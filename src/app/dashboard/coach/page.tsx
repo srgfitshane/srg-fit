@@ -172,7 +172,8 @@ export default function CoachDashboard() {
                     <div key={client.id}
                       style={{ display:'flex', alignItems:'center', gap:14, padding:'16px 24px', borderBottom: i < clients.length-1 ? '1px solid '+t.border : 'none', cursor:'pointer', transition:'background 0.15s ease' }}
                       onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceUp)}
-                      onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                      onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                      onClick={()=>router.push('/dashboard/coach/clients/'+client.id)}>
                       <div style={{ width:42, height:42, borderRadius:13, background:'linear-gradient(135deg,'+color+','+color+'88)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:'#000', flexShrink:0 }}>
                         {initials}
                       </div>
