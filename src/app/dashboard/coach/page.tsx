@@ -102,6 +102,12 @@ export default function CoachDashboard() {
           <div style={{ fontSize:14, fontWeight:700 }}>Coach Dashboard</div>
           <div style={{ flex:1 }} />
           <div style={{ fontSize:13, color:t.textMuted, marginRight:16 }}>{profile?.full_name}</div>
+          <button onClick={()=>router.push('/dashboard/coach/programs')} style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:8 }}>
+            📋 Programs
+          </button>
+          <button onClick={()=>router.push('/dashboard/coach/exercises')} style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:8 }}>
+            🏋️ Exercises
+          </button>
           <button onClick={handleSignOut} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Sign Out</button>
         </div>
 
@@ -148,7 +154,10 @@ export default function CoachDashboard() {
                 <div style={{ fontSize:40, marginBottom:12 }}>👥</div>
                 <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>No clients yet</div>
                 <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Invite your first client to get started</div>
-                <button onClick={()=>setShowInvite(true)} style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <button onClick={()=>router.push('/dashboard/coach/programs')} style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:9, padding:'8px 16px', fontSize:13, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            📋 Programs
+          </button>
+          <button onClick={()=>setShowInvite(true)} style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   + Invite Client
                 </button>
               </div>
