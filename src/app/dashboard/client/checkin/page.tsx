@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { triggerAiInsight } from '@/lib/ai-insights'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -79,6 +80,12 @@ export default function CheckinForm() {
     })
     setSubmitting(false)
     setDone(true)
+
+    // Fire AI insight silently in background — coach sees it, client never knows
+    if (clientRecord.coach_id) {
+      triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'checkin_brief')
+      triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'red_flag')
+    }
   }
 
   const SliderField = ({ label, value, onChange, color, emoji }: any) => (

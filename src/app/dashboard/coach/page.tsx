@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { getUnreadInsights } from '@/lib/ai-insights'
+import AiInsightsPanel from '@/components/AiInsightsPanel'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
   teal:"#00c9b1", tealDim:"#00c9b115", orange:"#f5a623", orangeDim:"#f5a62315",
-  purple:"#8b5cf6", red:"#ef4444", redDim:"#ef444415",
+  purple:"#8b5cf6", purpleDim:"#8b5cf615", red:"#ef4444", redDim:"#ef444415",
   yellow:"#eab308", green:"#22c55e", pink:"#f472b6",
   text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
 }
@@ -31,6 +33,8 @@ export default function CoachDashboard() {
   const [inviteName,  setInviteName]  = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [aiInsights, setAiInsights] = useState<any[]>([])
+  const [showInsights, setShowInsights] = useState(false)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -48,6 +52,9 @@ export default function CoachDashboard() {
       console.log('clients:', clientList)
       console.log('client error:', clientError)
       setClients(clientList || [])
+      // Load AI insights silently
+      const insights = await getUnreadInsights(user.id)
+      setAiInsights(insights)
       setLoading(false)
     }
     load()
@@ -107,6 +114,16 @@ export default function CoachDashboard() {
           </button>
           <button onClick={()=>router.push('/dashboard/coach/exercises')} style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:8 }}>
             🏋️ Exercises
+          </button>
+          {/* AI Insights bell */}
+          <button onClick={()=>setShowInsights(true)} title="AI Coaching Insights"
+            style={{ position:'relative', background:aiInsights.length>0?t.purpleDim:'none', border:'1px solid '+(aiInsights.length>0?t.purple+'40':t.border), borderRadius:8, padding:'6px 12px', fontSize:16, cursor:'pointer', marginRight:8, display:'flex', alignItems:'center' }}>
+            🧠
+            {aiInsights.length > 0 && (
+              <span style={{ position:'absolute', top:-4, right:-4, background:aiInsights.some(i=>i.priority==='urgent'||i.priority==='high')?t.red:t.orange, borderRadius:'50%', width:16, height:16, fontSize:9, fontWeight:900, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                {aiInsights.length}
+              </span>
+            )}
           </button>
           <button onClick={handleSignOut} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Sign Out</button>
         </div>
@@ -233,6 +250,15 @@ export default function CoachDashboard() {
               )}
             </div>
           </div>
+        )}
+
+        {/* AI Insights Panel */}
+        {showInsights && (
+          <AiInsightsPanel
+            insights={aiInsights}
+            onDismiss={(id) => setAiInsights(prev => prev.filter(i => i.id !== id))}
+            onClose={() => setShowInsights(false)}
+          />
         )}
 
       </div>
