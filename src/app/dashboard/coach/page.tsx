@@ -64,6 +64,7 @@ export default function CoachDashboard() {
     setInviting(true)
     setInviteMsg('')
     const { data: { user } } = await supabase.auth.getUser()
+    console.log('inviting with coachId:', user?.id, 'email:', inviteEmail, 'name:', inviteName)
     const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

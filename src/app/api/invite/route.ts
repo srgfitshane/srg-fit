@@ -54,15 +54,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Send password reset email so client can set their own password
-    await supabaseAdmin.auth.admin.generateLink({
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/set-password`,
+      }
     })
+
+    console.log('Magic link generated:', linkData?.properties?.action_link)
 
     return NextResponse.json({
       success: true,
       message: `Invite sent! ${fullName} can now log in at srgfit.training`,
       userId: newUser.user.id,
+      // In dev, return the link so you can test it
+      devLink: process.env.NODE_ENV === 'development' ? linkData?.properties?.action_link : undefined,
     })
 
   } catch (err: any) {
