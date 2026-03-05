@@ -52,7 +52,7 @@ export default function ExerciseLibrary() {
   const [filter,    setFilter]    = useState('all')
   const [showNew,   setShowNew]   = useState(false)
   const [seeding,   setSeeding]   = useState(false)
-  const [editingId, setEditingId] = useState<string|null>(null)
+  const [playingId, setPlayingId] = useState<string|null>(null)
   const [newEx, setNewEx] = useState({ name:'', muscles:[] as string[], equipment:'Barbell', difficulty:'Intermediate', tags:[] as string[], cues:'', video_url:'' })
   const router   = useRouter()
   const supabase = createClient()
@@ -99,14 +99,12 @@ export default function ExerciseLibrary() {
     return matchSearch && matchFilter
   })
 
-
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}input,select,textarea{color-scheme:dark;}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
-        {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
           <button onClick={()=>router.back()} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
           <div style={{ width:1, height:28, background:t.border }} />
@@ -116,9 +114,13 @@ export default function ExerciseLibrary() {
           {exercises.length === 0 && (
             <button onClick={seedLibrary} disabled={seeding}
               style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:8 }}>
-              {seeding ? 'Seeding...' : '⚡ Load Default Library'}
+              {seeding ? 'Seeding...' : '⚡ Defaults'}
             </button>
           )}
+          <button onClick={()=>router.push('/dashboard/coach/exercises/import')}
+            style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:8 }}>
+            📁 Bulk Import Videos
+          </button>
           <button onClick={()=>setShowNew(true)}
             style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             + Add Exercise
@@ -126,8 +128,6 @@ export default function ExerciseLibrary() {
         </div>
 
         <div style={{ maxWidth:1100, margin:'0 auto', padding:24 }}>
-
-          {/* Search + filter */}
           <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search exercises..."
               style={{ flex:1, minWidth:200, background:t.surface, border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
@@ -140,47 +140,67 @@ export default function ExerciseLibrary() {
             </select>
           </div>
 
-          {/* Empty state */}
           {exercises.length === 0 && !loading && (
             <div style={{ textAlign:'center', padding:'64px 20px' }}>
               <div style={{ fontSize:48, marginBottom:16 }}>🏋️</div>
               <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>No exercises yet</div>
-              <div style={{ fontSize:13, color:t.textMuted, marginBottom:24 }}>Load the default library of 25 exercises or add your own.</div>
+              <div style={{ fontSize:13, color:t.textMuted, marginBottom:24 }}>Bulk import your videos or load the default library.</div>
+              <button onClick={()=>router.push('/dashboard/coach/exercises/import')}
+                style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:12 }}>
+                📁 Bulk Import Videos
+              </button>
               <button onClick={seedLibrary} disabled={seeding}
-                style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:12 }}>
-                {seeding ? 'Loading...' : '⚡ Load Default Library (25 exercises)'}
+                style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                {seeding ? 'Loading...' : '⚡ Load Defaults (25)'}
               </button>
             </div>
           )}
 
-          {/* Exercise grid */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:12 }}>
+
+          {/* Exercise grid — with video preview */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:12 }}>
             {filtered.map(ex => (
-              <div key={ex.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px', transition:'border-color 0.15s ease' }}
+              <div key={ex.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, overflow:'hidden', transition:'border-color 0.15s ease' }}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=t.teal+'40'}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
-                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
-                  <div style={{ fontSize:14, fontWeight:800, flex:1, marginRight:8 }}>{ex.name}</div>
-                  <button onClick={()=>deleteExercise(ex.id)} style={{ background:'none', border:'none', color:t.red+'50', cursor:'pointer', fontSize:13, flexShrink:0 }}>✕</button>
+
+                {/* Video thumbnail / player */}
+                {ex.video_url && (
+                  <div style={{ position:'relative', background:'#000', aspectRatio:'16/9' }}>
+                    {playingId === ex.id ? (
+                      <video src={ex.video_url} autoPlay controls style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+                    ) : (
+                      <div onClick={()=>setPlayingId(ex.id)}
+                        style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', background:'#0a0a12', minHeight:120 }}>
+                        <div style={{ width:44, height:44, borderRadius:'50%', background:t.teal+'22', border:'2px solid '+t.teal+'60', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>▶</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ padding:'14px' }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
+                    <div style={{ fontSize:13, fontWeight:800, flex:1, marginRight:8 }}>{ex.name}</div>
+                    <button onClick={()=>deleteExercise(ex.id)} style={{ background:'none', border:'none', color:t.red+'50', cursor:'pointer', fontSize:13, flexShrink:0 }}>✕</button>
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:6 }}>
+                    {(ex.muscles||[]).map((m:string) => (
+                      <span key={m} style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:5, padding:'2px 7px', fontSize:10, fontWeight:700, color:t.teal }}>{m}</span>
+                    ))}
+                  </div>
+                  <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                    {ex.equipment && <span style={{ background:t.surfaceHigh, borderRadius:5, padding:'2px 7px', fontSize:10, color:t.textMuted }}>{ex.equipment}</span>}
+                    {ex.movement_pattern && <span style={{ background:t.orangeDim, borderRadius:5, padding:'2px 7px', fontSize:10, color:t.orange }}>{ex.movement_pattern}</span>}
+                    {(ex.tags||[]).map((tg:string) => (
+                      <span key={tg} style={{ background:t.purpleDim, borderRadius:5, padding:'2px 7px', fontSize:10, color:t.purple }}>{tg}</span>
+                    ))}
+                  </div>
+                  {ex.cues && <div style={{ fontSize:11, color:t.textMuted, marginTop:8, lineHeight:1.5, fontStyle:'italic' }}>{ex.cues}</div>}
                 </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:8 }}>
-                  {(ex.muscles||[]).map((m:string) => (
-                    <span key={m} style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:5, padding:'2px 7px', fontSize:10, fontWeight:700, color:t.teal }}>{m}</span>
-                  ))}
-                </div>
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {ex.equipment && <span style={{ background:t.surfaceHigh, borderRadius:5, padding:'2px 7px', fontSize:10, color:t.textMuted }}>{ex.equipment}</span>}
-                  {ex.difficulty && <span style={{ background:t.orangeDim, borderRadius:5, padding:'2px 7px', fontSize:10, color:t.orange }}>{ex.difficulty}</span>}
-                  {(ex.tags||[]).map((tg:string) => (
-                    <span key={tg} style={{ background:t.purpleDim, borderRadius:5, padding:'2px 7px', fontSize:10, color:t.purple }}>{tg}</span>
-                  ))}
-                </div>
-                {ex.cues && <div style={{ fontSize:11, color:t.textMuted, marginTop:8, lineHeight:1.5, fontStyle:'italic' }}>{ex.cues}</div>}
               </div>
             ))}
           </div>
         </div>
-
 
         {/* Add Exercise Modal */}
         {showNew && (
@@ -190,15 +210,11 @@ export default function ExerciseLibrary() {
                 <div style={{ fontSize:16, fontWeight:800 }}>Add Exercise</div>
                 <span onClick={()=>setShowNew(false)} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
               </div>
-
-              {/* Name */}
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Exercise Name *</div>
                 <input value={newEx.name} onChange={e=>setNewEx(p=>({...p,name:e.target.value}))} placeholder="e.g. Barbell Back Squat"
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
               </div>
-
-              {/* Equipment + Difficulty */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Equipment</div>
@@ -215,8 +231,6 @@ export default function ExerciseLibrary() {
                   </select>
                 </div>
               </div>
-
-              {/* Muscle groups */}
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Muscle Groups</div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
@@ -228,8 +242,6 @@ export default function ExerciseLibrary() {
                   ))}
                 </div>
               </div>
-
-              {/* Tags */}
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Tags</div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
@@ -241,15 +253,12 @@ export default function ExerciseLibrary() {
                   ))}
                 </div>
               </div>
-
-              {/* Cues */}
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Coaching Cues (optional)</div>
                 <textarea value={newEx.cues} onChange={e=>setNewEx(p=>({...p,cues:e.target.value}))} rows={2}
                   placeholder="Key technique cues shown to the client during workouts..."
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5 }} />
               </div>
-
               <button onClick={saveExercise} disabled={!newEx.name}
                 style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:!newEx.name?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newEx.name?0.5:1 }}>
                 Save Exercise →
