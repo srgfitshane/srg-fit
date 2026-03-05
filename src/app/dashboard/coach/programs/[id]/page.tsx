@@ -59,6 +59,7 @@ export default function ProgramBuilder() {
 
   const load = async () => {
     const { data: prog } = await supabase.from('programs').select(`*, client:clients(*, profile:profiles!clients_profile_id_fkey(full_name))`).eq('id', programId).single()
+    // note: template_id self-join not supported in this select, fetch separately if needed
     setProgram(prog)
     const { data: blockData } = await supabase
       .from('workout_blocks').select(`*, block_exercises(*, exercise:exercises(name, muscles))`)
@@ -192,7 +193,13 @@ export default function ProgramBuilder() {
           <button onClick={()=>router.push('/dashboard/coach/programs')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
           <div style={{ width:1, height:28, background:t.border }} />
           <div>
-            <div style={{ fontSize:14, fontWeight:800 }}>{program?.name || 'Program'}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ fontSize:14, fontWeight:800 }}>{program?.name || 'Program'}</div>
+              {program?.is_template
+                ? <span style={{ background:t.orange+'18', border:'1px solid '+t.orange+'40', borderRadius:5, padding:'2px 8px', fontSize:9, fontWeight:900, color:t.orange, letterSpacing:'0.08em' }}>TEMPLATE</span>
+                : <span style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:5, padding:'2px 8px', fontSize:9, fontWeight:900, color:t.teal, letterSpacing:'0.08em' }}>CLIENT</span>
+              }
+            </div>
             {program?.client?.profile?.full_name && <div style={{ fontSize:11, color:t.textMuted }}>{program.client.profile.full_name}</div>}
           </div>
           <div style={{ flex:1 }} />
