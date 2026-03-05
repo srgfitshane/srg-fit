@@ -125,6 +125,10 @@ export default function ClientDetail() {
             ? <button onClick={handleUnflag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Unflag</button>
             : <button onClick={()=>setShowFlag(true)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Flag Client</button>
           }
+          <button onClick={()=>router.push('/dashboard/coach/clients/'+clientId+'/habits')}
+            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            ✅ Manage Habits
+          </button>
         </div>
 
 
