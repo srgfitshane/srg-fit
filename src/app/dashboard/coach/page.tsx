@@ -62,32 +62,20 @@ export default function CoachDashboard() {
   const handleInvite = async () => {
     if (!inviteEmail || !inviteName) return
     setInviting(true)
-    // Create auth user with temp password
-    const tempPassword = Math.random().toString(36).slice(2) + 'A1!'
-    const { data: newUser, error: signUpError } = await supabase.auth.admin?.createUser({
-      email: inviteEmail,
-      password: tempPassword,
-      user_metadata: { full_name: inviteName, role: 'client' },
-      email_confirm: true,
-    }) as any
-    if (signUpError) {
-      setInviteMsg('Error: ' + signUpError.message)
-      setInviting(false)
-      return
-    }
-    // Create client record
+    setInviteMsg('')
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('clients').insert({
-      profile_id: newUser?.user?.id,
-      coach_id: user?.id,
-      start_date: new Date().toISOString().split('T')[0],
+    const res = await fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail, fullName: inviteName, coachId: user?.id }),
     })
-    setInviteMsg('Client invited! They can log in with their email.')
+    const result = await res.json()
+    if (!res.ok) { setInviteMsg('Error: ' + result.error); setInviting(false); return }
+    setInviteMsg(result.message)
     setInviting(false)
-    // Reload clients
     const { data: clientList } = await supabase
       .from('clients')
-      .select(`*, profile:profiles(full_name, email, avatar_url)`)
+      .select(`*, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)`)
       .eq('coach_id', user?.id!)
       .eq('active', true)
     setClients(clientList || [])
