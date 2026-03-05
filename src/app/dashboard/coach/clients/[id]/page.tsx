@@ -28,6 +28,9 @@ export default function ClientDetail() {
   const [checkins, setCheckins] = useState<any[]>([])
   const [metrics,  setMetrics]  = useState<any[]>([])
   const [workouts, setWorkouts] = useState<any[]>([])
+  const [showArchive, setShowArchive] = useState(false)
+  const [showDelete,  setShowDelete]  = useState(false)
+  const [actioning,   setActioning]   = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
@@ -89,6 +92,20 @@ export default function ClientDetail() {
     setClient((prev:any) => ({ ...prev, flagged: false, flag_note: null }))
   }
 
+  const handleArchive = async () => {
+    setActioning(true)
+    await supabase.from('clients').update({ active: false }).eq('id', clientId)
+    router.push('/dashboard/coach')
+  }
+
+  const handleDelete = async () => {
+    setActioning(true)
+    // Deactivate habits, then remove client record (keeps auth user + profile intact)
+    await supabase.from('habits').update({ active: false }).eq('client_id', clientId)
+    await supabase.from('clients').delete().eq('id', clientId)
+    router.push('/dashboard/coach')
+  }
+
 
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif" }}>
@@ -128,6 +145,14 @@ export default function ClientDetail() {
           <button onClick={()=>router.push('/dashboard/coach/clients/'+clientId+'/habits')}
             style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             ✅ Manage Habits
+          </button>
+          <button onClick={()=>setShowArchive(true)}
+            style={{ background:t.yellowDim, border:'1px solid '+t.yellow+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.yellow, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            📦 Archive
+          </button>
+          <button onClick={()=>setShowDelete(true)}
+            style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            🗑 Delete
           </button>
         </div>
 
@@ -357,6 +382,55 @@ export default function ClientDetail() {
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
                 <button onClick={()=>setShowFlag(false)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
                 <button onClick={handleFlag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Flag Client</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Archive modal */}
+        {showArchive && (
+          <div onClick={()=>setShowArchive(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>📦</div>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:8 }}>Archive {client?.profile?.full_name}?</div>
+              <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6, marginBottom:24 }}>
+                Archiving removes them from your active client list but keeps all their data intact. You can reactivate them anytime from Supabase.
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={()=>setShowArchive(false)}
+                  style={{ flex:1, padding:'11px', borderRadius:11, border:'1px solid '+t.border, background:t.surfaceHigh, fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Cancel
+                </button>
+                <button onClick={handleArchive} disabled={actioning}
+                  style={{ flex:1, padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.yellow+','+t.yellow+'cc)', fontSize:13, fontWeight:800, color:'#000', cursor:actioning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:actioning?0.6:1 }}>
+                  {actioning ? 'Archiving...' : '📦 Archive Client'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete modal */}
+        {showDelete && (
+          <div onClick={()=>setShowDelete(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.red+'40', borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:8, color:t.red }}>Delete {client?.profile?.full_name}?</div>
+              <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6, marginBottom:8 }}>
+                This removes the client relationship and deactivates their habits. Their auth account stays intact so they can be re-invited later.
+              </div>
+              <div style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'10px 14px', fontSize:12, color:t.red, marginBottom:24, fontWeight:600 }}>
+                ⚠️ This cannot be undone. All check-ins, workout logs, and metrics will remain in the database but will be unlinked.
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={()=>setShowDelete(false)}
+                  style={{ flex:1, padding:'11px', borderRadius:11, border:'1px solid '+t.border, background:t.surfaceHigh, fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Cancel
+                </button>
+                <button onClick={handleDelete} disabled={actioning}
+                  style={{ flex:1, padding:'11px', borderRadius:11, border:'none', background:t.red, fontSize:13, fontWeight:800, color:'#fff', cursor:actioning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:actioning?0.6:1 }}>
+                  {actioning ? 'Deleting...' : '🗑 Delete Client'}
+                </button>
               </div>
             </div>
           </div>
