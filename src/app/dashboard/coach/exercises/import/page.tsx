@@ -12,249 +12,275 @@ const t = {
   text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
 }
 
-// Equipment keywords to detect from filename prefix
-const EQUIPMENT_MAP: Record<string, string> = {
-  barbell:'Barbell', dumbbell:'Dumbbell', db:'Dumbbell', cable:'Cable',
-  machine:'Machine', bodyweight:'Bodyweight', bw:'Bodyweight',
-  kettlebell:'Kettlebell', kb:'Kettlebell', band:'Resistance Band',
-  resistance:'Resistance Band', ez:'EZ Bar', trap:'Trap Bar',
-  smith:'Smith Machine', sled:'Sled', landmine:'Landmine',
-  plate:'Plate', bench:'Bodyweight', box:'Bodyweight',
-}
+// Your Google Drive folder ID from the shared link
+const ROOT_FOLDER_ID = '1KICXWyVMtZ4634rs2j0RryWgE6qrAyD2'
 
-// Movement pattern detection from exercise name keywords
-const MOVEMENT_MAP: Record<string, string> = {
-  squat:'squat', lunge:'lunge', split:'lunge', stepup:'lunge',
-  deadlift:'hinge', rdl:'hinge', goodmorning:'hinge', hip:'hinge', swing:'hinge',
-  press:'push', pushup:'push', dip:'push', fly:'push', flye:'push',
-  row:'pull', pullup:'pull', pulldown:'pull', curl:'pull', facepull:'pull',
-  carry:'carry', walk:'carry', farmer:'carry',
-  plank:'core', crunch:'core', situp:'core', ab:'core', hollow:'core',
-  raise:'isolation', extension:'isolation', kickback:'isolation',
-}
-
-// Muscle group folder name normalization
+// Maps Drive folder names to Supabase muscle group values
 const MUSCLE_FOLDER_MAP: Record<string, string[]> = {
-  chest:     ['Chest'],
-  back:      ['Back'],
-  shoulders: ['Shoulders'], shoulder: ['Shoulders'], delts: ['Shoulders'],
-  biceps:    ['Biceps'], bicep: ['Biceps'],
-  triceps:   ['Triceps'], tricep: ['Triceps'],
-  legs:      ['Quads','Hamstrings','Glutes'], leg: ['Quads','Hamstrings','Glutes'],
-  quads:     ['Quads'], quad: ['Quads'],
-  hamstrings:['Hamstrings'], hamstring: ['Hamstrings'], hams: ['Hamstrings'],
-  glutes:    ['Glutes'], glute: ['Glutes'], butt: ['Glutes'],
-  calves:    ['Calves'], calf: ['Calves'],
-  core:      ['Core'], abs: ['Core'], ab: ['Core'],
-  fullbody:  ['Full Body'], full: ['Full Body'], compound: ['Full Body'],
-  forearms:  ['Forearms'], forearm: ['Forearms'],
-  cardio:    ['Cardio'],
+  'Abdominals':       ['Core'],
+  'Back':             ['Back'],
+  'Biceps':           ['Biceps'],
+  'Cardio-Functional':['Cardio'],
+  'Chest':            ['Chest'],
+  'Forearms':         ['Forearms'],
+  'Legs':             ['Quads','Hamstrings','Glutes'],
+  'Powerlifting':     ['Quads','Hamstrings','Glutes','Chest','Back'],
+  'Shoulder':         ['Shoulders'],
+  'Stretching':       ['Full Body'],
+  'Triceps':          ['Triceps'],
 }
 
-interface ParsedFile {
-  file: File
+// Movement pattern detection from exercise name
+const MOVEMENT_MAP: Record<string, string> = {
+  squat:'squat', lunge:'lunge', split:'lunge',
+  deadlift:'hinge', rdl:'hinge', hip:'hinge', swing:'hinge',
+  press:'push', pushup:'push', dip:'push', fly:'push', flye:'push', raise:'push',
+  row:'pull', pullup:'pull', pulldown:'pull', curl:'pull',
+  carry:'carry', farmer:'carry',
+  plank:'core', crunch:'core', situp:'core', rollout:'core',
+  extension:'isolation', kickback:'isolation',
+}
+
+interface DriveFile {
+  id: string
+  name: string
+  mimeType: string
+  thumbnailLink?: string
+  webViewLink?: string
+}
+
+interface ParsedVideo {
+  driveFileId: string
+  driveName: string
   folderName: string
-  muscles: string[]
-  equipment: string
   exerciseName: string
+  muscles: string[]
   movementPattern: string
-  status: 'pending' | 'uploading' | 'done' | 'exists' | 'error'
-  videoUrl?: string
+  thumbnailLink?: string
+  status: 'pending' | 'importing' | 'done' | 'updated' | 'error'
   error?: string
-  duplicate?: boolean
 }
 
-function parseFileName(filename: string, folderName: string): Omit<ParsedFile, 'file' | 'status'> {
-  const base = filename.replace(/\.[^.]+$/, '') // remove extension
-  const parts = base.split(/[_\s-]+/).filter(Boolean)
+function stripSuffix(filename: string): string {
+  // Remove extension, then strip trailing " (2)" or " (N)" pattern
+  return filename
+    .replace(/\.[^.]+$/, '')        // remove .mp4
+    .replace(/\s*\(\d+\)\s*$/, '')  // remove (2)
+    .trim()
+}
 
-  // Detect equipment from leading word(s)
-  let equipment = 'Other'
-  let nameStart = 0
-  for (let i = 1; i <= Math.min(3, parts.length); i++) {
-    const prefix = parts.slice(0, i).join('').toLowerCase()
-    if (EQUIPMENT_MAP[prefix]) { equipment = EQUIPMENT_MAP[prefix]; nameStart = i; break }
-    if (EQUIPMENT_MAP[parts[0].toLowerCase()]) { equipment = EQUIPMENT_MAP[parts[0].toLowerCase()]; nameStart = 1; break }
-  }
+function toTitleCase(str: string): string {
+  return str.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
 
-  // Exercise name = remaining parts, title cased
-  const nameParts = parts.slice(nameStart)
-  const exerciseName = nameParts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ')
-    || parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ')
-
-  // Movement pattern from name keywords
-  const nameKey = nameParts.join('').toLowerCase()
-  let movementPattern = 'general'
+function detectMovement(name: string): string {
+  const lower = name.toLowerCase().replace(/\s+/g,'')
   for (const [key, pattern] of Object.entries(MOVEMENT_MAP)) {
-    if (nameKey.includes(key)) { movementPattern = pattern; break }
+    if (lower.includes(key)) return pattern
   }
-
-  // Muscle groups from folder name
-  const folderKey = folderName.toLowerCase().replace(/[^a-z]/g, '')
-  const muscles = MUSCLE_FOLDER_MAP[folderKey] || [folderName.charAt(0).toUpperCase() + folderName.slice(1)]
-
-  return { folderName, muscles, equipment, exerciseName, movementPattern }
+  return 'general'
 }
 
-export default function BulkImporter() {
-  const [files,     setFiles]     = useState<ParsedFile[]>([])
-  const [importing, setImporting] = useState(false)
-  const [progress,  setProgress]  = useState({ done:0, total:0 })
-  const [done,      setDone]      = useState(false)
+function fuzzyMatch(driveName: string, exercises: any[]): any | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g,'')
+  const target = norm(driveName)
+  // Exact match first
+  const exact = exercises.find(e => norm(e.name) === target)
+  if (exact) return exact
+  // Substring match
+  const sub = exercises.find(e => norm(e.name).includes(target) || target.includes(norm(e.name)))
+  return sub || null
+}
+
+export default function DriveImporter() {
+  const [step,        setStep]        = useState<'connect'|'scanning'|'review'|'importing'|'done'>('connect')
+  const [accessToken, setAccessToken] = useState<string|null>(null)
+  const [videos,      setVideos]      = useState<ParsedVideo[]>([])
+  const [progress,    setProgress]    = useState({ done:0, total:0, folder:'' })
+  const [existingEx,  setExistingEx]  = useState<any[]>([])
   const router  = useRouter()
   const supabase = createClient()
 
-  const handleFolderDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    const items = Array.from(e.dataTransfer.items)
-    const parsed: ParsedFile[] = []
-
-    for (const item of items) {
-      if (item.kind !== 'file') continue
-      const entry = item.webkitGetAsEntry?.()
-      if (!entry) continue
-      await traverseEntry(entry, '', parsed)
-    }
-
-    setFiles(parsed)
-  }, [])
-
-  const traverseEntry = (entry: any, path: string, results: ParsedFile[]): Promise<void> => {
-    return new Promise(resolve => {
-      if (entry.isFile) {
-        entry.getFile((file: File) => {
-          if (!file.name.match(/\.(mp4|mov|webm|avi)$/i)) return resolve()
-          const folderName = path || 'misc'
-          const parsed = parseFileName(file.name, folderName)
-          results.push({ file, status:'pending', ...parsed })
-          resolve()
-        })
-      } else if (entry.isDirectory) {
-        const reader = entry.createReader()
-        const folderName = entry.name
-        reader.readEntries(async (entries: any[]) => {
-          for (const child of entries) {
-            await traverseEntry(child, folderName, results)
-          }
-          resolve()
-        })
-      } else resolve()
+  // ── Step 1: Google OAuth for Drive readonly scope ──────────────────────────
+  const connectDrive = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        scopes: 'https://www.googleapis.com/auth/drive.readonly',
+        redirectTo: window.location.href,
+        queryParams: { access_type: 'offline', prompt: 'consent' },
+        skipBrowserRedirect: false,
+      }
     })
+    if (error) alert('OAuth error: ' + error.message)
   }
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = Array.from(e.target.files || [])
-    const parsed: ParsedFile[] = fileList
-      .filter(f => f.name.match(/\.(mp4|mov|webm|avi)$/i))
-      .map(file => {
-        // webkitRelativePath gives us folder/file.mp4
-        const parts = (file as any).webkitRelativePath?.split('/') || [file.name]
-        const folderName = parts.length > 1 ? parts[parts.length - 2] : 'misc'
-        return { file, status: 'pending' as const, ...parseFileName(file.name, folderName) }
-      })
-    setFiles(parsed)
+  // ── On mount: check if we have a Google access token from session ──────────
+  const checkSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.provider_token
+    if (token) {
+      setAccessToken(token)
+      // Load existing exercises for fuzzy matching
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: exList } = await supabase.from('exercises').select('id,name').eq('coach_id', user?.id)
+      setExistingEx(exList || [])
+      return true
+    }
+    return false
   }
 
+  // Run once on mount
+  useState(() => { checkSession() })
 
+  // ── Step 2: Scan Drive folders ─────────────────────────────────────────────
+  const scanDrive = async () => {
+    if (!accessToken) { await connectDrive(); return }
+    setStep('scanning')
+    const parsed: ParsedVideo[] = []
+
+    try {
+      // Get all subfolders of root folder
+      const foldersRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q='${ROOT_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=50`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      const foldersData = await foldersRes.json()
+      const folders: DriveFile[] = foldersData.files || []
+
+      for (const folder of folders) {
+        setProgress(p => ({ ...p, folder: folder.name }))
+        const muscles = MUSCLE_FOLDER_MAP[folder.name] || [folder.name]
+
+        // Get all mp4 files in this folder (paginate if needed)
+        let pageToken = ''
+        do {
+          const pageParam = pageToken ? `&pageToken=${pageToken}` : ''
+          const filesRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q='${folder.id}'+in+parents+and+mimeType+contains+'video/'+and+trashed=false&fields=files(id,name,mimeType,thumbnailLink,webViewLink),nextPageToken&pageSize=200${pageParam}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          const filesData = await filesRes.json()
+          const files: DriveFile[] = filesData.files || []
+          pageToken = filesData.nextPageToken || ''
+
+          for (const file of files) {
+            const cleanName = stripSuffix(file.name)
+            const exerciseName = toTitleCase(cleanName)
+            parsed.push({
+              driveFileId:   file.id,
+              driveName:     cleanName,
+              folderName:    folder.name,
+              exerciseName,
+              muscles,
+              movementPattern: detectMovement(cleanName),
+              thumbnailLink: file.thumbnailLink,
+              status: 'pending',
+            })
+          }
+        } while (pageToken)
+      }
+
+      setVideos(parsed)
+      setStep('review')
+    } catch (err: any) {
+      alert('Drive scan error: ' + err.message)
+      setStep('connect')
+    }
+  }
+
+  // ── Step 3: Import — store Drive file IDs in Supabase ─────────────────────
   const runImport = async () => {
-    setImporting(true)
+    setStep('importing')
     const { data: { user } } = await supabase.auth.getUser()
-    const total = files.filter(f => f.status === 'pending').length
-    setProgress({ done: 0, total })
+    const pending = videos.filter(v => v.status === 'pending')
+    setProgress({ done:0, total: pending.length, folder:'' })
     let done = 0
 
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i]
-      if (f.status !== 'pending') continue
+    for (let i = 0; i < videos.length; i++) {
+      const v = videos[i]
+      if (v.status !== 'pending') continue
 
-      setFiles(prev => prev.map((p,j) => j===i ? {...p, status:'uploading'} : p))
+      setVideos(prev => prev.map((p,j) => j===i ? {...p, status:'importing'} : p))
 
       try {
-        // Check if exercise already exists by name
-        const { data: existing } = await supabase.from('exercises')
-          .select('id, video_url').eq('name', f.exerciseName).eq('coach_id', user?.id).single()
+        // Generate embeddable Drive URL
+        const driveEmbedUrl   = `https://drive.google.com/file/d/${v.driveFileId}/preview`
+        const driveLinkUrl    = `https://drive.google.com/file/d/${v.driveFileId}/view`
 
-        // Upload video to Supabase Storage
-        const ext = f.file.name.split('.').pop()
-        const storagePath = `${user?.id}/${f.folderName}/${f.exerciseName.replace(/\s+/g,'_')}.${ext}`
-        const { data: upload, error: uploadErr } = await supabase.storage
-          .from('exercise-videos')
-          .upload(storagePath, f.file, { upsert: true, contentType: `video/${ext}` })
+        // Check if exercise already exists (fuzzy match)
+        const match = fuzzyMatch(v.exerciseName, existingEx)
 
-        if (uploadErr) throw uploadErr
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('exercise-videos').getPublicUrl(storagePath)
-
-        if (existing) {
-          // Update existing exercise with video URL
-          await supabase.from('exercises').update({ video_url: publicUrl }).eq('id', existing.id)
-          setFiles(prev => prev.map((p,j) => j===i ? {...p, status:'exists', videoUrl: publicUrl, duplicate: true} : p))
+        if (match) {
+          // Update existing exercise with Drive video info
+          await supabase.from('exercises').update({
+            video_url:          driveEmbedUrl,
+            drive_file_id:      v.driveFileId,
+            drive_thumbnail:    v.thumbnailLink || null,
+            drive_link:         driveLinkUrl,
+          }).eq('id', match.id)
+          setVideos(prev => prev.map((p,j) => j===i ? {...p, status:'updated'} : p))
         } else {
           // Create new exercise record
           await supabase.from('exercises').insert({
-            coach_id: user?.id,
-            name: f.exerciseName,
-            muscles: f.muscles,
-            equipment: f.equipment,
-            movement_pattern: f.movementPattern,
-            video_url: publicUrl,
-            difficulty: 'Intermediate',
-            tags: [],
+            coach_id:           user?.id,
+            name:               v.exerciseName,
+            muscles:            v.muscles,
+            equipment:          'Other',
+            difficulty:         'Beginner',
+            tags:               [],
+            movement_pattern:   v.movementPattern,
+            video_url:          driveEmbedUrl,
+            drive_file_id:      v.driveFileId,
+            drive_thumbnail:    v.thumbnailLink || null,
+            drive_link:         driveLinkUrl,
           })
-          setFiles(prev => prev.map((p,j) => j===i ? {...p, status:'done', videoUrl: publicUrl} : p))
+          setVideos(prev => prev.map((p,j) => j===i ? {...p, status:'done'} : p))
         }
       } catch (err: any) {
-        setFiles(prev => prev.map((p,j) => j===i ? {...p, status:'error', error: err.message} : p))
+        setVideos(prev => prev.map((p,j) => j===i ? {...p, status:'error', error: err.message} : p))
       }
 
       done++
-      setProgress({ done, total })
+      setProgress(p => ({ ...p, done }))
     }
 
-    setDone(true)
-    setImporting(false)
-  }
-
-  const updateParsed = (i: number, field: keyof ParsedFile, value: any) => {
-    setFiles(prev => prev.map((f,j) => j===i ? {...f, [field]: value} : f))
+    setStep('done')
   }
 
   const stats = {
-    pending: files.filter(f=>f.status==='pending').length,
-    done:    files.filter(f=>f.status==='done').length,
-    exists:  files.filter(f=>f.status==='exists').length,
-    error:   files.filter(f=>f.status==='error').length,
+    pending: videos.filter(v=>v.status==='pending').length,
+    done:    videos.filter(v=>v.status==='done').length,
+    updated: videos.filter(v=>v.status==='updated').length,
+    error:   videos.filter(v=>v.status==='error').length,
   }
 
-  const muscleColors: Record<string,string> = {
-    Chest:t.orange, Back:t.teal, Shoulders:t.purple, Biceps:t.blue,
-    Triceps:t.pink, Quads:t.green, Hamstrings:t.yellow, Glutes:t.orange,
-    Core:t.red, Calves:t.teal, 'Full Body':t.teal, Forearms:t.textMuted,
+  const muscleColor: Record<string,string> = {
+    'Core':t.red,'Back':t.teal,'Chest':t.orange,'Shoulders':t.purple,
+    'Biceps':'#60a5fa','Triceps':'#f472b6','Quads':t.green,
+    'Hamstrings':t.yellow,'Glutes':t.orange,'Forearms':t.textMuted,
+    'Full Body':t.teal,'Cardio':t.green,
   }
-
 
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}input,select{color-scheme:dark;}
-        .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-      `}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}input,select{color-scheme:dark;}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
           <button onClick={()=>router.push('/dashboard/coach/exercises')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
           <div style={{ width:1, height:28, background:t.border }} />
-          <div style={{ fontSize:14, fontWeight:800 }}>Bulk Video Importer</div>
+          <div style={{ fontSize:14, fontWeight:800 }}>📁 Drive Video Importer</div>
           <div style={{ flex:1 }} />
-          {files.length > 0 && !importing && !done && (
+          {step === 'review' && (
             <button onClick={runImport}
               style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               ⚡ Import {stats.pending} Videos
             </button>
           )}
-          {done && (
+          {step === 'done' && (
             <button onClick={()=>router.push('/dashboard/coach/exercises')}
               style={{ background:'linear-gradient(135deg,'+t.green+','+t.green+'cc)', border:'none', borderRadius:9, padding:'8px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               ✓ Done — View Library
@@ -262,151 +288,128 @@ export default function BulkImporter() {
           )}
         </div>
 
-        <div style={{ maxWidth:960, margin:'0 auto', padding:28 }}>
+        <div style={{ maxWidth:980, margin:'0 auto', padding:28 }}>
 
-          {/* Drop zone — shown when no files loaded */}
-          {files.length === 0 && (
-            <div>
-              <div style={{ background:t.surface, border:'2px dashed '+t.border, borderRadius:20, padding:'60px 40px', textAlign:'center', marginBottom:20 }}
-                onDragOver={e=>{ e.preventDefault(); e.currentTarget.style.borderColor=t.teal }}
-                onDragLeave={e=>{ e.currentTarget.style.borderColor=t.border }}
-                onDrop={e=>{ e.currentTarget.style.borderColor=t.border; handleFolderDrop(e) }}>
-                <div style={{ fontSize:48, marginBottom:16 }}>📁</div>
-                <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Drag your muscle group folders here</div>
-                <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.7 }}>
-                  Drop your <span style={{ color:t.teal }}>chest/</span>, <span style={{ color:t.orange }}>back/</span>, <span style={{ color:t.purple }}>legs/</span> folders all at once.<br/>
-                  Files named like <code style={{ background:t.surfaceHigh, padding:'2px 6px', borderRadius:4, fontSize:12 }}>Barbell_bench_press.mp4</code> will be parsed automatically.
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:12, justifyContent:'center' }}>
-                  <div style={{ height:1, width:60, background:t.border }} />
-                  <span style={{ fontSize:12, color:t.textMuted }}>or</span>
-                  <div style={{ height:1, width:60, background:t.border }} />
-                </div>
-                <label style={{ display:'inline-block', marginTop:20, background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:10, padding:'10px 24px', fontSize:13, fontWeight:700, color:t.purple, cursor:'pointer' }}>
-                  📂 Browse Folders
-                  <input type="file" accept="video/*" multiple style={{ display:'none' }}
-                    {...{ webkitdirectory:'', directory:'' } as any}
-                    onChange={handleFileInput} />
-                </label>
+          {/* ── CONNECT SCREEN ── */}
+          {(step === 'connect') && (
+            <div style={{ textAlign:'center', padding:'80px 40px' }}>
+              <div style={{ fontSize:56, marginBottom:20 }}>📁</div>
+              <div style={{ fontSize:24, fontWeight:900, marginBottom:12 }}>Import from Google Drive</div>
+              <div style={{ fontSize:14, color:t.textMuted, marginBottom:8, lineHeight:1.7, maxWidth:480, margin:'0 auto 32px' }}>
+                Connects to your SRG Fit exercise video library on Google Drive.<br/>
+                Videos stay in Drive — we just store the file IDs in Supabase.
               </div>
-
-              {/* How it works */}
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
-                <div style={{ fontSize:13, fontWeight:800, marginBottom:16, color:t.teal }}>How it works</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
-                  {[
-                    ['📁','Reads folder names','chest/ → Chest muscle group'],
-                    ['🏷','Parses filenames','Barbell_bench_press.mp4 → Equipment: Barbell, Exercise: Bench Press'],
-                    ['⚡','Uploads & links','Creates exercise records with video URLs, skips duplicates'],
-                  ].map(([icon,title,desc]) => (
-                    <div key={title} style={{ background:t.surfaceUp, borderRadius:12, padding:16 }}>
-                      <div style={{ fontSize:24, marginBottom:8 }}>{icon}</div>
-                      <div style={{ fontSize:12, fontWeight:800, marginBottom:4 }}>{title}</div>
-                      <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.5 }}>{desc}</div>
-                    </div>
-                  ))}
-                </div>
+              <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap', marginBottom:40 }}>
+                {['11 muscle group folders','1000+ videos','No upload costs','Fast Google CDN'].map(f=>(
+                  <div key={f} style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal }}>{f}</div>
+                ))}
               </div>
+              {accessToken ? (
+                <button onClick={scanDrive}
+                  style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:12, padding:'14px 36px', fontSize:15, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  🔍 Scan Exercise Library
+                </button>
+              ) : (
+                <button onClick={connectDrive}
+                  style={{ background:'white', border:'none', borderRadius:12, padding:'14px 36px', fontSize:15, fontWeight:800, color:'#111', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'inline-flex', alignItems:'center', gap:10 }}>
+                  <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.4 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#34A853" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.4 6.5 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#FBBC05" d="M24 44c5.2 0 9.9-1.9 13.4-5l-6.2-5.2C29.2 35.4 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8H6.3C9.7 36.4 16.3 44 24 44z"/><path fill="#EA4335" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.1-2.2 4-4 5.4l.1-.1 6.2 5.2C37.3 41 44 36 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>
+                  Connect Google Account
+                </button>
+              )}
+              {accessToken && (
+                <p style={{ fontSize:12, color:t.green, marginTop:16 }}>✓ Google account connected</p>
+              )}
             </div>
           )}
 
-          {/* Progress bar during import */}
-          {importing && (
-            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24, marginBottom:20 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
-                <div style={{ fontSize:14, fontWeight:800 }}>Uploading videos...</div>
-                <div style={{ fontSize:13, color:t.teal, fontWeight:700 }}>{progress.done} / {progress.total}</div>
-              </div>
-              <div style={{ background:t.surfaceHigh, borderRadius:8, height:10, overflow:'hidden' }}>
-                <div style={{ height:'100%', background:'linear-gradient(90deg,'+t.teal+','+t.orange+')', borderRadius:8, transition:'width 0.3s ease', width: progress.total > 0 ? (progress.done/progress.total*100)+'%' : '0%' }} />
-              </div>
+          {/* ── SCANNING SCREEN ── */}
+          {step === 'scanning' && (
+            <div style={{ textAlign:'center', padding:'80px 40px' }}>
+              <div style={{ fontSize:48, marginBottom:20, animation:'spin 1s linear infinite' }}>⏳</div>
+              <div style={{ fontSize:20, fontWeight:800, marginBottom:8 }}>Scanning Drive folders...</div>
+              <div style={{ fontSize:13, color:t.teal }}>{progress.folder || 'Connecting...'}</div>
+              <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
             </div>
           )}
 
-          {/* Stats row */}
-          {files.length > 0 && (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
-              {[
-                ['Total',    files.length,  t.text,   t.border],
-                ['Ready',    stats.pending, t.teal,   t.teal+'30'],
-                ['Imported', stats.done,    t.green,  t.green+'30'],
-                ['Updated',  stats.exists,  t.orange, t.orange+'30'],
-              ].map(([label,val,color,border]) => (
-                <div key={label as string} style={{ background:t.surface, border:'1px solid '+(border as string), borderRadius:12, padding:'14px 18px' }}>
-                  <div style={{ fontSize:22, fontWeight:900, color: color as string }}>{val}</div>
-                  <div style={{ fontSize:11, color:t.textMuted, fontWeight:700 }}>{label}</div>
-                </div>
-              ))}
+          {/* ── IMPORTING PROGRESS ── */}
+          {step === 'importing' && (
+            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:28, marginBottom:20 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
+                <div style={{ fontSize:15, fontWeight:800 }}>Linking videos...</div>
+                <div style={{ fontSize:14, color:t.teal, fontWeight:700 }}>{progress.done} / {progress.total}</div>
+              </div>
+              <div style={{ background:t.surfaceHigh, borderRadius:8, height:12, overflow:'hidden' }}>
+                <div style={{ height:'100%', background:'linear-gradient(90deg,'+t.teal+','+t.orange+')', borderRadius:8, transition:'width 0.3s ease',
+                  width: progress.total > 0 ? (progress.done/progress.total*100)+'%' : '0%' }} />
+              </div>
+              <div style={{ fontSize:12, color:t.textMuted, marginTop:8 }}>No uploads — just storing Drive file IDs in Supabase</div>
             </div>
           )}
 
-
-          {/* File preview table */}
-          {files.length > 0 && (
-            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden' }}>
-              <div style={{ padding:'16px 20px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <div style={{ fontSize:13, fontWeight:800 }}>{files.length} videos parsed — review before importing</div>
-                {!importing && !done && (
-                  <button onClick={()=>setFiles([])} style={{ background:'none', border:'none', color:t.textMuted, fontSize:12, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Clear</button>
-                )}
-              </div>
-
-              {/* Column headers */}
-              <div style={{ display:'grid', gridTemplateColumns:'24px 1fr 120px 120px 120px 80px', gap:12, padding:'8px 20px', borderBottom:'1px solid '+t.border, background:t.surfaceUp }}>
-                {['','Exercise Name','Muscle Group','Equipment','Movement','Status'].map(h => (
-                  <div key={h} style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</div>
+          {/* ── REVIEW TABLE ── */}
+          {(step === 'review' || step === 'importing' || step === 'done') && videos.length > 0 && (
+            <>
+              {/* Stats row */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+                {[
+                  ['Total',    videos.length,  t.text,   t.border],
+                  ['New',      stats.done,     t.green,  t.green+'30'],
+                  ['Updated',  stats.updated,  t.orange, t.orange+'30'],
+                  ['Errors',   stats.error,    t.red,    t.red+'30'],
+                ].map(([label,val,color,border]) => (
+                  <div key={label as string} style={{ background:t.surface, border:'1px solid '+(border as string), borderRadius:12, padding:'14px 18px' }}>
+                    <div style={{ fontSize:22, fontWeight:900, color: color as string }}>{val}</div>
+                    <div style={{ fontSize:11, color:t.textMuted, fontWeight:700 }}>{label}</div>
+                  </div>
                 ))}
               </div>
 
-              {/* File rows */}
-              <div style={{ maxHeight:520, overflowY:'auto' }}>
-                {files.map((f,i) => {
-                  const statusColor = f.status==='done'?t.green : f.status==='exists'?t.orange : f.status==='error'?t.red : f.status==='uploading'?t.teal : t.textMuted
-                  const statusLabel = f.status==='done'?'New ✓' : f.status==='exists'?'Updated' : f.status==='error'?'Error' : f.status==='uploading'?'...' : 'Ready'
-                  const mc = muscleColors[f.muscles[0]] || t.teal
+              {/* Video grid preview */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden' }}>
+                <div style={{ padding:'14px 20px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ fontSize:13, fontWeight:800 }}>{videos.length} videos found across 11 muscle groups</div>
+                  <div style={{ fontSize:12, color:t.textMuted }}>Videos stay in Google Drive · Only IDs stored in Supabase</div>
+                </div>
 
-                  return (
-                    <div key={i} style={{ display:'grid', gridTemplateColumns:'24px 1fr 120px 120px 120px 80px', gap:12, padding:'10px 20px', borderBottom:'1px solid '+t.border+'80', alignItems:'center', background: f.status==='error' ? t.redDim : 'transparent' }}>
-                      {/* Status dot */}
-                      <div className="status-dot" style={{ background: statusColor }} />
+                {/* Column headers */}
+                <div style={{ display:'grid', gridTemplateColumns:'40px 1fr 130px 80px 80px', gap:12, padding:'8px 20px', borderBottom:'1px solid '+t.border, background:t.surfaceUp }}>
+                  {['','Exercise Name','Muscle Group','Folder','Status'].map(h => (
+                    <div key={h} style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</div>
+                  ))}
+                </div>
 
-                      {/* Exercise name — editable */}
-                      <input value={f.exerciseName} onChange={e=>updateParsed(i,'exerciseName',e.target.value)}
-                        disabled={importing || f.status==='done'}
-                        style={{ background:'transparent', border:'none', borderBottom:'1px solid '+t.border+'60', fontSize:13, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", width:'100%', padding:'2px 0' }} />
-
-                      {/* Muscle group */}
-                      <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
-                        {f.muscles.map(m => (
-                          <span key={m} style={{ background:(muscleColors[m]||t.teal)+'18', border:'1px solid '+(muscleColors[m]||t.teal)+'30', borderRadius:4, padding:'1px 6px', fontSize:10, fontWeight:700, color: muscleColors[m]||t.teal }}>{m}</span>
-                        ))}
+                <div style={{ maxHeight:560, overflowY:'auto' }}>
+                  {videos.map((v,i) => {
+                    const statusColor = v.status==='done'?t.green : v.status==='updated'?t.orange : v.status==='error'?t.red : v.status==='importing'?t.teal : t.textMuted
+                    const statusLabel = v.status==='done'?'✓ New' : v.status==='updated'?'↑ Updated' : v.status==='error'?'✗ Error' : v.status==='importing'?'...' : 'Ready'
+                    return (
+                      <div key={v.driveFileId} style={{ display:'grid', gridTemplateColumns:'40px 1fr 130px 80px 80px', gap:12, padding:'8px 20px', borderBottom:'1px solid '+t.border+'80', alignItems:'center', background: v.status==='error' ? t.redDim : 'transparent' }}>
+                        {/* Thumbnail */}
+                        <div style={{ width:36, height:28, borderRadius:4, overflow:'hidden', background:t.surfaceHigh, flexShrink:0 }}>
+                          {v.thumbnailLink
+                            ? <img src={v.thumbnailLink} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                            : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>🎬</div>
+                          }
+                        </div>
+                        {/* Exercise name */}
+                        <div style={{ fontSize:12, fontWeight:700, color:t.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.exerciseName}</div>
+                        {/* Muscles */}
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                          {v.muscles.slice(0,2).map(m => (
+                            <span key={m} style={{ background:(muscleColor[m]||t.teal)+'18', border:'1px solid '+(muscleColor[m]||t.teal)+'30', borderRadius:4, padding:'1px 5px', fontSize:9, fontWeight:700, color:muscleColor[m]||t.teal }}>{m}</span>
+                          ))}
+                        </div>
+                        {/* Folder */}
+                        <div style={{ fontSize:10, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.folderName}</div>
+                        {/* Status */}
+                        <div style={{ fontSize:11, fontWeight:700, color: statusColor }}>{statusLabel}</div>
                       </div>
-
-                      {/* Equipment — editable dropdown */}
-                      <select value={f.equipment} onChange={e=>updateParsed(i,'equipment',e.target.value)}
-                        disabled={importing || f.status==='done'}
-                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:6, padding:'3px 6px', fontSize:11, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}>
-                        {['Barbell','Dumbbell','Cable','Machine','Bodyweight','Kettlebell','Resistance Band','EZ Bar','Trap Bar','Smith Machine','Landmine','Sled','Plate','Other'].map(eq=>(
-                          <option key={eq} value={eq}>{eq}</option>
-                        ))}
-                      </select>
-
-                      {/* Movement pattern */}
-                      <select value={f.movementPattern} onChange={e=>updateParsed(i,'movementPattern',e.target.value)}
-                        disabled={importing || f.status==='done'}
-                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:6, padding:'3px 6px', fontSize:11, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}>
-                        {['push','pull','squat','hinge','lunge','carry','core','isolation','general'].map(p=>(
-                          <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>
-                        ))}
-                      </select>
-
-                      {/* Status */}
-                      <div style={{ fontSize:11, fontWeight:700, color: statusColor }}>{statusLabel}</div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           )}
 
         </div>

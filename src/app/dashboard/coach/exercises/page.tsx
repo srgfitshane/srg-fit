@@ -164,15 +164,22 @@ export default function ExerciseLibrary() {
                 onMouseEnter={e=>e.currentTarget.style.borderColor=t.teal+'40'}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
 
-                {/* Video thumbnail / player */}
+                {/* Video thumbnail / player — supports Drive embed or direct video */}
                 {ex.video_url && (
                   <div style={{ position:'relative', background:'#000', aspectRatio:'16/9' }}>
                     {playingId === ex.id ? (
-                      <video src={ex.video_url} autoPlay controls style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+                      ex.video_url.includes('drive.google.com') ? (
+                        <iframe src={ex.video_url} allow="autoplay" style={{ width:'100%', height:'100%', border:'none' }} />
+                      ) : (
+                        <video src={ex.video_url} autoPlay controls style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+                      )
                     ) : (
                       <div onClick={()=>setPlayingId(ex.id)}
-                        style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', background:'#0a0a12', minHeight:120 }}>
-                        <div style={{ width:44, height:44, borderRadius:'50%', background:t.teal+'22', border:'2px solid '+t.teal+'60', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>▶</div>
+                        style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', background:'#0a0a12', minHeight:120, position:'relative' }}>
+                        {ex.drive_thumbnail && (
+                          <img src={ex.drive_thumbnail} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.5 }} />
+                        )}
+                        <div style={{ position:'relative', width:44, height:44, borderRadius:'50%', background:t.teal+'33', border:'2px solid '+t.teal+'70', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>▶</div>
                       </div>
                     )}
                   </div>
