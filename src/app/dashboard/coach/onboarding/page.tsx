@@ -30,7 +30,7 @@ type Question = {
 
 type Form = { id: string; title: string; description: string; is_default: boolean }
 
-export default function OnboardingBuilderPage() {
+export default function FormsBuilderPage() {
   const supabase = createClient()
   const router = useRouter()
   const [coachId, setCoachId] = useState<string|null>(null)
@@ -65,7 +65,7 @@ export default function OnboardingBuilderPage() {
 
   const createForm = async () => {
     if (!coachId) return
-    const { data } = await supabase.from('onboarding_forms').insert({ coach_id: coachId, title: 'New Onboarding Form' }).select().single()
+    const { data } = await supabase.from('onboarding_forms').insert({ coach_id: coachId, title: 'New Form' }).select().single()
     if (data) { setForms(p => [...p, data]); loadForm(data) }
   }
 
@@ -147,7 +147,7 @@ export default function OnboardingBuilderPage() {
         {/* Header */}
         <div style={{ padding:'18px 20px', display:'flex', alignItems:'center', gap:12, borderBottom:'1px solid '+t.border }}>
           <button onClick={()=>router.push('/dashboard/coach')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
-          <div style={{ fontSize:18, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', flex:1 }}>Onboarding Form Builder</div>
+          <div style={{ fontSize:18, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', flex:1 }}>Form Builder</div>
           <button onClick={createForm} style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ New Form</button>
         </div>
 

@@ -57,6 +57,13 @@ export default function ClientDetail() {
       setClient(clientData)
       if (clientData?.coach_notes) setCoachNotes(clientData.coach_notes)
 
+      // Load forms for assign form feature
+      const { data: formData } = await supabase
+        .from('onboarding_forms')
+        .select('id,title,is_default')
+        .eq('coach_id', user.id)
+      setForms(formData || [])
+
       const { data: checkinData } = await supabase
         .from('checkins')
         .select('*')
@@ -103,6 +110,27 @@ export default function ClientDetail() {
 
   const [coachNotes, setCoachNotes] = useState('')
   const [notesSaved, setNotesSaved] = useState(false)
+  const [forms,        setForms]        = useState<any[]>([])
+  const [showAssignForm, setShowAssignForm] = useState(false)
+  const [assignFormId,   setAssignFormId]   = useState('')
+  const [assignNote,     setAssignNote]     = useState('')
+  const [assigning,      setAssigning]      = useState(false)
+  const [assignedDone,   setAssignedDone]   = useState(false)
+
+  const assignForm = async () => {
+    if (!assignFormId || !coachId) return
+    setAssigning(true)
+    await supabase.from('client_form_assignments').insert({
+      coach_id: coachId,
+      client_id: clientId,
+      form_id: assignFormId,
+      note: assignNote || null,
+      status: 'pending',
+    })
+    setAssigning(false)
+    setAssignedDone(true)
+    setTimeout(() => { setShowAssignForm(false); setAssignedDone(false); setAssignFormId(''); setAssignNote('') }, 1800)
+  }
 
   const saveAndBack = async () => {
     if (coachNotes.trim()) {
@@ -172,6 +200,10 @@ export default function ClientDetail() {
             ? <button onClick={handleUnflag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Unflag</button>
             : <button onClick={()=>setShowFlag(true)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Flag Client</button>
           }
+          <button onClick={()=>setShowAssignForm(true)}
+            style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            📝 Send Form
+          </button>
           <button onClick={()=>router.push('/dashboard/coach/clients/'+clientId+'/habits')}
             style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             ✅ Manage Habits
@@ -505,6 +537,46 @@ export default function ClientDetail() {
 
         </div>
 
+
+        {/* Assign form modal */}
+        {showAssignForm && (
+          <div onClick={()=>setShowAssignForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>📝 Send a Form</div>
+              <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>
+                Assign a form to {client?.profile?.full_name} — they'll see it in their client dashboard.
+              </div>
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Choose Form *</div>
+                <select value={assignFormId} onChange={e=>setAssignFormId(e.target.value)}
+                  style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:assignFormId?t.text:t.textMuted, outline:'none', fontFamily:"'DM Sans',sans-serif", appearance:'none' as any, colorScheme:'dark', boxSizing:'border-box' as any }}>
+                  <option value="">Select a form...</option>
+                  {forms.map(f => <option key={f.id} value={f.id} style={{ background:t.surfaceHigh }}>{f.title}{f.is_default?' (default)':''}</option>)}
+                </select>
+                {forms.length === 0 && (
+                  <div style={{ fontSize:12, color:t.orange, marginTop:6 }}>
+                    No forms yet. <span onClick={()=>router.push('/dashboard/coach/onboarding')} style={{ cursor:'pointer', textDecoration:'underline' }}>Create one first →</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Note to Client (optional)</div>
+                <input value={assignNote} onChange={e=>setAssignNote(e.target.value)} placeholder="e.g. Please fill this out before our next session"
+                  style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as any }} />
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={()=>setShowAssignForm(false)}
+                  style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Cancel
+                </button>
+                <button onClick={assignForm} disabled={!assignFormId || assigning || assignedDone}
+                  style={{ flex:2, background:assignedDone?t.green:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:assignedDone?'#000':'#fff', cursor:!assignFormId||assigning||assignedDone?'not-allowed':'pointer', opacity:!assignFormId||assigning?.5:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
+                  {assignedDone ? '✓ Form Sent!' : assigning ? 'Sending...' : '📝 Send Form'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Sticky save & back bar */}
         <div style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)' }}>

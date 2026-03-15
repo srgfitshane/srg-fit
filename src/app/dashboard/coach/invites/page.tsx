@@ -15,23 +15,27 @@ type Invite = {
   id: string; email: string; full_name: string | null; status: string
   created_at: string; expires_at: string; accepted_at: string | null; message: string | null
 }
-
-type Form = { id: string; title: string }
+type Form = { id: string; title: string; is_default: boolean }
 
 export default function InvitesPage() {
   const supabase = createClient()
   const router = useRouter()
-  const [invites, setInvites] = useState<Invite[]>([])
-  const [forms, setForms] = useState<Form[]>([])
-  const [loading, setLoading] = useState(true)
-  const [coachId, setCoachId] = useState<string | null>(null)
+  const [invites,   setInvites]   = useState<Invite[]>([])
+  const [forms,     setForms]     = useState<Form[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [coachId,   setCoachId]   = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
-  const [filter, setFilter] = useState<'all'|'pending'|'accepted'|'cancelled'>('all')
-  const [form, setForm] = useState({
-    email: '', full_name: '', message: '', onboarding_form_id: ''
-  })
+  const [sending,   setSending]   = useState(false)
+  const [filter,    setFilter]    = useState<'all'|'pending'|'accepted'|'cancelled'>('all')
+  const [form, setForm] = useState({ email:'', full_name:'', message:'', onboarding_form_id:'' })
+
+  // Post-send "What's next?" modal
+  const [showNext,     setShowNext]     = useState(false)
+  const [lastInvite,   setLastInvite]   = useState<Invite|null>(null)
+  const [nextFormId,   setNextFormId]   = useState('')
+  const [nextNote,     setNextNote]     = useState('')
+  const [assigning,    setAssigning]    = useState(false)
+  const [assignDone,   setAssignDone]   = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -40,7 +44,7 @@ export default function InvitesPage() {
       setCoachId(user.id)
       const [{ data: inv }, { data: frms }] = await Promise.all([
         supabase.from('client_invites').select('*').eq('coach_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('onboarding_forms').select('id,title').eq('coach_id', user.id)
+        supabase.from('onboarding_forms').select('id,title,is_default').eq('coach_id', user.id)
       ])
       setInvites(inv || [])
       setForms(frms || [])
@@ -58,13 +62,27 @@ export default function InvitesPage() {
     if (form.onboarding_form_id) payload.onboarding_form_id = form.onboarding_form_id
     const { data, error } = await supabase.from('client_invites').insert(payload).select().single()
     if (!error && data) {
-      // Send email via edge function
       await supabase.functions.invoke('send-invite-email', { body: { invite_id: data.id } })
       setInvites(p => [data, ...p])
-      setSent(true)
-      setTimeout(() => { setSent(false); setShowModal(false); setForm({ email:'', full_name:'', message:'', onboarding_form_id:'' }) }, 2000)
+      setLastInvite(data)
+      // Pre-select the form they chose, or the default
+      const chosenForm = form.onboarding_form_id || forms.find(f=>f.is_default)?.id || ''
+      setNextFormId(chosenForm)
+      setShowModal(false)
+      setForm({ email:'', full_name:'', message:'', onboarding_form_id:'' })
+      setShowNext(true)
     }
     setSending(false)
+  }
+
+  const assignFormToInvite = async () => {
+    if (!nextFormId || !lastInvite || !coachId) return
+    setAssigning(true)
+    // We don't have a client_id yet (not accepted), so we store on the invite itself
+    // and the accept flow will pick it up. For now just update the invite's form.
+    await supabase.from('client_invites').update({ onboarding_form_id: nextFormId }).eq('id', lastInvite.id)
+    setAssignDone(true)
+    setAssigning(false)
   }
 
   const cancelInvite = async (id: string) => {
@@ -82,11 +100,7 @@ export default function InvitesPage() {
   const statusColor = (s: string) => s === 'accepted' ? t.green : s === 'pending' ? t.orange : t.textMuted
   const statusBg   = (s: string) => s === 'accepted' ? t.greenDim : s === 'pending' ? t.orangeDim : t.surfaceHigh
 
-  const Input = ({ field, placeholder, type='text' }: any) => (
-    <input value={(form as any)[field]} onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
-      placeholder={placeholder} type={type}
-      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as any }} />
-  )
+  const sty = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as any }
 
   if (loading) return <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.textMuted }}>Loading...</div>
 
@@ -157,29 +171,35 @@ export default function InvitesPage() {
           </div>
         )}
 
-        {/* Send invite modal */}
+        {/* ── Send invite modal ── */}
         {showModal && (
           <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:20 }}>
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:460 }}>
               <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>Invite a Client</div>
-              <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>They'll receive an email with a link to sign up and complete onboarding.</div>
+              <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>They'll get an email with a link to sign up and get started.</div>
 
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                <div><div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Email *</div><Input field="email" placeholder="client@email.com" type="email" /></div>
-                <div><div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Name (optional)</div><Input field="full_name" placeholder="First Last" /></div>
                 <div>
-                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Onboarding Form</div>
-                  <select value={form.onboarding_form_id} onChange={e=>setForm(p=>({...p, onboarding_form_id:e.target.value}))}
-                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:form.onboarding_form_id?t.text:t.textMuted, outline:'none', fontFamily:"'DM Sans',sans-serif", appearance:'none' as any }}>
-                    <option value="">None (use default if set)</option>
-                    {forms.map(f => <option key={f.id} value={f.id} style={{ background:t.surfaceHigh }}>{f.title}</option>)}
+                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Email *</div>
+                  <input value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} placeholder="client@email.com" type="email" style={sty} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Name (optional)</div>
+                  <input value={form.full_name} onChange={e=>setForm(p=>({...p,full_name:e.target.value}))} placeholder="First Last" style={sty} />
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Attach a Form</div>
+                  <select value={form.onboarding_form_id} onChange={e=>setForm(p=>({...p,onboarding_form_id:e.target.value}))}
+                    style={{ ...sty, appearance:'none' as any, color:form.onboarding_form_id?t.text:t.textMuted }}>
+                    <option value="">None (assign later)</option>
+                    {forms.map(f => <option key={f.id} value={f.id} style={{ background:t.surfaceHigh }}>{f.title}{f.is_default?' (default)':''}</option>)}
                   </select>
                 </div>
                 <div>
                   <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Personal Note (optional)</div>
-                  <textarea value={form.message} onChange={e=>setForm(p=>({...p, message:e.target.value}))} rows={3}
-                    placeholder="Hey! I'm excited to work with you. Here's your invite to SRG Fit..."
-                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'vertical' }} />
+                  <textarea value={form.message} onChange={e=>setForm(p=>({...p,message:e.target.value}))} rows={3}
+                    placeholder="Hey! I'm excited to work with you..."
+                    style={{ ...sty, resize:'vertical' as any }} />
                 </div>
               </div>
 
@@ -189,10 +209,72 @@ export default function InvitesPage() {
                   Cancel
                 </button>
                 <button onClick={sendInvite} disabled={!form.email || sending}
-                  style={{ flex:2, background: sent?t.green:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:sending?'not-allowed':'pointer', opacity:(!form.email||sending)?.5:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
-                  {sent ? '✓ Invite Sent!' : sending ? 'Sending...' : '📨 Send Invite'}
+                  style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:sending||!form.email?'not-allowed':'pointer', opacity:(!form.email||sending)?.5:1, fontFamily:"'DM Sans',sans-serif" }}>
+                  {sending ? 'Sending...' : '📨 Send Invite'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Post-invite "What's next?" modal ── */}
+        {showNext && lastInvite && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:20 }}>
+            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:28, width:'100%', maxWidth:480 }}>
+              <div style={{ textAlign:'center', marginBottom:20 }}>
+                <div style={{ fontSize:36, marginBottom:8 }}>🎉</div>
+                <div style={{ fontSize:17, fontWeight:900, marginBottom:4 }}>Invite sent!</div>
+                <div style={{ fontSize:13, color:t.textMuted }}>
+                  {lastInvite.full_name || lastInvite.email} will get an email shortly.
+                </div>
+              </div>
+
+              <div style={{ background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:16, marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Attach a Form</div>
+                <div style={{ fontSize:13, color:t.textDim, marginBottom:10, lineHeight:1.5 }}>
+                  They'll be prompted to fill this out after signing up.
+                </div>
+                <select value={nextFormId} onChange={e=>setNextFormId(e.target.value)}
+                  style={{ ...sty, color:nextFormId?t.text:t.textMuted, appearance:'none' as any }}>
+                  <option value="">No form</option>
+                  {forms.map(f => <option key={f.id} value={f.id} style={{ background:t.surfaceHigh }}>{f.title}{f.is_default?' (default)':''}</option>)}
+                </select>
+                {nextFormId && (
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>Note to client (optional)</div>
+                    <input value={nextNote} onChange={e=>setNextNote(e.target.value)} placeholder="e.g. Please fill this out before our first call"
+                      style={sty} />
+                  </div>
+                )}
+                {nextFormId && !assignDone && (
+                  <button onClick={assignFormToInvite} disabled={assigning}
+                    style={{ marginTop:10, width:'100%', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.teal, cursor:assigning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:assigning?.6:1 }}>
+                    {assigning ? 'Saving...' : '✓ Attach Form to Invite'}
+                  </button>
+                )}
+                {assignDone && (
+                  <div style={{ marginTop:10, background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.green, textAlign:'center' }}>
+                    ✓ Form attached!
+                  </div>
+                )}
+              </div>
+
+              {/* Quick actions */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:16 }}>
+                <button onClick={()=>{ setShowNext(false); router.push('/dashboard/coach/onboarding') }}
+                  style={{ padding:'11px', borderRadius:11, border:'1px solid '+t.border, background:t.surfaceHigh, fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  📝 Manage Forms
+                </button>
+                <button onClick={()=>{ setShowNext(false); setShowModal(true) }}
+                  style={{ padding:'11px', borderRadius:11, border:'1px solid '+t.teal+'40', background:t.tealDim, fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  + Invite Another
+                </button>
+              </div>
+
+              <button onClick={()=>{ setShowNext(false); setAssignDone(false); setNextFormId(''); setNextNote('') }}
+                style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:11, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Done
+              </button>
             </div>
           </div>
         )}
