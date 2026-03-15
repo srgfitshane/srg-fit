@@ -1,355 +1,666 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
   border:'#252538', teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623',
-  accent:'#c8f545', accentDim:'#c8f54515', text:'#f0f0f0', textDim:'#888',
-  textMuted:'#555', red:'#ff4d6d', redDim:'#ff4d6d15', green:'#22c55e',
-  purple:'#a855f7', purpleDim:'#a855f715'
+  orangeDim:'#f5a62315', accent:'#c8f545', accentDim:'#c8f54515',
+  purple:'#8b5cf6', purpleDim:'#8b5cf615', green:'#22c55e', greenDim:'#22c55e15',
+  red:'#ef4444', redDim:'#ef444415', pink:'#f472b6',
+  text:'#eeeef8', textDim:'#8888a8', textMuted:'#5a5a78',
 }
 
-interface Client { id: string; profile_id: string; full_name: string; status: string }
-interface Exercise { id: string; name: string; muscle_group: string; exercise_type: string }
-interface SessionEx {
-  exercise_id: string; exercise_name: string; exercise_type: string
-  sets_prescribed: number; reps_prescribed: string; weight_prescribed: string
-  rest_seconds: number; notes_coach: string; order_index: number
+const CATEGORIES = [
+  { value:'strength',     label:'Strength',     icon:'🏋️', color:t.orange },
+  { value:'hypertrophy',  label:'Hypertrophy',  icon:'💪', color:t.purple },
+  { value:'conditioning', label:'Conditioning', icon:'🔥', color:t.red },
+  { value:'mobility',     label:'Mobility',     icon:'🧘', color:t.teal },
+  { value:'powerlifting', label:'Powerlifting', icon:'⚡', color:t.accent },
+  { value:'general',      label:'General',      icon:'🎯', color:t.green },
+]
+const catMeta = (c: string) => CATEGORIES.find(x => x.value === c) || CATEGORIES[5]
+
+interface TemplateEx {
+  id?: string
+  exercise_id: string
+  exercise_name: string
+  exercise_type: string
+  sets_prescribed: number
+  reps_prescribed: string
+  weight_prescribed: string
+  rest_seconds: number
+  notes: string
+  order_index: number
 }
+
+type View = 'list' | 'build'
+
 export default function CoachWorkoutsPage() {
   const supabase = createClient()
-  const router = useRouter()
-  const [clients, setClients] = useState<Client[]>([])
-  const [exercises, setExercises] = useState<Exercise[]>([])
-  const [sessions, setSessions] = useState<any[]>([])
-  const [view, setView] = useState<'list'|'create'>('list')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [searchEx, setSearchEx] = useState('')
-  const [filterClient, setFilterClient] = useState('all')
+  const router   = useRouter()
+  const [coachId,    setCoachId]    = useState('')
+  const [templates,  setTemplates]  = useState<any[]>([])
+  const [exercises,  setExercises]  = useState<any[]>([])
+  const [clients,    setClients]    = useState<any[]>([])
+  const [programs,   setPrograms]   = useState<any[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [view,       setView]       = useState<View>('list')
+  const [editing,    setEditing]    = useState<any>(null) // template being edited/created
+  const [saving,     setSaving]     = useState(false)
+  const [searchEx,   setSearchEx]   = useState('')
+  const [exGroup,    setExGroup]    = useState('all')
+  const [actionModal,setActionModal]= useState<any>(null) // {template, action}
+  const [actionForm, setActionForm] = useState({ client_id:'', date:'', program_id:'', resource_group_id:'' })
+  const [actionSaving,setActionSaving]=useState(false)
+  const [resourceGroups, setResourceGroups] = useState<any[]>([])
 
-  // New session form state
-  const [form, setForm] = useState({
-    client_id: '', title: 'Workout', day_label: '',
-    scheduled_date: new Date().toISOString().split('T')[0],
-    notes_coach: '', week_number: 1, day_number: 1
-  })
-  const [sessionExercises, setSessionExercises] = useState<SessionEx[]>([])
+  useEffect(() => { load() }, [])
 
-  useEffect(() => { loadData() }, [])
-
-  async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser()
+  const load = useCallback(async () => {
+    const { data:{ user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
+    setCoachId(user.id)
 
-    const [{ data: profile }] = await Promise.all([
-      supabase.from('profiles').select('id').eq('user_id', user.id).single()
-    ])
-
-    const [{ data: cls }, { data: exs }, { data: sess }] = await Promise.all([
-      supabase.from('clients').select('id, profile_id, status').eq('coach_id', profile?.id).neq('status','archived'),
+    const [
+      { data: tmpl },
+      { data: exs },
+      { data: cls },
+      { data: progs },
+      { data: rgroups },
+    ] = await Promise.all([
+      supabase.from('workout_templates').select(`*, workout_template_exercises(*)`)
+        .eq('coach_id', user.id).order('created_at', { ascending: false }),
       supabase.from('exercises').select('id, name, muscle_group, exercise_type').order('name'),
-      supabase.from('workout_sessions').select(`
-        id, title, status, scheduled_date, day_label, mood, session_rpe, completed_at,
-        clients!inner(id, profiles(full_name))
-      `).eq('coach_id', profile?.id).order('scheduled_date', { ascending: false }).limit(50)
+      supabase.from('clients')
+        .select('id, profile_id, profiles!profile_id(full_name)')
+        .eq('coach_id', user.id).eq('active', true),
+      supabase.from('programs').select('id, name, is_template')
+        .eq('coach_id', user.id).eq('active', true),
+      supabase.from('content_groups').select('id, name, icon, color').eq('coach_id', user.id),
     ])
 
-    // get full_names for clients
-    const clientsWithNames: Client[] = []
-    for (const c of cls || []) {
-      const { data: p } = await supabase.from('profiles').select('full_name').eq('id', c.profile_id).single()
-      clientsWithNames.push({ ...c, full_name: p?.full_name || 'Unknown' })
-    }
-
-    setClients(clientsWithNames)
+    setTemplates(tmpl || [])
     setExercises(exs || [])
-    setSessions(sess || [])
+    setPrograms(progs || [])
+    setResourceGroups(rgroups || [])
+
+    const clientsWithNames = (cls || []).map((c: any) => ({
+      ...c,
+      full_name: Array.isArray(c.profiles) ? c.profiles[0]?.full_name : c.profiles?.full_name || 'Unknown'
+    }))
+    setClients(clientsWithNames)
     setLoading(false)
+  }, [])
+
+  // ── Builder state ──────────────────────────────────────────────────────
+  const [form, setForm] = useState({
+    title: '', category: 'strength', difficulty: 'intermediate',
+    estimated_minutes: '', description: '', notes_coach: '', tags: ''
+  })
+  const [buildExercises, setBuildExercises] = useState<TemplateEx[]>([])
+
+  function openNew() {
+    setEditing(null)
+    setForm({ title:'', category:'strength', difficulty:'intermediate', estimated_minutes:'', description:'', notes_coach:'', tags:'' })
+    setBuildExercises([])
+    setView('build')
   }
 
-  async function createSession() {
-    if (!form.client_id || sessionExercises.length === 0) return
-    setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('id').eq('user_id', user!.id).single()
-
-    const { data: session, error } = await supabase.from('workout_sessions').insert({
-      client_id: form.client_id,
-      coach_id: profile?.id,
-      title: form.title,
-      day_label: form.day_label,
-      scheduled_date: form.scheduled_date,
-      notes_coach: form.notes_coach,
-      week_number: form.week_number,
-      day_number: form.day_number,
-      status: 'assigned'
-    }).select().single()
-
-    if (!error && session) {
-      await supabase.from('session_exercises').insert(
-        sessionExercises.map(ex => ({ ...ex, session_id: session.id }))
-      )
-      // notify client
-      const client = clients.find(c => c.id === form.client_id)
-      if (client) {
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: client.profile_id,
-            notification_type: 'program_assigned',
-            title: `New workout assigned: ${form.title}`,
-            body: form.scheduled_date ? `Scheduled for ${form.scheduled_date}` : 'Ready when you are!',
-            link_url: '/dashboard/client'
-          })
-        })
-      }
-    }
-    setSaving(false)
-    setView('list')
-    loadData()
-    setForm({ client_id:'', title:'Workout', day_label:'', scheduled_date: new Date().toISOString().split('T')[0], notes_coach:'', week_number:1, day_number:1 })
-    setSessionExercises([])
+  function openEdit(tmpl: any) {
+    setEditing(tmpl)
+    setForm({
+      title: tmpl.title,
+      category: tmpl.category || 'strength',
+      difficulty: tmpl.difficulty || 'intermediate',
+      estimated_minutes: tmpl.estimated_minutes || '',
+      description: tmpl.description || '',
+      notes_coach: tmpl.notes_coach || '',
+      tags: (tmpl.tags || []).join(', '),
+    })
+    const exs = (tmpl.workout_template_exercises || [])
+      .sort((a:any,b:any) => a.order_index - b.order_index)
+      .map((e:any) => ({ ...e, notes: e.notes || '' }))
+    setBuildExercises(exs)
+    setView('build')
   }
 
-  function addExercise(ex: Exercise) {
-    setSessionExercises(prev => [...prev, {
-      exercise_id: ex.id, exercise_name: ex.name, exercise_type: ex.exercise_type || 'strength',
-      sets_prescribed: 3, reps_prescribed: '8-12', weight_prescribed: '',
-      rest_seconds: 90, notes_coach: '', order_index: prev.length
+  function addExToTemplate(ex: any) {
+    if (buildExercises.some(e => e.exercise_id === ex.id)) return
+    setBuildExercises(prev => [...prev, {
+      exercise_id: ex.id, exercise_name: ex.name,
+      exercise_type: ex.exercise_type || 'strength',
+      sets_prescribed: 3, reps_prescribed: '8-12',
+      weight_prescribed: '', rest_seconds: 90,
+      notes: '', order_index: prev.length,
     }])
   }
 
-  function updateEx(idx: number, field: keyof SessionEx, val: any) {
-    setSessionExercises(prev => prev.map((e,i) => i===idx ? {...e, [field]: val} : e))
+  function updateBuildEx(idx: number, field: keyof TemplateEx, val: any) {
+    setBuildExercises(prev => prev.map((e,i) => i===idx ? {...e,[field]:val} : e))
   }
 
-  function removeEx(idx: number) {
-    setSessionExercises(prev => prev.filter((_,i) => i!==idx).map((e,i) => ({...e, order_index: i})))
+  function removeBuildEx(idx: number) {
+    setBuildExercises(prev => prev.filter((_,i)=>i!==idx).map((e,i)=>({...e,order_index:i})))
   }
 
-  const filteredEx = exercises.filter(e =>
-    e.name.toLowerCase().includes(searchEx.toLowerCase()) ||
-    e.muscle_group?.toLowerCase().includes(searchEx.toLowerCase())
-  ).slice(0, 30)
+  function moveEx(idx: number, dir: -1|1) {
+    const next = idx + dir
+    if (next < 0 || next >= buildExercises.length) return
+    setBuildExercises(prev => {
+      const arr = [...prev]
+      ;[arr[idx], arr[next]] = [arr[next], arr[idx]]
+      return arr.map((e,i) => ({...e, order_index: i}))
+    })
+  }
 
-  const filteredSessions = sessions.filter(s =>
-    filterClient === 'all' ? true : s.clients?.id === filterClient
+  async function saveTemplate() {
+    if (!form.title.trim() || buildExercises.length === 0) return
+    setSaving(true)
+    const payload = {
+      coach_id: coachId,
+      title: form.title.trim(),
+      category: form.category,
+      difficulty: form.difficulty,
+      estimated_minutes: form.estimated_minutes ? parseInt(form.estimated_minutes) : null,
+      description: form.description || null,
+      notes_coach: form.notes_coach || null,
+      tags: form.tags ? form.tags.split(',').map(s=>s.trim()).filter(Boolean) : [],
+      updated_at: new Date().toISOString(),
+    }
+
+    let templateId = editing?.id
+    if (editing) {
+      await supabase.from('workout_templates').update(payload).eq('id', editing.id)
+      await supabase.from('workout_template_exercises').delete().eq('template_id', editing.id)
+    } else {
+      const { data } = await supabase.from('workout_templates').insert(payload).select().single()
+      templateId = data?.id
+    }
+
+    if (templateId) {
+      await supabase.from('workout_template_exercises').insert(
+        buildExercises.map((e,i) => ({
+          template_id: templateId,
+          exercise_id: e.exercise_id,
+          exercise_name: e.exercise_name,
+          exercise_type: e.exercise_type,
+          sets_prescribed: e.sets_prescribed,
+          reps_prescribed: e.reps_prescribed,
+          weight_prescribed: e.weight_prescribed || null,
+          rest_seconds: e.rest_seconds,
+          notes: e.notes || null,
+          order_index: i,
+        }))
+      )
+    }
+    await load()
+    setSaving(false)
+    setView('list')
+  }
+
+  async function deleteTemplate(id: string) {
+    await supabase.from('workout_templates').delete().eq('id', id)
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  // ── Action handlers ────────────────────────────────────────────────────
+  function openAction(template: any, action: 'client'|'program'|'resource') {
+    setActionModal({ template, action })
+    setActionForm({ client_id:'', date: new Date().toISOString().split('T')[0], program_id:'', resource_group_id: resourceGroups[0]?.id || '' })
+  }
+
+  async function executeAction() {
+    if (!actionModal) return
+    setActionSaving(true)
+    const { template, action } = actionModal
+
+    if (action === 'client') {
+      // Create a workout_session + session_exercises from this template
+      if (!actionForm.client_id) { setActionSaving(false); return }
+      const client = clients.find(c => c.id === actionForm.client_id)
+      const { data: session } = await supabase.from('workout_sessions').insert({
+        coach_id: coachId,
+        client_id: actionForm.client_id,
+        title: template.title,
+        scheduled_date: actionForm.date || null,
+        notes_coach: template.notes_coach || null,
+        status: 'assigned',
+      }).select().single()
+
+      if (session) {
+        const exs = (template.workout_template_exercises || [])
+          .sort((a:any,b:any) => a.order_index - b.order_index)
+        await supabase.from('session_exercises').insert(
+          exs.map((e:any, i:number) => ({
+            session_id: session.id,
+            exercise_id: e.exercise_id,
+            exercise_name: e.exercise_name,
+            exercise_type: e.exercise_type,
+            sets_prescribed: e.sets_prescribed,
+            reps_prescribed: e.reps_prescribed,
+            weight_prescribed: e.weight_prescribed || null,
+            rest_seconds: e.rest_seconds,
+            notes_coach: e.notes || null,
+            order_index: i,
+          }))
+        )
+        if (client?.profile_id) {
+          fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: client.profile_id,
+              notification_type: 'program_assigned',
+              title: `New workout assigned: ${template.title}`,
+              body: actionForm.date ? `Scheduled for ${actionForm.date}` : 'Ready when you are!',
+              link_url: '/dashboard/client',
+            })
+          }).catch(()=>{})
+        }
+      }
+    }
+
+    if (action === 'program') {
+      // Add as a workout_block to an existing program
+      if (!actionForm.program_id) { setActionSaving(false); return }
+      const exs = (template.workout_template_exercises || [])
+        .sort((a:any,b:any) => a.order_index - b.order_index)
+
+      // Get current max order_index for this program
+      const { data: existingBlocks } = await supabase
+        .from('workout_blocks').select('order_index').eq('program_id', actionForm.program_id)
+        .order('order_index', { ascending: false }).limit(1)
+      const nextOrder = existingBlocks?.[0]?.order_index != null ? existingBlocks[0].order_index + 1 : 0
+
+      const { data: block } = await supabase.from('workout_blocks').insert({
+        program_id: actionForm.program_id,
+        name: template.title,
+        block_label: template.category,
+        order_index: nextOrder,
+        group_types: {},
+      }).select().single()
+
+      if (block) {
+        await supabase.from('block_exercises').insert(
+          exs.map((e:any, i:number) => ({
+            block_id: block.id,
+            exercise_id: e.exercise_id,
+            sets: e.sets_prescribed,
+            reps: e.reps_prescribed,
+            target_weight: e.weight_prescribed || null,
+            rest_seconds: e.rest_seconds,
+            notes: e.notes || null,
+            order_index: i,
+          }))
+        )
+      }
+    }
+
+    if (action === 'resource') {
+      // Save as a content_item of type 'workout'
+      const exs = (template.workout_template_exercises || [])
+        .sort((a:any,b:any) => a.order_index - b.order_index)
+      await supabase.from('content_items').insert({
+        coach_id: coachId,
+        group_id: actionForm.resource_group_id || null,
+        title: template.title,
+        description: template.description || null,
+        content_type: 'workout',
+        difficulty: template.difficulty,
+        estimated_duration: template.estimated_minutes ? `${template.estimated_minutes} min` : null,
+        tags: template.tags || [],
+        workout_exercises: exs.map((e:any) => ({
+          order: e.order_index + 1,
+          name: e.exercise_name,
+          prescription: [e.sets_prescribed, e.reps_prescribed].filter(Boolean).join('x') + (e.weight_prescribed ? ` @ ${e.weight_prescribed}` : '')
+        })),
+      })
+    }
+
+    setActionSaving(false)
+    setActionModal(null)
+  }
+
+  // ── Filtered exercises ─────────────────────────────────────────────────
+  const muscleGroups = [...new Set(exercises.map((e:any)=>e.muscle_group).filter(Boolean))] as string[]
+  const filteredEx = exercises.filter((e:any) => {
+    const matchSearch = !searchEx || e.name.toLowerCase().includes(searchEx.toLowerCase())
+    const matchGroup = exGroup === 'all' || e.muscle_group === exGroup
+    return matchSearch && matchGroup
+  }).slice(0, 40)
+
+  const inp = {
+    background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8,
+    padding: '9px 12px', fontSize: 13, color: t.text, outline: 'none' as const,
+    fontFamily: "'DM Sans',sans-serif", width: '100%',
+  }
+
+  if (loading) return (
+    <div style={{background:t.bg,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'DM Sans',sans-serif",color:t.teal,fontSize:14,fontWeight:700}}>Loading...</div>
   )
-
-  const statusColor = (s: string) => ({
-    assigned:'#f5a623', in_progress: t.teal, completed: t.green, skipped: t.textMuted
-  }[s] || t.textMuted)
-
-  const moodEmoji = (m: string) => ({ great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }[m] || '')
 
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}`}</style>
-      <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",padding:'24px'}}>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}`}</style>
+      <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif"}}>
 
-        {/* Header */}
-        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}>
-          <button onClick={()=>router.push('/dashboard/coach')}
-            style={{background:'none',border:'none',color:t.textDim,cursor:'pointer',fontSize:13}}>← Dashboard</button>
-          <div style={{flex:1}}/>
-          <h1 style={{fontSize:22,fontWeight:900,color:t.text}}>💪 Workouts</h1>
-          <div style={{flex:1}}/>
-          {view==='list' && (
-            <button onClick={()=>setView('create')}
-              style={{background:t.accent,border:'none',borderRadius:10,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#0f0f0f',cursor:'pointer'}}>
-              + Assign Workout
+        {/* Top bar */}
+        <div style={{background:t.surface,borderBottom:`1px solid ${t.border}`,padding:'0 24px',display:'flex',alignItems:'center',height:60,gap:12}}>
+          {view === 'build' ? (
+            <button onClick={()=>setView('list')} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+              ← Back to Library
+            </button>
+          ) : (
+            <button onClick={()=>router.push('/dashboard/coach')} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+              ← Dashboard
             </button>
           )}
-          {view==='create' && (
-            <button onClick={()=>setView('list')}
-              style={{background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'8px 14px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
-              ← Back
+          <div style={{width:1,height:28,background:t.border}}/>
+          <div style={{fontSize:14,fontWeight:800}}>💪 Workout Library</div>
+          <div style={{flex:1}}/>
+          {view === 'list' && (
+            <button onClick={openNew}
+              style={{background:`linear-gradient(135deg,${t.accent},${t.accent}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:12,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+              + Build Workout
+            </button>
+          )}
+          {view === 'build' && (
+            <button onClick={saveTemplate} disabled={saving || !form.title.trim() || buildExercises.length === 0}
+              style={{background:saving||!form.title.trim()||buildExercises.length===0?t.surfaceHigh:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:12,fontWeight:800,color:saving||!form.title.trim()||buildExercises.length===0?t.textMuted:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",transition:'all 0.2s'}}>
+              {saving ? 'Saving...' : editing ? '💾 Save Changes' : '✓ Save Workout'}
             </button>
           )}
         </div>
 
-        {loading ? (
-          <div style={{color:t.textMuted,textAlign:'center',paddingTop:60}}>Loading...</div>
-        ) : view === 'list' ? (
-          <SessionList sessions={filteredSessions} clients={clients} filterClient={filterClient}
-            setFilterClient={setFilterClient} statusColor={statusColor} moodEmoji={moodEmoji}
-            t={t} router={router}/>
-        ) : (
-          <CreateSession form={form} setForm={setForm} clients={clients} exercises={filteredEx}
-            sessionExercises={sessionExercises} addExercise={addExercise} updateEx={updateEx}
-            removeEx={removeEx} searchEx={searchEx} setSearchEx={setSearchEx}
-            createSession={createSession} saving={saving} t={t}/>
+        {/* ── LIST VIEW ── */}
+        {view === 'list' && (
+          <div style={{maxWidth:960,margin:'0 auto',padding:24}}>
+            {templates.length === 0 ? (
+              <div style={{textAlign:'center',padding:'80px 20px'}}>
+                <div style={{fontSize:56,marginBottom:16}}>💪</div>
+                <div style={{fontSize:20,fontWeight:900,marginBottom:8}}>Workout Library</div>
+                <div style={{fontSize:13,color:t.textMuted,marginBottom:28,lineHeight:1.7,maxWidth:400,margin:'0 auto 28px'}}>
+                  Build reusable workouts once, then send them to a client,<br/>drop them into a program, or publish to the resource library.
+                </div>
+                <button onClick={openNew}
+                  style={{background:`linear-gradient(135deg,${t.accent},${t.accent}cc)`,border:'none',borderRadius:12,padding:'12px 28px',fontSize:14,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  + Build Your First Workout
+                </button>
+              </div>
+            ) : (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
+                {templates.map(tmpl => {
+                  const cm = catMeta(tmpl.category)
+                  const exCount = tmpl.workout_template_exercises?.length || 0
+                  return (
+                    <div key={tmpl.id} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:16,overflow:'hidden',transition:'border-color 0.15s'}}>
+                      <div style={{height:3,background:`linear-gradient(90deg,${cm.color},${cm.color}88)`}}/>
+                      <div style={{padding:'16px 18px'}}>
+                        {/* Header */}
+                        <div style={{display:'flex',alignItems:'flex-start',gap:10,marginBottom:10}}>
+                          <div style={{width:40,height:40,borderRadius:11,background:cm.color+'18',border:`1px solid ${cm.color}30`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>
+                            {cm.icon}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:14,fontWeight:800,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tmpl.title}</div>
+                            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                              <span style={{fontSize:10,fontWeight:700,padding:'1px 7px',borderRadius:20,background:cm.color+'18',color:cm.color}}>{cm.label}</span>
+                              <span style={{fontSize:10,padding:'1px 7px',borderRadius:20,background:t.surfaceHigh,color:t.textMuted}}>{tmpl.difficulty}</span>
+                              {tmpl.estimated_minutes && <span style={{fontSize:10,padding:'1px 7px',borderRadius:20,background:t.surfaceHigh,color:t.textMuted}}>⏱ {tmpl.estimated_minutes}m</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Exercise list preview */}
+                        <div style={{background:t.surfaceUp,borderRadius:10,padding:'10px 12px',marginBottom:12}}>
+                          <div style={{fontSize:11,fontWeight:700,color:t.textMuted,marginBottom:6}}>{exCount} exercise{exCount!==1?'s':''}</div>
+                          {(tmpl.workout_template_exercises || [])
+                            .sort((a:any,b:any)=>a.order_index-b.order_index)
+                            .slice(0,4).map((ex:any,i:number) => (
+                              <div key={i} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 0',borderBottom:i<Math.min(3,exCount-1)?`1px solid ${t.border}44`:'none'}}>
+                                <span style={{fontSize:10,fontWeight:800,color:t.teal,minWidth:16}}>{i+1}.</span>
+                                <span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.exercise_name}</span>
+                                <span style={{fontSize:11,color:t.textMuted,flexShrink:0}}>{ex.sets_prescribed}×{ex.reps_prescribed}</span>
+                              </div>
+                            ))}
+                          {exCount > 4 && <div style={{fontSize:10,color:t.textMuted,marginTop:4}}>+{exCount-4} more</div>}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:8}}>
+                          {[
+                            { label:'→ Client',   action:'client',   color:t.teal,   bg:t.tealDim },
+                            { label:'→ Program',  action:'program',  color:t.orange, bg:t.orangeDim },
+                            { label:'→ Resource', action:'resource', color:t.purple, bg:t.purpleDim },
+                          ].map(a => (
+                            <button key={a.action} onClick={()=>openAction(tmpl, a.action as any)}
+                              style={{background:a.bg,border:`1px solid ${a.color}40`,borderRadius:8,padding:'7px 4px',fontSize:11,fontWeight:700,color:a.color,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                              {a.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Edit / Delete */}
+                        <div style={{display:'flex',gap:6}}>
+                          <button onClick={()=>openEdit(tmpl)}
+                            style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'6px',fontSize:11,fontWeight:700,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                            ✏️ Edit
+                          </button>
+                          <DeleteButton onDelete={()=>deleteTemplate(tmpl.id)} t={t}/>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* New workout card */}
+                <div onClick={openNew} style={{background:'transparent',border:`2px dashed ${t.border}`,borderRadius:16,padding:'40px 20px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,cursor:'pointer',minHeight:200,transition:'border-color 0.15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=t.teal+'50'}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
+                  <span style={{fontSize:28}}>+</span>
+                  <span style={{fontSize:12,fontWeight:700,color:t.textMuted}}>Build Workout</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── BUILD VIEW ── */}
+        {view === 'build' && (
+          <div style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:0,maxWidth:1200,margin:'0 auto',padding:24}}>
+
+            {/* Left: Form + exercise list */}
+            <div style={{paddingRight:20}}>
+              {/* Workout details */}
+              <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:20,marginBottom:16}}>
+                <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:14}}>Workout Details</div>
+                <div style={{marginBottom:12}}>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Title *</label>
+                  <input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="e.g. Upper Body Push — Week 1" style={inp}/>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:12}}>
+                  <div>
+                    <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Category</label>
+                    <select value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))} style={inp}>
+                      {CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.icon} {c.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Difficulty</label>
+                    <select value={form.difficulty} onChange={e=>setForm(p=>({...p,difficulty:e.target.value}))} style={inp}>
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Est. Duration (min)</label>
+                    <input type="number" value={form.estimated_minutes} onChange={e=>setForm(p=>({...p,estimated_minutes:e.target.value}))} placeholder="45" style={inp}/>
+                  </div>
+                </div>
+                <div style={{marginBottom:10}}>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Description (optional)</label>
+                  <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={2} placeholder="What's this workout for? Any context for the client..." style={{...inp,resize:'vertical' as const}}/>
+                </div>
+                <div style={{marginBottom:10}}>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Coach Notes (shown to client)</label>
+                  <textarea value={form.notes_coach} onChange={e=>setForm(p=>({...p,notes_coach:e.target.value}))} rows={2} placeholder="Focus on tempo today. Keep RPE at 8 max..." style={{...inp,resize:'vertical' as const}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Tags (comma-separated)</label>
+                  <input value={form.tags} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="push, chest, upper body" style={inp}/>
+                </div>
+              </div>
+
+              {/* Exercise list */}
+              {buildExercises.length === 0 ? (
+                <div style={{background:t.surface,border:`2px dashed ${t.border}`,borderRadius:14,padding:'32px',textAlign:'center',color:t.textMuted,fontSize:13}}>
+                  ← Add exercises from the library on the right
+                </div>
+              ) : (
+                <div style={{display:'grid',gap:10}}>
+                  {buildExercises.map((ex,i) => (
+                    <div key={i} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'14px 16px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                        <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                          <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:'none',border:'none',color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',fontSize:10,lineHeight:1,padding:'1px 4px'}}>▲</button>
+                          <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:'none',border:'none',color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',fontSize:10,lineHeight:1,padding:'1px 4px'}}>▼</button>
+                        </div>
+                        <span style={{fontSize:12,fontWeight:800,color:t.teal,minWidth:20}}>{i+1}.</span>
+                        <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>
+                        <button onClick={()=>removeBuildEx(i)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>✕</button>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8}}>
+                        {[
+                          {label:'Sets', field:'sets_prescribed', type:'number', ph:'3'},
+                          {label:'Reps', field:'reps_prescribed', type:'text', ph:'8-12'},
+                          {label:'Load', field:'weight_prescribed', type:'text', ph:'RPE 8'},
+                          {label:'Rest (sec)', field:'rest_seconds', type:'number', ph:'90'},
+                        ].map(f=>(
+                          <div key={f.field}>
+                            <label style={{fontSize:10,color:t.textDim,display:'block',marginBottom:3}}>{f.label}</label>
+                            <input type={f.type} value={(ex as any)[f.field]} placeholder={f.ph}
+                              onChange={e=>updateBuildEx(i,f.field as keyof TemplateEx, f.type==='number'?parseInt(e.target.value)||0:e.target.value)}
+                              style={{...inp,padding:'6px 8px',fontSize:13}}/>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{marginTop:8}}>
+                        <input value={ex.notes} onChange={e=>updateBuildEx(i,'notes',e.target.value)}
+                          placeholder="Exercise note for client..." style={{...inp,padding:'6px 10px',fontSize:12}}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Exercise picker */}
+            <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:16,height:'fit-content',position:'sticky',top:24}}>
+              <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Exercise Library</div>
+              <input value={searchEx} onChange={e=>setSearchEx(e.target.value)} placeholder="Search..."
+                style={{...inp,marginBottom:8,padding:'7px 10px'}}/>
+              <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:10}}>
+                <button onClick={()=>setExGroup('all')} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700}}>All</button>
+                {muscleGroups.map(g=>(
+                  <button key={g} onClick={()=>setExGroup(g)} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap'}}>
+                    {g}
+                  </button>
+                ))}
+              </div>
+              <div style={{maxHeight:480,overflowY:'auto',display:'grid',gap:3}}>
+                {filteredEx.map((ex:any)=>{
+                  const added = buildExercises.some(e=>e.exercise_id===ex.id)
+                  return (
+                    <div key={ex.id} onClick={()=>!added&&addExToTemplate(ex)}
+                      style={{padding:'8px 10px',borderRadius:8,background:added?t.tealDim:t.surfaceHigh,border:`1px solid ${added?t.teal:t.border}`,cursor:added?'default':'pointer',transition:'all 0.12s'}}>
+                      <div style={{fontSize:12,fontWeight:600,color:added?t.teal:t.text}}>{ex.name}</div>
+                      {ex.muscle_group&&<div style={{fontSize:10,color:t.textMuted}}>{ex.muscle_group}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── ACTION MODAL ── */}
+        {actionModal && (
+          <div style={{position:'fixed',inset:0,background:'#000000bb',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}} onClick={()=>setActionModal(null)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:20,padding:28,width:'100%',maxWidth:440}}>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>
+                {actionModal.action==='client'   && '👤 Assign to Client'}
+                {actionModal.action==='program'  && '📋 Add to Program'}
+                {actionModal.action==='resource' && '📚 Save to Resource Library'}
+              </div>
+              <div style={{fontSize:12,color:t.teal,fontWeight:700,marginBottom:20}}>💪 {actionModal.template.title}</div>
+
+              {actionModal.action === 'client' && (
+                <div style={{display:'flex',flexDirection:'column',gap:14}}>
+                  <div>
+                    <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Client *</label>
+                    <select value={actionForm.client_id} onChange={e=>setActionForm(p=>({...p,client_id:e.target.value}))} style={{...inp,fontSize:14}}>
+                      <option value="">Select client...</option>
+                      {clients.map(c=><option key={c.id} value={c.id}>{c.full_name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Scheduled Date</label>
+                    <input type="date" value={actionForm.date} onChange={e=>setActionForm(p=>({...p,date:e.target.value}))} style={{...inp,fontSize:14}}/>
+                  </div>
+                </div>
+              )}
+
+              {actionModal.action === 'program' && (
+                <div>
+                  <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Add to Program *</label>
+                  <select value={actionForm.program_id} onChange={e=>setActionForm(p=>({...p,program_id:e.target.value}))} style={{...inp,fontSize:14}}>
+                    <option value="">Select program...</option>
+                    {programs.map(p=>(
+                      <option key={p.id} value={p.id}>{p.is_template?'📐 ':'👤 '}{p.name}</option>
+                    ))}
+                  </select>
+                  <div style={{fontSize:11,color:t.textMuted,marginTop:8}}>This workout will be added as a new block in the program builder.</div>
+                </div>
+              )}
+
+              {actionModal.action === 'resource' && (
+                <div>
+                  <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Resource Collection</label>
+                  <select value={actionForm.resource_group_id} onChange={e=>setActionForm(p=>({...p,resource_group_id:e.target.value}))} style={{...inp,fontSize:14}}>
+                    <option value="">No collection (uncategorized)</option>
+                    {resourceGroups.map(g=><option key={g.id} value={g.id}>{g.icon} {g.name}</option>)}
+                  </select>
+                  <div style={{fontSize:11,color:t.textMuted,marginTop:8}}>Clients will see this workout in their Resource Library with all exercises listed.</div>
+                </div>
+              )}
+
+              <div style={{display:'flex',gap:10,marginTop:20}}>
+                <button onClick={()=>setActionModal(null)} style={{flex:1,background:'transparent',border:`1px solid ${t.border}`,borderRadius:10,padding:'11px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
+                <button onClick={executeAction} disabled={actionSaving||(actionModal.action==='client'&&!actionForm.client_id)||(actionModal.action==='program'&&!actionForm.program_id)}
+                  style={{flex:2,background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:10,padding:'11px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",opacity:actionSaving?0.6:1}}>
+                  {actionSaving ? 'Saving...' : actionModal.action==='client' ? '📤 Assign Workout' : actionModal.action==='program' ? '📋 Add to Program' : '📚 Save to Library'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>
   )
 }
 
-function SessionList({ sessions, clients, filterClient, setFilterClient, statusColor, moodEmoji, t, router }: any) {
-  return (
-    <div>
-      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-        <select value={filterClient} onChange={e=>setFilterClient(e.target.value)}
-          style={{background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'7px 12px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>
-          <option value="all">All Clients</option>
-          {clients.map((c:any)=><option key={c.id} value={c.id}>{c.full_name}</option>)}
-        </select>
-      </div>
-      {sessions.length === 0 ? (
-        <div style={{textAlign:'center',padding:'60px 20px',color:t.textMuted}}>
-          <div style={{fontSize:40,marginBottom:12}}>💪</div>
-          <p style={{fontSize:15,fontWeight:600,color:t.textDim}}>No workouts assigned yet</p>
-          <p style={{fontSize:13}}>Click "Assign Workout" to get started</p>
-        </div>
-      ) : (
-        <div style={{display:'grid',gap:10}}>
-          {sessions.map((s:any) => (
-            <div key={s.id} onClick={()=>router.push(`/dashboard/coach/workouts/${s.id}`)}
-              style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'16px 18px',cursor:'pointer',display:'flex',gap:12,alignItems:'center'}}>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{s.title}</div>
-                <div style={{fontSize:12,color:t.textDim}}>
-                  {s.clients?.profiles?.full_name || 'Client'} · {s.scheduled_date || 'No date'}
-                  {s.day_label && ` · ${s.day_label}`}
-                </div>
-              </div>
-              <div style={{display:'flex',alignItems:'center',gap:10}}>
-                {s.mood && <span style={{fontSize:16}}>{moodEmoji(s.mood)}</span>}
-                {s.session_rpe && <span style={{fontSize:12,color:t.textDim}}>RPE {s.session_rpe}</span>}
-                <span style={{fontSize:11,fontWeight:700,color:statusColor(s.status),background:statusColor(s.status)+'15',padding:'3px 10px',borderRadius:20}}>
-                  {s.status.replace('_',' ')}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+function DeleteButton({ onDelete, t }: { onDelete: ()=>void, t: any }) {
+  const [confirm, setConfirm] = useState(false)
+  if (confirm) return (
+    <div style={{display:'flex',gap:4}}>
+      <button onClick={onDelete} style={{background:t.red,border:'none',borderRadius:7,padding:'6px 10px',fontSize:11,fontWeight:700,color:'#fff',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Delete</button>
+      <button onClick={()=>setConfirm(false)} style={{background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:7,padding:'6px 8px',fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
     </div>
   )
-}
-
-function CreateSession({ form, setForm, clients, exercises, sessionExercises, addExercise, updateEx, removeEx, searchEx, setSearchEx, createSession, saving, t }: any) {
-  const inp = (field: string, val: string) => setForm((f:any)=>({...f,[field]:val}))
-  const canSave = form.client_id && sessionExercises.length > 0
-
   return (
-    <div style={{display:'grid',gridTemplateColumns:'1fr 340px',gap:20,maxWidth:1100}}>
-
-      {/* Left: Session details + exercises */}
-      <div>
-        <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'20px',marginBottom:16}}>
-          <p style={{fontSize:12,fontWeight:700,color:t.textDim,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:14}}>Session Details</p>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
-            <div>
-              <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Client *</label>
-              <select value={form.client_id} onChange={e=>inp('client_id',e.target.value)}
-                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:form.client_id?t.text:t.textMuted,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}>
-                <option value="">Select client...</option>
-                {clients.map((c:any)=><option key={c.id} value={c.id}>{c.full_name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Scheduled Date</label>
-              <input type="date" value={form.scheduled_date} onChange={e=>inp('scheduled_date',e.target.value)}
-                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:t.text,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}/>
-            </div>
-          </div>
-          <div style={{marginBottom:12}}>
-            <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Session Title</label>
-            <input value={form.title} onChange={e=>inp('title',e.target.value)} placeholder="e.g. Upper Body Pull"
-              style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:t.text,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}/>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr',gap:12}}>
-            <div>
-              <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Day Label</label>
-              <input value={form.day_label} onChange={e=>inp('day_label',e.target.value)} placeholder="Day A – Lower"
-                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:t.text,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}/>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Week</label>
-              <input type="number" value={form.week_number} onChange={e=>inp('week_number',e.target.value)} min={1}
-                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:t.text,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}/>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Day #</label>
-              <input type="number" value={form.day_number} onChange={e=>inp('day_number',e.target.value)} min={1}
-                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:t.text,fontSize:14,fontFamily:"'DM Sans',sans-serif"}}/>
-            </div>
-          </div>
-          <div style={{marginTop:12}}>
-            <label style={{fontSize:12,color:t.textDim,display:'block',marginBottom:4}}>Coach Notes (visible to client)</label>
-            <textarea value={form.notes_coach} onChange={e=>inp('notes_coach',e.target.value)}
-              placeholder="Focus on form today. Deload week — keep RPE at 7 max..."
-              rows={2}
-              style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px 12px',color:t.text,fontSize:14,resize:'vertical',fontFamily:"'DM Sans',sans-serif"}}/>
-          </div>
-        </div>
-
-        {/* Exercise list */}
-        {sessionExercises.length > 0 && (
-          <div style={{display:'grid',gap:10,marginBottom:16}}>
-            {sessionExercises.map((ex:SessionEx, i:number)=>(
-              <div key={i} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'16px 18px'}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
-                  <span style={{fontSize:13,fontWeight:800,color:t.teal,minWidth:22}}>{i+1}.</span>
-                  <span style={{fontWeight:700,fontSize:15,flex:1}}>{ex.exercise_name}</span>
-                  <button onClick={()=>removeEx(i)} style={{background:'none',border:'none',color:t.red,cursor:'pointer',fontSize:16}}>×</button>
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8}}>
-                  {[
-                    {label:'Sets', field:'sets_prescribed', type:'number', placeholder:'3'},
-                    {label:'Reps', field:'reps_prescribed', type:'text', placeholder:'8-12'},
-                    {label:'Load', field:'weight_prescribed', type:'text', placeholder:'135 lbs / RPE 8'},
-                    {label:'Rest (sec)', field:'rest_seconds', type:'number', placeholder:'90'},
-                  ].map(f=>(
-                    <div key={f.field}>
-                      <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>{f.label}</label>
-                      <input type={f.type} value={(ex as any)[f.field]} placeholder={f.placeholder}
-                        onChange={e=>updateEx(i,f.field as keyof SessionEx, f.type==='number'?parseInt(e.target.value)||0:e.target.value)}
-                        style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:7,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/>
-                    </div>
-                  ))}
-                </div>
-                <div style={{marginTop:8}}>
-                  <input value={ex.notes_coach} onChange={e=>updateEx(i,'notes_coach',e.target.value)}
-                    placeholder="Exercise notes for client..."
-                    style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:7,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button onClick={createSession} disabled={!canSave || saving}
-          style={{width:'100%',background:canSave?t.accent:'#2a2a3a',border:'none',borderRadius:12,padding:'14px',fontSize:15,fontWeight:700,color:canSave?'#0f0f0f':t.textMuted,cursor:canSave?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif",transition:'all 0.2s'}}>
-          {saving ? 'Saving...' : canSave ? '✓ Assign Workout to Client' : 'Select client + add exercises to assign'}
-        </button>
-      </div>
-
-      {/* Right: Exercise picker */}
-      <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'16px',height:'fit-content',position:'sticky',top:24}}>
-        <p style={{fontSize:12,fontWeight:700,color:t.textDim,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Exercise Library</p>
-        <input value={searchEx} onChange={e=>setSearchEx(e.target.value)}
-          placeholder="Search exercises..."
-          style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'8px 12px',color:t.text,fontSize:13,marginBottom:10,fontFamily:"'DM Sans',sans-serif"}}/>
-        <div style={{maxHeight:500,overflowY:'auto',display:'grid',gap:4}}>
-          {exercises.map((ex:Exercise)=>{
-            const added = sessionExercises.some((e:SessionEx)=>e.exercise_id===ex.id)
-            return (
-              <div key={ex.id} onClick={()=>!added&&addExercise(ex)}
-                style={{padding:'9px 12px',borderRadius:8,background:added?t.tealDim:t.surfaceHigh,border:`1px solid ${added?t.teal:t.border}`,cursor:added?'default':'pointer',transition:'all 0.15s'}}>
-                <div style={{fontSize:13,fontWeight:600,color:added?t.teal:t.text}}>{ex.name}</div>
-                {ex.muscle_group && <div style={{fontSize:11,color:t.textMuted}}>{ex.muscle_group}</div>}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
+    <button onClick={()=>setConfirm(true)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:700,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>🗑</button>
   )
 }
