@@ -42,6 +42,7 @@ export default function CoachInsightsPage() {
   const [expanded,  setExpanded]  = useState<string|null>(null)
   const [filter,    setFilter]    = useState<'all'|'unread'|'saved'>('all')
   const [saving,    setSaving]    = useState<string|null>(null)
+  const [addingCal, setAddingCal] = useState<string|null>(null)
 
   useEffect(()=>{ load() },[])
 
@@ -94,6 +95,40 @@ export default function CoachInsightsPage() {
   const dismiss = async (id:string) => {
     await supabase.from('ai_insights').update({is_dismissed:true}).eq('id',id)
     setInsights(p=>p.filter(i=>i.id!==id))
+  }
+
+  const addToCalendar = async (insight: any) => {
+    if (!coachId) return
+    setAddingCal(insight.id)
+    const c = insight.content || {}
+    const name = clientName(insight.client_id)
+    const title = c.title || `${name} — ${TYPE_LABELS[insight.type] || insight.type}`
+    const description = [c.summary, c.suggested_action ? `⚡ Action: ${c.suggested_action}` : null]
+      .filter(Boolean).join('\n\n')
+    // Default to tomorrow 10am
+    const start = new Date()
+    start.setDate(start.getDate() + 1)
+    start.setHours(10, 0, 0, 0)
+    const end = new Date(start)
+    end.setMinutes(end.getMinutes() + 30)
+    const typeColors: Record<string,string> = {
+      checkin_brief:'#00c9b1', progression:'#f5a623', red_flag:'#ef4444', recommended_action:'#8b5cf6'
+    }
+    await supabase.from('calendar_events').insert({
+      coach_id: coachId,
+      client_id: insight.client_id,
+      title,
+      description,
+      event_type: 'note',
+      start_at: start.toISOString(),
+      end_at: end.toISOString(),
+      color: typeColors[insight.type] || '#00c9b1',
+    })
+    // Sync to Google Calendar via server action would go here in production
+    // For now the event lives in Supabase calendar_events and shows in the in-app calendar
+    setAddingCal(null)
+    await supabase.from('ai_insights').update({ is_reviewed: true, reviewed_at: new Date().toISOString() }).eq('id', insight.id)
+    setInsights(p => p.map(i => i.id === insight.id ? { ...i, is_reviewed: true } : i))
   }
 
   const clientName = (id:string) => {
@@ -294,6 +329,10 @@ export default function CoachInsightsPage() {
                               {insight.insight_data?.checkins_analyzed!=null && ` · ${insight.insight_data.checkins_analyzed} check-ins · ${insight.insight_data.sessions_analyzed} sessions · ${insight.insight_data.metrics_analyzed} metrics`}
                             </div>
                             <div style={{display:'flex',gap:6}}>
+                              <button onClick={()=>addToCalendar(insight)} disabled={addingCal===insight.id}
+                                style={{background:insight.is_reviewed?t.surfaceHigh:t.tealDim,border:'1px solid '+(insight.is_reviewed?t.border:t.teal+'40'),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:insight.is_reviewed?t.textMuted:t.teal,cursor:addingCal===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:addingCal===insight.id?0.6:1}}>
+                                {addingCal===insight.id?'Adding...':insight.is_reviewed?'✓ On Calendar':'📅 Add to Calendar'}
+                              </button>
                               <button onClick={()=>toggleSave(insight.id,insight.is_saved)}
                                 style={{background:insight.is_saved?t.yellow+'18':'transparent',border:'1px solid '+(insight.is_saved?t.yellow+'60':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:insight.is_saved?t.yellow:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                 {insight.is_saved?'⭐ Saved':'☆ Save'}

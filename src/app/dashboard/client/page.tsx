@@ -373,6 +373,23 @@ export default function ClientDashboard() {
             </div>
           </div>
 
+          {/* Community quick link */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
+            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
+            <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:40, height:40, borderRadius:12, background:t.teal+'18', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🏘️</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:800 }}>SRG Fit Community</div>
+                <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Share wins & hype up your crew</div>
+              </div>
+              <button onClick={()=>router.push('/dashboard/client/community')}
+                style={{ background:t.teal+'22', color:t.teal, border:'1px solid '+t.teal+'44',
+                  borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Join →
+              </button>
+            </div>
+          </div>
+
           {/* Recent PRs */}
           {recentPRs.length > 0 && (
             <div style={{ background:'linear-gradient(135deg,'+t.yellow+'12,'+t.orange+'08)', border:'1px solid '+t.yellow+'25', borderRadius:14, padding:'14px 16px', marginBottom:14 }} className="fade">
