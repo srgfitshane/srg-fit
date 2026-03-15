@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 
@@ -24,10 +24,13 @@ const TABS = [
 
 
 export default function ClientDetail() {
+  const [coachId,  setCoachId]  = useState<string | null>(null)
   const [client,   setClient]   = useState<any>(null)
   const [checkins, setCheckins] = useState<any[]>([])
   const [metrics,  setMetrics]  = useState<any[]>([])
   const [workouts, setWorkouts] = useState<any[]>([])
+  const [nutritionPlan, setNutritionPlan] = useState<any>(null)
+  const [program, setProgram] = useState<any>(null)
   const [showArchive, setShowArchive] = useState(false)
   const [showDelete,  setShowDelete]  = useState(false)
   const [actioning,   setActioning]   = useState(false)
@@ -44,6 +47,7 @@ export default function ClientDetail() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
+      setCoachId(user.id)
 
       const { data: clientData } = await supabase
         .from('clients')
@@ -69,12 +73,27 @@ export default function ClientDetail() {
       setMetrics(metricsData || [])
 
       const { data: workoutData } = await supabase
-        .from('workout_logs')
+        .from('workout_sessions')
         .select('*')
         .eq('client_id', clientId)
-        .order('started_at', { ascending: false })
+        .order('scheduled_date', { ascending: false })
         .limit(5)
       setWorkouts(workoutData || [])
+
+      const { data: nutritionData } = await supabase
+        .from('nutrition_plans')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+        .single()
+      setNutritionPlan(nutritionData || null)
+
+      const { data: programData } = await supabase
+        .from('programs')
+        .select('*')
+        .eq('id', (await supabase.from('clients').select('program_id').eq('id', clientId).single()).data?.program_id)
+        .single()
+      setProgram(programData || null)
 
       setLoading(false)
     }
@@ -265,11 +284,11 @@ export default function ClientDetail() {
                   <div key={w.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom: i < workouts.length-1 ? '1px solid '+t.border : 'none' }}>
                     <div style={{ width:32, height:32, borderRadius:9, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>💪</div>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:600 }}>Workout Session</div>
-                      <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.started_at).toLocaleDateString()}</div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{w.name || 'Workout Session'}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.scheduled_date || w.completed_at || w.created_at).toLocaleDateString()}</div>
                     </div>
-                    {w.finished_at && <div style={{ fontSize:11, color:t.orange, fontWeight:700 }}>
-                      {Math.round((new Date(w.finished_at).getTime() - new Date(w.started_at).getTime()) / 60000)}m
+                    {w.status && <div style={{ fontSize:11, color: w.status==='completed' ? t.green : t.orange, fontWeight:700, textTransform:'capitalize' }}>
+                      {w.status}
                     </div>}
                   </div>
                 )) : (
@@ -359,13 +378,113 @@ export default function ClientDetail() {
             </div>
           )}
 
-          {/* OTHER TABS - placeholder */}
-          {(activeTab === 'program' || activeTab === 'nutrition' || activeTab === 'messages') && (
-            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'56px', textAlign:'center' }}>
-              <div style={{ fontSize:36, marginBottom:12 }}>{TABS.find(tab=>tab.id===activeTab)?.icon}</div>
-              <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>{TABS.find(tab=>tab.id===activeTab)?.label} coming soon</div>
-              <div style={{ fontSize:13, color:t.textMuted }}>This section will be wired up as we build out each module</div>
+          {/* PROGRAM TAB */}
+          {activeTab === 'program' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              {program ? (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
+                  <div style={{ fontSize:15, fontWeight:800, marginBottom:4 }}>{program.name}</div>
+                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:16 }}>{program.description}</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
+                    {[
+                      { label:'Duration',  val: program.duration_weeks ? program.duration_weeks+'w' : '—', color:t.teal },
+                      { label:'Frequency', val: program.sessions_per_week ? program.sessions_per_week+'x/wk' : '—', color:t.orange },
+                      { label:'Level',     val: program.difficulty || '—', color:t.purple },
+                      { label:'Goal',      val: program.goal || '—', color:t.green },
+                    ].map(s => (
+                      <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' }}>
+                        <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
+                        <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
+                  <div style={{ fontSize:32, marginBottom:12 }}>💪</div>
+                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No program assigned</div>
+                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Assign a program from the Programs page</div>
+                  <button onClick={()=>router.push('/dashboard/coach/programs')}
+                    style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Go to Programs
+                  </button>
+                </div>
+              )}
+              {/* Recent workouts */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
+                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Workout Sessions</div>
+                {workouts.length > 0 ? workouts.map((w:any, i:number) => (
+                  <div key={w.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 0', borderBottom: i < workouts.length-1 ? '1px solid '+t.border : 'none' }}>
+                    <div style={{ width:36, height:36, borderRadius:10, background: w.status==='completed' ? t.greenDim : t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>
+                      {w.status==='completed' ? '✅' : '📋'}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{w.name || 'Workout'}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.scheduled_date || w.created_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}</div>
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:700, color: w.status==='completed' ? t.green : t.orange, textTransform:'capitalize' }}>{w.status}</div>
+                  </div>
+                )) : (
+                  <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No workout sessions yet</div>
+                )}
+              </div>
             </div>
+          )}
+
+          {/* NUTRITION TAB */}
+          {activeTab === 'nutrition' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              {nutritionPlan ? (
+                <>
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+                      <div>
+                        <div style={{ fontSize:15, fontWeight:800 }}>{nutritionPlan.name}</div>
+                        <div style={{ fontSize:12, color:t.textMuted, marginTop:2, textTransform:'capitalize' }}>{nutritionPlan.approach} approach</div>
+                      </div>
+                      <button onClick={()=>router.push('/dashboard/coach/nutrition')}
+                        style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Edit Plan
+                      </button>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
+                      {[
+                        { label:'Calories',  val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : '—', color:t.orange },
+                        { label:'Protein',   val: nutritionPlan.protein_g ? nutritionPlan.protein_g+'g' : '—', color:t.teal },
+                        { label:'Carbs',     val: nutritionPlan.carbs_g ? nutritionPlan.carbs_g+'g' : '—', color:t.yellow },
+                        { label:'Fat',       val: nutritionPlan.fat_g ? nutritionPlan.fat_g+'g' : '—', color:t.purple },
+                        { label:'Water',     val: nutritionPlan.water_oz ? nutritionPlan.water_oz+'oz' : '—', color:'#38bdf8' },
+                      ].map(s => (
+                        <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
+                          <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {nutritionPlan.notes && (
+                      <div style={{ marginTop:16, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.5 }}>
+                        <strong>Coach notes:</strong> {nutritionPlan.notes}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
+                  <div style={{ fontSize:32, marginBottom:12 }}>🥗</div>
+                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No nutrition plan assigned</div>
+                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Create a nutrition plan for this client</div>
+                  <button onClick={()=>router.push('/dashboard/coach/nutrition')}
+                    style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Go to Nutrition
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MESSAGES TAB */}
+          {activeTab === 'messages' && client && (
+            <MiniThread coachId={coachId!} client={client} />
           )}
 
         </div>
@@ -438,5 +557,128 @@ export default function ClientDetail() {
 
       </div>
     </>
+  )
+}
+
+
+// ── MiniThread: embedded in client profile ────────────────────────────────
+function MiniThread({ coachId, client }: { coachId: string; client: any }) {
+  const supabase  = createClient()
+  const [thread,  setThread]  = useState<any[]>([])
+  const [draft,   setDraft]   = useState('')
+  const [sending, setSending] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef  = useRef<HTMLTextAreaElement>(null)
+  const profileId = client.profile?.id
+
+  const colors = {
+    bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
+    teal:"#00c9b1", tealDim:"#00c9b115", text:"#eeeef8", textMuted:"#5a5a78",
+  }
+
+  useEffect(() => {
+    if (!profileId) return
+    const load = async () => {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${coachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${coachId})`)
+        .order('created_at', { ascending: true })
+      setThread(data || [])
+      // Mark incoming as read
+      await supabase.from('messages').update({ read: true })
+        .eq('sender_id', profileId).eq('recipient_id', coachId).eq('read', false)
+    }
+    load()
+  }, [profileId])
+
+  // Realtime
+  useEffect(() => {
+    if (!profileId) return
+    const channel = supabase.channel('mini-thread-' + profileId)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:`recipient_id=eq.${coachId}` }, (payload) => {
+        const msg = payload.new as any
+        if (msg.sender_id === profileId) {
+          setThread(prev => [...prev, msg])
+          supabase.from('messages').update({ read:true }).eq('id', msg.id)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [profileId, coachId])
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:'smooth' }) }, [thread])
+
+  const send = async () => {
+    if (!draft.trim() || !profileId) return
+    setSending(true)
+    const { data } = await supabase.from('messages')
+      .insert({ sender_id: coachId, recipient_id: profileId, body: draft.trim(), read: false })
+      .select().single()
+    if (data) setThread(prev => [...prev, data])
+    setDraft('')
+    setSending(false)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  }
+
+  const c = colors
+  return (
+    <div style={{ background:c.surface, border:'1px solid '+c.border, borderRadius:16, overflow:'hidden', display:'flex', flexDirection:'column', height:500 }}>
+      {/* Header */}
+      <div style={{ padding:'14px 18px', borderBottom:'1px solid '+c.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ fontSize:13, fontWeight:800 }}>💬 Messages</div>
+        <a href={`/dashboard/coach/messages?client=${client.id}`}
+          style={{ fontSize:11, fontWeight:700, color:c.teal, textDecoration:'none' }}>
+          Open full view →
+        </a>
+      </div>
+
+      {/* Thread */}
+      <div style={{ flex:1, overflowY:'auto', padding:'16px 18px', display:'flex', flexDirection:'column', gap:8 }}>
+        {thread.length === 0 && (
+          <div style={{ textAlign:'center', marginTop:40, color:c.textMuted, fontSize:13 }}>No messages yet. Send the first one!</div>
+        )}
+        {thread.map((msg, i) => {
+          const isMe = msg.sender_id === coachId
+          return (
+            <div key={msg.id || i} style={{ display:'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth:'72%', background: isMe ? c.teal : c.surfaceHigh, color: isMe ? '#000' : c.text,
+                borderRadius: isMe ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
+                padding:'9px 13px', fontSize:13, fontWeight:500, wordBreak:'break-word', lineHeight:1.5,
+              }}>
+                {msg.body}
+                <div style={{ fontSize:10, marginTop:3, opacity:0.6, textAlign: isMe ? 'right' : 'left' }}>
+                  {new Date(msg.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                  {isMe && <span style={{ marginLeft:4 }}>{msg.read ? ' ✓✓' : ' ✓'}</span>}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ borderTop:'1px solid '+c.border, padding:'12px 16px', display:'flex', gap:8, alignItems:'flex-end' }}>
+        <textarea ref={inputRef}
+          value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={handleKey}
+          placeholder={`Message ${client.profile?.full_name?.split(' ')[0] || 'client'}...`}
+          rows={1}
+          style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:10, padding:'9px 12px', fontSize:13, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:100, overflowY:'auto' }}
+          onInput={e=>{ const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px' }}
+        />
+        <button onClick={send} disabled={!draft.trim()||sending}
+          style={{ background:c.teal, border:'none', borderRadius:9, width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', cursor:!draft.trim()||sending?'not-allowed':'pointer', opacity:!draft.trim()||sending?0.4:1, flexShrink:0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
   )
 }

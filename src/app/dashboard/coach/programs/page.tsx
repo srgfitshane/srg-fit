@@ -133,12 +133,6 @@ export default function ProgramsList() {
     router.push('/dashboard/coach/programs/'+newProg.id)
   }
 
-  const deleteProgram = async (id: string) => {
-    await supabase.from('programs').delete().eq('id', id)
-    setTemplates(prev => prev.filter(p => p.id !== id))
-    setClientProgs(prev => prev.filter(p => p.id !== id))
-  }
-
   const openNew = (isTemplate: boolean) => {
     setNewIsTemplate(isTemplate)
     setNewName(''); setNewGoal('general'); setNewDesc(''); setNewWeeks(''); setNewClient('')
@@ -149,67 +143,215 @@ export default function ProgramsList() {
   const ProgramCard = ({ p, isTemplate }: { p: any, isTemplate: boolean }) => {
     const gm = goalMeta(p.goal)
     const originTemplate = isTemplate ? null : templates.find(t => t.id === p.template_id)
+    const [editing,    setEditing]    = useState(false)
+    const [editName,   setEditName]   = useState(p.name)
+    const [editDesc,   setEditDesc]   = useState(p.description || '')
+    const [saving,     setSaving]     = useState(false)
+    const [duping,     setDuping]     = useState(false)
+    const [confirmDel, setConfirmDel] = useState(false)
+    const [deleting,   setDeleting]   = useState(false)
+
+    const handleSave = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!editName.trim()) return
+      setSaving(true)
+      const { error } = await supabase
+        .from('programs')
+        .update({ name: editName.trim(), description: editDesc.trim() || null })
+        .eq('id', p.id)
+      setSaving(false)
+      if (!error) {
+        p.name = editName.trim()
+        p.description = editDesc.trim() || null
+        setEditing(false)
+      }
+    }
+
+    const handleDuplicate = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setDuping(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: newProg } = await supabase.from('programs').insert({
+        coach_id: user?.id,
+        name: p.name + ' (Copy)',
+        description: p.description || null,
+        is_template: p.is_template,
+        goal: p.goal,
+        duration_weeks: p.duration_weeks,
+        active: false,
+      }).select().single()
+      if (newProg) {
+        const { data: blocks } = await supabase
+          .from('workout_blocks')
+          .select(`*, block_exercises(*)`)
+          .eq('program_id', p.id)
+        for (const block of (blocks || [])) {
+          const { data: nb } = await supabase.from('workout_blocks').insert({
+            program_id: newProg.id, name: block.name, day_label: block.day_label,
+            block_label: block.block_label, week_number: block.week_number,
+            order_index: block.order_index, group_types: block.group_types || {},
+          }).select().single()
+          if (nb) {
+            for (const ex of (block.block_exercises || [])) {
+              await supabase.from('block_exercises').insert({
+                block_id: nb.id, exercise_id: ex.exercise_id, sets: ex.sets, reps: ex.reps,
+                target_weight: ex.target_weight, rest_seconds: ex.rest_seconds, rpe: ex.rpe,
+                tut: ex.tut, superset_group: ex.superset_group, exercise_role: ex.exercise_role,
+                notes: ex.notes, order_index: ex.order_index, progression_note: ex.progression_note,
+              })
+            }
+          }
+        }
+        load()
+      }
+      setDuping(false)
+    }
+
+    const handleDelete = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setDeleting(true)
+      await supabase.from('workout_blocks').delete().eq('program_id', p.id)
+      await supabase.from('programs').delete().eq('id', p.id)
+      setTemplates(prev => prev.filter(x => x.id !== p.id))
+      setClientProgs(prev => prev.filter(x => x.id !== p.id))
+    }
+
+    const btnBase: React.CSSProperties = {
+      border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11,
+      fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+    }
+
     return (
-      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden', transition:'all 0.15s ease', cursor:'pointer' }}
-        onClick={()=>router.push('/dashboard/coach/programs/'+p.id)}
-        onMouseEnter={e=>e.currentTarget.style.borderColor=(isTemplate?t.orange:t.teal)+'50'}
-        onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden', transition:'all 0.15s ease', cursor: editing ? 'default' : 'pointer' }}
+        onClick={()=>{ if (!editing) router.push('/dashboard/coach/programs/'+p.id) }}
+        onMouseEnter={e=>{ if (!editing) e.currentTarget.style.borderColor=(isTemplate?t.orange:t.teal)+'50' }}
+        onMouseLeave={e=>{ if (!editing) e.currentTarget.style.borderColor=t.border }}>
 
         {/* Color bar top */}
         <div style={{ height:4, background:`linear-gradient(90deg,${gm.color},${gm.color}88)` }} />
 
         <div style={{ padding:'16px 18px' }}>
-          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10 }}>
+          {/* Name row */}
+          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom: editing ? 10 : 10 }}>
             <div style={{ flex:1, marginRight:8 }}>
-              {isTemplate && (
+              {isTemplate && !editing && (
                 <div style={{ fontSize:9, fontWeight:900, color:t.orange, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>
                   📐 Template
                 </div>
               )}
-              <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
+              {editing ? (
+                <input
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  placeholder="Program name"
+                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.teal+'60', borderRadius:8, padding:'7px 10px', fontSize:13, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
+                />
+              ) : (
+                <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
+              )}
             </div>
-            <button onClick={e=>{ e.stopPropagation(); deleteProgram(p.id) }}
-              style={{ background:'none', border:'none', color:t.red+'50', cursor:'pointer', fontSize:14, flexShrink:0 }}>✕</button>
           </div>
+
+          {/* Description edit */}
+          {editing && (
+            <div style={{ marginBottom:10 }}>
+              <textarea
+                value={editDesc}
+                onChange={e => setEditDesc(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                placeholder="Description (optional)"
+                rows={2}
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5 }}
+              />
+            </div>
+          )}
 
           {/* Goal badge */}
-          <div style={{ display:'flex', gap:6, marginBottom:10, flexWrap:'wrap' }}>
-            <span style={{ background:gm.color+'18', border:'1px solid '+gm.color+'30', borderRadius:6, padding:'2px 9px', fontSize:11, fontWeight:700, color:gm.color }}>
-              {gm.icon} {gm.label}
-            </span>
-            {p.duration_weeks && (
-              <span style={{ background:t.surfaceHigh, borderRadius:6, padding:'2px 9px', fontSize:11, color:t.textMuted }}>
-                {p.duration_weeks}wk
+          {!editing && (
+            <div style={{ display:'flex', gap:6, marginBottom:10, flexWrap:'wrap' }}>
+              <span style={{ background:gm.color+'18', border:'1px solid '+gm.color+'30', borderRadius:6, padding:'2px 9px', fontSize:11, fontWeight:700, color:gm.color }}>
+                {gm.icon} {gm.label}
               </span>
-            )}
-          </div>
+              {p.duration_weeks && (
+                <span style={{ background:t.surfaceHigh, borderRadius:6, padding:'2px 9px', fontSize:11, color:t.textMuted }}>
+                  {p.duration_weeks}wk
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Client or template origin */}
-          {!isTemplate && p.client?.profile?.full_name && (
+          {!isTemplate && !editing && p.client?.profile?.full_name && (
             <div style={{ fontSize:12, color:t.teal, fontWeight:700, marginBottom:6 }}>👤 {p.client.profile.full_name}</div>
           )}
-          {!isTemplate && originTemplate && (
+          {!isTemplate && !editing && originTemplate && (
             <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>📐 From: {originTemplate.name}</div>
           )}
-          {p.description && (
+          {!editing && p.description && (
             <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.5, marginBottom:10, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
               {p.description}
             </div>
           )}
 
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
-            <div style={{ fontSize:10, color:t.textMuted }}>
-              {p.start_date ? 'Started '+new Date(p.start_date).toLocaleDateString() : isTemplate ? 'Template' : 'No start date'}
-            </div>
-            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-              {isTemplate && (
-                <button onClick={e=>{ e.stopPropagation(); setAssignClient(''); setAssignStart(''); setShowAssign(p) }}
-                  style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  + Assign
+          {/* Action row */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8, gap:6, flexWrap:'wrap' }}>
+            {editing ? (
+              <div style={{ display:'flex', gap:6 }} onClick={e=>e.stopPropagation()}>
+                <button onClick={handleSave} disabled={saving || !editName.trim()}
+                  style={{ ...btnBase, background: t.teal, color:'#000', opacity: saving||!editName.trim()?0.5:1 }}>
+                  {saving ? '⏳ Saving…' : '💾 Save'}
                 </button>
-              )}
-              <div style={{ fontSize:11, color:isTemplate?t.orange:t.teal, fontWeight:700 }}>Open →</div>
-            </div>
+                <button onClick={e=>{ e.stopPropagation(); setEditing(false); setEditName(p.name); setEditDesc(p.description||'') }}
+                  style={{ ...btnBase, background:t.surfaceHigh, color:t.textMuted }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize:10, color:t.textMuted }}>
+                  {p.start_date ? 'Started '+new Date(p.start_date).toLocaleDateString() : isTemplate ? 'Template' : 'No start date'}
+                </div>
+                <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }} onClick={e=>e.stopPropagation()}>
+                  {/* Edit */}
+                  <button onClick={e=>{ e.stopPropagation(); setEditing(true) }}
+                    style={{ ...btnBase, background:t.tealDim, border:'1px solid '+t.teal+'40', color:t.teal }}>
+                    ✏️ Edit
+                  </button>
+                  {/* Duplicate */}
+                  <button onClick={handleDuplicate} disabled={duping}
+                    style={{ ...btnBase, background:t.orange+'18', border:'1px solid '+t.orange+'40', color:t.orange, opacity:duping?0.5:1 }}>
+                    {duping ? '⏳' : '📋'}
+                  </button>
+                  {/* Assign (templates only) */}
+                  {isTemplate && (
+                    <button onClick={e=>{ e.stopPropagation(); setAssignClient(''); setAssignStart(''); setShowAssign(p) }}
+                      style={{ ...btnBase, background:t.tealDim, border:'1px solid '+t.teal+'40', color:t.teal }}>
+                      + Assign
+                    </button>
+                  )}
+                  {/* Delete */}
+                  {!confirmDel ? (
+                    <button onClick={e=>{ e.stopPropagation(); setConfirmDel(true) }}
+                      style={{ ...btnBase, background:t.redDim, border:'1px solid '+t.red+'40', color:t.red }}>
+                      🗑
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={handleDelete} disabled={deleting}
+                        style={{ ...btnBase, background:t.red, color:'#fff', opacity:deleting?0.5:1 }}>
+                        {deleting ? '⏳' : '⚠️ Confirm'}
+                      </button>
+                      <button onClick={e=>{ e.stopPropagation(); setConfirmDel(false) }}
+                        style={{ ...btnBase, background:t.surfaceHigh, color:t.textMuted }}>
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  <div style={{ fontSize:11, color:isTemplate?t.orange:t.teal, fontWeight:700 }}>Open →</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

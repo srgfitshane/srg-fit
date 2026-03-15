@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 
@@ -117,8 +117,18 @@ export default function DriveImporter() {
 
   // ── On mount: check if we have a Google access token from session ──────────
   const checkSession = async () => {
+    // First try the session provider_token
     const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.provider_token
+    let token = session?.provider_token
+
+    // Fallback: parse access_token from URL hash (right after OAuth redirect)
+    if (!token && typeof window !== 'undefined') {
+      const hash = window.location.hash
+      const params = new URLSearchParams(hash.replace('#', ''))
+      const hashToken = params.get('provider_token') || params.get('access_token')
+      if (hashToken) token = hashToken
+    }
+
     if (token) {
       setAccessToken(token)
       // Load existing exercises for fuzzy matching
@@ -131,11 +141,14 @@ export default function DriveImporter() {
   }
 
   // Run once on mount
-  useState(() => { checkSession() })
+  useEffect(() => { checkSession() }, [])
 
   // ── Step 2: Scan Drive folders ─────────────────────────────────────────────
   const scanDrive = async () => {
-    if (!accessToken) { await connectDrive(); return }
+    // Always re-fetch token fresh to avoid stale closure
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.provider_token || accessToken
+    if (!token) { await connectDrive(); return }
     setStep('scanning')
     const parsed: ParsedVideo[] = []
 
@@ -143,10 +156,12 @@ export default function DriveImporter() {
       // Get all subfolders of root folder
       const foldersRes = await fetch(
         `https://www.googleapis.com/drive/v3/files?q='${ROOT_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=50`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: { Authorization: `Bearer ${token}` } }
       )
       const foldersData = await foldersRes.json()
+      console.log('Drive folders response:', JSON.stringify(foldersData))
       const folders: DriveFile[] = foldersData.files || []
+      console.log('Folders found:', folders.length, folders.map(f=>f.name))
 
       for (const folder of folders) {
         setProgress(p => ({ ...p, folder: folder.name }))
@@ -158,7 +173,7 @@ export default function DriveImporter() {
           const pageParam = pageToken ? `&pageToken=${pageToken}` : ''
           const filesRes = await fetch(
             `https://www.googleapis.com/drive/v3/files?q='${folder.id}'+in+parents+and+mimeType+contains+'video/'+and+trashed=false&fields=files(id,name,mimeType,thumbnailLink,webViewLink),nextPageToken&pageSize=200${pageParam}`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
+            { headers: { Authorization: `Bearer ${token}` } }
           )
           const filesData = await filesRes.json()
           const files: DriveFile[] = filesData.files || []
