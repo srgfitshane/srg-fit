@@ -17,6 +17,7 @@ const TYPE_META: Record<string,{icon:string,label:string,color:string}> = {
   pdf:    {icon:'📑',label:'PDF',      color:'#fb923c'},
   guide:  {icon:'📘',label:'Guide',    color:'#a78bfa'},
   link:   {icon:'🔗',label:'Link',     color:'#34d399'},
+  workout:{icon:'💪',label:'Workout',  color:'#00c9b1'},
 }
 const DIFF_META: Record<string,{label:string,color:string}> = {
   beginner:    {label:'Beginner',    color:'#22c55e'},
@@ -39,7 +40,7 @@ export default function CoachResourcesPage() {
   const [itemModal,   setItemModal]   = useState<any>(null)
   const [saving,      setSaving]      = useState(false)
   const [gForm, setGForm] = useState({name:'',icon:'💪',color:'#00c9b1'})
-  const [iForm, setIForm] = useState({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:''})
+  const [iForm, setIForm] = useState({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:'',workout_exercises:'',estimated_duration:''})
 
   useEffect(()=>{load()},[])
 
@@ -85,6 +86,15 @@ export default function CoachResourcesPage() {
       content_type:iForm.content_type, duration:iForm.duration||null,
       difficulty:iForm.difficulty, tags:tagArr,
       file_url:iForm.file_url||null,
+      estimated_duration:iForm.estimated_duration||null,
+    }
+    // Parse workout exercises from textarea (one per line: "Exercise - sets x reps")
+    if (iForm.content_type === 'workout' && iForm.workout_exercises.trim()) {
+      const lines = iForm.workout_exercises.split('\n').filter(Boolean).map((line:string,i:number) => ({
+        order: i+1, name: line.split('-')[0]?.trim()||line.trim(),
+        prescription: line.includes('-') ? line.split('-').slice(1).join('-').trim() : ''
+      }))
+      payload.workout_exercises = lines
     }
     if (itemModal?.id) {
       await supabase.from('content_items').update(payload).eq('id',itemModal.id)
@@ -101,9 +111,9 @@ export default function CoachResourcesPage() {
 
   const openNewGroup = () => { setGForm({name:'',icon:'💪',color:'#00c9b1'}); setGroupModal({}) }
   const openEditGroup = (g:any) => { setGForm({name:g.name,icon:g.icon||'💪',color:g.color||'#00c9b1'}); setGroupModal(g) }
-  const openNewItem   = () => { setIForm({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:''}); setItemModal({group_id:activeGroup}) }
+  const openNewItem   = () => { setIForm({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:'',workout_exercises:'',estimated_duration:''}); setItemModal({group_id:activeGroup}) }
   const openEditItem  = (item:any) => {
-    setIForm({title:item.title,description:item.description||'',content_type:item.content_type,file_url:item.file_url||'',duration:item.duration||'',difficulty:item.difficulty||'beginner',tags:(item.tags||[]).join(', ')})
+    setIForm({title:item.title,description:item.description||'',content_type:item.content_type,file_url:item.file_url||'',duration:item.duration||'',difficulty:item.difficulty||'beginner',tags:(item.tags||[]).join(', '),workout_exercises:item.workout_exercises?item.workout_exercises.map((e:any)=>e.name+(e.prescription?' - '+e.prescription:'')).join('\n'):'',estimated_duration:item.estimated_duration||''})
     setItemModal(item)
   }
 
@@ -349,6 +359,21 @@ export default function CoachResourcesPage() {
                 <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Tags (comma separated)</label>
                 <input value={iForm.tags} onChange={e=>setIForm(p=>({...p,tags:e.target.value}))} placeholder="strength, recovery, beginner" style={inp}/>
               </div>
+              {iForm.content_type === 'workout' && (
+                <>
+                  <div>
+                    <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Estimated Duration</label>
+                    <input value={iForm.estimated_duration} onChange={e=>setIForm(p=>({...p,estimated_duration:e.target.value}))} placeholder="e.g. 45-60 min" style={inp}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Exercises (one per line — Name - Sets x Reps)</label>
+                    <textarea value={iForm.workout_exercises} onChange={e=>setIForm(p=>({...p,workout_exercises:e.target.value}))} rows={6}
+                      placeholder={"Squat - 4 x 6-8\nRomanian Deadlift - 3 x 10\nLeg Press - 3 x 12\nLeg Curl - 3 x 12"}
+                      style={{...inp,resize:'vertical' as const}}/>
+                    <div style={{fontSize:10,color:t.textMuted,marginTop:4}}>Format: Exercise Name - Sets x Reps (e.g. "Squat - 4 x 6")</div>
+                  </div>
+                </>
+              )}
             </div>
             <div style={{display:'flex',gap:10,marginTop:20}}>
               <button onClick={()=>setItemModal(null)} style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'10px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>

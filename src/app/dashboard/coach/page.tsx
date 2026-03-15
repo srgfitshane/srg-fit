@@ -41,6 +41,7 @@ export default function CoachDashboard() {
   const [lifecycleReason, setLifecycleReason] = useState('')
   const [lifecycleLoading, setLifecycleLoading] = useState(false)
   const [clientFilter, setClientFilter] = useState<'active'|'paused'|'archived'>('active')
+  const [navExpanded, setNavExpanded] = useState(false)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -263,6 +264,8 @@ export default function CoachDashboard() {
                           style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.red+'40', background:t.redDim, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕</button>
                         <button onClick={()=>router.push('/dashboard/coach/clients/'+client.id)}
                           style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>View →</button>
+                        <button onClick={()=>router.push('/dashboard/preview/'+client.id)}
+                          style={{ padding:'5px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.purple+'40', background:t.purpleDim, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>👁️</button>
                       </div>
                     </div>
                   )
@@ -276,25 +279,47 @@ export default function CoachDashboard() {
 
             {/* Quick nav */}
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-              <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:14 }}>Quick Access</div>
+              {/* Header row with toggle */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>Quick Access</div>
+                <button onClick={()=>setNavExpanded(p=>!p)}
+                  style={{ background:navExpanded?t.tealDim:'transparent', border:'1px solid '+(navExpanded?t.teal+'40':t.border), borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:700, color:navExpanded?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {navExpanded ? '▲ Less' : '▼ More'}
+                </button>
+              </div>
+
+              {/* Always-visible essentials */}
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {[
+                  { label:'Messages',   icon:'💬', path:'/dashboard/coach/messages'   },
+                  { label:'Community',  icon:'🏘️', path:'/dashboard/coach/community'  },
                   { label:'Programs',   icon:'📋', path:'/dashboard/coach/programs'   },
+                ].map(item => (
+                  <button key={item.label} onClick={()=>router.push(item.path)}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as any, width:'100%' }}
+                    onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceHigh)}
+                    onMouseLeave={e=>(e.currentTarget.style.background=t.surfaceUp)}>
+                    <span style={{ fontSize:16 }}>{item.icon}</span>
+                    <span style={{ fontSize:13, fontWeight:600, color:t.text }}>{item.label}</span>
+                    <span style={{ marginLeft:'auto', color:t.textMuted, fontSize:12 }}>→</span>
+                  </button>
+                ))}
+
+                {/* Collapsible section */}
+                {navExpanded && [
                   { label:'Workouts',   icon:'💪', path:'/dashboard/coach/workouts'   },
                   { label:'Nutrition',  icon:'🥗', path:'/dashboard/coach/nutrition'  },
-                  { label:'Messages',   icon:'💬', path:'/dashboard/coach/messages'   },
+                  { label:'Check-ins',  icon:'✅', path:'/dashboard/coach/checkins'   },
+                  { label:'Habits',     icon:'🔁', path:'/dashboard/coach/habits'     },
+                  { label:'Calendar',   icon:'📅', path:'/dashboard/coach/calendar'   },
+                  { label:'Progress',   icon:'📈', path:'/dashboard/coach/progress'   },
+                  { label:'Resources',  icon:'📚', path:'/dashboard/coach/resources'  },
+                  { label:'AI Insights',icon:'🤖', path:'/dashboard/coach/insights'   },
+                  { label:'Reports',    icon:'📊', path:'/dashboard/coach/reports'    },
                   { label:'Exercises',  icon:'🏋️', path:'/dashboard/coach/exercises'  },
                   { label:'Invites',    icon:'📨', path:'/dashboard/coach/invites'    },
                   { label:'Onboarding', icon:'📝', path:'/dashboard/coach/onboarding' },
                   { label:'Plans',      icon:'💳', path:'/dashboard/coach/plans'      },
-                  { label:'Check-ins',  icon:'✅', path:'/dashboard/coach/checkins'   },
-                  { label:'Habits',     icon:'🔁', path:'/dashboard/coach/habits'     },
-        { label:'Calendar',   icon:'📅', path:'/dashboard/coach/calendar'   },
-        { label:'Progress',   icon:'📈', path:'/dashboard/coach/progress'   },
-        { label:'Resources',  icon:'📚', path:'/dashboard/coach/resources'  },
-        { label:'AI Insights', icon:'🤖', path:'/dashboard/coach/insights'   },
-        { label:'Reports',     icon:'📊', path:'/dashboard/coach/reports'    },
-        { label:'Community',   icon:'🏘️', path:'/dashboard/coach/community'  },
                 ].map(item => (
                   <button key={item.label} onClick={()=>router.push(item.path)}
                     style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as any, width:'100%' }}
