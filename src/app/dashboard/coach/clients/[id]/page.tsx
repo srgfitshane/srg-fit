@@ -55,6 +55,7 @@ export default function ClientDetail() {
         .eq('id', clientId)
         .single()
       setClient(clientData)
+      if (clientData?.coach_notes) setCoachNotes(clientData.coach_notes)
 
       const { data: checkinData } = await supabase
         .from('checkins')
@@ -99,6 +100,16 @@ export default function ClientDetail() {
     }
     load()
   }, [clientId])
+
+  const [coachNotes, setCoachNotes] = useState('')
+  const [notesSaved, setNotesSaved] = useState(false)
+
+  const saveAndBack = async () => {
+    if (coachNotes.trim()) {
+      await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId)
+    }
+    router.push('/dashboard/coach')
+  }
 
   const handleFlag = async () => {
     await supabase.from('clients').update({ flagged: true, flag_note: flagNote }).eq('id', clientId)
@@ -300,8 +311,13 @@ export default function ClientDetail() {
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Coach Notes</div>
                 <textarea placeholder="Private notes about this client..." rows={6}
+                  value={coachNotes}
+                  onChange={e=>{ setCoachNotes(e.target.value); setNotesSaved(false) }}
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.6 }} />
-                <button style={{ marginTop:10, background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Save Note</button>
+                <button onClick={async ()=>{ await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId); setNotesSaved(true); setTimeout(()=>setNotesSaved(false),2000) }}
+                  style={{ marginTop:10, background:notesSaved?t.green:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
+                  {notesSaved ? '✓ Saved!' : 'Save Note'}
+                </button>
               </div>
 
             </div>
@@ -490,7 +506,25 @@ export default function ClientDetail() {
         </div>
 
 
-        {/* Flag modal */}
+        {/* Sticky save & back bar */}
+        <div style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)' }}>
+          <div style={{ fontSize:12, color:t.textMuted }}>
+            Viewing {client?.profile?.full_name}'s profile
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={()=>router.push('/dashboard/preview/'+clientId)}
+              style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              👁️ Preview as Client
+            </button>
+            <button onClick={saveAndBack}
+              style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 20px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              ← Save & Back
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom padding for sticky bar */}
+        <div style={{ height:64 }} />
         {showFlag && (
           <div onClick={()=>setShowFlag(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>

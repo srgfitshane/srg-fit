@@ -55,13 +55,27 @@ export default function InviteAcceptPage() {
 
     if (clErr || !cl) { setError('Something went wrong. Please try again or contact your coach.'); setStatus('valid'); return }
 
-    // Update invite
+    // Mark invite accepted
     await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', invite.id)
+
     // Update profile name if not set
     if (invite.full_name) {
       const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
       if (!prof?.full_name) await supabase.from('profiles').update({ full_name: invite.full_name }).eq('id', user.id)
     }
+
+    // Auto welcome message from coach
+    try {
+      const coachName = coach?.full_name?.split(' ')[0] || 'Your coach'
+      const clientFirstName = invite.full_name?.split(' ')[0] || 'there'
+      await supabase.from('messages').insert({
+        sender_id: invite.coach_id,
+        recipient_id: user.id,
+        body: `Hey ${clientFirstName}! 👋 Welcome to SRG Fit — I'm pumped to have you here. I'm setting up your program now and will be in touch soon. Feel free to message me anytime. Let's get to work! 💪\n\n— ${coachName}`,
+        read: false,
+      })
+    } catch (_) { /* non-blocking */ }
+
     router.push('/onboarding')
   }
 
