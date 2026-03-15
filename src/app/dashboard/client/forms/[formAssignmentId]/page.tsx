@@ -15,7 +15,7 @@ type Question = {
   id: string; sort_order: number; question_type: string; label: string
   placeholder?: string; helper_text?: string; required: boolean
   options?: string[]; scale_min?: number; scale_max?: number
-  scale_min_label?: string; scale_max_label?: string
+  scale_min_label?: string; scale_max_label?: string; maps_to?: string
 }
 
 export default function ClientFormPage() {
@@ -85,11 +85,57 @@ export default function ClientFormPage() {
   const submit = async () => {
     if (!validate()) return
     setSubmitting(true)
-    await supabase.from('client_form_assignments').update({
+
+    // Mark assignment complete
+    const { data: asgn } = await supabase.from('client_form_assignments').update({
       status: 'completed',
       completed_at: new Date().toISOString(),
       response: answers,
-    }).eq('id', formAssignmentId)
+    }).eq('id', formAssignmentId).select('*, form:onboarding_forms(is_checkin_type, id), client_id').single()
+
+    // If this is a check-in type form, mirror mapped fields into checkins table
+    if (asgn?.form?.is_checkin_type) {
+      const now = new Date()
+      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay())
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)
+
+      // Build checkin row from mapped fields
+      const checkinRow: any = {
+        client_id: asgn.client_id,
+        submitted_at: now.toISOString(),
+        week_start: weekStart.toISOString().split('T')[0],
+        week_end: weekEnd.toISOString().split('T')[0],
+        response_data: answers,
+      }
+
+      // Map answers to checkins columns using maps_to on each question
+      for (const q of questions) {
+        if (q.maps_to && answers[q.id] !== undefined && answers[q.id] !== '') {
+          const val = answers[q.id]
+          // Numeric fields
+          const numericFields = ['weight','sleep_hours','sleep_quality','mood_score','energy_score',
+            'stress','hunger_score','pain_score','workout_adherence','nutrition_adherence','habit_adherence']
+          checkinRow[q.maps_to] = numericFields.includes(q.maps_to) ? Number(val) : val
+        }
+      }
+
+      // Get coach_id from client record
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: clientRec } = await supabase.from('clients').select('coach_id').eq('profile_id', user.id).single()
+        if (clientRec) {
+          checkinRow.coach_id = clientRec.coach_id
+          await supabase.from('checkins').insert(checkinRow)
+          // Trigger AI insights
+          try {
+            const { triggerAiInsight } = await import('@/lib/ai-insights')
+            triggerAiInsight(asgn.client_id, clientRec.coach_id, 'checkin_brief')
+            triggerAiInsight(asgn.client_id, clientRec.coach_id, 'red_flag')
+          } catch (_) { /* non-blocking */ }
+        }
+      }
+    }
+
     setSubmitted(true)
     setSubmitting(false)
   }

@@ -49,6 +49,7 @@ export default function ClientDashboard() {
   const [milestones,   setMilestones]   = useState<any[]>([])
   const [recentPRs,    setRecentPRs]    = useState<any[]>([])
   const [workoutLogs,  setWorkoutLogs]  = useState<any[]>([])
+  const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState('today')
   const [trainingTab,  setTrainingTab]  = useState('workouts')
@@ -117,6 +118,16 @@ export default function ClientDashboard() {
           .order('started_at', { ascending: false })
           .limit(5)
         setWorkoutLogs(wlData || [])
+
+        // Pending check-in form assignments
+        const { data: pendingCI } = await supabase
+          .from('client_form_assignments')
+          .select('id, note, form:onboarding_forms(title, is_checkin_type)')
+          .eq('client_id', clientData.id)
+          .eq('status', 'pending')
+          .eq('onboarding_forms.is_checkin_type', true)
+          .limit(3)
+        setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type))
       }
 
       setLoading(false)
@@ -244,7 +255,25 @@ export default function ClientDashboard() {
           </div>
 
 
-          {/* Today's workout */}
+          {/* Pending custom check-in forms */}
+          {pendingCheckins.map((a: any) => (
+            <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.purple+'50', borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
+              <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.teal+')' }} />
+              <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:12, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>📋</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:800 }}>{a.form?.title || 'Check-in'}</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{a.note || 'Your coach sent you a check-in to complete'}</div>
+                </div>
+                <button onClick={()=>router.push('/dashboard/client/forms/'+a.id)}
+                  style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                  Fill out →
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Default weekly check-in card */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
             <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }} />
             <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>

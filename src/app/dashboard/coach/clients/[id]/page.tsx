@@ -61,7 +61,7 @@ export default function ClientDetail() {
       // Load forms for assign form feature
       const { data: formData } = await supabase
         .from('onboarding_forms')
-        .select('id,title,is_default')
+        .select('id,title,is_default,is_checkin_type')
         .eq('coach_id', user.id)
       setForms(formData || [])
 
@@ -712,83 +712,164 @@ export default function ClientDetail() {
 }
 
 
-// ── FormsTab: coach view of assigned forms for a client ──────────────────
+// ── FormsTab: coach view of assigned forms + check-in schedules ──────────
 function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: any) {
   const [assignments, setAssignments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [schedules,   setSchedules]   = useState<any[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [showSchedule, setShowSchedule] = useState(false)
+  const [schedFormId,  setSchedFormId]  = useState('')
+  const [schedFreq,    setSchedFreq]    = useState('weekly')
+  const [schedNote,    setSchedNote]    = useState('')
+  const [scheduling,   setScheduling]   = useState(false)
+
+  const checkinForms = forms.filter((f: any) => f.is_checkin_type)
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
-        .from('client_form_assignments')
-        .select('*, form:onboarding_forms(title)')
-        .eq('client_id', clientId)
-        .order('assigned_at', { ascending: false })
-      setAssignments(data || [])
+      const [{ data: asgns }, { data: scheds }] = await Promise.all([
+        supabase.from('client_form_assignments').select('*, form:onboarding_forms(title, is_checkin_type)').eq('client_id', clientId).order('assigned_at', { ascending: false }),
+        supabase.from('check_in_schedules').select('*, form:onboarding_forms(title)').eq('client_id', clientId).order('created_at'),
+      ])
+      setAssignments(asgns || [])
+      setSchedules(scheds || [])
       setLoading(false)
     }
     load()
   }, [clientId])
+
+  const saveSchedule = async () => {
+    if (!schedFormId || !coachId) return
+    setScheduling(true)
+    const { data } = await supabase.from('check_in_schedules').upsert({
+      coach_id: coachId, client_id: clientId, form_id: schedFormId,
+      frequency: schedFreq, active: true, note: schedNote || null,
+    }, { onConflict: 'client_id,form_id' }).select('*, form:onboarding_forms(title)').single()
+    if (data) setSchedules(p => { const exists = p.find(s=>s.form_id===schedFormId); return exists ? p.map(s=>s.form_id===schedFormId?data:s) : [...p,data] })
+    setScheduling(false)
+    setShowSchedule(false)
+    setSchedFormId(''); setSchedFreq('weekly'); setSchedNote('')
+  }
+
+  const deleteSchedule = async (id: string) => {
+    await supabase.from('check_in_schedules').delete().eq('id', id)
+    setSchedules(p => p.filter(s => s.id !== id))
+  }
 
   const deleteAssignment = async (id: string) => {
     await supabase.from('client_form_assignments').delete().eq('id', id)
     setAssignments(p => p.filter(a => a.id !== id))
   }
 
-  if (loading) return (
-    <div style={{ padding:'40px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading forms...</div>
-  )
+  const sty = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, boxSizing:'border-box' as const, appearance:'none' as const }
+
+  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading...</div>
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
-        <div style={{ fontSize:13, fontWeight:700 }}>Assigned Forms ({assignments.length})</div>
-        <button onClick={onAssign}
-          style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          + Send Form
-        </button>
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+      {/* ── Check-in Schedules section ── */}
+      <div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          <div>
+            <div style={{ fontSize:14, fontWeight:800 }}>✅ Check-in Schedule</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>Recurring check-in forms sent on a schedule</div>
+          </div>
+          {checkinForms.length > 0 && (
+            <button onClick={()=>setShowSchedule(true)}
+              style={{ background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              + Schedule Check-in
+            </button>
+          )}
+        </div>
+
+        {checkinForms.length === 0 && (
+          <div style={{ background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', fontSize:12, color:t.textMuted }}>
+            No check-in forms yet. Go to <span onClick={()=>router.push('/dashboard/coach/onboarding')} style={{ color:t.teal, cursor:'pointer', textDecoration:'underline' }}>Form Builder</span> → create a form → toggle "Check-in Form" on.
+          </div>
+        )}
+
+        {schedules.length > 0 && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {schedules.map((s: any) => (
+              <div key={s.id} style={{ background:s.active ? t.purpleDim : t.surfaceUp, border:'1px solid '+(s.active ? t.purple+'40' : t.border), borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ fontSize:20 }}>📅</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700 }}>{s.form?.title}</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2, textTransform:'capitalize' }}>{s.frequency} · {s.active ? 'Active' : 'Paused'}</div>
+                  {s.note && <div style={{ fontSize:11, color:t.textDim, marginTop:2, fontStyle:'italic' }}>"{s.note}"</div>}
+                </div>
+                <button onClick={()=>deleteSchedule(s.id)} style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Schedule modal */}
+        {showSchedule && (
+          <div onClick={()=>setShowSchedule(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>📅 Schedule Check-in</div>
+              <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Client will be prompted on this schedule. A new form assignment is created each cycle.</div>
+              <div style={{ marginBottom:14 }}>
+                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Check-in Form *</label>
+                <select value={schedFormId} onChange={e=>setSchedFormId(e.target.value)} style={sty}>
+                  <option value="">Select a check-in form...</option>
+                  {checkinForms.map((f: any) => <option key={f.id} value={f.id}>{f.title}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom:14 }}>
+                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Frequency</label>
+                <select value={schedFreq} onChange={e=>setSchedFreq(e.target.value)} style={sty}>
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Bi-weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Note (optional)</label>
+                <input value={schedNote} onChange={e=>setSchedNote(e.target.value)} placeholder="e.g. Please fill this out every Monday morning" style={sty} />
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={()=>setShowSchedule(false)} style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
+                <button onClick={saveSchedule} disabled={!schedFormId||scheduling} style={{ flex:2, background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#fff', cursor:!schedFormId||scheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!schedFormId||scheduling?.5:1 }}>
+                  {scheduling ? 'Saving...' : '📅 Save Schedule'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {assignments.length === 0 ? (
-        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-          <div style={{ fontSize:32, marginBottom:12 }}>📝</div>
-          <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No forms sent yet</div>
-          <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Send a form to collect intake info, check-ins, waivers, or anything else.</div>
-          <button onClick={onAssign}
-            style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            Send First Form
-          </button>
+      {/* ── One-off form assignments ── */}
+      <div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          <div style={{ fontSize:14, fontWeight:800 }}>📝 Sent Forms ({assignments.length})</div>
+          <button onClick={onAssign} style={{ background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Send Form</button>
         </div>
-      ) : assignments.map((a:any) => (
-        <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', display:'flex', alignItems:'center', gap:14 }}>
-          <div style={{ width:40, height:40, borderRadius:12, background: a.status==='completed'?t.greenDim:t.purpleDim, border:'1px solid '+(a.status==='completed'?t.green:t.purple)+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
-            {a.status === 'completed' ? '✅' : '📝'}
+
+        {assignments.length === 0 ? (
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'40px', textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:10 }}>📝</div>
+            <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No forms sent yet</div>
+            <div style={{ fontSize:12, color:t.textMuted }}>Send a one-off form — intake, waiver, survey, whatever you need.</div>
           </div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>{a.form?.title || 'Unknown Form'}</div>
-            <div style={{ fontSize:11, color:t.textMuted }}>
-              Sent {new Date(a.assigned_at).toLocaleDateString()} ·{' '}
-              {a.status === 'completed'
-                ? <span style={{ color:t.green }}>Completed {new Date(a.completed_at).toLocaleDateString()}</span>
-                : <span style={{ color:t.orange }}>Pending</span>}
+        ) : assignments.map((a: any) => (
+          <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:38, height:38, borderRadius:10, background:a.status==='completed'?t.greenDim:t.purpleDim, border:'1px solid '+(a.status==='completed'?t.green:t.purple)+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+              {a.status==='completed' ? '✅' : a.form?.is_checkin_type ? '📋' : '📝'}
             </div>
-            {a.note && <div style={{ fontSize:11, color:t.textDim, marginTop:3, fontStyle:'italic' }}>"{a.note}"</div>}
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:700 }}>{a.form?.title}</div>
+              <div style={{ fontSize:11, color:t.textMuted }}>
+                Sent {new Date(a.assigned_at).toLocaleDateString()} · {a.status==='completed' ? <span style={{ color:t.green }}>Completed {new Date(a.completed_at).toLocaleDateString()}</span> : <span style={{ color:t.orange }}>Pending</span>}
+              </div>
+              {a.note && <div style={{ fontSize:11, color:t.textDim, fontStyle:'italic' }}>"{a.note}"</div>}
+            </div>
+            <button onClick={()=>deleteAssignment(a.id)} style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
           </div>
-          <div style={{ display:'flex', gap:6 }}>
-            {a.status === 'completed' && (
-              <button
-                onClick={()=>router.push('/dashboard/coach/forms/'+a.id+'/responses')}
-                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                View Responses
-              </button>
-            )}
-            <button onClick={()=>deleteAssignment(a.id)}
-              style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:8, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              ✕
-            </button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
