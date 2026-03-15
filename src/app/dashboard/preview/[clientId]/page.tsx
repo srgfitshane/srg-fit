@@ -31,8 +31,9 @@ export default function PreviewAsClient() {
   const [checkin,  setCheckin]  = useState<any>(null)
   const [nutrition,setNutrition]= useState<any>(null)
   const [entries,  setEntries]  = useState<any[]>([])
+  const [calItems, setCalItems] = useState<any[]>([])
   const [loading,  setLoading]  = useState(true)
-  const [activeTab,setActiveTab]= useState<'today'|'training'|'nutrition'|'metrics'>('today')
+  const [activeTab,setActiveTab]= useState<'today'|'training'|'nutrition'|'metrics'|'calendar'>('today')
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => { if (clientId) load() }, [clientId])
@@ -60,6 +61,7 @@ export default function PreviewAsClient() {
       { data: metricsData },
       { data: checkinData },
       { data: nutritionData },
+      { data: calData },
     ] = await Promise.all([
       supabase.from('workout_sessions').select('*')
         .eq('client_id', clientId).order('scheduled_date', { ascending: false }).limit(15),
@@ -73,6 +75,8 @@ export default function PreviewAsClient() {
         .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1),
       supabase.from('nutrition_daily_logs').select('*')
         .eq('client_id', clientId).eq('log_date', today).single(),
+      supabase.from('calendar_events').select('*')
+        .eq('client_id', clientId).order('start_at').limit(50),
     ])
 
     setSessions(sessionData || [])
@@ -83,6 +87,18 @@ export default function PreviewAsClient() {
     setMetrics(metricsData?.[0] || null)
     setCheckin(checkinData?.[0] || null)
     setNutrition(nutritionData || null)
+
+    // Build merged calendar items
+    const merged: any[] = []
+    for (const e of calData || []) {
+      merged.push({ id:e.id, title:e.title, date:e.start_at.split('T')[0], start_at:e.start_at, end_at:e.end_at, color:e.color||'#8b5cf6', label:e.event_type?.replace('_',' ')||'Event', type:'calendar', description:e.description })
+    }
+    for (const s of sessionData || []) {
+      if (!s.scheduled_date) continue
+      merged.push({ id:'ws_'+s.id, title:s.title||'Workout', date:s.scheduled_date, color:s.status==='completed'?'#22c55e':s.status==='in_progress'?'#00c9b1':'#f5a623', label:s.status==='completed'?'Completed':'Workout', type:'workout', status:s.status, session_rpe:s.session_rpe, mood:s.mood })
+    }
+    merged.sort((a,b)=>a.date.localeCompare(b.date))
+    setCalItems(merged)
 
     if (nutritionData) {
       const { data: entryData } = await supabase.from('food_entries')
@@ -110,6 +126,7 @@ export default function PreviewAsClient() {
     { id:'training', label:'Training',  icon:'💪' },
     { id:'nutrition',label:'Nutrition', icon:'🥗' },
     { id:'metrics',  label:'Metrics',   icon:'📈' },
+    { id:'calendar', label:'Calendar',  icon:'📅' },
   ]
 
   return (
@@ -364,6 +381,60 @@ export default function PreviewAsClient() {
                   {metrics.notes && (
                     <div style={{ marginTop:12, fontSize:12, color:t.textDim, borderTop:'1px solid '+t.border, paddingTop:10 }}>{metrics.notes}</div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── CALENDAR ── */}
+          {activeTab === 'calendar' && (
+            <div>
+              <div style={{ fontSize:13, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:14 }}>
+                Schedule — {calItems.length} event{calItems.length!==1?'s':''}
+              </div>
+
+              {/* Legend */}
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:16 }}>
+                {[
+                  { color:'#f5a623', label:'Upcoming workout' },
+                  { color:'#22c55e', label:'Completed' },
+                  { color:'#8b5cf6', label:'Coach event' },
+                ].map(l => (
+                  <div key={l.label} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:t.textMuted }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:l.color }}/>
+                    {l.label}
+                  </div>
+                ))}
+              </div>
+
+              {calItems.length === 0 ? (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'40px 20px', textAlign:'center', color:t.textMuted, fontSize:13 }}>
+                  Nothing scheduled yet
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {calItems.map(item => {
+                    const isPast = item.date < today
+                    return (
+                      <div key={item.id} style={{ background:t.surface, border:'1px solid '+(item.color+'30'), borderRadius:13, padding:'12px 16px', display:'flex', gap:12, alignItems:'flex-start', opacity:isPast?0.7:1 }}>
+                        <div style={{ width:3, minHeight:40, borderRadius:2, background:item.color, flexShrink:0, marginTop:2 }}/>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3, flexWrap:'wrap' }}>
+                            <div style={{ fontSize:13, fontWeight:700 }}>{item.title}</div>
+                            <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:20, background:item.color+'20', color:item.color, textTransform:'capitalize' }}>{item.label}</span>
+                          </div>
+                          <div style={{ fontSize:11, color:t.textMuted }}>
+                            📅 {new Date(item.date+'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric', year:'numeric' })}
+                            {item.start_at && item.type==='calendar' && (
+                              <span> · 🕐 {new Date(item.start_at).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' })}</span>
+                            )}
+                          </div>
+                          {item.session_rpe && <div style={{ fontSize:11, color:t.orange, marginTop:3 }}>RPE {item.session_rpe}{item.mood ? ' · '+item.mood : ''}</div>}
+                          {item.description && <div style={{ fontSize:11, color:t.textDim, marginTop:4, lineHeight:1.5 }}>{item.description.slice(0,100)}{item.description.length>100?'...':''}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
