@@ -181,7 +181,7 @@ export default function CheckinForm() {
     </>
   )
 
-  const stepContent: Record<string, JSX.Element> = {
+  const stepContent: Record<string, React.ReactElement> = {
     body: (
       <div>
         <div style={{ marginBottom:20 }}>

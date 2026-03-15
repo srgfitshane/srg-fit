@@ -41,6 +41,9 @@ export default function CoachResourcesPage() {
   const [saving,      setSaving]      = useState(false)
   const [gForm, setGForm] = useState({name:'',icon:'💪',color:'#00c9b1'})
   const [iForm, setIForm] = useState({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:'',workout_exercises:'',estimated_duration:''})
+  const [workoutPickerOpen, setWorkoutPickerOpen] = useState(false)
+  const [pickerSessions, setPickerSessions] = useState<any[]>([])
+  const [pickerLoading, setPickerLoading] = useState(false)
 
   useEffect(()=>{load()},[])
 
@@ -111,6 +114,40 @@ export default function CoachResourcesPage() {
 
   const openNewGroup = () => { setGForm({name:'',icon:'💪',color:'#00c9b1'}); setGroupModal({}) }
   const openEditGroup = (g:any) => { setGForm({name:g.name,icon:g.icon||'💪',color:g.color||'#00c9b1'}); setGroupModal(g) }
+  const openWorkoutPicker = async () => {
+    setWorkoutPickerOpen(true)
+    setPickerLoading(true)
+    // Load distinct workout sessions (unique titles) to use as templates
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select('id, title, day_label, notes_coach')
+      .eq('coach_id', coachId)
+      .order('created_at', { ascending: false })
+      .limit(60)
+    setPickerSessions(sessions || [])
+    setPickerLoading(false)
+  }
+
+  const importFromSession = async (session: any) => {
+    // Load the session's exercises
+    const { data: exs } = await supabase
+      .from('session_exercises')
+      .select('exercise_name, sets_prescribed, reps_prescribed, weight_prescribed, order_index')
+      .eq('session_id', session.id)
+      .order('order_index')
+    const exerciseLines = (exs || [])
+      .map((e:any) => `${e.exercise_name}${(e.sets_prescribed||e.reps_prescribed) ? ' - '+(e.sets_prescribed||'')+'x'+(e.reps_prescribed||'') : ''}${e.weight_prescribed?' @ '+e.weight_prescribed:''}`)
+      .join('\n')
+    setIForm(p => ({
+      ...p,
+      title: session.title || p.title,
+      description: session.notes_coach || p.description,
+      content_type: 'workout',
+      workout_exercises: exerciseLines,
+    }))
+    setWorkoutPickerOpen(false)
+  }
+
   const openNewItem   = () => { setIForm({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:'',workout_exercises:'',estimated_duration:''}); setItemModal({group_id:activeGroup}) }
   const openEditItem  = (item:any) => {
     setIForm({title:item.title,description:item.description||'',content_type:item.content_type,file_url:item.file_url||'',duration:item.duration||'',difficulty:item.difficulty||'beginner',tags:(item.tags||[]).join(', '),workout_exercises:item.workout_exercises?item.workout_exercises.map((e:any)=>e.name+(e.prescription?' - '+e.prescription:'')).join('\n'):'',estimated_duration:item.estimated_duration||''})
@@ -366,7 +403,13 @@ export default function CoachResourcesPage() {
                     <input value={iForm.estimated_duration} onChange={e=>setIForm(p=>({...p,estimated_duration:e.target.value}))} placeholder="e.g. 45-60 min" style={inp}/>
                   </div>
                   <div>
-                    <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Exercises (one per line — Name - Sets x Reps)</label>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+                      <label style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase'}}>Exercises (one per line — Name - Sets x Reps)</label>
+                      <button onClick={openWorkoutPicker} type="button"
+                        style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:7,padding:'4px 10px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
+                        📋 Import from Builder
+                      </button>
+                    </div>
                     <textarea value={iForm.workout_exercises} onChange={e=>setIForm(p=>({...p,workout_exercises:e.target.value}))} rows={6}
                       placeholder={"Squat - 4 x 6-8\nRomanian Deadlift - 3 x 10\nLeg Press - 3 x 12\nLeg Curl - 3 x 12"}
                       style={{...inp,resize:'vertical' as const}}/>
@@ -382,6 +425,43 @@ export default function CoachResourcesPage() {
                 {saving?'Saving...':itemModal?.id?'Save Changes':'Add Resource'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Workout Picker Modal */}
+      {workoutPickerOpen && (
+        <div style={{position:'fixed',inset:0,background:'#000000cc',display:'flex',alignItems:'center',justifyContent:'center',zIndex:110,padding:20}} onClick={()=>setWorkoutPickerOpen(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:20,padding:28,width:'100%',maxWidth:520,maxHeight:'80vh',display:'flex',flexDirection:'column'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div style={{fontSize:15,fontWeight:800}}>📋 Import from Workout Builder</div>
+              <button onClick={()=>setWorkoutPickerOpen(false)} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:18}}>✕</button>
+            </div>
+            <div style={{fontSize:12,color:t.textMuted,marginBottom:16}}>
+              Pick a session to import its exercises and title into the workout resource.
+            </div>
+            {pickerLoading ? (
+              <div style={{textAlign:'center',padding:32,color:t.textMuted,fontSize:13}}>Loading sessions...</div>
+            ) : pickerSessions.length === 0 ? (
+              <div style={{textAlign:'center',padding:32,color:t.textMuted,fontSize:13}}>
+                No workout sessions found.<br/>Build one in the Workout Builder first.
+              </div>
+            ) : (
+              <div style={{overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:6}}>
+                {pickerSessions.map(s => (
+                  <div key={s.id} onClick={()=>importFromSession(s)}
+                    style={{background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:11,padding:'12px 14px',cursor:'pointer',transition:'all 0.15s'}}
+                    onMouseEnter={e=>(e.currentTarget.style.border='1px solid '+t.teal+'60')}
+                    onMouseLeave={e=>(e.currentTarget.style.border='1px solid '+t.border)}>
+                    <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{s.title || 'Untitled Workout'}</div>
+                    <div style={{fontSize:11,color:t.textMuted}}>
+                      {s.day_label && <span>{s.day_label} · </span>}
+                      Tap to import exercises
+                    </div>
+                    {s.notes_coach && <div style={{fontSize:11,color:t.teal,marginTop:4}}>📌 {s.notes_coach.slice(0,60)}{s.notes_coach.length>60?'...':''}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

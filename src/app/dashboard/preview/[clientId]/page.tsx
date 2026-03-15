@@ -12,7 +12,7 @@ const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
   teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', orangeDim:'#f5a62315',
   purple:'#8b5cf6', purpleDim:'#8b5cf615', red:'#ef4444',
-  green:'#22c55e', greenDim:'#22c55e15', yellow:'#eab308',
+  green:'#22c55e', greenDim:'#22c55e15', yellow:'#eab308', blue:'#60a5fa',
   text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8', pink:'#f472b6',
 }
 
