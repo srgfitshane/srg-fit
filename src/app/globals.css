@@ -1,26 +1,71 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #080810;
+  --foreground: #eeeef8;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── Mobile-first global resets ── */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  /* Prevent font size inflation on iOS after orientation change */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #080810;
+  color: #eeeef8;
+  margin: 0;
+  padding: 0;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  /* Prevent overscroll bounce on iOS (keeps dark bg visible) */
+  overscroll-behavior: none;
+}
+
+/* Prevent input zoom on iOS — all inputs must be >= 16px font size */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Improve tap targets — anything clickable gets at least 44px height */
+button {
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Remove tap flash on mobile for interactive elements */
+a, button, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Smooth scrolling momentum on iOS */
+.scroll-ios {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area insets for notched phones (iPhone X+) */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #252538; border-radius: 4px; }
+
+/* Range input cross-browser */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Prevent text selection on tap-heavy UI elements */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
 }

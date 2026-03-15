@@ -145,7 +145,14 @@ export default function CoachReportsPage() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+        .roster-row{display:grid;grid-template-columns:200px 80px 80px 80px 1fr 90px 80px;gap:12px;align-items:center;}
+        @media(max-width:800px){.roster-row{grid-template-columns:1fr 60px 60px;gap:8px;}.roster-hide{display:none;}}
+        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}
+        @media(max-width:600px){.stats-grid{grid-template-columns:repeat(2,1fr);}}
+        .detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding-top:16px;}
+        @media(max-width:700px){.detail-grid{grid-template-columns:1fr;}}
+      `}</style>
       <div style={{background:t.bg,minHeight:'100vh',fontFamily:"'DM Sans',sans-serif",color:t.text}}>
 
         {/* Top bar */}
@@ -158,7 +165,7 @@ export default function CoachReportsPage() {
         <div style={{maxWidth:1100,margin:'0 auto',padding:24}}>
 
           {/* Roster summary stats */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:28}}>
+          <div className="stats-grid">
             <StatCard label="Active Clients" value={activeCount} sub={`${clients.length} total`} color={t.teal}/>
             <StatCard label="Total Sessions" value={totalSessions} sub="completed" color={t.orange}/>
             <StatCard label="Total Check-ins" value={totalCheckins} sub="submitted" color={t.purple}/>
@@ -180,7 +187,8 @@ export default function CoachReportsPage() {
                 <div key={c.id}>
                   {/* Row */}
                   <div onClick={()=>selectClient(c.id)}
-                    style={{padding:'14px 20px',borderBottom:'1px solid '+t.border,cursor:'pointer',background:isSelected?t.tealDim:'transparent',display:'grid',gridTemplateColumns:'200px 80px 80px 80px 1fr 90px 80px',gap:12,alignItems:'center'}}
+                    style={{padding:'14px 20px',borderBottom:'1px solid '+t.border,cursor:'pointer',background:isSelected?t.tealDim:'transparent'}}
+                    className="roster-row"
                     onMouseEnter={e=>{ if(!isSelected) e.currentTarget.style.background=t.surfaceUp }}
                     onMouseLeave={e=>{ if(!isSelected) e.currentTarget.style.background='transparent' }}>
 
@@ -202,19 +210,19 @@ export default function CoachReportsPage() {
                     </div>
 
                     {/* Check-ins */}
-                    <div style={{textAlign:'center'}}>
+                    <div style={{textAlign:'center'}} className="roster-hide">
                       <div style={{fontSize:16,fontWeight:800,color:t.purple}}>{c.checkins}</div>
                       <div style={{fontSize:9,color:t.textMuted}}>check-ins</div>
                     </div>
 
                     {/* Metrics */}
-                    <div style={{textAlign:'center'}}>
+                    <div style={{textAlign:'center'}} className="roster-hide">
                       <div style={{fontSize:16,fontWeight:800,color:t.teal}}>{c.metrics}</div>
                       <div style={{fontSize:9,color:t.textMuted}}>entries</div>
                     </div>
 
                     {/* Weight + change */}
-                    <div>
+                    <div className="roster-hide">
                       {c.latestWeight ? (
                         <div style={{display:'flex',alignItems:'center',gap:6}}>
                           <span style={{fontSize:13,fontWeight:700}}>{c.latestWeight} lbs</span>
@@ -256,7 +264,7 @@ export default function CoachReportsPage() {
                       {!detail ? (
                         <div style={{padding:'20px 0',color:t.textMuted,fontSize:13}}>Loading...</div>
                       ) : (
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:16,paddingTop:16}}>
+                        <div className="detail-grid">
 
                           {/* Recent sessions */}
                           <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:14}}>

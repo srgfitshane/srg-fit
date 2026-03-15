@@ -211,7 +211,10 @@ export default function CoachCalendar() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+        .cal-grid{display:grid;grid-template-columns:1fr 280px;gap:0;max-width:1200px;margin:0 auto;padding:24px;}
+        @media(max-width:750px){.cal-grid{grid-template-columns:1fr;}.cal-sidebar{display:none;}}
+      `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
@@ -226,7 +229,7 @@ export default function CoachCalendar() {
           </button>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 280px', gap:0, maxWidth:1200, margin:'0 auto', padding:24 }}>
+        <div className="cal-grid">
 
           {/* Calendar grid */}
           <div style={{ paddingRight:24 }}>
@@ -278,7 +281,7 @@ export default function CoachCalendar() {
           </div>
 
           {/* Sidebar */}
-          <div>
+          <div className="cal-sidebar">
             {/* Selected event detail */}
             {selected && (
               <div style={{ background:t.surface, border:'1px solid '+(selected.color||t.teal)+'50', borderRadius:14, padding:18, marginBottom:16 }}>

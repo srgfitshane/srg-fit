@@ -152,7 +152,10 @@ export default function CoachInsightsPage() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+        .insights-grid{display:grid;grid-template-columns:300px 1fr;gap:20px;}
+        @media(max-width:700px){.insights-grid{grid-template-columns:1fr;}}
+      `}</style>
       <div style={{background:t.bg,minHeight:'100vh',fontFamily:"'DM Sans',sans-serif",color:t.text}}>
 
         {/* Top bar */}
@@ -164,7 +167,8 @@ export default function CoachInsightsPage() {
           <div style={{flex:1}}/>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'300px 1fr',maxWidth:1200,margin:'0 auto',padding:24,gap:20}}>
+        <div style={{display:'grid',gridTemplateColumns:'min(300px,100%)',maxWidth:1200,margin:'0 auto',padding:24,gap:20}}
+          className="insights-grid">
 
           {/* Left: Generator panel */}
           <div>
