@@ -293,6 +293,7 @@ export default function CoachDashboard() {
         { label:'Progress',   icon:'📈', path:'/dashboard/coach/progress'   },
         { label:'Resources',  icon:'📚', path:'/dashboard/coach/resources'  },
         { label:'AI Insights', icon:'🤖', path:'/dashboard/coach/insights'   },
+        { label:'Reports',     icon:'📊', path:'/dashboard/coach/reports'    },
                 ].map(item => (
                   <button key={item.label} onClick={()=>router.push(item.path)}
                     style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as any, width:'100%' }}

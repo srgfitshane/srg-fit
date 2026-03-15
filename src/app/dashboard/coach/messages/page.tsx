@@ -38,7 +38,7 @@ export default function MessagesPage() {
 
       const { data: cls } = await supabase
         .from('clients')
-        .select(`id, profile:profiles!clients_profile_id_fkey(id, full_name, avatar_url)`)
+        .select(`id, profile:profiles!profile_id(id, full_name, avatar_url)`)
         .eq('coach_id', user.id)
         .eq('active', true)
         .order('created_at', { ascending: false })
