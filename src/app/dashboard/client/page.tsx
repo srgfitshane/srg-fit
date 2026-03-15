@@ -29,6 +29,7 @@ const NAV = [
   { id:'training',  label:'Training', icon:'💪' },
   { id:'nutrition', label:'Nutrition',icon:'🥗' },
   { id:'metrics',   label:'Metrics',  icon:'📈' },
+  { id:'calendar',  label:'Calendar', icon:'📅' },
   { id:'messages',  label:'Messages', icon:'💬' },
   { id:'billing',   label:'Billing',  icon:'💳' },
 ]
@@ -191,7 +192,7 @@ export default function ClientDashboard() {
         {/* Nav */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, display:'flex', overflowX:'auto', flexShrink:0, padding:'0 6px' }}>
           {NAV.map(n => (
-            <div key={n.id} onClick={()=>setActiveNav(n.id)}
+            <div key={n.id} onClick={()=>{ if(n.id==='calendar') router.push('/dashboard/client/calendar'); else setActiveNav(n.id) }}
               style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, padding:'10px 12px', cursor:'pointer', borderBottom:'2px solid '+(activeNav===n.id ? t.teal : 'transparent'), transition:'all 0.15s ease', flexShrink:0 }}>
               <span style={{ fontSize:15 }}>{n.icon}</span>
               <span style={{ fontSize:10, fontWeight:activeNav===n.id ? 700 : 500, color:activeNav===n.id ? t.teal : t.textDim, whiteSpace:'nowrap' }}>{n.label}</span>
