@@ -48,7 +48,10 @@ export default function ProgramBuilder() {
   const [activeWeek, setActiveWeek] = useState(1)
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null)
+  const [addExTab,   setAddExTab]   = useState<'exercise'|'template'>('exercise')
   const [exSearch,   setExSearch]   = useState('')
+  const [templates,  setTemplates]  = useState<any[]>([])
+  const [tmplLoading,setTmplLoading]= useState(false)
   const [saving,     setSaving]     = useState<string|null>(null)
   const router   = useRouter()
   const params   = useParams()
@@ -162,6 +165,100 @@ export default function ProgramBuilder() {
   const deleteExercise = async (blockId: string, exId: string) => {
     await supabase.from('block_exercises').delete().eq('id', exId)
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, block_exercises: (b.block_exercises||[]).filter((e:any) => e.id !== exId) } : b))
+  }
+
+  const openAddEx = async (blockId: string) => {
+    setShowAddEx(blockId)
+    setExSearch('')
+    setAddExTab('exercise')
+    setTmplLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: tmpl } = await supabase
+      .from('workout_templates')
+      .select(`*, workout_template_exercises(*)`)
+      .eq('coach_id', user!.id)
+      .order('created_at', { ascending: false })
+    setTemplates(tmpl || [])
+    setTmplLoading(false)
+  }
+
+  // Import all exercises from a workout template into an existing block
+  const importTemplateIntoBlock = async (blockId: string, template: any) => {
+    const block = blocks.find(b => b.id === blockId)
+    let orderStart = (block?.block_exercises || []).length
+    const exs = (template.workout_template_exercises || [])
+      .sort((a:any,b:any) => a.order_index - b.order_index)
+    for (const ex of exs) {
+      const { data: newEx } = await supabase.from('block_exercises').insert({
+        block_id: blockId,
+        exercise_id: ex.exercise_id,
+        sets: ex.sets_prescribed || 3,
+        reps: ex.reps_prescribed || '8-12',
+        target_weight: ex.weight_prescribed || '',
+        rest_seconds: ex.rest_seconds || 90,
+        exercise_role: orderStart === 0 ? 'main' : orderStart === 1 ? 'secondary' : 'accessory',
+        notes: ex.notes || null,
+        order_index: orderStart++,
+      }).select(`*, exercise:exercises(name, muscles)`).single()
+      if (newEx) {
+        setBlocks(prev => prev.map(b => b.id === blockId
+          ? { ...b, block_exercises: [...(b.block_exercises||[]), newEx] }
+          : b
+        ))
+      }
+    }
+    setShowAddEx(null)
+  }
+
+  // Add a new day pre-populated from a template
+  const addDayFromTemplate = async (weekNum: number, template: any) => {
+    const existing = blocksForWeek(weekNum)
+    const labels = ['A','B','C','D','E','F','G']
+    const label = labels[existing.length] || `Day ${existing.length+1}`
+    const { data: block } = await supabase.from('workout_blocks').insert({
+      program_id: programId,
+      name: template.title,
+      day_label: template.title,
+      week_number: weekNum,
+      order_index: existing.length,
+    }).select().single()
+    if (block) {
+      const exs = (template.workout_template_exercises || [])
+        .sort((a:any,b:any) => a.order_index - b.order_index)
+      for (let i = 0; i < exs.length; i++) {
+        const ex = exs[i]
+        await supabase.from('block_exercises').insert({
+          block_id: block.id,
+          exercise_id: ex.exercise_id,
+          sets: ex.sets_prescribed || 3,
+          reps: ex.reps_prescribed || '8-12',
+          target_weight: ex.weight_prescribed || '',
+          rest_seconds: ex.rest_seconds || 90,
+          exercise_role: i === 0 ? 'main' : i === 1 ? 'secondary' : 'accessory',
+          notes: ex.notes || null,
+          order_index: i,
+        })
+      }
+      await load()
+    }
+    setShowAddDay(null)
+  }
+
+  const [showAddDay, setShowAddDay]   = useState<number|null>(null)
+  const [addDayTmplLoading, setAddDayTmplLoading] = useState(false)
+  const [addDayTemplates, setAddDayTemplates] = useState<any[]>([])
+
+  const openAddDay = async (weekNum: number) => {
+    setShowAddDay(weekNum)
+    setAddDayTmplLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: tmpl } = await supabase
+      .from('workout_templates')
+      .select(`*, workout_template_exercises(*)`)
+      .eq('coach_id', user!.id)
+      .order('created_at', { ascending: false })
+    setAddDayTemplates(tmpl || [])
+    setAddDayTmplLoading(false)
   }
 
   const filteredExercises = exercises.filter(e => e.name.toLowerCase().includes(exSearch.toLowerCase()))
@@ -386,7 +483,7 @@ export default function ProgramBuilder() {
                         )
                       })}
 
-                      <button onClick={()=>{ setShowAddEx(block.id); setExSearch('') }}
+                      <button onClick={()=>openAddEx(block.id)}
                         style={{ width:'100%', padding:'9px', borderRadius:10, border:'1px dashed '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
                         + Add Exercise
                       </button>
@@ -395,7 +492,7 @@ export default function ProgramBuilder() {
                 )
               })}
 
-              <button onClick={()=>addDay(activeWeek)}
+              <button onClick={()=>openAddDay(activeWeek)}
                 style={{ background:'transparent', border:'2px dashed '+t.border, borderRadius:18, padding:'32px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', flexDirection:'column' as any, alignItems:'center', gap:8, minHeight:120 }}>
                 <span style={{ fontSize:28 }}>+</span>Add Day
               </button>
@@ -441,30 +538,155 @@ export default function ProgramBuilder() {
           </div>
         )}
 
-        {/* Add Exercise Modal */}
+        {/* Add Exercise / From Template Modal */}
         {showAddEx && (
           <div onClick={()=>setShowAddEx(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:480, padding:24, maxHeight:'80vh', display:'flex', flexDirection:'column' as any }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:520, padding:24, maxHeight:'85vh', display:'flex', flexDirection:'column' as any }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-                <div style={{ fontSize:15, fontWeight:800 }}>Add Exercise</div>
+                <div style={{ fontSize:15, fontWeight:800 }}>Add to Day</div>
                 <span onClick={()=>setShowAddEx(null)} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
               </div>
-              <input value={exSearch} onChange={e=>setExSearch(e.target.value)} placeholder="Search exercises..." autoFocus
-                style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", marginBottom:12 }} />
-              <div style={{ overflowY:'auto', flex:1 }}>
-                {filteredExercises.length === 0 && <div style={{ textAlign:'center', padding:'24px', color:t.textMuted, fontSize:13 }}>No exercises found. Visit 🏋️ Exercises to add some.</div>}
-                {filteredExercises.map(ex => (
-                  <div key={ex.id} onClick={()=>addExercise(showAddEx, ex.id)}
-                    style={{ padding:'10px 12px', borderRadius:10, cursor:'pointer', marginBottom:4, display:'flex', alignItems:'center', gap:10 }}
-                    onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceUp)}
-                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:700 }}>{ex.name}</div>
-                      {ex.muscles?.length > 0 && <div style={{ fontSize:11, color:t.textMuted }}>{ex.muscles.join(', ')}</div>}
-                    </div>
-                    <div style={{ fontSize:11, color:t.teal, fontWeight:700 }}>+ Add</div>
-                  </div>
+
+              {/* Tab switcher */}
+              <div style={{ display:'flex', background:t.surfaceHigh, borderRadius:10, padding:3, gap:2, marginBottom:16 }}>
+                {([['exercise','🏋️ Exercise Library'],['template','💪 From Workout Library']] as const).map(([id,label])=>(
+                  <button key={id} onClick={()=>setAddExTab(id)}
+                    style={{ flex:1, padding:'7px', borderRadius:8, border:'none', background:addExTab===id?t.teal:'transparent', color:addExTab===id?'#000':t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {label}
+                  </button>
                 ))}
+              </div>
+
+              {/* Exercise Library tab */}
+              {addExTab === 'exercise' && (
+                <>
+                  <input value={exSearch} onChange={e=>setExSearch(e.target.value)} placeholder="Search exercises..." autoFocus
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", marginBottom:12 }} />
+                  <div style={{ overflowY:'auto', flex:1 }}>
+                    {filteredExercises.length === 0 && <div style={{ textAlign:'center', padding:'24px', color:t.textMuted, fontSize:13 }}>No exercises found. Visit 🏋️ Exercises to add some.</div>}
+                    {filteredExercises.map(ex => (
+                      <div key={ex.id} onClick={()=>addExercise(showAddEx, ex.id)}
+                        style={{ padding:'10px 12px', borderRadius:10, cursor:'pointer', marginBottom:4, display:'flex', alignItems:'center', gap:10 }}
+                        onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceUp)}
+                        onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:700 }}>{ex.name}</div>
+                          {ex.muscles?.length > 0 && <div style={{ fontSize:11, color:t.textMuted }}>{ex.muscles.join(', ')}</div>}
+                        </div>
+                        <div style={{ fontSize:11, color:t.teal, fontWeight:700 }}>+ Add</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Workout Library tab */}
+              {addExTab === 'template' && (
+                <div style={{ overflowY:'auto', flex:1 }}>
+                  {tmplLoading ? (
+                    <div style={{ textAlign:'center', padding:32, color:t.textMuted, fontSize:13 }}>Loading workout library...</div>
+                  ) : templates.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:32, color:t.textMuted, fontSize:13 }}>
+                      No workouts in your library yet.<br/>
+                      <span style={{ color:t.teal }}>Build some in 💪 Workouts first.</span>
+                    </div>
+                  ) : templates.map(tmpl => {
+                    const exCount = tmpl.workout_template_exercises?.length || 0
+                    const preview = (tmpl.workout_template_exercises || [])
+                      .sort((a:any,b:any)=>a.order_index-b.order_index).slice(0,3)
+                    return (
+                      <div key={tmpl.id} onClick={()=>importTemplateIntoBlock(showAddEx!, tmpl)}
+                        style={{ background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', marginBottom:8, cursor:'pointer', transition:'border-color 0.15s' }}
+                        onMouseEnter={e=>(e.currentTarget.style.borderColor=t.teal+'60')}
+                        onMouseLeave={e=>(e.currentTarget.style.borderColor=t.border)}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+                          <div style={{ fontWeight:700, fontSize:13 }}>{tmpl.title}</div>
+                          <span style={{ fontSize:10, fontWeight:700, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:20, padding:'2px 8px', flexShrink:0 }}>
+                            Import {exCount} exercise{exCount!==1?'s':''}
+                          </span>
+                        </div>
+                        <div style={{ display:'flex', gap:4, flexWrap:'wrap' as const, marginBottom:6 }}>
+                          <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:t.surfaceHigh, color:t.textMuted }}>{tmpl.category}</span>
+                          <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:t.surfaceHigh, color:t.textMuted }}>{tmpl.difficulty}</span>
+                          {tmpl.estimated_minutes && <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:t.surfaceHigh, color:t.textMuted }}>⏱ {tmpl.estimated_minutes}m</span>}
+                        </div>
+                        {preview.map((ex:any,i:number) => (
+                          <div key={i} style={{ fontSize:11, color:t.textDim, display:'flex', gap:6, marginBottom:2 }}>
+                            <span style={{ color:t.teal, fontWeight:700, minWidth:14 }}>{i+1}.</span>
+                            <span>{ex.exercise_name}</span>
+                            <span style={{ color:t.textMuted }}>{ex.sets_prescribed}×{ex.reps_prescribed}</span>
+                          </div>
+                        ))}
+                        {exCount > 3 && <div style={{ fontSize:10, color:t.textMuted, marginTop:2 }}>+{exCount-3} more exercises</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Add Day Modal — blank or from template */}
+        {showAddDay !== null && (
+          <div onClick={()=>setShowAddDay(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:520, padding:24, maxHeight:'85vh', display:'flex', flexDirection:'column' as any }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+                <div style={{ fontSize:15, fontWeight:800 }}>Add Day — Week {showAddDay}</div>
+                <span onClick={()=>setShowAddDay(null)} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
+              </div>
+
+              {/* Blank day button */}
+              <button onClick={async ()=>{ await addDay(showAddDay!); setShowAddDay(null) }}
+                style={{ width:'100%', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'14px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:12, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif" }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:t.tealDim, border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>➕</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:t.text }}>Blank Day</div>
+                  <div style={{ fontSize:11, color:t.textMuted }}>Start with an empty day and add exercises manually</div>
+                </div>
+              </button>
+
+              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Or pick from Workout Library</div>
+
+              <div style={{ overflowY:'auto', flex:1 }}>
+                {addDayTmplLoading ? (
+                  <div style={{ textAlign:'center', padding:32, color:t.textMuted, fontSize:13 }}>Loading...</div>
+                ) : addDayTemplates.length === 0 ? (
+                  <div style={{ textAlign:'center', padding:32, color:t.textMuted, fontSize:13 }}>
+                    No workouts in your library yet.<br/>
+                    <span style={{ color:t.teal }}>Build some in 💪 Workouts first.</span>
+                  </div>
+                ) : addDayTemplates.map(tmpl => {
+                  const exCount = tmpl.workout_template_exercises?.length || 0
+                  const preview = (tmpl.workout_template_exercises || [])
+                    .sort((a:any,b:any)=>a.order_index-b.order_index).slice(0,4)
+                  return (
+                    <div key={tmpl.id} onClick={()=>addDayFromTemplate(showAddDay!, tmpl)}
+                      style={{ background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', marginBottom:8, cursor:'pointer', transition:'border-color 0.15s' }}
+                      onMouseEnter={e=>(e.currentTarget.style.borderColor=t.orange+'60')}
+                      onMouseLeave={e=>(e.currentTarget.style.borderColor=t.border)}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+                        <div style={{ fontWeight:700, fontSize:13 }}>{tmpl.title}</div>
+                        <span style={{ fontSize:10, fontWeight:700, color:t.orange, background:t.orangeDim, border:'1px solid '+t.orange+'30', borderRadius:20, padding:'2px 8px', flexShrink:0 }}>
+                          {exCount} exercise{exCount!==1?'s':''}
+                        </span>
+                      </div>
+                      <div style={{ display:'flex', gap:4, flexWrap:'wrap' as const, marginBottom:6 }}>
+                        <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:t.surfaceHigh, color:t.textMuted }}>{tmpl.category}</span>
+                        <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:t.surfaceHigh, color:t.textMuted }}>{tmpl.difficulty}</span>
+                        {tmpl.estimated_minutes && <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:t.surfaceHigh, color:t.textMuted }}>⏱ {tmpl.estimated_minutes}m</span>}
+                      </div>
+                      {preview.map((ex:any,i:number) => (
+                        <div key={i} style={{ fontSize:11, color:t.textDim, display:'flex', gap:6, marginBottom:2 }}>
+                          <span style={{ color:t.orange, fontWeight:700, minWidth:14 }}>{i+1}.</span>
+                          <span>{ex.exercise_name}</span>
+                          <span style={{ color:t.textMuted }}>{ex.sets_prescribed}×{ex.reps_prescribed}</span>
+                        </div>
+                      ))}
+                      {exCount > 4 && <div style={{ fontSize:10, color:t.textMuted, marginTop:2 }}>+{exCount-4} more</div>}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
