@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import RichMessageThread from '@/components/messaging/RichMessageThread'
@@ -15,6 +15,14 @@ const t = {
 }
 
 export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div style={{ background:'#080810', minHeight:'100vh' }} />}>
+      <MessagesInner />
+    </Suspense>
+  )
+}
+
+function MessagesInner() {
   const [coachId,    setCoachId]    = useState<string | null>(null)
   const [clients,    setClients]    = useState<any[]>([])
   const [activeId,   setActiveId]   = useState<string | null>(null)
