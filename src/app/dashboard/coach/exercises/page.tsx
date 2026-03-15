@@ -79,7 +79,13 @@ export default function ExerciseLibrary() {
   const saveExercise = async () => {
     if (!newEx.name) return
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('exercises').insert({ ...newEx, coach_id: user?.id })
+    const payload: any = { name: newEx.name, muscles: newEx.muscles, equipment: newEx.equipment, difficulty: newEx.difficulty, tags: newEx.tags, cues: newEx.cues, coach_id: user?.id }
+    const { data: saved } = await supabase.from('exercises').insert(payload).select().single()
+    // Upload video if attached
+    const videoFile = (newEx as any)._videoFile
+    if (saved && videoFile) {
+      await uploadVideo(saved.id, videoFile)
+    }
     setShowNew(false)
     setNewEx({ name:'', muscles:[], equipment:'Barbell', difficulty:'Intermediate', tags:[], cues:'', video_url:'' })
     await load()
@@ -90,8 +96,24 @@ export default function ExerciseLibrary() {
     setExercises(prev => prev.filter(e => e.id !== id))
   }
 
-  const toggleMuscle = (m: string) => setNewEx(p => ({ ...p, muscles: p.muscles.includes(m) ? p.muscles.filter(x=>x!==m) : [...p.muscles, m] }))
-  const toggleTag    = (tg: string) => setNewEx(p => ({ ...p, tags: p.tags.includes(tg) ? p.tags.filter(x=>x!==tg) : [...p.tags, tg] }))
+  const [uploading, setUploading] = useState<string|null>(null) // exerciseId being uploaded
+
+  const uploadVideo = async (exerciseId: string, file: File) => {
+    setUploading(exerciseId)
+    const ext = file.name.split('.').pop()
+    const path = `${exerciseId}/demo.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('exercise-videos')
+      .upload(path, file, { upsert: true, contentType: file.type })
+    if (!upErr) {
+      const { data: { publicUrl } } = supabase.storage.from('exercise-videos').getPublicUrl(path)
+      await supabase.from('exercises').update({ video_url: publicUrl }).eq('id', exerciseId)
+      setExercises(prev => prev.map(e => e.id === exerciseId ? { ...e, video_url: publicUrl } : e))
+    }
+    setUploading(null)
+  }
+  const toggleMuscle = (m: string)  => setNewEx(p => ({ ...p, muscles: p.muscles.includes(m)  ? p.muscles.filter(x=>x!==m)  : [...p.muscles, m]  }))
+  const toggleTag    = (tg: string) => setNewEx(p => ({ ...p, tags:    p.tags.includes(tg)    ? p.tags.filter(x=>x!==tg)    : [...p.tags, tg]    }))
 
   const filtered = exercises.filter(e => {
     const matchSearch = e.name.toLowerCase().includes(search.toLowerCase())
@@ -188,7 +210,17 @@ export default function ExerciseLibrary() {
                 <div style={{ padding:'14px' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
                     <div style={{ fontSize:13, fontWeight:800, flex:1, marginRight:8 }}>{ex.name}</div>
-                    <button onClick={()=>deleteExercise(ex.id)} style={{ background:'none', border:'none', color:t.red+'50', cursor:'pointer', fontSize:13, flexShrink:0 }}>✕</button>
+                    <div style={{ display:'flex', gap:4 }}>
+                      {/* Video upload button */}
+                      <label title="Upload video" style={{ cursor:'pointer' }}>
+                        <input type="file" accept="video/*" style={{ display:'none' }}
+                          onChange={e => { if (e.target.files?.[0]) uploadVideo(ex.id, e.target.files[0]); e.target.value = '' }} />
+                        <span style={{ background: ex.video_url ? t.tealDim : t.surfaceHigh, border:'1px solid '+(ex.video_url ? t.teal+'40' : t.border), borderRadius:6, padding:'3px 7px', fontSize:11, color: ex.video_url ? t.teal : t.textMuted, cursor:'pointer', display:'inline-block', whiteSpace:'nowrap' }}>
+                          {uploading === ex.id ? '⏳' : ex.video_url ? '📹 ✓' : '📹'}
+                        </span>
+                      </label>
+                      <button onClick={()=>deleteExercise(ex.id)} style={{ background:'none', border:'none', color:t.red+'50', cursor:'pointer', fontSize:13, flexShrink:0 }}>✕</button>
+                    </div>
                   </div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:6 }}>
                     {(ex.muscles||[]).map((m:string) => (
@@ -265,6 +297,23 @@ export default function ExerciseLibrary() {
                 <textarea value={newEx.cues} onChange={e=>setNewEx(p=>({...p,cues:e.target.value}))} rows={2}
                   placeholder="Key technique cues shown to the client during workouts..."
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5 }} />
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Demo Video (optional)</div>
+                <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                  <label style={{ flex:1, cursor:'pointer' }}>
+                    <input type="file" accept="video/*" style={{ display:'none' }}
+                      onChange={e => { if (e.target.files?.[0]) setNewEx(p=>({...p, _videoFile: e.target.files![0], _videoName: e.target.files![0].name} as any)) }} />
+                    <div style={{ background:t.surfaceUp, border:'2px dashed '+t.border, borderRadius:10, padding:'10px 14px', fontSize:12, color:(newEx as any)._videoFile ? t.teal : t.textMuted, textAlign:'center' as const }}>
+                      {(newEx as any)._videoFile ? `✓ ${(newEx as any)._videoName}` : '📹 Click to attach a video'}
+                    </div>
+                  </label>
+                  {(newEx as any)._videoFile && (
+                    <button onClick={()=>setNewEx(p=>({...p, _videoFile: null, _videoName: ''} as any))}
+                      style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'8px', fontSize:12, color:t.red, cursor:'pointer' }}>✕</button>
+                  )}
+                </div>
+                <div style={{ fontSize:11, color:t.textMuted, marginTop:5 }}>MP4, WebM, or MOV. Video uploads after saving.</div>
               </div>
               <button onClick={saveExercise} disabled={!newEx.name}
                 style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:!newEx.name?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newEx.name?0.5:1 }}>
