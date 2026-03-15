@@ -43,7 +43,7 @@ const NAV_EXPANDED = [
   { label:'Reports',    icon:'📊', path:'/dashboard/coach/reports'    },
   { label:'Exercises',  icon:'🏋️', path:'/dashboard/coach/exercises'  },
   { label:'Invites',    icon:'📨', path:'/dashboard/coach/invites'    },
-  { label:'Onboarding', icon:'📝', path:'/dashboard/coach/onboarding' },
+  { label:'Forms',      icon:'📝', path:'/dashboard/coach/onboarding' },
   { label:'Plans',      icon:'💳', path:'/dashboard/coach/plans'      },
 ]
 

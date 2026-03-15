@@ -19,6 +19,7 @@ const TABS = [
   { id:'nutrition',  label:'Nutrition',  icon:'🥗' },
   { id:'checkins',   label:'Check-ins',  icon:'✅' },
   { id:'metrics',    label:'Metrics',    icon:'📈' },
+  { id:'forms',      label:'Forms',      icon:'📝' },
   { id:'messages',   label:'Messages',   icon:'💬' },
 ]
 
@@ -116,6 +117,8 @@ export default function ClientDetail() {
   const [assignNote,     setAssignNote]     = useState('')
   const [assigning,      setAssigning]      = useState(false)
   const [assignedDone,   setAssignedDone]   = useState(false)
+  const [resending,      setResending]      = useState(false)
+  const [resendDone,     setResendDone]     = useState(false)
 
   const assignForm = async () => {
     if (!assignFormId || !coachId) return
@@ -130,6 +133,39 @@ export default function ClientDetail() {
     setAssigning(false)
     setAssignedDone(true)
     setTimeout(() => { setShowAssignForm(false); setAssignedDone(false); setAssignFormId(''); setAssignNote('') }, 1800)
+  }
+
+  const resendInvite = async () => {
+    if (!coachId) return
+    setResending(true)
+    // Find the most recent pending invite for this client's email
+    const email = client?.profile?.email
+    if (email) {
+      const { data: inv } = await supabase
+        .from('client_invites')
+        .select('id')
+        .eq('coach_id', coachId)
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (inv) {
+        await supabase.from('client_invites').update({
+          status: 'pending',
+          expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString()
+        }).eq('id', inv.id)
+        await supabase.functions.invoke('send-invite-email', { body: { invite_id: inv.id } })
+      } else {
+        // Create a fresh invite if none found
+        const { data: newInv } = await supabase.from('client_invites').insert({
+          coach_id: coachId, email, full_name: client?.profile?.full_name
+        }).select().single()
+        if (newInv) await supabase.functions.invoke('send-invite-email', { body: { invite_id: newInv.id } })
+      }
+    }
+    setResending(false)
+    setResendDone(true)
+    setTimeout(() => setResendDone(false), 2500)
   }
 
   const saveAndBack = async () => {
@@ -200,6 +236,10 @@ export default function ClientDetail() {
             ? <button onClick={handleUnflag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Unflag</button>
             : <button onClick={()=>setShowFlag(true)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Flag Client</button>
           }
+          <button onClick={resendInvite} disabled={resending || resendDone}
+            style={{ background:resendDone?t.greenDim:t.orangeDim, border:'1px solid '+(resendDone?t.green:t.orange)+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:resendDone?t.green:t.orange, cursor:resending||resendDone?'default':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            {resendDone ? '✓ Sent!' : resending ? 'Sending...' : '📨 Resend Invite'}
+          </button>
           <button onClick={()=>setShowAssignForm(true)}
             style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             📝 Send Form
@@ -530,6 +570,11 @@ export default function ClientDetail() {
             </div>
           )}
 
+          {/* FORMS TAB */}
+          {activeTab === 'forms' && (
+            <FormsTab clientId={clientId} coachId={coachId!} forms={forms} onAssign={() => setShowAssignForm(true)} supabase={supabase} router={router} t={t} />
+          )}
+
           {/* MESSAGES TAB */}
           {activeTab === 'messages' && client && (
             <MiniThread coachId={coachId!} client={client} />
@@ -663,6 +708,88 @@ export default function ClientDetail() {
 
       </div>
     </>
+  )
+}
+
+
+// ── FormsTab: coach view of assigned forms for a client ──────────────────
+function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: any) {
+  const [assignments, setAssignments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from('client_form_assignments')
+        .select('*, form:onboarding_forms(title)')
+        .eq('client_id', clientId)
+        .order('assigned_at', { ascending: false })
+      setAssignments(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [clientId])
+
+  const deleteAssignment = async (id: string) => {
+    await supabase.from('client_form_assignments').delete().eq('id', id)
+    setAssignments(p => p.filter(a => a.id !== id))
+  }
+
+  if (loading) return (
+    <div style={{ padding:'40px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading forms...</div>
+  )
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>Assigned Forms ({assignments.length})</div>
+        <button onClick={onAssign}
+          style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          + Send Form
+        </button>
+      </div>
+
+      {assignments.length === 0 ? (
+        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>📝</div>
+          <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No forms sent yet</div>
+          <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Send a form to collect intake info, check-ins, waivers, or anything else.</div>
+          <button onClick={onAssign}
+            style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            Send First Form
+          </button>
+        </div>
+      ) : assignments.map((a:any) => (
+        <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', display:'flex', alignItems:'center', gap:14 }}>
+          <div style={{ width:40, height:40, borderRadius:12, background: a.status==='completed'?t.greenDim:t.purpleDim, border:'1px solid '+(a.status==='completed'?t.green:t.purple)+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+            {a.status === 'completed' ? '✅' : '📝'}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700, marginBottom:2 }}>{a.form?.title || 'Unknown Form'}</div>
+            <div style={{ fontSize:11, color:t.textMuted }}>
+              Sent {new Date(a.assigned_at).toLocaleDateString()} ·{' '}
+              {a.status === 'completed'
+                ? <span style={{ color:t.green }}>Completed {new Date(a.completed_at).toLocaleDateString()}</span>
+                : <span style={{ color:t.orange }}>Pending</span>}
+            </div>
+            {a.note && <div style={{ fontSize:11, color:t.textDim, marginTop:3, fontStyle:'italic' }}>"{a.note}"</div>}
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            {a.status === 'completed' && (
+              <button
+                onClick={()=>router.push('/dashboard/coach/forms/'+a.id+'/responses')}
+                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                View Responses
+              </button>
+            )}
+            <button onClick={()=>deleteAssignment(a.id)}
+              style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:8, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
