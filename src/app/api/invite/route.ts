@@ -46,13 +46,16 @@ export async function POST(request: NextRequest) {
       active: true,
     })
 
-    // Get coach name
-    const { data: coachProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('full_name')
-      .eq('id', coachId)
-      .single()
-    const coachName = coachProfile?.full_name || 'Your Coach'
+    // Get coach name (non-fatal if not found)
+    let coachName = 'Your Coach'
+    try {
+      const { data: coachProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', coachId)
+        .single()
+      if (coachProfile?.full_name) coachName = coachProfile.full_name
+    } catch (_) {}
 
     // Generate password-set link
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srg-fit.vercel.app'
@@ -63,43 +66,50 @@ export async function POST(request: NextRequest) {
     })
     const setPasswordLink = linkData?.properties?.action_link
 
-    // Send via Resend
+    // Send via Resend (non-blocking — don't crash if email fails)
     const resendKey = process.env.RESEND_API_KEY
     if (resendKey && setPasswordLink) {
-      const firstName = fullName.split(' ')[0]
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${resendKey}`,
-        },
-        body: JSON.stringify({
-          from: 'SRG Fit <onboarding@resend.dev>',
-          to: [email],
-          subject: `${coachName} invited you to SRG Fit`,
-          html: `
-            <div style="font-family: Arial, sans-serif; background: #080810; color: #eeeef8; padding: 40px 20px; max-width: 520px; margin: 0 auto;">
-              <div style="text-align: center; margin-bottom: 28px;">
-                <div style="font-size: 28px; font-weight: 900; color: #00c9b1;">SRG FIT</div>
-                <div style="font-size: 12px; color: #8888a8;">Strength &middot; Nutrition &middot; Mental Health</div>
+      try {
+        const firstName = fullName.split(' ')[0]
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${resendKey}`,
+          },
+          body: JSON.stringify({
+            from: 'SRG Fit <onboarding@resend.dev>',
+            to: [email],
+            subject: `${coachName} invited you to SRG Fit`,
+            html: `
+              <div style="font-family: Arial, sans-serif; background: #080810; color: #eeeef8; padding: 40px 20px; max-width: 520px; margin: 0 auto;">
+                <div style="text-align: center; margin-bottom: 28px;">
+                  <div style="font-size: 28px; font-weight: 900; color: #00c9b1;">SRG FIT</div>
+                  <div style="font-size: 12px; color: #8888a8;">Strength &middot; Nutrition &middot; Mental Health</div>
+                </div>
+                <div style="background: #0f0f1a; border: 1px solid #252538; border-radius: 16px; padding: 28px; text-align: center;">
+                  <div style="font-size: 40px; margin-bottom: 16px;">&#128075;</div>
+                  <h2 style="font-size: 20px; font-weight: 900; margin-bottom: 8px; color: #eeeef8;">Hey ${firstName}!</h2>
+                  <p style="font-size: 14px; color: #8888a8; line-height: 1.7; margin-bottom: 28px;">
+                    <strong style="color: #00c9b1;">${coachName}</strong> has invited you to join SRG Fit &mdash;
+                    your personal coaching platform for strength, nutrition, and mental health.
+                  </p>
+                  <a href="${setPasswordLink}" style="display: inline-block; background: #00c9b1; border-radius: 12px; padding: 14px 36px; font-size: 15px; font-weight: 900; color: #000; text-decoration: none;">
+                    Set Up Your Account &rarr;
+                  </a>
+                  <p style="font-size: 11px; color: #5a5a78; margin-top: 20px;">This link expires in 24 hours.</p>
+                </div>
+                <p style="text-align: center; font-size: 11px; color: #5a5a78; margin-top: 20px;">If you didn't expect this, you can safely ignore this email.</p>
               </div>
-              <div style="background: #0f0f1a; border: 1px solid #252538; border-radius: 16px; padding: 28px; text-align: center;">
-                <div style="font-size: 40px; margin-bottom: 16px;">&#128075;</div>
-                <h2 style="font-size: 20px; font-weight: 900; margin-bottom: 8px; color: #eeeef8;">Hey ${firstName}!</h2>
-                <p style="font-size: 14px; color: #8888a8; line-height: 1.7; margin-bottom: 28px;">
-                  <strong style="color: #00c9b1;">${coachName}</strong> has invited you to join SRG Fit &mdash;
-                  your personal coaching platform for strength, nutrition, and mental health.
-                </p>
-                <a href="${setPasswordLink}" style="display: inline-block; background: #00c9b1; border-radius: 12px; padding: 14px 36px; font-size: 15px; font-weight: 900; color: #000; text-decoration: none;">
-                  Set Up Your Account &rarr;
-                </a>
-                <p style="font-size: 11px; color: #5a5a78; margin-top: 20px;">This link expires in 24 hours.</p>
-              </div>
-              <p style="text-align: center; font-size: 11px; color: #5a5a78; margin-top: 20px;">If you didn't expect this, you can safely ignore this email.</p>
-            </div>
-          `
-        }),
-      })
+            `
+          }),
+        })
+      } catch (emailErr) {
+        // Email failure is non-fatal — user was created, just log it
+        console.error('Resend email failed:', emailErr)
+      }
+    } else {
+      console.log('No RESEND_API_KEY or no password link — skipping email. Link:', setPasswordLink)
     }
 
     return NextResponse.json({
