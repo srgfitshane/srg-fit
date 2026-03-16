@@ -130,7 +130,7 @@ export default function CoachNutritionPage() {
       fat_g: parseInt(form.fat_g) || null,
       fiber_g: parseInt(form.fiber_g) || null,
       water_oz: parseInt(form.water_oz) || 64,
-      notes_coach: form.notes_coach || null,
+      notes: form.notes_coach || null,
       is_active: true
     }
     if (view === 'edit' && editing) {
