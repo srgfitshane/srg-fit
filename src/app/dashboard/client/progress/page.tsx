@@ -8,8 +8,10 @@ import {
 
 const t = {
   bg:'#0f0f0f', surface:'#1a1a1a', surfaceHigh:'#242424', border:'#2a2a2a',
-  text:'#f0f0f0', textMuted:'#888', green:'#4ade80', teal:'#2dd4bf',
-  blue:'#60a5fa', purple:'#a78bfa', orange:'#fb923c', pink:'#f472b6',
+  text:'#f0f0f0', textMuted:'#888', textDim:'#aaa',
+  green:'#4ade80', teal:'#2dd4bf', tealDim:'#2dd4bf15',
+  blue:'#60a5fa', purple:'#a78bfa', purpleDim:'#a78bfa15',
+  orange:'#fb923c', pink:'#f472b6',
   red:'#f87171', yellow:'#facc15',
 }
 const TIMEFRAMES = [
@@ -46,6 +48,8 @@ export default function ClientProgressPage() {
   const [photoFile, setPhotoFile] = useState<File|null>(null)
   const [saving, setSaving] = useState(false)
   const [lightbox, setLightbox] = useState<any>(null)
+  const [compareMode,  setCompareMode]  = useState(false)
+  const [compareSelection, setCompareSelection] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { init() }, [])
@@ -123,6 +127,15 @@ export default function ClientProgressPage() {
     }
     setPhotoOpen(false); setSaving(false); setPhotoFile(null)
     setPhotoForm({ angle:'front', caption:'', weight_at_time:'' }); loadData()
+  }
+
+  const toggleComparePhoto = (photo: any) => {
+    setCompareSelection(prev => {
+      const exists = prev.find(p => p.id === photo.id)
+      if (exists) return prev.filter(p => p.id !== photo.id)
+      if (prev.length >= 2) return [prev[1], photo] // slide window
+      return [...prev, photo]
+    })
   }
 
   if (loading) return <div style={{color:t.textMuted,padding:40,textAlign:'center'}}>Loading...</div>
@@ -216,29 +229,70 @@ export default function ClientProgressPage() {
         )}
       </div>
 
-      {/* Progress Photos Grid */}
+      {/* Progress Photos */}
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:t.textMuted, marginBottom:14 }}>PROGRESS PHOTOS</div>
-        {photos.length===0 ? (
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:t.textMuted }}>PROGRESS PHOTOS ({photos.length})</div>
+          <div style={{ display:'flex', gap:8 }}>
+            {photos.length >= 2 && (
+              <button onClick={()=>{ setCompareMode(!compareMode); setCompareSelection([]) }}
+                style={{ padding:'6px 14px', borderRadius:20, border:'1px solid', cursor:'pointer', fontSize:12, fontWeight:600,
+                  borderColor: compareMode ? t.teal : t.border,
+                  background:  compareMode ? t.tealDim : 'transparent',
+                  color:       compareMode ? t.teal : t.textMuted }}>
+                {compareMode ? '✕ Cancel Compare' : '⇔ Compare Photos'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Compare mode instructions */}
+        {compareMode && (
+          <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:t.teal }}>
+            {compareSelection.length === 0 && 'Select two photos to compare side by side'}
+            {compareSelection.length === 1 && 'Good — now select a second photo'}
+            {compareSelection.length === 2 && (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <span>2 photos selected — ready to compare!</span>
+                <button onClick={()=>setLightbox({ compare: true, photos: compareSelection })}
+                  style={{ background:t.teal, border:'none', borderRadius:8, padding:'5px 14px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer' }}>
+                  Compare →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {photos.length === 0 ? (
           <div style={{ textAlign:'center', color:t.textMuted, padding:40, fontSize:13 }}>
             No photos yet — add your first progress photo to track visual changes!
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10 }}>
-            {photos.map(p => (
-              <div key={p.id} onClick={()=>setLightbox(p)}
-                style={{ borderRadius:12, overflow:'hidden', border:'1px solid '+t.border, cursor:'pointer',
-                  transition:'transform 0.15s' }}
-                onMouseEnter={e=>(e.currentTarget.style.transform='scale(1.03)')}
-                onMouseLeave={e=>(e.currentTarget.style.transform='scale(1)')}>
-                <img src={p.signedUrl} alt={p.angle} style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }} />
-                <div style={{ padding:'7px 10px', background:t.surfaceHigh }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:t.teal, textTransform:'capitalize' }}>{p.angle?.replace('_',' ')}</div>
-                  <div style={{ fontSize:10, color:t.textMuted }}>{fmt(p.photo_date)}</div>
-                  {p.weight_at_time && <div style={{ fontSize:10, color:t.orange }}>{p.weight_at_time} lbs</div>}
+            {photos.map(p => {
+              const selected = compareSelection.find(s => s.id === p.id)
+              const selIdx   = compareSelection.findIndex(s => s.id === p.id)
+              return (
+                <div key={p.id}
+                  onClick={() => compareMode ? toggleComparePhoto(p) : setLightbox(p)}
+                  style={{ borderRadius:12, overflow:'hidden', border:'2px solid '+(selected ? t.teal : t.border),
+                    cursor:'pointer', transition:'transform 0.15s, border-color 0.15s', position:'relative' }}
+                  onMouseEnter={e=>(e.currentTarget.style.transform='scale(1.03)')}
+                  onMouseLeave={e=>(e.currentTarget.style.transform='scale(1)')}>
+                  {selected && (
+                    <div style={{ position:'absolute', top:6, right:6, zIndex:2, background:t.teal, color:'#000', borderRadius:'50%', width:22, height:22, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800 }}>
+                      {selIdx + 1}
+                    </div>
+                  )}
+                  <img src={p.signedUrl} alt={p.angle} style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }} />
+                  <div style={{ padding:'7px 10px', background:t.surfaceHigh }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.teal, textTransform:'capitalize' }}>{p.angle?.replace('_',' ')}</div>
+                    <div style={{ fontSize:10, color:t.textMuted }}>{fmt(p.photo_date)}</div>
+                    {p.weight_at_time && <div style={{ fontSize:10, color:t.orange }}>{p.weight_at_time} lbs</div>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -329,8 +383,8 @@ export default function ClientProgressPage() {
         </div>
       )}
 
-      {/* Lightbox */}
-      {lightbox && (
+      {/* Lightbox — single photo */}
+      {lightbox && !lightbox.compare && (
         <div onClick={()=>setLightbox(null)} style={{ position:'fixed', inset:0, background:'#000d', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
           <div onClick={e=>e.stopPropagation()} style={{ maxWidth:500, width:'100%' }}>
             <img src={lightbox.signedUrl} style={{ width:'100%', borderRadius:16, display:'block' }} />
@@ -339,6 +393,47 @@ export default function ClientProgressPage() {
               {lightbox.weight_at_time && <div style={{ color:t.orange, fontSize:13 }}>{lightbox.weight_at_time} lbs</div>}
               {lightbox.caption && <div style={{ color:t.text, fontSize:13, marginTop:4 }}>{lightbox.caption}</div>}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox — side-by-side compare */}
+      {lightbox?.compare && lightbox.photos?.length === 2 && (
+        <div onClick={()=>{ setLightbox(null); setCompareMode(false); setCompareSelection([]) }}
+          style={{ position:'fixed', inset:0, background:'#000e', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:200, padding:20, overflowY:'auto' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:900 }}>
+            <div style={{ fontSize:16, fontWeight:800, color:t.text, textAlign:'center', marginBottom:16 }}>📸 Photo Comparison</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              {lightbox.photos.map((p: any, i: number) => (
+                <div key={p.id} style={{ background:t.surface, borderRadius:16, overflow:'hidden', border:'2px solid '+(i===0 ? t.teal : t.purple) }}>
+                  <div style={{ background:i===0 ? t.tealDim : t.purpleDim, padding:'8px 14px', fontSize:11, fontWeight:700, color:i===0?t.teal:t.purple, display:'flex', alignItems:'center', gap:6 }}>
+                    <span>{i===0 ? '① Before' : '② After'}</span>
+                    <span style={{ marginLeft:'auto', color:t.textMuted }}>
+                      {p.weight_at_time ? `${p.weight_at_time} lbs · ` : ''}{fmt(p.photo_date)}
+                    </span>
+                  </div>
+                  <img src={p.signedUrl} alt={p.angle} style={{ width:'100%', display:'block', objectFit:'cover', maxHeight:500 }} />
+                  <div style={{ padding:'8px 14px', background:t.surfaceHigh }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'capitalize' }}>{p.angle?.replace('_',' ')}</div>
+                    {p.caption && <div style={{ fontSize:11, color:t.textDim, marginTop:2 }}>{p.caption}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Delta if both have weight */}
+            {lightbox.photos[0].weight_at_time && lightbox.photos[1].weight_at_time && (
+              <div style={{ marginTop:12, background:t.surfaceHigh, borderRadius:12, padding:'12px 16px', textAlign:'center' }}>
+                <span style={{ fontSize:13, color:t.textMuted }}>Weight change: </span>
+                <span style={{ fontSize:16, fontWeight:800, color: (lightbox.photos[1].weight_at_time - lightbox.photos[0].weight_at_time) < 0 ? t.green : t.red }}>
+                  {((lightbox.photos[1].weight_at_time - lightbox.photos[0].weight_at_time) > 0 ? '+' : '')}
+                  {(lightbox.photos[1].weight_at_time - lightbox.photos[0].weight_at_time).toFixed(1)} lbs
+                </span>
+              </div>
+            )}
+            <button onClick={()=>{ setLightbox(null); setCompareMode(false); setCompareSelection([]) }}
+              style={{ marginTop:16, display:'block', marginLeft:'auto', marginRight:'auto', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'9px 24px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer' }}>
+              Close
+            </button>
           </div>
         </div>
       )}

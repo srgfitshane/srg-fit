@@ -3,6 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend
+} from 'recharts'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -434,36 +438,7 @@ export default function ClientDetail() {
 
           {/* METRICS TAB */}
           {activeTab === 'metrics' && (
-            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden' }}>
-              {metrics.length === 0 ? (
-                <div style={{ padding:'48px', textAlign:'center' }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>📈</div>
-                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No metrics yet</div>
-                  <div style={{ fontSize:13, color:t.textMuted }}>Metrics will appear here once the client logs them</div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display:'grid', gridTemplateColumns:'auto repeat(6,1fr)', gap:0 }}>
-                    {['Date','Weight','Chest','Waist','Hips','L Arm','R Arm'].map(h => (
-                      <div key={h} style={{ padding:'12px 16px', fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', borderBottom:'1px solid '+t.border, background:t.surfaceHigh }}>{h}</div>
-                    ))}
-                    {metrics.map((m:any, i:number) => (
-                      [
-                        new Date(m.logged_date).toLocaleDateString([], { month:'short', day:'numeric' }),
-                        m.weight ? m.weight+'lbs' : '—',
-                        m.chest  ? m.chest+'"'   : '—',
-                        m.waist  ? m.waist+'"'   : '—',
-                        m.hips   ? m.hips+'"'    : '—',
-                        m.left_arm  ? m.left_arm+'"'  : '—',
-                        m.right_arm ? m.right_arm+'"' : '—',
-                      ].map((val, j) => (
-                        <div key={j} style={{ padding:'12px 16px', fontSize:13, fontWeight: j===0 ? 600 : 700, color: j===0 ? t.textMuted : t.orange, borderBottom: i < metrics.length-1 ? '1px solid '+t.border : 'none', background: i%2===0 ? 'transparent' : t.surfaceUp+'44' }}>{val}</div>
-                      ))
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <CoachMetricsTab metrics={metrics} t={t} />
           )}
 
           {/* PROGRAM TAB */}
@@ -708,6 +683,166 @@ export default function ClientDetail() {
 
       </div>
     </>
+  )
+}
+
+
+// ── CoachMetricsTab ───────────────────────────────────────────────────────
+function CoachMetricsTab({ metrics, t }: { metrics: any[], t: any }) {
+  const [activeChart, setActiveChart] = useState<'weight'|'bodyfat'|'measurements'>('weight')
+
+  if (metrics.length === 0) return (
+    <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
+      <div style={{ fontSize:32, marginBottom:12 }}>📈</div>
+      <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No metrics yet</div>
+      <div style={{ fontSize:13, color:t.textMuted }}>Metrics will appear here once the client logs them</div>
+    </div>
+  )
+
+  const sorted = [...metrics].sort((a,b) => a.logged_date.localeCompare(b.logged_date))
+  const fmt = (d: string) => new Date(d+'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' })
+
+  const chartData = sorted.map(m => ({
+    date: fmt(m.logged_date),
+    weight: m.weight ?? null,
+    body_fat: m.body_fat ?? null,
+    waist: m.waist ?? null,
+    hips: m.hips ?? null,
+    chest: m.chest ?? null,
+    left_arm: m.left_arm ?? null,
+    right_arm: m.right_arm ?? null,
+  }))
+
+  const MCOLORS: Record<string, string> = {
+    waist: t.teal, hips: t.pink, chest: '#60a5fa', left_arm: t.green, right_arm: t.purple,
+  }
+
+  const latest = sorted[sorted.length - 1]
+  const first  = sorted[0]
+  const wChange = latest?.weight && first?.weight ? +(latest.weight - first.weight).toFixed(1) : null
+  const bfChange = latest?.body_fat && first?.body_fat ? +(latest.body_fat - first.body_fat).toFixed(1) : null
+
+  const TABS = [
+    { id: 'weight',       label: 'Weight',       color: t.teal   },
+    { id: 'bodyfat',      label: 'Body Fat',     color: t.orange  },
+    { id: 'measurements', label: 'Measurements', color: t.purple  },
+  ] as const
+
+  const tooltipStyle = {
+    contentStyle: { background: t.surfaceHigh, border: '1px solid '+t.border, borderRadius: 10, color: t.text, fontSize: 12 },
+    cursor: { stroke: t.border },
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+      {/* Summary stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:10 }}>
+        {[
+          { label:'Current Weight', val: latest?.weight ? `${latest.weight} lbs` : '—', color: t.teal },
+          { label:'Weight Change', val: wChange !== null ? `${wChange > 0 ? '+' : ''}${wChange} lbs` : '—', color: wChange !== null ? (wChange < 0 ? t.green : t.red) : t.textMuted },
+          { label:'Body Fat', val: latest?.body_fat ? `${latest.body_fat}%` : '—', color: t.orange },
+          { label:'BF% Change', val: bfChange !== null ? `${bfChange > 0 ? '+' : ''}${bfChange}%` : '—', color: bfChange !== null ? (bfChange < 0 ? t.green : t.red) : t.textMuted },
+          { label:'Entries', val: metrics.length, color: t.purple },
+        ].map(s => (
+          <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px' }}>
+            <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:s.color }}>{s.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
+        <div style={{ display:'flex', gap:6, marginBottom:18, flexWrap:'wrap' }}>
+          {TABS.map(tab => (
+            <button key={tab.id} onClick={()=>setActiveChart(tab.id)}
+              style={{ padding:'6px 14px', borderRadius:20, border:'1px solid', cursor:'pointer', fontSize:12, fontWeight:600, fontFamily:"'DM Sans',sans-serif", transition:'all .15s',
+                borderColor: activeChart===tab.id ? tab.color : t.border,
+                background:  activeChart===tab.id ? tab.color+'22' : 'transparent',
+                color:       activeChart===tab.id ? tab.color : t.textMuted }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeChart === 'weight' && (
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={chartData} margin={{ top:5, right:20, left:0, bottom:5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
+              <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} unit=" lbs" />
+              <Tooltip {...tooltipStyle} />
+              <Line type="monotone" dataKey="weight" stroke={t.teal} strokeWidth={2.5} dot={{ r:4, fill:t.teal }} connectNulls activeDot={{ r:6 }} name="Weight (lbs)" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {activeChart === 'bodyfat' && (
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={chartData} margin={{ top:5, right:20, left:0, bottom:5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
+              <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} unit="%" />
+              <Tooltip {...tooltipStyle} />
+              <Line type="monotone" dataKey="body_fat" stroke={t.orange} strokeWidth={2.5} dot={{ r:4, fill:t.orange }} connectNulls activeDot={{ r:6 }} name="Body Fat %" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {activeChart === 'measurements' && (
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={chartData} margin={{ top:5, right:20, left:0, bottom:5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
+              <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} unit='"' />
+              <Tooltip {...tooltipStyle} />
+              <Legend wrapperStyle={{ paddingTop:10, fontSize:11, color:t.textMuted }} />
+              {(['waist','hips','chest','left_arm','right_arm'] as const).map(f => (
+                <Line key={f} type="monotone" dataKey={f} stroke={MCOLORS[f]} strokeWidth={2} dot={{ r:3 }} connectNulls name={f.replace('_',' ')} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* History table */}
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden' }}>
+        <div style={{ padding:'14px 18px', fontSize:12, fontWeight:700, color:t.textMuted, borderBottom:'1px solid '+t.border, textTransform:'uppercase', letterSpacing:'0.06em' }}>Raw Data</div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+            <thead>
+              <tr style={{ background:t.surfaceHigh }}>
+                {['Date','Weight','BF%','Waist','Hips','Chest','L Arm','R Arm','Neck','Calves'].map(h => (
+                  <th key={h} style={{ padding:'10px 14px', textAlign:'left' as const, fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', whiteSpace:'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...metrics].sort((a,b)=>b.logged_date.localeCompare(a.logged_date)).map((m, i) => (
+                <tr key={m.id} style={{ borderTop:'1px solid '+t.border, background: i%2===0 ? 'transparent' : t.surfaceUp+'44' }}>
+                  <td style={{ padding:'10px 14px', fontWeight:600, color:t.textDim, whiteSpace:'nowrap' }}>{fmt(m.logged_date)}</td>
+                  {[
+                    m.weight     ? m.weight+'lbs'     : '—',
+                    m.body_fat   ? m.body_fat+'%'     : '—',
+                    m.waist      ? m.waist+'"'        : '—',
+                    m.hips       ? m.hips+'"'         : '—',
+                    m.chest      ? m.chest+'"'        : '—',
+                    m.left_arm   ? m.left_arm+'"'     : '—',
+                    m.right_arm  ? m.right_arm+'"'    : '—',
+                    m.neck       ? m.neck+'"'         : '—',
+                    m.calves     ? m.calves+'"'       : '—',
+                  ].map((val, j) => (
+                    <td key={j} style={{ padding:'10px 14px', fontWeight: val==='—' ? 400 : 700, color: val==='—' ? t.textMuted : t.orange }}>{val}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
   )
 }
 

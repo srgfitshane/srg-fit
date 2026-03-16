@@ -2,6 +2,10 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer
+} from 'recharts'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -25,15 +29,29 @@ const METRICS = [
   { key:'calves',      label:'Calves',       unit:'in',  icon:'🦵',  color:'#84cc16' },
 ]
 
-function SparkLine({ data, color }: { data:number[], color:string }) {
-  if (data.length < 2) return null
-  const w = 80, h = 28
-  const min = Math.min(...data), max = Math.max(...data), range = max-min||1
-  const pts = data.map((v,i) => `${(i/(data.length-1))*(w-4)+2},${h-2-((v-min)/range)*(h-4)}`).join(' ')
+// Mini sparkline chart using Recharts
+function MiniChart({ data, color }: { data: number[], color: string }) {
+  if (data.length < 2) return (
+    <div style={{ width:90, height:36, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ fontSize:10, color:t.textMuted }}>not enough data</div>
+    </div>
+  )
+  const chartData = data.map((v, i) => ({ i, v }))
   return (
-    <svg width={w} height={h}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <ResponsiveContainer width={90} height={36}>
+      <LineChart data={chartData} margin={{ top:2, right:2, left:2, bottom:2 }}>
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} />
+        <YAxis domain={['auto','auto']} hide />
+        <XAxis dataKey="i" hide />
+        <Tooltip
+          content={({ active, payload }) => active && payload?.length ? (
+            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:6, padding:'3px 7px', fontSize:10, color:t.text }}>
+              {payload[0].value}
+            </div>
+          ) : null}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -61,7 +79,7 @@ export default function ClientMetrics() {
     setCoachId(clientData.coach_id)
     const { data: hist } = await supabase
       .from('metrics').select('*').eq('client_id', clientData.id)
-      .order('logged_date', { ascending: false }).limit(12)
+      .order('logged_date', { ascending: true }).limit(12)
     setHistory(hist || [])
     setLoading(false)
   }
@@ -75,7 +93,7 @@ export default function ClientMetrics() {
     await supabase.from('metrics').upsert(payload, { onConflict: 'client_id,logged_date' })
     const { data: hist } = await supabase
       .from('metrics').select('*').eq('client_id', clientId)
-      .order('logged_date', { ascending: false }).limit(12)
+      .order('logged_date', { ascending: true }).limit(12)
     setHistory(hist || [])
     setSaving(false)
     setSaved(true)
@@ -83,10 +101,24 @@ export default function ClientMetrics() {
   }
 
   const sparkFor = (key: string) =>
-    [...history].reverse().map(e => e[key]).filter(v => v != null)
+    history.map(e => e[key]).filter(v => v != null).map(Number)
 
   const latestFor = (key: string) => {
-    for (const e of history) { if (e[key] != null) return e[key] }
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i][key] != null) return history[i][key]
+    }
+    return null
+  }
+
+  const prevFor = (key: string) => {
+    // second most recent non-null value
+    let found = 0
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i][key] != null) {
+        found++
+        if (found === 2) return history[i][key]
+      }
+    }
     return null
   }
 
@@ -112,7 +144,7 @@ export default function ClientMetrics() {
         <div style={{ maxWidth:700, margin:'0 auto', padding:24 }}>
 
           {/* Date picker */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:16 }}>
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:16, flexWrap:'wrap' }}>
             <div style={{ fontSize:13, fontWeight:700 }}>📅 Log Date</div>
             <input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)}
               style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
@@ -123,17 +155,28 @@ export default function ClientMetrics() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:20 }}>
             {METRICS.map(m => {
               const prev = latestFor(m.key)
+              const prev2 = prevFor(m.key)
               const spark = sparkFor(m.key)
+              const delta = prev != null && prev2 != null ? +(prev - prev2).toFixed(1) : null
               return (
                 <div key={m.key} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px' }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:700 }}>{m.icon} {m.label}</div>
+                      <div style={{ fontSize:12, fontWeight:700, marginBottom:3 }}>{m.icon} {m.label}</div>
                       {prev != null && (
-                        <div style={{ fontSize:10, color:t.textDim, marginTop:2 }}>Last: {prev} {m.unit}</div>
+                        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                          <span style={{ fontSize:11, color:t.textDim }}>Last: {prev} {m.unit}</span>
+                          {delta !== null && (
+                            <span style={{ fontSize:10, fontWeight:700, color: delta < 0 ? t.green : delta > 0 ? t.red : t.textMuted }}>
+                              {delta > 0 ? '▲' : delta < 0 ? '▼' : '–'} {Math.abs(delta)}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
-                    <SparkLine data={spark} color={m.color} />
+                    {spark.length >= 2 && (
+                      <MiniChart data={spark} color={m.color} />
+                    )}
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <input type="number" step="0.1" value={values[m.key]||''} onChange={e=>setValues(v=>({...v,[m.key]:e.target.value}))}
@@ -155,10 +198,10 @@ export default function ClientMetrics() {
           {history.length > 0 && (
             <div style={{ marginTop:28 }}>
               <div style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:14 }}>Recent History</div>
-              {history.slice(0,5).map(e => (
+              {[...history].reverse().slice(0,5).map(e => (
                 <div key={e.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', marginBottom:10 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:t.teal, marginBottom:8 }}>
-                    {new Date(e.logged_date).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric', year:'numeric' })}
+                    {new Date(e.logged_date+'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric', year:'numeric' })}
                   </div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
                     {METRICS.filter(m=>e[m.key]!=null).map(m => (
@@ -171,6 +214,7 @@ export default function ClientMetrics() {
               ))}
             </div>
           )}
+
         </div>
       </div>
     </>
