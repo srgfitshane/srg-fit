@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 
@@ -148,6 +148,21 @@ export default function CoachResourcesPage() {
     setWorkoutPickerOpen(false)
   }
 
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileUpload = async (file: File) => {
+    if (!file || !coachId) return
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `${coachId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    const { data, error } = await supabase.storage.from('resources').upload(path, file, { upsert: false })
+    if (!error && data) {
+      const { data: urlData } = supabase.storage.from('resources').getPublicUrl(path)
+      setIForm(p => ({ ...p, file_url: urlData.publicUrl }))
+    }
+    setUploading(false)
+  }
   const openNewItem   = () => { setIForm({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:'',workout_exercises:'',estimated_duration:''}); setItemModal({group_id:activeGroup}) }
   const openEditItem  = (item:any) => {
     setIForm({title:item.title,description:item.description||'',content_type:item.content_type,file_url:item.file_url||'',duration:item.duration||'',difficulty:item.difficulty||'beginner',tags:(item.tags||[]).join(', '),workout_exercises:item.workout_exercises?item.workout_exercises.map((e:any)=>e.name+(e.prescription?' - '+e.prescription:'')).join('\n'):'',estimated_duration:item.estimated_duration||''})
@@ -388,8 +403,23 @@ export default function CoachResourcesPage() {
                   <input value={iForm.duration} onChange={e=>setIForm(p=>({...p,duration:e.target.value}))} placeholder="e.g. 5 min read" style={inp}/>
                 </div>
                 <div>
-                  <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>URL (optional)</label>
-                  <input value={iForm.file_url} onChange={e=>setIForm(p=>({...p,file_url:e.target.value}))} placeholder="https://..." style={inp}/>
+                  <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>File Upload or URL</label>
+                  {/* Upload zone */}
+                  <div
+                    onClick={()=>fileInputRef.current?.click()}
+                    style={{background:t.surfaceHigh,border:`2px dashed ${iForm.file_url?t.teal:t.border}`,borderRadius:10,padding:'12px 14px',marginBottom:8,cursor:'pointer',textAlign:'center',transition:'border-color .15s'}}>
+                    {uploading ? (
+                      <div style={{fontSize:12,color:t.teal}}>⏳ Uploading...</div>
+                    ) : iForm.file_url ? (
+                      <div style={{fontSize:11,color:t.teal,fontWeight:700}}>✓ File attached — click to replace</div>
+                    ) : (
+                      <div style={{fontSize:12,color:t.textMuted}}>📎 Click to upload PDF, video, image (max 50MB)</div>
+                    )}
+                    <input ref={fileInputRef} type="file" style={{display:'none'}}
+                      accept=".pdf,video/*,image/*,audio/*"
+                      onChange={e=>{ const f=e.target.files?.[0]; if(f) handleFileUpload(f) }}/>
+                  </div>
+                  <input value={iForm.file_url} onChange={e=>setIForm(p=>({...p,file_url:e.target.value}))} placeholder="...or paste a URL (YouTube, Google Drive, etc.)" style={inp}/>
                 </div>
               </div>
               <div>
