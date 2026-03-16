@@ -26,6 +26,7 @@ const CLIENT_COLORS = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 
 // Always-visible nav items
 const NAV_ESSENTIALS = [
+  { label:'Outreach',  icon:'📣', path:'/dashboard/coach/outreach'  },
   { label:'Messages',  icon:'💬', path:'/dashboard/coach/messages'  },
   { label:'Community', icon:'🏘️', path:'/dashboard/coach/community' },
   { label:'Programs',  icon:'📋', path:'/dashboard/coach/programs'  },
