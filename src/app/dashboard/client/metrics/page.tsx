@@ -131,7 +131,10 @@ export default function ClientMetrics() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};} input[type=number]::-webkit-inner-spin-button{opacity:0.4}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};} input[type=number]::-webkit-inner-spin-button{opacity:0.4}
+        .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+        @media(max-width:520px){.metrics-grid{grid-template-columns:1fr;}}
+      `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 20px', display:'flex', alignItems:'center', height:60, gap:12 }}>
@@ -141,7 +144,7 @@ export default function ClientMetrics() {
           {saved && <div style={{ fontSize:12, fontWeight:700, color:t.green, background:t.greenDim, borderRadius:8, padding:'4px 10px' }}>✓ Saved!</div>}
         </div>
 
-        <div style={{ maxWidth:700, margin:'0 auto', padding:24 }}>
+        <div style={{ maxWidth:480, margin:'0 auto', padding:'16px 16px' }}>
 
           {/* Date picker */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:16, flexWrap:'wrap' }}>
@@ -152,7 +155,7 @@ export default function ClientMetrics() {
           </div>
 
           {/* Input grid */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:20 }}>
+          <div className="metrics-grid" style={{ marginBottom:20 }}>
             {METRICS.map(m => {
               const prev = latestFor(m.key)
               const prev2 = prevFor(m.key)
