@@ -104,7 +104,10 @@ export default function ClientDetail() {
       const { data: programData } = await supabase
         .from('programs')
         .select('*')
-        .eq('id', (await supabase.from('clients').select('program_id').eq('id', clientId).single()).data?.program_id)
+        .eq('client_id', clientId)
+        .eq('is_template', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single()
       setProgram(programData || null)
 
@@ -443,55 +446,16 @@ export default function ClientDetail() {
 
           {/* PROGRAM TAB */}
           {activeTab === 'program' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              {program ? (
-                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
-                  <div style={{ fontSize:15, fontWeight:800, marginBottom:4 }}>{program.name}</div>
-                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:16 }}>{program.description}</div>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
-                    {[
-                      { label:'Duration',  val: program.duration_weeks ? program.duration_weeks+'w' : '—', color:t.teal },
-                      { label:'Frequency', val: program.sessions_per_week ? program.sessions_per_week+'x/wk' : '—', color:t.orange },
-                      { label:'Level',     val: program.difficulty || '—', color:t.purple },
-                      { label:'Goal',      val: program.goal || '—', color:t.green },
-                    ].map(s => (
-                      <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
-                        <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>💪</div>
-                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No program assigned</div>
-                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Assign a program from the Programs page</div>
-                  <button onClick={()=>router.push('/dashboard/coach/programs')}
-                    style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    Go to Programs
-                  </button>
-                </div>
-              )}
-              {/* Recent workouts */}
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Workout Sessions</div>
-                {workouts.length > 0 ? workouts.map((w:any, i:number) => (
-                  <div key={w.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 0', borderBottom: i < workouts.length-1 ? '1px solid '+t.border : 'none' }}>
-                    <div style={{ width:36, height:36, borderRadius:10, background: w.status==='completed' ? t.greenDim : t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>
-                      {w.status==='completed' ? '✅' : '📋'}
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{w.name || 'Workout'}</div>
-                      <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.scheduled_date || w.created_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}</div>
-                    </div>
-                    <div style={{ fontSize:11, fontWeight:700, color: w.status==='completed' ? t.green : t.orange, textTransform:'capitalize' }}>{w.status}</div>
-                  </div>
-                )) : (
-                  <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No workout sessions yet</div>
-                )}
-              </div>
-            </div>
+            <ProgramTab
+              clientId={clientId}
+              coachId={coachId!}
+              program={program}
+              workouts={workouts}
+              supabase={supabase}
+              router={router}
+              t={t}
+              onProgramChange={setProgram}
+            />
           )}
 
           {/* NUTRITION TAB */}
@@ -1127,6 +1091,179 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
             <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ── ProgramTab ────────────────────────────────────────────────────────────
+function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t, onProgramChange }: any) {
+  const [allPrograms, setAllPrograms] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedId, setSelectedId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    supabase.from('programs')
+      .select('id, name, goal, duration_weeks, is_template')
+      .eq('coach_id', coachId)
+      .order('is_template', { ascending: false })
+      .order('name')
+      .then(({ data }: any) => { setAllPrograms(data || []); setLoading(false) })
+  }, [coachId])
+
+  useEffect(() => {
+    setSelectedId(program?.id || '')
+    setDirty(false)
+  }, [program?.id])
+
+  const handleChange = (id: string) => {
+    setSelectedId(id)
+    setDirty(id !== (program?.id || ''))
+    setSaved(false)
+  }
+
+  const saveAssignment = async () => {
+    if (!dirty) return
+    setSaving(true)
+    if (selectedId) {
+      // Link this program to the client
+      await supabase.from('programs').update({ client_id: clientId }).eq('id', selectedId)
+      // Unlink any previously assigned programs (set client_id to null) except the new one
+      if (program?.id && program.id !== selectedId) {
+        await supabase.from('programs').update({ client_id: null }).eq('id', program.id)
+      }
+      const { data: newProg } = await supabase.from('programs').select('*').eq('id', selectedId).single()
+      onProgramChange(newProg)
+    } else {
+      // Unassign current program
+      if (program?.id) {
+        await supabase.from('programs').update({ client_id: null }).eq('id', program.id)
+      }
+      onProgramChange(null)
+    }
+    setSaving(false)
+    setSaved(true)
+    setDirty(false)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const templates = allPrograms.filter(p => p.is_template)
+  const clientProgs = allPrograms.filter(p => !p.is_template)
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+      {/* Assignment card */}
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:800, marginBottom:2 }}>Assigned Program</div>
+            <div style={{ fontSize:12, color:t.textMuted }}>
+              {program ? `Currently: ${program.name}` : 'No program assigned yet'}
+            </div>
+          </div>
+          <button onClick={() => router.push('/dashboard/coach/programs')}
+            style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            Manage Programs →
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ color:t.textMuted, fontSize:13 }}>Loading programs...</div>
+        ) : (
+          <>
+            <div style={{ marginBottom:14 }}>
+              <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:8 }}>
+                Select Program
+              </label>
+              <select
+                value={selectedId}
+                onChange={e => handleChange(e.target.value)}
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+(dirty?t.orange:t.border), borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}>
+                <option value="">— No program assigned —</option>
+                {clientProgs.length > 0 && (
+                  <optgroup label="Client Programs">
+                    {clientProgs.map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name}{p.goal ? ` · ${p.goal}` : ''}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {templates.length > 0 && (
+                  <optgroup label="Templates (will assign a copy)">
+                    {templates.map((p: any) => (
+                      <option key={p.id} value={p.id}>📐 {p.name}{p.goal ? ` · ${p.goal}` : ''}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              {allPrograms.length === 0 && (
+                <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>
+                  No programs yet. <span onClick={() => router.push('/dashboard/coach/programs')} style={{ cursor:'pointer', textDecoration:'underline' }}>Create one first →</span>
+                </div>
+              )}
+            </div>
+
+            {dirty && (
+              <button onClick={saveAssignment} disabled={saving}
+                style={{ width:'100%', background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.7:1 }}>
+                {saving ? 'Saving...' : '💾 Save Program Assignment'}
+              </button>
+            )}
+            {saved && (
+              <div style={{ background:t.greenDim, border:'1px solid '+t.green+'40', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.green, fontWeight:700, textAlign:'center' as const }}>
+                ✓ Program assigned successfully!
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Active program details */}
+      {program && (
+        <div style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:16, padding:20 }}>
+          <div style={{ height:3, background:`linear-gradient(90deg,${t.teal},${t.orange})`, borderRadius:3, marginBottom:16, marginTop:-20, marginLeft:-20, marginRight:-20 }} />
+          <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>{program.name}</div>
+          {program.description && <div style={{ fontSize:13, color:t.textMuted, marginBottom:14, lineHeight:1.6 }}>{program.description}</div>}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:14 }}>
+            {[
+              { label:'Duration',  val: program.duration_weeks ? program.duration_weeks+'w' : '—', color:t.teal },
+              { label:'Frequency', val: program.sessions_per_week ? program.sessions_per_week+'x/wk' : '—', color:t.orange },
+              { label:'Level',     val: program.difficulty || '—', color:t.purple },
+              { label:'Goal',      val: program.goal || '—', color:t.green },
+            ].map(s => (
+              <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' as const }}>
+                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
+                <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => router.push('/dashboard/coach/programs/'+program.id)}
+            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            Open in Builder →
+          </button>
+        </div>
+      )}
+
+      {/* Recent workout sessions */}
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Workout Sessions</div>
+        {workouts.length > 0 ? workouts.map((w:any, i:number) => (
+          <div key={w.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 0', borderBottom: i < workouts.length-1 ? '1px solid '+t.border : 'none' }}>
+            <div style={{ width:36, height:36, borderRadius:10, background: w.status==='completed' ? t.greenDim : t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>
+              {w.status==='completed' ? '✅' : '📋'}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:600 }}>{w.title || w.name || 'Workout'}</div>
+              <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.scheduled_date || w.created_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}</div>
+            </div>
+            <div style={{ fontSize:11, fontWeight:700, color: w.status==='completed' ? t.green : t.orange, textTransform:'capitalize' as const }}>{w.status}</div>
+          </div>
+        )) : (
+          <div style={{ textAlign:'center' as const, padding:'20px 0', color:t.textMuted, fontSize:13 }}>No workout sessions yet</div>
+        )}
       </div>
     </div>
   )
