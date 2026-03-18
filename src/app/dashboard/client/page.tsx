@@ -226,8 +226,8 @@ export default function ClientDashboard() {
         {/* Main content */}
         <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '18px 16px' }}>
 
-          {/* Today content — hidden when messages OR training tab active */}
-          {activeNav !== 'messages' && activeNav !== 'training' && <>
+          {/* Today content — hidden when messages OR training OR nutrition tab active */}
+          {activeNav !== 'messages' && activeNav !== 'training' && activeNav !== 'nutrition' && <>
 
           {/* Greeting */}
           <div style={{ marginBottom:18 }} className="fade">
@@ -524,7 +524,7 @@ export default function ClientDashboard() {
           )}
 
           {/* Tagline */}
-          {activeNav !== 'messages' && activeNav !== 'billing' && activeNav !== 'training' && activeNav !== 'today' && (
+          {activeNav !== 'messages' && activeNav !== 'billing' && activeNav !== 'training' && activeNav !== 'today' && activeNav !== 'nutrition' && (
           <div style={{ textAlign:'center', padding:'8px 0 24px', fontSize:12, color:t.textMuted, fontStyle:'italic' }}>
             Be Kind to Yourself & Stay Awesome 💪
           </div>
