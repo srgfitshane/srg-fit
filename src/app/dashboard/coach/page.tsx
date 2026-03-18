@@ -156,7 +156,22 @@ export default function CoachDashboard() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{background:${t.bg};}
+        .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+        .coach-main{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;}
+        .client-actions{display:flex;gap:5px;flex-shrink:0;}
+        @media(max-width:900px){
+          .coach-main{grid-template-columns:1fr;}
+        }
+        @media(max-width:600px){
+          .coach-stats{grid-template-columns:repeat(2,1fr);}
+          .coach-topbar-name{display:none;}
+          .client-actions{flex-wrap:wrap;}
+          .coach-pad{padding:14px!important;}
+        }
+      `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
@@ -165,7 +180,7 @@ export default function CoachDashboard() {
           <div style={{ width:1, height:28, background:t.border, margin:'0 16px' }} />
           <div style={{ fontSize:14, fontWeight:700 }}>Coach Dashboard</div>
           <div style={{ flex:1 }} />
-          <div style={{ fontSize:13, color:t.textMuted, marginRight:16 }}>{profile?.full_name}</div>
+          <div style={{ fontSize:13, color:t.textMuted, marginRight:16 }} className="coach-topbar-name">{profile?.full_name}</div>
           {profile?.id && <NotificationBell userId={profile.id} accentColor={t.teal} />}
           <button onClick={()=>setShowInsights(true)} title="AI Coaching Insights"
             style={{ position:'relative', background:aiInsights.length>0?t.purpleDim:'none', border:'1px solid '+(aiInsights.length>0?t.purple+'40':t.border), borderRadius:8, padding:'6px 12px', fontSize:16, cursor:'pointer', marginRight:8, display:'flex', alignItems:'center' }}>
@@ -177,7 +192,7 @@ export default function CoachDashboard() {
           <button onClick={handleSignOut} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Sign Out</button>
         </div>
 
-        <div style={{ padding:28, maxWidth:1200, margin:'0 auto' }}>
+        <div style={{ padding:28, maxWidth:1200, margin:'0 auto' }} className="coach-pad">
 
           {/* Greeting */}
           <div style={{ marginBottom:28 }}>
@@ -186,7 +201,7 @@ export default function CoachDashboard() {
           </div>
 
           {/* Stats */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28 }}>
+          <div className="coach-stats" style={{ marginBottom:28 }}>
             {[
               { label:'Active Clients', val:clients.length,                      color:t.teal,   icon:'👥' },
               { label:'Flagged',        val:clients.filter(c=>c.flagged).length, color:t.red,    icon:'🚩' },
@@ -204,7 +219,7 @@ export default function CoachDashboard() {
           </div>
 
           {/* 2-col layout */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:20, alignItems:'start' }}>
+          <div className="coach-main">
 
             {/* LEFT: Clients */}
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden' }}>
@@ -271,7 +286,7 @@ export default function CoachDashboard() {
                         <div style={{ fontSize:11, color:t.textMuted, flexShrink:0 }}>
                           Since {new Date(client.start_date).toLocaleDateString([], { month:'short', year:'numeric' })}
                         </div>
-                        <div style={{ display:'flex', gap:5, flexShrink:0 }} onClick={e=>e.stopPropagation()}>
+                        <div className="client-actions" onClick={e=>e.stopPropagation()}>
                           {client.paused ? (
                             <button onClick={()=>{ setLifecycleClient(client); setLifecycleAction('resume') }}
                               style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.green+'40', background:t.greenDim, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>▶ Resume</button>
