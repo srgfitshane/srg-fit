@@ -226,8 +226,8 @@ export default function ClientDashboard() {
         {/* Main content */}
         <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '18px 16px' }}>
 
-          {/* Today content — hidden when messages OR training OR nutrition tab active */}
-          {activeNav !== 'messages' && activeNav !== 'training' && activeNav !== 'nutrition' && <>
+          {/* Today content — hidden when on any dedicated tab */}
+          {activeNav === 'today' && <>
 
           {/* Greeting */}
           <div style={{ marginBottom:18 }} className="fade">
@@ -482,13 +482,6 @@ export default function ClientDashboard() {
 
           </> /* end today content */}
 
-          {/* ── TODAY TAB (explicit) ── */}
-          {activeNav === 'today' && (
-            <div style={{ textAlign:'center', padding:'8px 0 24px', fontSize:12, color:t.textMuted, fontStyle:'italic' }}>
-              Be Kind to Yourself & Stay Awesome 💪
-            </div>
-          )}
-
           {/* ── TRAINING TAB ── */}
           {activeNav === 'training' && (
             <TrainingTab clientRecord={clientRecord} supabase={supabase} router={router} t={t} />
@@ -497,6 +490,31 @@ export default function ClientDashboard() {
           {/* ── NUTRITION TAB ── */}
           {activeNav === 'nutrition' && (
             <NutritionTab clientRecord={clientRecord} supabase={supabase} t={t} />
+          )}
+
+          {/* ── METRICS TAB ── */}
+          {activeNav === 'metrics' && (
+            <div style={{ paddingBottom:32 }}>
+              <div style={{ fontSize:15, fontWeight:800, marginBottom:16 }}>📈 My Metrics</div>
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'28px 20px', textAlign:'center' as const, marginBottom:14 }}>
+                <div style={{ fontSize:32, marginBottom:10 }}>📊</div>
+                <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>Log your measurements</div>
+                <div style={{ fontSize:13, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>Track weight, body fat, and measurements over time</div>
+                <button onClick={() => router.push('/dashboard/client/metrics')}
+                  style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px 24px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Open Metrics →
+                </button>
+              </div>
+              <button onClick={() => router.push('/dashboard/client/progress')}
+                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:t.teal+'18', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>📸</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:t.text }}>Progress Photos & Charts</div>
+                  <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>See your full progress history</div>
+                </div>
+                <span style={{ color:t.textMuted, fontSize:16 }}>→</span>
+              </button>
+            </div>
           )}
 
           {/* ── MESSAGES TAB ── */}
@@ -523,8 +541,8 @@ export default function ClientDashboard() {
             <BillingTab clientRecord={clientRecord} supabase={supabase} />
           )}
 
-          {/* Tagline */}
-          {activeNav !== 'messages' && activeNav !== 'billing' && activeNav !== 'training' && activeNav !== 'today' && activeNav !== 'nutrition' && (
+          {/* Tagline — shown on nutrition, metrics, and other content tabs */}
+          {activeNav !== 'today' && activeNav !== 'messages' && activeNav !== 'billing' && activeNav !== 'training' && (
           <div style={{ textAlign:'center', padding:'8px 0 24px', fontSize:12, color:t.textMuted, fontStyle:'italic' }}>
             Be Kind to Yourself & Stay Awesome 💪
           </div>
