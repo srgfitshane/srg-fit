@@ -324,10 +324,16 @@ export default function CoachWorkoutsPage() {
   // ── Filtered exercises (used in modal) ────────────────────────────────────
   const [searchEx, setSearchEx] = useState('')
   const [exGroup,  setExGroup]  = useState('all')
-  const muscleGroups = [...new Set(exercises.map((e:any)=>e.muscles).filter(Boolean))] as string[]
+  const muscleGroups = [...new Set(
+    exercises.flatMap((e:any) => e.muscles
+      ? e.muscles.split(',').map((m:string) => m.trim()).filter(Boolean)
+      : []
+    )
+  )].sort() as string[]
   const filteredEx = exercises.filter((e:any) => {
     const matchSearch = !searchEx || e.name.toLowerCase().includes(searchEx.toLowerCase())
-    const matchGroup = exGroup === 'all' || e.muscles === exGroup
+    const exMuscles = e.muscles ? e.muscles.split(',').map((m:string) => m.trim()) : []
+    const matchGroup = exGroup === 'all' || exMuscles.includes(exGroup)
     return matchSearch && matchGroup
   })
 
@@ -344,7 +350,7 @@ export default function CoachWorkoutsPage() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}.ex-chips::-webkit-scrollbar{display:none;}`}</style>
       <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif"}}>
 
         {/* Top bar */}
@@ -589,8 +595,8 @@ export default function CoachWorkoutsPage() {
                   autoFocus
                   style={{...inp,marginBottom:10}}
                 />
-                {/* Muscle group filters */}
-                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {/* Muscle group filters - single scrollable row */}
+                <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:2,msOverflowStyle:'none',scrollbarWidth:'none'}}>
                   <button onClick={()=>setExGroup('all')}
                     style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
                     All
