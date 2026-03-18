@@ -162,23 +162,28 @@ export default function CoachDashboard() {
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
         .coach-main{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
+        .coach-topbar-label{display:block;}
         @media(max-width:900px){
           .coach-main{grid-template-columns:1fr;}
         }
-        @media(max-width:600px){
+        @media(max-width:700px){
           .coach-stats{grid-template-columns:repeat(2,1fr);}
           .coach-topbar-name{display:none;}
+          .coach-topbar-label{display:none;}
           .client-actions{flex-wrap:wrap;}
           .coach-pad{padding:14px!important;}
+        }
+        @media(max-width:500px){
+          .client-actions button span:not(:first-child){display:none;}
         }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60 }}>
+        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', height:56, gap:8, overflowX:'hidden' }}>
           <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
           <div style={{ width:1, height:28, background:t.border, margin:'0 16px' }} />
-          <div style={{ fontSize:14, fontWeight:700 }}>Coach Dashboard</div>
+          <div style={{ fontSize:14, fontWeight:700 }} className="coach-topbar-label">Coach Dashboard</div>
           <div style={{ flex:1 }} />
           <div style={{ fontSize:13, color:t.textMuted, marginRight:16 }} className="coach-topbar-name">{profile?.full_name}</div>
           {profile?.id && <NotificationBell userId={profile.id} accentColor={t.teal} />}
@@ -223,7 +228,7 @@ export default function CoachDashboard() {
 
             {/* LEFT: Clients */}
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden' }}>
-              <div style={{ padding:'20px 24px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ padding:'20px 24px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
                 <div style={{ fontSize:15, fontWeight:800 }}>
                   Clients <span style={{ fontSize:13, color:t.textMuted, fontWeight:500 }}>
                     ({clients.filter(c=>!c.paused).length} active{clients.filter(c=>c.paused).length > 0 ? ', '+clients.filter(c=>c.paused).length+' paused' : ''})
