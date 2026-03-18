@@ -37,7 +37,6 @@ const NAV = [
 const TRAINING_SUBNAV = [
   { id:'workouts',  label:'Workouts' },
   { id:'programs',  label:'Programs' },
-  { id:'exercises', label:'Exercise Library' },
 ]
 
 export default function ClientDashboard() {
@@ -492,20 +491,7 @@ export default function ClientDashboard() {
 
           {/* ── TRAINING TAB ── */}
           {activeNav === 'training' && (
-            <div>
-              {/* Sub-nav */}
-              <div style={{ display:'flex', gap:6, marginBottom:18, background:t.surface, borderRadius:12, padding:'4px', border:'1px solid '+t.border }}>
-                {TRAINING_SUBNAV.map(tab => (
-                  <button key={tab.id} onClick={() => setTrainingTab(tab.id)}
-                    style={{ flex:1, padding:'7px 4px', borderRadius:9, border:'none', background: trainingTab===tab.id ? t.teal : 'none', color: trainingTab===tab.id ? '#0f0f0f' : t.textDim, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              {trainingTab === 'workouts'  && <WorkoutsTab  clientRecord={clientRecord} supabase={supabase} router={router} t={t} />}
-              {trainingTab === 'programs'  && <ProgramsTab  clientRecord={clientRecord} supabase={supabase} router={router} t={t} />}
-              {trainingTab === 'exercises' && <ExercisesTab clientRecord={clientRecord} supabase={supabase} t={t} />}
-            </div>
+            <TrainingTab clientRecord={clientRecord} supabase={supabase} router={router} t={t} />
           )}
 
           {/* ── NUTRITION TAB ── */}
@@ -728,6 +714,194 @@ function ProfileNudge({ clientId, onOpen }: { clientId: string|null, onOpen: ()=
           {pct === 0 ? 'Get Started' : 'Continue →'}
         </button>
       </div>
+    </div>
+  )
+}
+
+
+// ── TrainingTab ───────────────────────────────────────────────────────────
+function TrainingTab({ clientRecord, supabase, router, t }: any) {
+  const [program, setProgram] = useState<any>(null)
+  const [sessions, setSessions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'program'|'workouts'>('program')
+
+  useEffect(() => {
+    if (!clientRecord?.id) { setLoading(false); return }
+    const load = async () => {
+      const [{ data: prog }, { data: sess }] = await Promise.all([
+        supabase.from('programs').select('id, name, description, goal, duration_weeks, difficulty')
+          .eq('client_id', clientRecord.id).eq('is_template', false)
+          .order('created_at', { ascending: false }).limit(1).single(),
+        supabase.from('workout_sessions')
+          .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach')
+          .eq('client_id', clientRecord.id)
+          .order('scheduled_date', { ascending: true })
+          .limit(50),
+      ])
+      setProgram(prog || null)
+      setSessions(sess || [])
+      setLoading(false)
+    }
+    load()
+  }, [clientRecord?.id])
+
+  const upcoming = sessions.filter(s => s.status === 'assigned' || s.status === 'in_progress')
+  const completed = sessions.filter(s => s.status === 'completed')
+  const fmtDur = (s: number) => s ? `${Math.floor(s/60)}m` : null
+
+  if (loading) return <div style={{ padding:'40px 0', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading training...</div>
+
+  if (view === 'workouts') return (
+    <div style={{ paddingBottom:32 }}>
+      {/* Back to program */}
+      <button onClick={() => setView('program')}
+        style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:6, marginBottom:18, padding:0 }}>
+        ← {program?.name || 'Program'}
+      </button>
+
+      {/* Upcoming sessions */}
+      <div style={{ marginBottom:20 }}>
+        <p style={{ fontSize:12, fontWeight:700, color:t.textDim, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
+          Upcoming ({upcoming.length})
+        </p>
+        {upcoming.length === 0 ? (
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'28px 20px', textAlign:'center' }}>
+            <div style={{ fontSize:28, marginBottom:8 }}>✅</div>
+            <p style={{ fontSize:13, color:t.textDim, fontWeight:600 }}>All caught up!</p>
+          </div>
+        ) : upcoming.map(s => (
+          <div key={s.id} onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
+            style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', marginBottom:10, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:s.status==='in_progress'?t.tealDim:t.orangeDim, border:'1px solid '+(s.status==='in_progress'?t.teal:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+              {s.status === 'in_progress' ? '▶️' : '💪'}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:15 }}>{s.title}</div>
+              <div style={{ fontSize:12, color:t.textDim, marginTop:2 }}>
+                {s.scheduled_date}{s.day_label ? ` · ${s.day_label}` : ''}
+              </div>
+              {s.notes_coach && <div style={{ fontSize:11, color:t.orange, marginTop:4 }}>📌 {s.notes_coach.slice(0,60)}{s.notes_coach.length>60?'...':''}</div>}
+            </div>
+            <span style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:20, background:s.status==='in_progress'?t.tealDim:t.orangeDim, color:s.status==='in_progress'?t.teal:t.orange, border:`1px solid ${s.status==='in_progress'?t.teal:t.orange}30` }}>
+              {s.status === 'in_progress' ? 'Resume' : 'Start'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Completed sessions */}
+      {completed.length > 0 && (
+        <div>
+          <p style={{ fontSize:12, fontWeight:700, color:t.textDim, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
+            Completed ({completed.length})
+          </p>
+          <div style={{ display:'grid', gap:8 }}>
+            {completed.map(s => (
+              <div key={s.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:18 }}>✅</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:600, fontSize:14 }}>{s.title}</div>
+                  <div style={{ fontSize:11, color:t.textDim }}>{s.completed_at ? new Date(s.completed_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : s.scheduled_date}</div>
+                </div>
+                <div style={{ textAlign:'right' as const }}>
+                  {fmtDur(s.duration_seconds) && <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{fmtDur(s.duration_seconds)}</div>}
+                  {s.session_rpe && <div style={{ fontSize:11, color:t.textMuted }}>RPE {s.session_rpe}</div>}
+                  {s.mood && <div style={{ fontSize:14 }}>{{ great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }[s.mood as 'great'|'good'|'okay'|'tired'|'awful']}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  // Default view: program card
+  return (
+    <div style={{ paddingBottom:32 }}>
+      {!program ? (
+        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'40px 20px', textAlign:'center' }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>💪</div>
+          <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>No program assigned yet</div>
+          <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Your coach is building your program. Check back soon!</div>
+        </div>
+      ) : (
+        <>
+          {/* Program card */}
+          <div style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
+            <div style={{ height:4, background:`linear-gradient(90deg,${t.teal},${t.orange})` }} />
+            <div style={{ padding:'20px 20px 16px' }}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:16 }}>
+                <div style={{ width:48, height:48, borderRadius:14, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>💪</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>{program.name}</div>
+                  {program.description && <div style={{ fontSize:13, color:t.textDim, lineHeight:1.6 }}>{program.description}</div>}
+                </div>
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
+                {[
+                  { label:'Duration', val: program.duration_weeks ? `${program.duration_weeks}w` : '—', color:t.teal },
+                  { label:'Difficulty', val: program.difficulty || '—', color:t.orange },
+                  { label:'Goal', val: program.goal || '—', color:t.green },
+                ].map(s => (
+                  <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'12px', textAlign:'center' as const }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:s.color, marginBottom:2 }}>{s.val}</div>
+                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', fontWeight:700 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sessions summary + CTA */}
+              <div style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700 }}>
+                    {upcoming.length > 0
+                      ? `${upcoming.length} workout${upcoming.length!==1?'s':''} scheduled`
+                      : sessions.length > 0 ? 'All workouts completed! 🎉' : 'No sessions yet'}
+                  </div>
+                  {upcoming.length > 0 && (
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                      Next: {upcoming[0]?.scheduled_date}
+                    </div>
+                  )}
+                  {completed.length > 0 && (
+                    <div style={{ fontSize:11, color:t.green, marginTop:2 }}>✅ {completed.length} completed</div>
+                  )}
+                </div>
+                <button onClick={() => setView('workouts')}
+                  style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'10px 18px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                  View All →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick-start: next session */}
+          {upcoming.length > 0 && (
+            <div onClick={() => router.push(`/dashboard/client/workout/${upcoming[0].id}`)}
+              style={{ background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:16, overflow:'hidden', cursor:'pointer' }}>
+              <div style={{ height:3, background:`linear-gradient(90deg,${t.orange},${t.yellow})` }} />
+              <div style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+                  {upcoming[0].status === 'in_progress' ? '▶️' : '💪'}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:800 }}>
+                    {upcoming[0].status === 'in_progress' ? 'Resume Workout' : 'Up Next'}
+                  </div>
+                  <div style={{ fontSize:13, color:t.text, marginTop:2 }}>{upcoming[0].title}</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{upcoming[0].scheduled_date}{upcoming[0].day_label ? ` · ${upcoming[0].day_label}` : ''}</div>
+                </div>
+                <div style={{ background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#000', whiteSpace:'nowrap' as const }}>
+                  {upcoming[0].status === 'in_progress' ? 'Resume ▶' : 'Start 💪'}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
