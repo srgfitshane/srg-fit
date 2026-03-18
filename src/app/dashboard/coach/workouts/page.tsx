@@ -49,8 +49,7 @@ export default function CoachWorkoutsPage() {
   const [view,       setView]       = useState<View>('list')
   const [editing,    setEditing]    = useState<any>(null) // template being edited/created
   const [saving,     setSaving]     = useState(false)
-  const [searchEx,   setSearchEx]   = useState('')
-  const [exGroup,    setExGroup]    = useState('all')
+  const [showExPicker, setShowExPicker] = useState(false)
   const [actionModal,setActionModal]= useState<any>(null) // {template, action}
   const [actionForm, setActionForm] = useState({ client_id:'', date:'', program_id:'', resource_group_id:'' })
   const [actionSaving,setActionSaving]=useState(false)
@@ -322,13 +321,15 @@ export default function CoachWorkoutsPage() {
     setActionModal(null)
   }
 
-  // ── Filtered exercises ─────────────────────────────────────────────────
+  // ── Filtered exercises (used in modal) ────────────────────────────────────
+  const [searchEx, setSearchEx] = useState('')
+  const [exGroup,  setExGroup]  = useState('all')
   const muscleGroups = [...new Set(exercises.map((e:any)=>e.muscles).filter(Boolean))] as string[]
   const filteredEx = exercises.filter((e:any) => {
     const matchSearch = !searchEx || e.name.toLowerCase().includes(searchEx.toLowerCase())
     const matchGroup = exGroup === 'all' || e.muscles === exGroup
     return matchSearch && matchGroup
-  }).slice(0, 40)
+  })
 
   const inp = {
     background: t.surfaceHigh, border: `1px solid ${t.border}`, borderRadius: 8,
@@ -469,58 +470,63 @@ export default function CoachWorkoutsPage() {
 
         {/* ── BUILD VIEW ── */}
         {view === 'build' && (
-          <div style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:0,maxWidth:1200,margin:'0 auto',padding:24}}>
+          <div style={{maxWidth:720,margin:'0 auto',padding:24}}>
 
-            {/* Left: Form + exercise list */}
-            <div style={{paddingRight:20}}>
-              {/* Workout details */}
-              <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-                <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:14}}>Workout Details</div>
-                <div style={{marginBottom:12}}>
-                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Title *</label>
-                  <input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="e.g. Upper Body Push — Week 1" style={inp}/>
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:12}}>
-                  <div>
-                    <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Category</label>
-                    <select value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))} style={inp}>
-                      {CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.icon} {c.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Difficulty</label>
-                    <select value={form.difficulty} onChange={e=>setForm(p=>({...p,difficulty:e.target.value}))} style={inp}>
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Est. Duration (min)</label>
-                    <input type="number" value={form.estimated_minutes} onChange={e=>setForm(p=>({...p,estimated_minutes:e.target.value}))} placeholder="45" style={inp}/>
-                  </div>
-                </div>
-                <div style={{marginBottom:10}}>
-                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Description (optional)</label>
-                  <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={2} placeholder="What's this workout for? Any context for the client..." style={{...inp,resize:'vertical' as const}}/>
-                </div>
-                <div style={{marginBottom:10}}>
-                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Coach Notes (shown to client)</label>
-                  <textarea value={form.notes_coach} onChange={e=>setForm(p=>({...p,notes_coach:e.target.value}))} rows={2} placeholder="Focus on tempo today. Keep RPE at 8 max..." style={{...inp,resize:'vertical' as const}}/>
+            {/* Workout details */}
+            <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:20,marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:14}}>Workout Details</div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Title *</label>
+                <input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="e.g. Upper Body Push — Week 1" style={inp}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:12}}>
+                <div>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Category</label>
+                  <select value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))} style={inp}>
+                    {CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.icon} {c.label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Tags (comma-separated)</label>
-                  <input value={form.tags} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="push, chest, upper body" style={inp}/>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Difficulty</label>
+                  <select value={form.difficulty} onChange={e=>setForm(p=>({...p,difficulty:e.target.value}))} style={inp}>
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Est. Duration (min)</label>
+                  <input type="number" value={form.estimated_minutes} onChange={e=>setForm(p=>({...p,estimated_minutes:e.target.value}))} placeholder="45" style={inp}/>
                 </div>
               </div>
+              <div style={{marginBottom:10}}>
+                <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Description (optional)</label>
+                <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={2} placeholder="What's this workout for? Any context for the client..." style={{...inp,resize:'vertical' as const}}/>
+              </div>
+              <div style={{marginBottom:10}}>
+                <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Coach Notes (shown to client)</label>
+                <textarea value={form.notes_coach} onChange={e=>setForm(p=>({...p,notes_coach:e.target.value}))} rows={2} placeholder="Focus on tempo today. Keep RPE at 8 max..." style={{...inp,resize:'vertical' as const}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:4}}>Tags (comma-separated)</label>
+                <input value={form.tags} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="push, chest, upper body" style={inp}/>
+              </div>
+            </div>
 
-              {/* Exercise list */}
-              {buildExercises.length === 0 ? (
-                <div style={{background:t.surface,border:`2px dashed ${t.border}`,borderRadius:14,padding:'32px',textAlign:'center',color:t.textMuted,fontSize:13}}>
-                  ← Add exercises from the library on the right
-                </div>
-              ) : (
-                <div style={{display:'grid',gap:10}}>
+            {/* Exercise list */}
+            {buildExercises.length === 0 ? (
+              <div style={{background:t.surface,border:`2px dashed ${t.border}`,borderRadius:14,padding:'40px 32px',textAlign:'center',marginBottom:16}}>
+                <div style={{fontSize:36,marginBottom:12}}>💪</div>
+                <div style={{fontSize:14,fontWeight:700,marginBottom:6,color:t.textDim}}>No exercises yet</div>
+                <div style={{fontSize:12,color:t.textMuted,marginBottom:20}}>Click the button below to search and add exercises</div>
+                <button onClick={()=>{setSearchEx('');setExGroup('all');setShowExPicker(true)}}
+                  style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:10,padding:'10px 24px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  + Add Exercise
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{display:'grid',gap:10,marginBottom:12}}>
                   {buildExercises.map((ex,i) => (
                     <div key={i} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'14px 16px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
@@ -554,33 +560,85 @@ export default function CoachWorkoutsPage() {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
 
-            {/* Right: Exercise picker */}
-            <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:16,height:'fit-content',position:'sticky',top:24}}>
-              <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Exercise Library</div>
-              <input value={searchEx} onChange={e=>setSearchEx(e.target.value)} placeholder="Search..."
-                style={{...inp,marginBottom:8,padding:'7px 10px'}}/>
-              <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:10}}>
-                <button onClick={()=>setExGroup('all')} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700}}>All</button>
-                {muscleGroups.map(g=>(
-                  <button key={g} onClick={()=>setExGroup(g)} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap'}}>
-                    {g}
+                {/* Add more exercises button */}
+                <button onClick={()=>{setSearchEx('');setExGroup('all');setShowExPicker(true)}}
+                  style={{width:'100%',background:t.tealDim,border:`1px dashed ${t.teal}60`,borderRadius:12,padding:'12px',fontSize:13,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>
+                  + Add Exercise
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── EXERCISE PICKER MODAL ── */}
+        {showExPicker && (
+          <div style={{position:'fixed',inset:0,background:'#000000cc',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}} onClick={()=>setShowExPicker(false)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:20,width:'100%',maxWidth:560,maxHeight:'85vh',display:'flex',flexDirection:'column'}}>
+              {/* Header */}
+              <div style={{padding:'18px 20px 12px',borderBottom:`1px solid ${t.border}`,flexShrink:0}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                  <div style={{fontSize:15,fontWeight:800}}>Exercise Library</div>
+                  <button onClick={()=>setShowExPicker(false)} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:20,lineHeight:1}}>✕</button>
+                </div>
+                {/* Search */}
+                <input
+                  value={searchEx}
+                  onChange={e=>setSearchEx(e.target.value)}
+                  placeholder="Search exercises..."
+                  autoFocus
+                  style={{...inp,marginBottom:10}}
+                />
+                {/* Muscle group filters */}
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  <button onClick={()=>setExGroup('all')}
+                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                    All
                   </button>
-                ))}
+                  {muscleGroups.map(g=>(
+                    <button key={g} onClick={()=>setExGroup(g)}
+                      style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>
+                      {g}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div style={{maxHeight:480,overflowY:'auto',display:'grid',gap:3}}>
+              {/* Results */}
+              <div style={{overflowY:'auto',flex:1,padding:'8px 12px',display:'grid',gap:4}}>
+                <div style={{fontSize:11,color:t.textMuted,padding:'4px 4px 8px',fontWeight:600}}>{filteredEx.length} exercise{filteredEx.length!==1?'s':''}</div>
                 {filteredEx.map((ex:any)=>{
                   const added = buildExercises.some(e=>e.exercise_id===ex.id)
                   return (
-                    <div key={ex.id} onClick={()=>!added&&addExToTemplate(ex)}
-                      style={{padding:'8px 10px',borderRadius:8,background:added?t.tealDim:t.surfaceHigh,border:`1px solid ${added?t.teal:t.border}`,cursor:added?'default':'pointer',transition:'all 0.12s'}}>
-                      <div style={{fontSize:12,fontWeight:600,color:added?t.teal:t.text}}>{ex.name}</div>
-                      {ex.muscles&&<div style={{fontSize:10,color:t.textMuted}}>{ex.muscles}</div>}
+                    <div key={ex.id}
+                      onClick={()=>{ if(!added){ addExToTemplate(ex) } }}
+                      style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:10,background:added?t.tealDim:t.surfaceHigh,border:`1px solid ${added?t.teal:t.border}`,cursor:added?'default':'pointer',transition:'all 0.12s'}}
+                      onMouseEnter={e=>{ if(!added) e.currentTarget.style.borderColor=t.teal+'60' }}
+                      onMouseLeave={e=>{ if(!added) e.currentTarget.style.borderColor=t.border }}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:added?t.teal:t.text}}>{ex.name}</div>
+                        {ex.muscles && <div style={{fontSize:11,color:t.textMuted}}>{ex.muscles}{ex.movement_pattern?' · '+ex.movement_pattern:''}</div>}
+                      </div>
+                      {added ? (
+                        <span style={{fontSize:11,fontWeight:700,color:t.teal,flexShrink:0}}>✓ Added</span>
+                      ) : (
+                        <span style={{fontSize:18,color:t.textMuted,flexShrink:0}}>+</span>
+                      )}
                     </div>
                   )
                 })}
+                {filteredEx.length === 0 && (
+                  <div style={{textAlign:'center',padding:'40px 20px',color:t.textMuted,fontSize:13}}>
+                    No exercises found. Try a different search.
+                  </div>
+                )}
+              </div>
+              {/* Footer */}
+              <div style={{padding:'12px 20px',borderTop:`1px solid ${t.border}`,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style={{fontSize:12,color:t.textMuted}}>{buildExercises.length} exercise{buildExercises.length!==1?'s':''} in workout</div>
+                <button onClick={()=>setShowExPicker(false)}
+                  style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 20px',fontSize:13,fontWeight:700,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Done ✓
+                </button>
               </div>
             </div>
           </div>
