@@ -248,6 +248,78 @@ export default function ProgramBuilder() {
   const [addDayTmplLoading, setAddDayTmplLoading] = useState(false)
   const [addDayTemplates, setAddDayTemplates] = useState<any[]>([])
 
+  // ── Send to Client ────────────────────────────────────────────────────
+  const [showSend, setShowSend] = useState(false)
+  const [sendStartDate, setSendStartDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [sendMode, setSendMode] = useState<'add'|'replace'>('add')
+  const [sending, setSendingSessions] = useState(false)
+  const [sendDone, setSendDone] = useState(false)
+  const [sendError, setSendError] = useState('')
+
+  const DAY_MAP: Record<string,number> = { Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6,Sun:0 }
+
+  const sendToClient = async () => {
+    if (!program?.client_id) { setSendError('No client assigned to this program.'); return }
+    setSendingSessions(true); setSendError('')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const clientId = program.client_id
+      const startDate = new Date(sendStartDate + 'T12:00:00')
+
+      // Get the Monday of the start week
+      const dayOfWeek = startDate.getDay() // 0=Sun,1=Mon...
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+      const weekStart = new Date(startDate)
+      weekStart.setDate(weekStart.getDate() + diffToMonday)
+
+      if (sendMode === 'replace') {
+        await supabase.from('workout_sessions')
+          .delete()
+          .eq('client_id', clientId)
+          .eq('program_id', program.id)
+          .eq('status', 'assigned')
+      }
+
+      const sortedBlocks = [...blocks].sort((a,b) => a.week_number - b.week_number || a.order_index - b.order_index)
+      const sessionsToInsert: any[] = []
+
+      for (const block of sortedBlocks) {
+        if (!block.day_of_week) continue // skip unscheduled blocks
+        const weekOffset = (block.week_number - 1) * 7
+        const targetDayNum = DAY_MAP[block.day_of_week]
+        let dayOffset = targetDayNum - 1 // Mon=0, Tue=1...
+        if (block.day_of_week === 'Sun') dayOffset = 6
+        const sessionDate = new Date(weekStart)
+        sessionDate.setDate(sessionDate.getDate() + weekOffset + dayOffset)
+        sessionsToInsert.push({
+          client_id: clientId,
+          program_id: program.id,
+          block_id: block.id,
+          coach_id: user?.id,
+          title: block.day_label || block.name,
+          scheduled_date: sessionDate.toISOString().split('T')[0],
+          date: sessionDate.toISOString().split('T')[0],
+          status: 'assigned',
+          week_number: block.week_number,
+          day_label: block.day_of_week,
+        })
+      }
+
+      if (sessionsToInsert.length === 0) {
+        setSendError('No scheduled workouts found. Place workouts on calendar days first.')
+        setSendingSessions(false); return
+      }
+
+      const { error } = await supabase.from('workout_sessions').insert(sessionsToInsert)
+      if (error) { setSendError(error.message); setSendingSessions(false); return }
+      setSendDone(true)
+      setTimeout(() => { setShowSend(false); setSendDone(false) }, 2200)
+    } catch (e: any) {
+      setSendError(e.message)
+    }
+    setSendingSessions(false)
+  }
+
   const openAddDay = async (weekNum: number) => {
     setShowAddDay(weekNum)
     setAddDayTmplLoading(true)
@@ -309,6 +381,12 @@ export default function ProgramBuilder() {
             ))}
           </div>
           <button onClick={addWeek} style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Week</button>
+          {program?.client_id && (
+            <button onClick={()=>{ setShowSend(true); setSendDone(false); setSendError('') }}
+              style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              📤 Send to Client
+            </button>
+          )}
         </div>
 
         {/* Week tabs */}
@@ -597,6 +675,57 @@ export default function ProgramBuilder() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Send to Client Modal */}
+        {showSend && (
+          <div onClick={()=>setShowSend(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>
+              <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>📤 Send to Client</div>
+              <div style={{ fontSize:13, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>
+                Creates a <strong style={{ color:t.text }}>workout session</strong> for each scheduled day in the program calendar.
+                {program?.client?.profile?.full_name && <> Sending to <strong style={{ color:t.teal }}>{program.client.profile.full_name}</strong>.</>}
+              </div>
+
+              <div style={{ marginBottom:16 }}>
+                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
+                  Program Start Date
+                </label>
+                <input type="date" value={sendStartDate} onChange={e=>setSendStartDate(e.target.value)}
+                  style={{ width:'100%', background:'#161624', border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }} />
+                <div style={{ fontSize:11, color:t.textMuted, marginTop:6 }}>Week 1 starts on the Monday of this date's week.</div>
+              </div>
+
+              <div style={{ marginBottom:20 }}>
+                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:8 }}>
+                  If sessions already exist
+                </label>
+                <div style={{ display:'flex', gap:8 }}>
+                  {([['add','➕ Add on top','Keep existing sessions and add these'],['replace','🔄 Replace assigned','Remove existing assigned sessions first']] as const).map(([val,label,desc])=>(
+                    <div key={val} onClick={()=>setSendMode(val)}
+                      style={{ flex:1, padding:'12px', borderRadius:12, border:'1px solid '+(sendMode===val?t.teal:t.border), background:sendMode===val?t.tealDim:'transparent', cursor:'pointer', transition:'all .15s' }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:sendMode===val?t.teal:t.text, marginBottom:3 }}>{label}</div>
+                      <div style={{ fontSize:10, color:t.textMuted, lineHeight:1.4 }}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {sendError && (
+                <div style={{ background:'#ef444415', border:'1px solid #ef444430', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#ef4444', marginBottom:14 }}>{sendError}</div>
+              )}
+
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={()=>setShowSend(false)} style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Cancel
+                </button>
+                <button onClick={sendToClient} disabled={sending||sendDone}
+                  style={{ flex:2, background:sendDone?t.green:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:sending||sendDone?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:sending?0.7:1, transition:'background .3s' }}>
+                  {sendDone ? '✓ Sessions Created!' : sending ? 'Sending...' : '📤 Send Workouts'}
+                </button>
+              </div>
             </div>
           </div>
         )}
