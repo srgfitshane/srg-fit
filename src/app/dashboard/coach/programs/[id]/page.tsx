@@ -502,40 +502,14 @@ export default function ProgramBuilder() {
 
         {/* CALENDAR VIEW */}
         {view === 'calendar' && (
-          <div style={{ maxWidth:1200, margin:'0 auto', padding:'24px', overflowX:'auto' }}>
-            <div style={{ minWidth:700 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'80px repeat('+Math.max(blocksForWeek(weeks[0]||1).length,1)+',1fr)', gap:8, marginBottom:8 }}>
-                <div />
-                {blocksForWeek(weeks[0]||1).map((b,i) => (
-                  <div key={i} style={{ textAlign:'center', fontSize:12, fontWeight:800, color:t.textMuted, padding:'6px 0' }}>{b.day_label || b.name}</div>
-                ))}
-              </div>
-              {weeks.map((w,wi) => (
-                <div key={w} style={{ display:'grid', gridTemplateColumns:'80px repeat('+Math.max(blocksForWeek(w).length,1)+',1fr)', gap:8, marginBottom:8 }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <div style={{ background:WEEK_COLORS[wi%8]+'18', border:'1px solid '+WEEK_COLORS[wi%8]+'40', borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:800, color:WEEK_COLORS[wi%8] }}>W{w}</div>
-                  </div>
-                  {blocksForWeek(w).map(block => (
-                    <div key={block.id} onClick={()=>{ setView('builder'); setActiveWeek(w) }}
-                      style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px', cursor:'pointer', minHeight:80 }}
-                      onMouseEnter={e=>(e.currentTarget.style.borderColor=WEEK_COLORS[wi%8]+'60')}
-                      onMouseLeave={e=>(e.currentTarget.style.borderColor=t.border)}>
-                      <div style={{ fontSize:11, fontWeight:800, color:WEEK_COLORS[wi%8], marginBottom:6 }}>{block.day_label || block.name}</div>
-                      {(block.block_exercises||[]).slice(0,5).map((ex:any,i:number) => (
-                        <div key={i} style={{ fontSize:10, color:t.textMuted, marginBottom:2, display:'flex', alignItems:'center', gap:4 }}>
-                          {ex.superset_group && <span style={{ fontSize:9, fontWeight:800, color:t.orange }}>{ex.superset_group}</span>}
-                          <span style={{ background:ROLE_COLORS[ex.exercise_role]+'18', color:ROLE_COLORS[ex.exercise_role], borderRadius:3, padding:'0 4px', fontSize:9, fontWeight:700 }}>{ex.exercise_role}</span>
-                          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ex.exercise?.name}</span>
-                        </div>
-                      ))}
-                      {(block.block_exercises||[]).length > 5 && <div style={{ fontSize:10, color:t.textMuted }}>+{(block.block_exercises||[]).length-5} more</div>}
-                      {(block.block_exercises||[]).length === 0 && <div style={{ fontSize:10, color:t.textMuted, fontStyle:'italic' }}>Empty</div>}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
+          <CalendarView
+            blocks={blocks}
+            weeks={weeks}
+            programId={programId}
+            supabase={supabase}
+            onBlocksChange={setBlocks}
+            onEditWeek={(w) => { setActiveWeek(w); setView('builder') }}
+          />
         )}
 
         {/* Add Exercise / From Template Modal */}
@@ -694,5 +668,135 @@ export default function ProgramBuilder() {
 
       </div>
     </>
+  )
+}
+
+
+// ── CalendarView ─────────────────────────────────────────────────────────
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+
+function CalendarView({ blocks, weeks, programId, supabase, onBlocksChange, onEditWeek }: {
+  blocks: any[], weeks: number[], programId: string, supabase: any,
+  onBlocksChange: (b: any[]) => void, onEditWeek: (w: number) => void
+}) {
+  const [activeWeek, setActiveWeek] = useState(weeks[0] || 1)
+  const [assigning, setAssigning] = useState<string|null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const weekBlocks = blocks.filter(b => b.week_number === activeWeek)
+  const scheduled = weekBlocks.filter(b => b.day_of_week)
+  const unscheduled = weekBlocks.filter(b => !b.day_of_week)
+  const blocksForDay = (day: string) => scheduled.filter(b => b.day_of_week === day).sort((a,b) => a.order_index - b.order_index)
+  const exCount = (block: any) => (block.block_exercises || []).length
+
+  const assignDay = async (blockId: string, day: string | null) => {
+    setSaving(true)
+    await supabase.from('workout_blocks').update({ day_of_week: day }).eq('id', blockId)
+    onBlocksChange(blocks.map(b => b.id === blockId ? { ...b, day_of_week: day } : b))
+    setAssigning(null)
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ maxWidth:1200, margin:'0 auto', padding:24, fontFamily:"'DM Sans',sans-serif" }}>
+
+      {/* Week selector */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:20, flexWrap:'wrap' as const }}>
+        <span style={{ fontSize:12, fontWeight:700, color:t.textMuted }}>Week:</span>
+        {weeks.map((w,i) => (
+          <button key={w} onClick={()=>setActiveWeek(w)}
+            style={{ padding:'5px 14px', borderRadius:20, border:'1px solid '+(activeWeek===w?WEEK_COLORS[i%8]+'60':t.border), background:activeWeek===w?WEEK_COLORS[i%8]+'18':'transparent', color:activeWeek===w?WEEK_COLORS[i%8]:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.15s' }}>
+            Week {w}
+          </button>
+        ))}
+        <button onClick={()=>onEditWeek(activeWeek)}
+          style={{ marginLeft:'auto', padding:'5px 14px', borderRadius:20, border:'1px solid '+t.border, background:'transparent', color:t.textDim, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          ✏️ Edit in Builder
+        </button>
+      </div>
+
+      {/* 7-column grid */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8, marginBottom:16 }}>
+        {DAYS.map(day => (
+          <div key={day} style={{ textAlign:'center', padding:'8px 4px', fontSize:12, fontWeight:800, color:t.textMuted, background:t.surface, border:'1px solid '+t.border, borderRadius:10 }}>
+            {day}
+          </div>
+        ))}
+        {DAYS.map(day => {
+          const dayBlocks = blocksForDay(day)
+          const isTarget = assigning !== null
+          return (
+            <div key={day}
+              onClick={() => { if (assigning) assignDay(assigning, day) }}
+              style={{ minHeight:120, background: isTarget ? t.tealDim : t.surface, border:'1px solid '+(isTarget?t.teal+'60':t.border), borderRadius:10, padding:'8px', cursor:isTarget?'pointer':'default', transition:'all 0.15s' }}>
+              {dayBlocks.length === 0 && isTarget && (
+                <div style={{ height:'100%', minHeight:80, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:t.teal, fontWeight:700 }}>
+                  + Drop here
+                </div>
+              )}
+              {dayBlocks.map(block => (
+                <div key={block.id} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', marginBottom:6, position:'relative' as const }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:t.teal, marginBottom:3, paddingRight:16 }}>{block.day_label || block.name}</div>
+                  <div style={{ fontSize:10, color:t.textMuted, marginBottom:4 }}>{exCount(block)} exercise{exCount(block)!==1?'s':''}</div>
+                  {(block.block_exercises||[]).slice(0,3).map((ex:any,i:number) => (
+                    <div key={i} style={{ fontSize:10, color:t.textDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:1 }}>
+                      {i+1}. {ex.exercise?.name}
+                    </div>
+                  ))}
+                  {exCount(block) > 3 && <div style={{ fontSize:9, color:t.textMuted, marginTop:2 }}>+{exCount(block)-3} more</div>}
+                  <button onClick={e=>{ e.stopPropagation(); assignDay(block.id, null) }}
+                    style={{ position:'absolute', top:5, right:6, background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:11, lineHeight:1, padding:2 }} title="Remove">✕</button>
+                </div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Assign prompt banner */}
+      {assigning && (
+        <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:12, padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:13, fontWeight:700, color:t.teal, flex:1 }}>
+            📅 Click a day above to schedule "{blocks.find(b=>b.id===assigning)?.day_label || 'workout'}"
+          </span>
+          <button onClick={()=>setAssigning(null)} style={{ background:'none', border:'1px solid '+t.teal+'40', borderRadius:8, padding:'4px 12px', color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Unscheduled tray */}
+      <div>
+        <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
+          Unscheduled — Week {activeWeek} ({unscheduled.length})
+        </div>
+        {unscheduled.length === 0 ? (
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'20px', textAlign:'center' }}>
+            <div style={{ fontSize:20, marginBottom:6 }}>✅</div>
+            <div style={{ fontSize:13, color:t.textMuted }}>All workouts scheduled for Week {activeWeek}!</div>
+          </div>
+        ) : (
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const }}>
+            {unscheduled.map(block => (
+              <div key={block.id}
+                onClick={() => setAssigning(assigning===block.id ? null : block.id)}
+                style={{ background:assigning===block.id?t.tealDim:t.surface, border:'1px solid '+(assigning===block.id?t.teal:t.border), borderRadius:12, padding:'12px 16px', cursor:'pointer', minWidth:160, transition:'all 0.15s' }}>
+                <div style={{ fontSize:13, fontWeight:800, color:assigning===block.id?t.teal:t.text, marginBottom:3 }}>{block.day_label || block.name}</div>
+                <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>{exCount(block)} exercise{exCount(block)!==1?'s':''}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:assigning===block.id?t.teal:t.textDim }}>
+                  {assigning===block.id ? '↑ Click a day above' : '📅 Schedule'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {saving && (
+        <div style={{ position:'fixed', bottom:20, right:20, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, zIndex:100 }}>
+          Saving...
+        </div>
+      )}
+    </div>
   )
 }
