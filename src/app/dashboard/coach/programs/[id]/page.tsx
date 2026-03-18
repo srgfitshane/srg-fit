@@ -283,12 +283,12 @@ export default function ProgramBuilder() {
       const sortedBlocks = [...blocks].sort((a,b) => a.week_number - b.week_number || a.order_index - b.order_index)
       const sessionsToInsert: any[] = []
 
+      const DAY_OFFSETS: Record<string,number> = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 }
+
       for (const block of sortedBlocks) {
-        if (!block.day_of_week) continue // skip unscheduled blocks
+        if (!block.day_of_week || !(block.day_of_week in DAY_OFFSETS)) continue
         const weekOffset = (block.week_number - 1) * 7
-        const targetDayNum = DAY_MAP[block.day_of_week]
-        let dayOffset = targetDayNum - 1 // Mon=0, Tue=1...
-        if (block.day_of_week === 'Sun') dayOffset = 6
+        const dayOffset = DAY_OFFSETS[block.day_of_week]
         const sessionDate = new Date(weekStart)
         sessionDate.setDate(sessionDate.getDate() + weekOffset + dayOffset)
         sessionsToInsert.push({
