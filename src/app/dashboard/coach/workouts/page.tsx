@@ -72,7 +72,7 @@ export default function CoachWorkoutsPage() {
     ] = await Promise.all([
       supabase.from('workout_templates').select(`*, workout_template_exercises(*)`)
         .eq('coach_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('exercises').select('id, name, muscle_group, exercise_type').order('name'),
+      supabase.from('exercises').select('id, name, muscles, movement_pattern, difficulty').order('name'),
       supabase.from('clients')
         .select('id, profile_id, profiles!profile_id(full_name)')
         .eq('coach_id', user.id).eq('active', true),
@@ -130,7 +130,7 @@ export default function CoachWorkoutsPage() {
     if (buildExercises.some(e => e.exercise_id === ex.id)) return
     setBuildExercises(prev => [...prev, {
       exercise_id: ex.id, exercise_name: ex.name,
-      exercise_type: ex.exercise_type || 'strength',
+      exercise_type: ex.movement_pattern || 'strength',
       sets_prescribed: 3, reps_prescribed: '8-12',
       weight_prescribed: '', rest_seconds: 90,
       notes: '', order_index: prev.length,
@@ -323,10 +323,10 @@ export default function CoachWorkoutsPage() {
   }
 
   // ── Filtered exercises ─────────────────────────────────────────────────
-  const muscleGroups = [...new Set(exercises.map((e:any)=>e.muscle_group).filter(Boolean))] as string[]
+  const muscleGroups = [...new Set(exercises.map((e:any)=>e.muscles).filter(Boolean))] as string[]
   const filteredEx = exercises.filter((e:any) => {
     const matchSearch = !searchEx || e.name.toLowerCase().includes(searchEx.toLowerCase())
-    const matchGroup = exGroup === 'all' || e.muscle_group === exGroup
+    const matchGroup = exGroup === 'all' || e.muscles === exGroup
     return matchSearch && matchGroup
   }).slice(0, 40)
 
@@ -577,7 +577,7 @@ export default function CoachWorkoutsPage() {
                     <div key={ex.id} onClick={()=>!added&&addExToTemplate(ex)}
                       style={{padding:'8px 10px',borderRadius:8,background:added?t.tealDim:t.surfaceHigh,border:`1px solid ${added?t.teal:t.border}`,cursor:added?'default':'pointer',transition:'all 0.12s'}}>
                       <div style={{fontSize:12,fontWeight:600,color:added?t.teal:t.text}}>{ex.name}</div>
-                      {ex.muscle_group&&<div style={{fontSize:10,color:t.textMuted}}>{ex.muscle_group}</div>}
+                      {ex.muscles&&<div style={{fontSize:10,color:t.textMuted}}>{ex.muscles}</div>}
                     </div>
                   )
                 })}
