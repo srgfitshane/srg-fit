@@ -325,14 +325,17 @@ export default function CoachWorkoutsPage() {
   const [searchEx, setSearchEx] = useState('')
   const [exGroup,  setExGroup]  = useState('all')
   const muscleGroups = [...new Set(
-    exercises.flatMap((e:any) => e.muscles
-      ? e.muscles.split(',').map((m:string) => m.trim()).filter(Boolean)
-      : []
-    )
+    exercises.flatMap((e:any) => {
+      if (!e.muscles) return []
+      if (Array.isArray(e.muscles)) return e.muscles.map((m:string) => m.trim()).filter(Boolean)
+      return String(e.muscles).split(',').map((m:string) => m.trim()).filter(Boolean)
+    })
   )].sort() as string[]
   const filteredEx = exercises.filter((e:any) => {
     const matchSearch = !searchEx || e.name.toLowerCase().includes(searchEx.toLowerCase())
-    const exMuscles = e.muscles ? e.muscles.split(',').map((m:string) => m.trim()) : []
+    const exMuscles: string[] = !e.muscles ? [] :
+      Array.isArray(e.muscles) ? e.muscles.map((m:string) => m.trim()) :
+      String(e.muscles).split(',').map((m:string) => m.trim())
     const matchGroup = exGroup === 'all' || exMuscles.includes(exGroup)
     return matchSearch && matchGroup
   })
