@@ -25,19 +25,44 @@ const getGreeting = () => {
 }
 
 const NAV = [
-  { id:'today',     label:'Today',    icon:'⚡' },
-  { id:'training',  label:'Training', icon:'💪' },
-  { id:'nutrition', label:'Nutrition',icon:'🥗' },
-  { id:'metrics',   label:'Metrics',  icon:'📈' },
-  { id:'calendar',  label:'Calendar', icon:'📅' },
-  { id:'messages',  label:'Messages', icon:'💬' },
-  { id:'billing',   label:'Billing',  icon:'💳' },
+  { id:'today',     icon:'home',     label:'Home'      },
+  { id:'training',  icon:'training', label:'Training'  },
+  { id:'nutrition', icon:'nutrition',label:'Nutrition' },
+  { id:'messages',  icon:'messages', label:'Messages'  },
+  { id:'metrics',   icon:'metrics',  label:'Metrics'   },
 ]
 
-const TRAINING_SUBNAV = [
-  { id:'workouts',  label:'Workouts' },
-  { id:'programs',  label:'Programs' },
-]
+// SVG icons — cleaner than emoji for bottom nav
+const NavIcon = ({ id, active }: { id: string, active: boolean }) => {
+  const c = active ? '#00c9b1' : '#5a5a78'
+  const s = { width:22, height:22 } as const
+  if (id === 'home') return (
+    <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><polyline points="9 21 9 12 15 12 15 21"/>
+    </svg>
+  )
+  if (id === 'training') return (
+    <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
+    </svg>
+  )
+  if (id === 'nutrition') return (
+    <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+    </svg>
+  )
+  if (id === 'messages') return (
+    <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+    </svg>
+  )
+  if (id === 'metrics') return (
+    <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+  )
+  return null
+}
 
 export default function ClientDashboard() {
   const [profile,      setProfile]      = useState<any>(null)
@@ -52,7 +77,7 @@ export default function ClientDashboard() {
   const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState('today')
-  const [trainingTab,  setTrainingTab]  = useState('workouts')
+  const [plusOpen,     setPlusOpen]     = useState(false)
   const router   = useRouter()
   const supabase = createClient()
   const today    = new Date().toISOString().split('T')[0]
@@ -197,34 +222,38 @@ export default function ClientDashboard() {
         ::-webkit-scrollbar{width:4px;}
         ::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes scaleIn{from{opacity:0;transform:scale(0.85);}to{opacity:1;transform:scale(1);}}
         .fade{animation:fadeUp 0.3s ease forwards;}
+        .plus-action{animation:scaleIn 0.15s ease forwards;}
       `}</style>
 
-      <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', flexDirection:'column', maxWidth:480, margin:'0 auto' }}>
+      <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', flexDirection:'column', maxWidth:480, margin:'0 auto', position:'relative' }}>
 
         {/* Top bar */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:56, flexShrink:0 }}>
-          <div style={{ fontSize:16, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
+        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:52, flexShrink:0, position:'sticky', top:0, zIndex:10 }}>
+          <div style={{ fontSize:15, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
           <div style={{ flex:1 }} />
-          <div style={{ fontSize:12, color:t.textMuted, marginRight:8 }}>{profile?.full_name?.split(' ')[0]}</div>
+          {/* Calendar & Settings quick access */}
+          <button onClick={()=>router.push('/dashboard/client/calendar')}
+            style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', padding:'6px', marginRight:4, display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </button>
           {profile?.id && <NotificationBell userId={profile.id} accentColor={t.teal} />}
-          <button onClick={handleSignOut} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:12, fontWeight:600, fontFamily:"'DM Sans',sans-serif", marginLeft:8 }}>Sign out</button>
+          <button onClick={()=>setActiveNav('billing')}
+            style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', padding:'6px 0 6px 6px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+            </svg>
+          </button>
         </div>
 
-        {/* Nav */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, display:'flex', overflowX:'auto', flexShrink:0, padding:'0 6px' }}>
-          {NAV.map(n => (
-            <div key={n.id} onClick={()=>{ if(n.id==='calendar') router.push('/dashboard/client/calendar'); else setActiveNav(n.id) }}
-              style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, padding:'10px 12px', cursor:'pointer', borderBottom:'2px solid '+(activeNav===n.id ? t.teal : 'transparent'), transition:'all 0.15s ease', flexShrink:0 }}>
-              <span style={{ fontSize:15 }}>{n.icon}</span>
-              <span style={{ fontSize:10, fontWeight:activeNav===n.id ? 700 : 500, color:activeNav===n.id ? t.teal : t.textDim, whiteSpace:'nowrap' }}>{n.label}</span>
-            </div>
-          ))}
-        </div>
+        {/* Main content — padded for bottom nav */}
+        <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 96px' }}>
 
-
-        {/* Main content */}
-        <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '18px 16px' }}>
+          {/* Click-outside dismiss for + menu */}
+          {plusOpen && <div onClick={()=>setPlusOpen(false)} style={{ position:'fixed', inset:0, zIndex:19 }} />}
 
           {/* Today content — hidden when on any dedicated tab */}
           {activeNav === 'today' && <>
@@ -519,7 +548,7 @@ export default function ClientDashboard() {
 
           {/* ── MESSAGES TAB ── */}
           {activeNav === 'messages' && (
-            <div style={{ margin:'-18px -16px', height:'calc(100vh - 112px)' }}>
+            <div style={{ margin:'-16px -16px', height:'calc(100vh - 52px - 60px)' }}>
               {profile && coachProfileId ? (
                 <RichMessageThread
                   myId={profile.id}
@@ -549,6 +578,50 @@ export default function ClientDashboard() {
           )}
 
         </div>
+
+        {/* ── Floating + button ── */}
+        <div style={{ position:'fixed', bottom:72, right:'max(16px, calc(50vw - 240px + 16px))', zIndex:30 }}>
+          {/* Action menu */}
+          {plusOpen && (
+            <div className="plus-action" style={{ position:'absolute', bottom:60, right:0, display:'flex', flexDirection:'column', gap:10, alignItems:'flex-end', pointerEvents:'all' }}>
+              <button onClick={()=>{ setPlusOpen(false); setActiveNav('nutrition') }}
+                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+                </svg>
+                Log Food
+              </button>
+              <button onClick={()=>{ setPlusOpen(false); nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : setActiveNav('training') }}
+                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
+                </svg>
+                {nextSession ? 'Start Workout' : 'Log Activity'}
+              </button>
+            </div>
+          )}
+          {/* + button */}
+          <button onClick={()=>setPlusOpen(o=>!o)}
+            style={{ width:52, height:52, borderRadius:26, background:plusOpen ? t.surfaceHigh : `linear-gradient(135deg,${t.teal},${t.teal}cc)`, border: plusOpen ? '1px solid '+t.border : 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 4px 20px rgba(0,201,177,0.35)', transition:'all 0.2s ease', transform: plusOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={plusOpen ? t.textMuted : '#000'} strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* ── Bottom Nav ── */}
+        <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
+          {NAV.map(n => (
+            <button key={n.id} onClick={()=>setActiveNav(n.id)}
+              style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, cursor:'pointer', padding:'8px 0', position:'relative' }}>
+              {activeNav === n.id && (
+                <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
+              )}
+              <NavIcon id={n.id} active={activeNav === n.id} />
+            </button>
+          ))}
+        </div>
+
       </div>
     </>
   )
