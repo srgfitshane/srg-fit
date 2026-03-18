@@ -49,6 +49,7 @@ export default function ClientDashboard() {
   const [milestones,   setMilestones]   = useState<any[]>([])
   const [recentPRs,    setRecentPRs]    = useState<any[]>([])
   const [workoutLogs,  setWorkoutLogs]  = useState<any[]>([])
+  const [nextSession,  setNextSession]  = useState<any>(null)
   const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState('today')
@@ -118,6 +119,17 @@ export default function ClientDashboard() {
           .order('started_at', { ascending: false })
           .limit(5)
         setWorkoutLogs(wlData || [])
+
+        // Next upcoming workout session
+        const { data: nextSess } = await supabase
+          .from('workout_sessions')
+          .select('id, title, scheduled_date')
+          .eq('client_id', clientData.id)
+          .in('status', ['assigned', 'in_progress'])
+          .order('scheduled_date', { ascending: true })
+          .limit(1)
+          .single()
+        setNextSession(nextSess || null)
 
         // Pending check-in form assignments
         const { data: pendingCI } = await supabase
@@ -296,14 +308,19 @@ export default function ClientDashboard() {
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
                 <div style={{ width:40, height:40, borderRadius:12, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>💪</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:800 }}>Today's Workout</div>
+                  <div style={{ fontSize:14, fontWeight:800 }}>{nextSession ? nextSession.title : "Today's Workout"}</div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
-                    {clientRecord?.program_id ? 'Assigned by Shane' : 'No workout assigned yet'}
+                    {nextSession
+                      ? nextSession.scheduled_date ? `Scheduled ${nextSession.scheduled_date}` : 'Ready when you are'
+                      : 'No workout assigned yet'}
                   </div>
                 </div>
               </div>
-              <button style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                Start Workout 💪
+              <button
+                onClick={() => nextSession && router.push(`/dashboard/client/workout/${nextSession.id}`)}
+                disabled={!nextSession}
+                style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background: nextSession ? 'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)' : t.surfaceHigh, color: nextSession ? '#000' : t.textMuted, fontSize:13, fontWeight:800, cursor: nextSession ? 'pointer' : 'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
+                {nextSession ? 'Start Workout 💪' : 'No Workout Assigned'}
               </button>
             </div>
           </div>
@@ -817,12 +834,14 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!clientRecord?.program_id) { setLoading(false); return }
+    if (!clientRecord?.id) { setLoading(false); return }
     supabase.from('programs')
-      .select('id, name, description, duration_weeks, days_per_week, goal, level')
-      .eq('id', clientRecord.program_id)
+      .select('id, name, description, duration_weeks, days_per_week, goal, level, active, start_date')
+      .eq('client_id', clientRecord.id)
+      .eq('is_template', false)
+      .order('created_at', { ascending: false })
       .then(({ data }: any) => { setPrograms(data || []); setLoading(false) })
-  }, [clientRecord?.program_id])
+  }, [clientRecord?.id])
 
   const levelColor = (l: string) => ({
     beginner: t.green, intermediate: t.orange, advanced: t.red
