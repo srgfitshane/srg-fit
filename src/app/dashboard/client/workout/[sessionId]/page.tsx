@@ -26,6 +26,8 @@ function defaultSet(): SetData {
 }
 export default function ActiveWorkoutPage() {
   const supabase = createClient()
+  const [videoUploads, setVideoUploads]   = useState<Record<string,string>>({}) // exId → url
+  const [videoUploading, setVideoUploading] = useState<Record<string,boolean>>({})
   const router = useRouter()
   const { sessionId } = useParams()
 
@@ -125,6 +127,22 @@ export default function ActiveWorkoutPage() {
 
   function addSet(exId: string) {
     setSetData(prev => ({ ...prev, [exId]: [...prev[exId], defaultSet()] }))
+  }
+
+  async function uploadFormVideo(exId: string, file: File) {
+    setVideoUploading(prev => ({ ...prev, [exId]: true }))
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setVideoUploading(prev => ({ ...prev, [exId]: false })); return }
+    const ext = file.name.split('.').pop()
+    const path = `${user.id}/${sessionId}/${exId}_${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('workout-clips').upload(path, file)
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('workout-clips').getPublicUrl(path)
+      setVideoUploads(prev => ({ ...prev, [exId]: urlData.publicUrl }))
+      // Save url to session_exercise row
+      await supabase.from('session_exercises').update({ client_video_url: urlData.publicUrl }).eq('id', exId)
+    }
+    setVideoUploading(prev => ({ ...prev, [exId]: false }))
   }
 
   async function cancelWorkout() {
@@ -243,11 +261,30 @@ export default function ActiveWorkoutPage() {
             <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
               <div style={{marginBottom:16}}>
                 <h2 style={{fontSize:20,fontWeight:900,marginBottom:4}}>{ex.exercise_name}</h2>
-                <div style={{fontSize:13,color:t.textDim}}>
+                <div style={{fontSize:13,color:t.textDim,marginBottom:8}}>
                   Target: {ex.sets_prescribed} × {ex.reps_prescribed}
                   {ex.weight_prescribed && ` @ ${ex.weight_prescribed}`}
                 </div>
-                {ex.notes_coach && <div style={{fontSize:12,color:t.orange,marginTop:4}}>💬 {ex.notes_coach}</div>}
+                {ex.notes_coach && <div style={{fontSize:12,color:t.orange,marginTop:4,marginBottom:8}}>💬 {ex.notes_coach}</div>}
+
+                {/* Form check video upload */}
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <label style={{display:'flex',alignItems:'center',gap:7,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:'1px solid '+(videoUploads[ex.id]?t.green+'50':t.border),borderRadius:10,padding:'8px 14px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,transition:'all 0.2s'}}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                    </svg>
+                    {videoUploading[ex.id] ? 'Uploading...' : videoUploads[ex.id] ? '✓ Form check uploaded' : 'Upload form check video'}
+                    <input type="file" accept="video/*" capture="environment" style={{display:'none'}}
+                      disabled={videoUploading[ex.id]}
+                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
+                  </label>
+                  {videoUploads[ex.id] && (
+                    <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
+                      style={{fontSize:11,color:t.teal,textDecoration:'none',fontWeight:600}}>
+                      View ↗
+                    </a>
+                  )}
+                </div>
               </div>
 
               <div style={{display:'grid',gap:10,marginBottom:12}}>
