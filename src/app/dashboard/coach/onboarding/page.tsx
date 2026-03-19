@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -56,8 +56,17 @@ type Form = {
 }
 
 export default function FormsBuilderPage() {
+  return (
+    <Suspense fallback={null}>
+      <FormsBuilderInner />
+    </Suspense>
+  )
+}
+
+function FormsBuilderInner() {
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [coachId, setCoachId] = useState<string|null>(null)
   const [forms, setForms] = useState<Form[]>([])
   const [activeForm, setActiveForm] = useState<Form|null>(null)
@@ -73,7 +82,10 @@ export default function FormsBuilderPage() {
       setCoachId(user.id)
       const { data } = await supabase.from('onboarding_forms').select('*').eq('coach_id', user.id).order('created_at')
       setForms(data || [])
-      if (data && data.length > 0) loadForm(data[0])
+      // If ?edit=formId is in the URL, jump straight to that form
+      const editId = searchParams.get('edit')
+      const target = editId ? data?.find(f => f.id === editId) : data?.[0]
+      if (target) loadForm(target)
       else setLoading(false)
     }
     load()

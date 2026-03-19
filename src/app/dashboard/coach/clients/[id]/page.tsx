@@ -52,7 +52,7 @@ export default function ClientDetail() {
   // Check-in schedule
   const [checkinSchedule,     setCheckinSchedule]     = useState<any>(null)
   const [checkinAssignments,  setCheckinAssignments]  = useState<any[]>([])
-  const [scheduleForm,        setScheduleForm]        = useState({ send_day:0, send_time:'08:00', active:true })
+  const [scheduleForm,        setScheduleForm]        = useState({ send_day:0, send_time:'08:00', active:true, form_id:'' })
   const [scheduleSaving,      setScheduleSaving]      = useState(false)
   const [scheduleSaved,       setScheduleSaved]       = useState(false)
   const [sendingNow,          setSendingNow]          = useState(false)
@@ -175,6 +175,7 @@ export default function ClientDetail() {
           send_day:  schedData.send_day  ?? 0,
           send_time: schedData.send_time ?? '08:00',
           active:    schedData.active    ?? true,
+          form_id:   schedData.form_id   ?? '',
         })
       }
       const { data: assignData } = await supabase
@@ -602,6 +603,7 @@ export default function ClientDetail() {
                           send_day:  scheduleForm.send_day,
                           send_time: scheduleForm.send_time,
                           active:    scheduleForm.active,
+                          form_id:   scheduleForm.form_id || null,
                           next_send_at: next.toISOString(),
                         }).eq('id', checkinSchedule.id)
                         setCheckinSchedule((p:any) => ({ ...p, ...scheduleForm, next_send_at: next.toISOString() }))
@@ -611,6 +613,7 @@ export default function ClientDetail() {
                           send_day:  scheduleForm.send_day,
                           send_time: scheduleForm.send_time,
                           active:    scheduleForm.active,
+                          form_id:   scheduleForm.form_id || null,
                           frequency: 'weekly',
                           next_send_at: next.toISOString(),
                         }).select().single()
@@ -654,7 +657,33 @@ export default function ClientDetail() {
                   </div>
                 </div>
 
-                {/* Send Now */}
+                {/* Form picker */}
+                <div style={{ marginTop:12 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Check-in Form</div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <select
+                      value={scheduleForm.form_id}
+                      onChange={e => setScheduleForm(p => ({ ...p, form_id: e.target.value }))}
+                      style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', outline:'none' }}>
+                      <option value="">Default (Weekly Check In)</option>
+                      {forms.filter(f => f.is_checkin_type).map((f:any) => (
+                        <option key={f.id} value={f.id}>{f.title}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        const target = scheduleForm.form_id || forms.find((f:any) => f.is_checkin_type)?.id
+                        if (target) router.push(`/dashboard/coach/onboarding?edit=${target}`)
+                        else router.push('/dashboard/coach/onboarding')
+                      }}
+                      style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'10px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                      ✏️ Edit Form
+                    </button>
+                  </div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:5 }}>
+                    Edit questions in the form builder. Changes apply to all future check-ins using this form.
+                  </div>
+                </div>
                 <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid '+t.border }}>
                   <button
                     disabled={sendingNow}
