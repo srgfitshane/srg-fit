@@ -80,6 +80,15 @@ export default function ClientDashboard() {
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
+  // Mental health check-in
+  const [mentalCheckin,    setMentalCheckin]    = useState({ stress:5, mood:5, energy:5 })
+  const [mentalSubmitted,  setMentalSubmitted]  = useState(false)
+  const [mentalCollapsed,  setMentalCollapsed]  = useState(false)
+  // Journal
+  const [journalText,      setJournalText]      = useState('')
+  const [journalPrivate,   setJournalPrivate]   = useState(true)
+  const [journalSaved,     setJournalSaved]     = useState(false)
+  const [journalSaving,    setJournalSaving]    = useState(false)
   const router   = useRouter()
   const supabase = createClient()
   const today    = new Date().toISOString().split('T')[0]
@@ -196,6 +205,33 @@ export default function ClientDashboard() {
     setMilestones(prev => prev.filter(m => m.id !== id))
   }
 
+  const saveMentalCheckin = async () => {
+    if (!clientRecord) return
+    await supabase.from('daily_checkins').upsert({
+      client_id: clientRecord.id,
+      checkin_date: today,
+      stress_score: mentalCheckin.stress,
+      mood_score:   mentalCheckin.mood,
+      energy_score: mentalCheckin.energy,
+    }, { onConflict: 'client_id,checkin_date' })
+    setMentalSubmitted(true)
+    setTimeout(() => setMentalCollapsed(true), 800)
+  }
+
+  const saveJournal = async () => {
+    if (!clientRecord || !journalText.trim()) return
+    setJournalSaving(true)
+    await supabase.from('journal_entries').upsert({
+      client_id:   clientRecord.id,
+      entry_date:  today,
+      body:        journalText.trim(),
+      is_private:  journalPrivate,
+    }, { onConflict: 'client_id,entry_date' })
+    setJournalSaving(false)
+    setJournalSaved(true)
+    setTimeout(() => setJournalSaved(false), 2500)
+  }
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
@@ -206,14 +242,6 @@ export default function ClientDashboard() {
       <div style={{ color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
     </div>
   )
-
-
-  const totalTasks = 3 + habits.length
-  const doneTasks  = habits.filter(h => {
-    const val = habitLogs[h.id] || 0
-    return h.habit_type === 'check' ? val >= 1 : val >= h.target
-  }).length
-  const progressPct = Math.round((doneTasks / Math.max(totalTasks, 1)) * 100)
 
   return (
     <>
@@ -257,108 +285,113 @@ export default function ClientDashboard() {
           {/* Click-outside dismiss for + menu */}
           {plusOpen && <div onClick={()=>setPlusOpen(false)} style={{ position:'fixed', inset:0, zIndex:19 }} />}
 
-          {/* Today content — hidden when on any dedicated tab */}
+          {/* ── TODAY TAB ── */}
           {activeNav === 'today' && <>
 
-          {/* Greeting */}
-          <div style={{ marginBottom:18 }} className="fade">
-            <div style={{ fontSize:22, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', lineHeight:1.2, marginBottom:4 }}>
+          {/* ── 1. GREETING ── */}
+          <div style={{ marginBottom:20 }} className="fade">
+            <div style={{ fontSize:23, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', lineHeight:1.2, marginBottom:3 }}>
               {getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋
             </div>
             <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
 
-          {/* Profile completion nudge */}
-          <ProfileNudge clientId={clientRecord?.id} onOpen={()=>router.push('/dashboard/client/profile')} />
-
-          {/* Milestones / celebrations */}
-          {milestones.map(m => (
-            <div key={m.id} className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'20,'+t.orange+'08)', border:'1px solid '+t.yellow+'30', borderRadius:16, padding:'16px 18px', marginBottom:12, position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', top:-8, right:-8, fontSize:60, opacity:0.07, lineHeight:1 }}>🏆</div>
-              <div style={{ fontSize:20, marginBottom:6 }}>🎉</div>
-              <div style={{ fontSize:14, fontWeight:700, color:t.yellow, lineHeight:1.4, marginBottom:10 }}>{m.message}</div>
-              <button onClick={()=>dismissMilestone(m.id)}
-                style={{ background:t.yellowDim, border:'1px solid '+t.yellow+'40', borderRadius:8, padding:'5px 14px', fontSize:11, fontWeight:700, color:t.yellow, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                Thanks! ✓
-              </button>
+          {/* ── 2. RECENT WINS PLAQUE ── */}
+          {(milestones.length > 0 || recentPRs.length > 0) && (
+            <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+t.yellow+'35', borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>🏆</div>
+              <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>🏆 Recent Wins</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {recentPRs.map((pr:any) => (
+                  <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:6, height:6, borderRadius:'50%', background:t.yellow, flexShrink:0 }}/>
+                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR — {pr.exercise?.name}</div>
+                    <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs 💪</div>
+                  </div>
+                ))}
+                {milestones.map((m:any) => (
+                  <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:6, height:6, borderRadius:'50%', background:t.orange, flexShrink:0 }}/>
+                    <div style={{ fontSize:13, color:t.text, flex:1, lineHeight:1.4 }}>{m.message}</div>
+                    <button onClick={()=>dismissMilestone(m.id)} style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
 
-          {/* Day progress */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 16px', marginBottom:14 }} className="fade">
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-              <div style={{ fontSize:13, fontWeight:700 }}>Today's Progress</div>
-              <div style={{ fontSize:15, fontWeight:900, color:progressPct===100 ? t.green : t.teal }}>{progressPct}%</div>
-            </div>
-            <div style={{ height:7, background:t.surfaceHigh, borderRadius:4, overflow:'hidden' }}>
-              <div style={{ height:'100%', width:progressPct+'%', background:progressPct===100 ? 'linear-gradient(90deg,'+t.green+','+t.teal+')' : 'linear-gradient(90deg,'+t.teal+','+t.orange+')', borderRadius:4, transition:'width 0.5s ease' }} />
-            </div>
-            {progressPct===100 && <div style={{ fontSize:11, color:t.green, fontWeight:700, marginTop:8, textAlign:'center' }}>You crushed today 💪 Be Kind to Yourself & Stay Awesome</div>}
-          </div>
-
-
-          {/* Pending custom check-in forms */}
-          {pendingCheckins.map((a: any) => (
-            <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.purple+'50', borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-              <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.teal+')' }} />
-              <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ width:40, height:40, borderRadius:12, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>📋</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:800 }}>{a.form?.title || 'Check-in'}</div>
-                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{a.note || 'Your coach sent you a check-in to complete'}</div>
+          {/* ── 3. MENTAL HEALTH CHECK-IN ── */}
+          <div className="fade" style={{ background:t.surface, border:'1px solid '+(mentalSubmitted?t.green+'40':t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }}>
+            <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }}/>
+            <div style={{ padding:'14px 16px' }}>
+              <button onClick={()=>setMentalCollapsed(c=>!c)} style={{ width:'100%', background:'none', border:'none', padding:0, cursor:'pointer', display:'flex', alignItems:'center', gap:10, fontFamily:"'DM Sans',sans-serif" }}>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🧠</div>
+                <div style={{ flex:1, textAlign:'left' as const }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:t.text }}>How are you feeling?</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
+                    {mentalSubmitted ? '✓ Logged today' : 'Stress · Mood · Energy'}
+                  </div>
                 </div>
-                <button onClick={()=>router.push('/dashboard/client/forms/'+a.id)}
-                  style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
-                  Fill out →
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {/* Default weekly check-in card */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }} />
-            <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:40, height:40, borderRadius:12, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>📋</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:800 }}>Weekly Check-in</div>
-                <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Reflect on your week & keep Shane in the loop</div>
-              </div>
-              <button onClick={()=>router.push('/dashboard/client/checkin')}
-                style={{ background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
-                Check in →
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: mentalCollapsed?'rotate(-90deg)':'rotate(0deg)', transition:'transform 0.2s' }}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
               </button>
+
+              {!mentalCollapsed && (
+                <div style={{ marginTop:14 }}>
+                  {([
+                    { key:'stress', label:'😤 Stress', low:'Chill', high:'Maxed', color:t.red },
+                    { key:'mood',   label:'😊 Mood',   low:'Low',   high:'Great', color:t.pink },
+                    { key:'energy', label:'⚡ Energy',  low:'Drained',high:'Energized', color:t.yellow },
+                  ] as const).map(({ key, label, low, high, color }) => (
+                    <div key={key} style={{ marginBottom:14 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:t.textDim }}>{label}</div>
+                        <div style={{ fontSize:14, fontWeight:900, color }}>{mentalCheckin[key]}</div>
+                      </div>
+                      <input type="range" min={1} max={10} value={mentalCheckin[key]}
+                        onChange={e=>setMentalCheckin(p=>({...p,[key]:+e.target.value}))}
+                        style={{ width:'100%', accentColor:color, cursor:'pointer' }}/>
+                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginTop:2 }}>
+                        <span>1 — {low}</span><span>10 — {high}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={saveMentalCheckin}
+                    style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {mentalSubmitted ? '✓ Saved!' : 'Save Check-in'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Today's workout */}
+          {/* ── 4. TODAY'S WORKOUT ── */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
+            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }}/>
             <div style={{ padding:'14px 16px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                <div style={{ width:40, height:40, borderRadius:12, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>💪</div>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:800 }}>{nextSession ? nextSession.title : "Today's Workout"}</div>
-                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
-                    {nextSession
-                      ? nextSession.scheduled_date ? `Scheduled ${nextSession.scheduled_date}` : 'Ready when you are'
-                      : 'No workout assigned yet'}
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
+                    {nextSession ? (nextSession.scheduled_date ? `Scheduled ${nextSession.scheduled_date}` : 'Ready when you are') : 'No workout assigned yet'}
                   </div>
                 </div>
               </div>
               <button
-                onClick={() => nextSession && router.push(`/dashboard/client/workout/${nextSession.id}`)}
+                onClick={()=>nextSession && router.push(`/dashboard/client/workout/${nextSession.id}`)}
                 disabled={!nextSession}
-                style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background: nextSession ? 'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)' : t.surfaceHigh, color: nextSession ? '#000' : t.textMuted, fontSize:13, fontWeight:800, cursor: nextSession ? 'pointer' : 'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
+                style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:nextSession?'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)':t.surfaceHigh, color:nextSession?'#000':t.textMuted, fontSize:13, fontWeight:800, cursor:nextSession?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
                 {nextSession ? 'Start Workout 💪' : 'No Workout Assigned'}
               </button>
             </div>
           </div>
 
-          {/* Habits */}
+          {/* ── 5. TASKS / HABITS ── */}
           {habits.length > 0 && (
             <div style={{ marginBottom:14 }} className="fade">
-              <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Today's Habits</div>
+              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {habits.map((h:any) => {
                   const val = habitLogs[h.id] || 0
@@ -369,7 +402,7 @@ export default function ClientDashboard() {
                   if (h.habit_type === 'check') return (
                     <div key={h.id} onClick={()=>logHabit(h.id, val?0:1)}
                       style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
-                      <div style={{ width:34, height:34, borderRadius:10, background:done?'linear-gradient(135deg,'+color+','+color+'aa)':t.surfaceHigh, border:'1px solid '+(done?color+'60':t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?14:16, flexShrink:0, transition:'all 0.2s ease' }}>
+                      <div style={{ width:32, height:32, borderRadius:9, background:done?'linear-gradient(135deg,'+color+','+color+'aa)':t.surfaceHigh, border:'1px solid '+(done?color+'60':t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?13:16, flexShrink:0, transition:'all 0.2s ease' }}>
                         {done ? '✓' : h.icon||'✅'}
                       </div>
                       <div style={{ flex:1 }}>
@@ -380,7 +413,7 @@ export default function ClientDashboard() {
                   )
 
                   return (
-                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft: String(val||'') })}
+                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft:String(val||'') })}
                       style={{ padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                         <span style={{ fontSize:18 }}>{h.icon||'📊'}</span>
@@ -393,8 +426,8 @@ export default function ClientDashboard() {
                           <div style={{ fontSize:10, color:t.textMuted }}>Tap to log</div>
                         </div>
                       </div>
-                      <div style={{ height:5, background:t.surfaceHigh, borderRadius:3, marginTop:8, overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:pct+'%', background:'linear-gradient(90deg,'+color+','+color+'bb)', borderRadius:3, transition:'width 0.4s ease' }} />
+                      <div style={{ height:4, background:t.surfaceHigh, borderRadius:3, marginTop:8, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:pct+'%', background:'linear-gradient(90deg,'+color+','+color+'bb)', borderRadius:3, transition:'width 0.4s ease' }}/>
                       </div>
                     </div>
                   )
@@ -403,17 +436,46 @@ export default function ClientDashboard() {
             </div>
           )}
 
-
-          {/* No habits yet */}
-          {habits.length === 0 && (
-            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'20px 16px', marginBottom:14, textAlign:'center' }} className="fade">
-              <div style={{ fontSize:24, marginBottom:8 }}>📋</div>
-              <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>No habits assigned yet</div>
-              <div style={{ fontSize:12, color:t.textMuted }}>Shane will set up your daily habits soon</div>
+          {/* ── 6. JOURNAL ── */}
+          <div className="fade" style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
+            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
+            <div style={{ padding:'14px 16px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>✍️</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:800 }}>How did today go?</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Your daily journal</div>
+                </div>
+              </div>
+              <textarea
+                value={journalText}
+                onChange={e=>setJournalText(e.target.value)}
+                placeholder="Write anything — wins, struggles, how you're really feeling. No judgment here."
+                rows={4}
+                style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' }}
+              />
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10 }}>
+                {/* Privacy toggle */}
+                <button onClick={()=>setJournalPrivate(p=>!p)}
+                  style={{ display:'flex', alignItems:'center', gap:7, background:journalPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(journalPrivate?t.border:t.teal+'40'), borderRadius:20, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={journalPrivate?t.textMuted:t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {journalPrivate
+                      ? <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>
+                      : <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/> }
+                  </svg>
+                  <span style={{ fontSize:11, fontWeight:700, color:journalPrivate?t.textMuted:t.teal }}>
+                    {journalPrivate ? 'Private' : 'Visible to Coach'}
+                  </span>
+                </button>
+                <button onClick={saveJournal} disabled={journalSaving||!journalText.trim()}
+                  style={{ background:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':t.surfaceHigh, border:'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+                  {journalSaved ? '✓ Saved!' : journalSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
             </div>
-          )}
+          </div>
 
-          {/* Empty state for new clients */}
+          {/* Empty state */}
           {habits.length === 0 && !nextSession && (
             <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+t.teal+'25', borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
               <div style={{ fontSize:32, marginBottom:10 }}>🚀</div>
