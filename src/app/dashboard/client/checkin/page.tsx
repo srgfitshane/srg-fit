@@ -97,7 +97,7 @@ export default function CheckinForm() {
         // Find the most recent pending check-in assignment (not snoozed past now)
         const { data: pending } = await supabase
           .from('client_form_assignments')
-          .select('*, form:onboarding_forms(title, is_checkin_type)')
+          .select('*, form:onboarding_forms(title, form_type, is_checkin_type)')
           .eq('client_id', clientData.id)
           .eq('status', 'pending')
           .not('checkin_schedule_id', 'is', null)

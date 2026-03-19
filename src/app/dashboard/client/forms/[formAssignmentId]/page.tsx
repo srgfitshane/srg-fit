@@ -92,10 +92,11 @@ export default function ClientFormPage() {
       status: 'completed',
       completed_at: new Date().toISOString(),
       response: answers,
-    }).eq('id', formAssignmentId).select('*, form:onboarding_forms(is_checkin_type, id), client_id').single()
+    }).eq('id', formAssignmentId).select('*, form:onboarding_forms(form_type, is_checkin_type, id), client_id').single()
 
-    // If this is a check-in type form, mirror mapped fields into checkins table
-    if (asgn?.form?.is_checkin_type) {
+    // Mirror mapped fields into checkins table if this is a check_in type form
+    const isCheckin = asgn?.form?.form_type === 'check_in' || asgn?.form?.is_checkin_type
+    if (isCheckin) {
       const now = new Date()
       const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay())
       const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)

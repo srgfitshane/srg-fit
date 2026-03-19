@@ -174,12 +174,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         // Pending check-in form assignments
         const { data: pendingCI } = await supabase
           .from('client_form_assignments')
-          .select('id, note, form:onboarding_forms(title, is_checkin_type)')
+          .select('id, note, form:onboarding_forms(title, form_type, is_checkin_type)')
           .eq('client_id', clientData.id)
           .eq('status', 'pending')
-          .eq('onboarding_forms.is_checkin_type', true)
           .limit(3)
-        setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type))
+        setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type || a.form?.form_type === 'check_in'))
 
         // Load today's mental check-in if already submitted
         const { data: todayCheckin } = await supabase

@@ -96,7 +96,7 @@ export default function ClientDetail() {
       // Load forms for assign form feature
       const { data: formData } = await supabase
         .from('onboarding_forms')
-        .select('id,title,is_default,is_checkin_type')
+        .select('id,title,form_type,is_default,is_checkin_type')
         .eq('coach_id', user.id)
       setForms(formData || [])
 
@@ -666,7 +666,7 @@ export default function ClientDetail() {
                       onChange={e => setScheduleForm(p => ({ ...p, form_id: e.target.value }))}
                       style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', outline:'none' }}>
                       <option value="">Default (Weekly Check In)</option>
-                      {forms.filter(f => f.is_checkin_type).map((f:any) => (
+                      {forms.filter(f => f.form_type === 'check_in' || f.is_checkin_type).map((f:any) => (
                         <option key={f.id} value={f.id}>{f.title}</option>
                       ))}
                     </select>
@@ -690,14 +690,20 @@ export default function ClientDetail() {
                     onClick={async () => {
                       if (!coachId || !checkinSchedule) return
                       setSendingNow(true)
-                      // Find the check-in form (is_checkin_type = true)
-                      const { data: ciForm } = await supabase
-                        .from('onboarding_forms').select('id')
-                        .eq('coach_id', coachId).eq('is_checkin_type', true).limit(1).single()
-                      if (ciForm) {
+                      // Use the schedule's form_id if set, otherwise find first check_in type form
+                      let ciFormId = checkinSchedule?.form_id
+                      if (!ciFormId) {
+                        const { data: ciForm } = await supabase
+                          .from('onboarding_forms').select('id')
+                          .eq('coach_id', coachId)
+                          .or('form_type.eq.check_in,is_checkin_type.eq.true')
+                          .limit(1).single()
+                        ciFormId = ciForm?.id
+                      }
+                      if (ciFormId) {
                         const { data: newAssign } = await supabase.from('client_form_assignments').insert({
                           coach_id: coachId, client_id: clientId,
-                          form_id: ciForm.id,
+                          form_id: ciFormId,
                           checkin_schedule_id: checkinSchedule.id,
                           status: 'pending',
                           note: 'Sent manually by coach',
@@ -1430,12 +1436,12 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
   const [schedNote,    setSchedNote]    = useState('')
   const [scheduling,   setScheduling]   = useState(false)
 
-  const checkinForms = forms.filter((f: any) => f.is_checkin_type)
+  const checkinForms = forms.filter((f: any) => f.form_type === 'check_in' || f.is_checkin_type)
 
   useEffect(() => {
     const load = async () => {
       const [{ data: asgns }, { data: scheds }] = await Promise.all([
-        supabase.from('client_form_assignments').select('*, form:onboarding_forms(title, is_checkin_type)').eq('client_id', clientId).order('assigned_at', { ascending: false }),
+        supabase.from('client_form_assignments').select('*, form:onboarding_forms(title, form_type, is_checkin_type)').eq('client_id', clientId).order('assigned_at', { ascending: false }),
         supabase.from('check_in_schedules').select('*, form:onboarding_forms(title)').eq('client_id', clientId).order('created_at'),
       ])
       setAssignments(asgns || [])
@@ -1564,7 +1570,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
         ) : assignments.map((a: any) => (
           <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:38, height:38, borderRadius:10, background:a.status==='completed'?t.greenDim:t.purpleDim, border:'1px solid '+(a.status==='completed'?t.green:t.purple)+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
-              {a.status==='completed' ? '✅' : a.form?.is_checkin_type ? '📋' : '📝'}
+              {a.status==='completed' ? '✅' : (a.form?.form_type === 'check_in' || a.form?.is_checkin_type) ? '📋' : '📝'}
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:700 }}>{a.form?.title}</div>
