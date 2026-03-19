@@ -159,16 +159,46 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   async function doSearch(q: string) {
     setSearching(true)
     try {
-      const res = await fetch(`${FDC_URL}/foods/search?api_key=${USDA_KEY}&query=${encodeURIComponent(q)}&pageSize=10&dataType=Survey%20(FNDDS),SR%20Legacy,Branded`)
+      // Search all data types — Foundation + SR Legacy give the best basic foods (eggs, chicken, etc)
+      // Branded gives packaged products. No dataType filter = all types.
+      const params = new URLSearchParams({
+        api_key: USDA_KEY,
+        query: q,
+        pageSize: '20',
+        sortBy: 'dataType.keyword',
+        sortOrder: 'asc',
+      })
+      const res = await fetch(FDC_URL+'/foods/search?'+params.toString())
       const data = await res.json()
-      setSearchResults(data.foods || [])
+      const foods = (data.foods || []) as any[]
+
+      // Dedupe by cleaned name + prefer Foundation/SR Legacy over Branded for generics
+      const seen = new Set<string>()
+      const deduped = foods.filter(f => {
+        const key = cleanFoodName(f.description).toLowerCase().slice(0, 40)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      }).slice(0, 12)
+
+      setSearchResults(deduped)
     } catch { setSearchResults([]) }
     setSearching(false)
+  }
+
+  // Clean up USDA all-caps names like "EGG, WHOLE, RAW, FRESH" → "Egg, whole, raw"
+  function cleanFoodName(name: string): string {
+    if (!name) return name
+    // If it's all caps (USDA style), convert to title-ish case
+    if (name === name.toUpperCase()) {
+      return name.toLowerCase().replace(/(^\w|,\s*\w)/g, c => c.toUpperCase())
+    }
+    return name
   }
   function pickUSDAFood(food: any) {
     const nutrients = food.foodNutrients || []
     const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? Math.round(n.value*10)/10 : null }
-    setPendingFood({ food_name: food.description, calories: get('energy'), protein_g: get('protein'), carbs_g: get('carbohydrate'), fat_g: get('total lipid'), serving_size: food.servingSize ? food.servingSize+(food.servingSizeUnit||'g') : '100g' })
+    setPendingFood({ food_name: cleanFoodName(food.description), calories: get('energy'), protein_g: get('protein'), carbs_g: get('carbohydrate'), fat_g: get('total lipid'), serving_size: food.servingSize ? food.servingSize+(food.servingSizeUnit||'g') : '100g' })
   }
 
   // ── Barcode scanner (Quagga via CDN) ──────────────────────────────────────
@@ -320,11 +350,19 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             <input value={searchQ} onChange={e=>handleSearchInput(e.target.value)} placeholder="e.g. chicken breast, greek yogurt..." autoFocus style={{ ...inp, marginBottom:10 }}/>
             {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'8px 0' }}>Searching USDA database...</div>}
             {searchResults.map((food:any) => {
-              const n = food.foodNutrients||[]; const cal=n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value; const pro=n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
+              const n = food.foodNutrients||[]
+              const cal = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value
+              const pro = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
+              const isGeneric = food.dataType === 'Foundation' || food.dataType === 'SR Legacy' || food.dataType === 'Survey (FNDDS)'
               return (
-                <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", display:'block' }}>
-                  <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.description}</div>
-                  <div style={{ fontSize:11, color:t.textMuted }}>{cal?`${Math.round(cal)} kcal`:'—'} · {pro?`${Math.round(pro)}g protein`:'—'} · per 100g</div>
+                <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
+                    <div style={{ fontSize:13, fontWeight:700, flex:1 }}>{cleanFoodName(food.description)}</div>
+                    {isGeneric && <span style={{ fontSize:9, fontWeight:700, color:t.teal, background:t.tealDim, borderRadius:4, padding:'1px 5px', flexShrink:0 }}>GENERIC</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:t.textMuted }}>
+                    {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · per 100g
+                  </div>
                 </button>
               )
             })}
