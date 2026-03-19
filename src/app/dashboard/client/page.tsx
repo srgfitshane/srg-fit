@@ -79,6 +79,7 @@ export default function ClientDashboard() {
   const [activeNav,    setActiveNav]    = useState('today')
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
+  const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
   const router   = useRouter()
   const supabase = createClient()
   const today    = new Date().toISOString().split('T')[0]
@@ -510,21 +511,83 @@ export default function ClientDashboard() {
           )}
 
           {/* ── MESSAGES TAB ── */}
-          {activeNav === 'messages' && (
-            <div style={{ height:'calc(100vh - 52px - 60px)', overflow:'hidden' }}>
-              {profile && coachProfileId ? (
-                <RichMessageThread
-                  myId={profile.id}
-                  otherId={coachProfileId}
-                  otherName="Coach Shane"
-                  tenorKey={TENOR_KEY}
-                  height="100%"
-                />
-              ) : (
-                <div style={{ padding:40, textAlign:'center', color:t.textMuted, fontSize:13 }}>
-                  {!clientRecord ? 'No coach assigned yet.' : 'Loading messages...'}
+          {activeNav === 'messages' && messagesView === 'hub' && (
+            <div style={{ paddingBottom:32 }}>
+              <div style={{ fontSize:22, fontWeight:900, marginBottom:6, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
+                Connect
+              </div>
+              <div style={{ fontSize:13, color:t.textMuted, marginBottom:24 }}>Message your coach or check in with the community</div>
+
+              {/* Coach message card */}
+              <button onClick={()=>setMessagesView('coach')}
+                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
+                <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.teal+'30,'+t.orange+'18)', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>Message Coach Shane</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Direct line to your coach — questions, check-ins, anything</div>
+                  </div>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
                 </div>
-              )}
+              </button>
+
+              {/* Community card */}
+              <button onClick={()=>router.push('/dashboard/client/community')}
+                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }} />
+                <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.purple+'30,'+t.pink+'18)', border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>SRG Fit Community</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Share your wins and hype up your crew</div>
+                  </div>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* ── MESSAGES: Coach thread ── */}
+          {activeNav === 'messages' && messagesView === 'coach' && (
+            <div style={{ height:'calc(100vh - 52px - 60px)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+              {/* Back button */}
+              <div style={{ padding:'10px 0 6px', flexShrink:0 }}>
+                <button onClick={()=>setMessagesView('hub')}
+                  style={{ background:'none', border:'none', color:t.teal, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:"'DM Sans',sans-serif", padding:0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                  Back
+                </button>
+              </div>
+              <div style={{ flex:1, overflow:'hidden' }}>
+                {profile && coachProfileId ? (
+                  <RichMessageThread
+                    myId={profile.id}
+                    otherId={coachProfileId}
+                    otherName="Coach Shane"
+                    tenorKey={TENOR_KEY}
+                    height="100%"
+                  />
+                ) : (
+                  <div style={{ padding:40, textAlign:'center', color:t.textMuted, fontSize:13 }}>
+                    {!clientRecord ? 'No coach assigned yet.' : 'Loading messages...'}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -542,7 +605,8 @@ export default function ClientDashboard() {
 
         </div>
 
-        {/* ── Floating + button ── */}
+        {/* ── Floating + button — hidden on message thread ── */}
+        {!(activeNav === 'messages' && messagesView === 'coach') && (
         <div style={{ position:'fixed', bottom:72, right:'max(16px, calc(50vw - 240px + 16px))', zIndex:30 }}>
           {/* Action menu */}
           {plusOpen && (
@@ -571,6 +635,7 @@ export default function ClientDashboard() {
             </svg>
           </button>
         </div>
+        )}
 
         {/* ── Log Habit Popup ── */}
         {logPopup && (
@@ -611,7 +676,7 @@ export default function ClientDashboard() {
         {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
-            <button key={n.id} onClick={()=> n.id === 'metrics' ? router.push('/dashboard/client/metrics') : setActiveNav(n.id)}
+            <button key={n.id} onClick={()=>{ if(n.id === 'metrics'){ router.push('/dashboard/client/metrics'); return } if(n.id !== 'messages') setMessagesView('hub'); setActiveNav(n.id) }}
               style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, cursor:'pointer', padding:'8px 0', position:'relative' }}>
               {activeNav === n.id && (
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
