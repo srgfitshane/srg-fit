@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
-const USDA_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'eEGagObIubrSly0f7IlCN6xTzjAb3dmLVclJ3bOS'
+const USDA_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || ''
 const FDC_URL  = 'https://api.nal.usda.gov/fdc/v1'
 
 const MEAL_LABELS = [
