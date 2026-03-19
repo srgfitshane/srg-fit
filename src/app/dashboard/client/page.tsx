@@ -36,7 +36,7 @@ const NAV = [
 const NavIcon = ({ id, active }: { id: string, active: boolean }) => {
   const c = active ? '#00c9b1' : '#5a5a78'
   const s = { width:22, height:22 } as const
-  if (id === 'home') return (
+  if (id === 'home' || id === 'today') return (
     <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><polyline points="9 21 9 12 15 12 15 21"/>
     </svg>
@@ -78,6 +78,7 @@ export default function ClientDashboard() {
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState('today')
   const [plusOpen,     setPlusOpen]     = useState(false)
+  const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
   const router   = useRouter()
   const supabase = createClient()
   const today    = new Date().toISOString().split('T')[0]
@@ -378,24 +379,21 @@ export default function ClientDashboard() {
                   )
 
                   return (
-                    <div key={h.id} style={{ padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, transition:'all 0.2s ease' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft: String(val||'') })}
+                      style={{ padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                         <span style={{ fontSize:18 }}>{h.icon||'📊'}</span>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:13, fontWeight:700, color:done?color:t.text }}>{h.label}</div>
                           <div style={{ fontSize:11, color:t.textMuted }}>Target: {h.target}{h.unit}</div>
                         </div>
-                        <div style={{ fontSize:15, fontWeight:800, color:done?color:t.textDim }}>{val||0}<span style={{ fontSize:10, color:t.textMuted }}>{h.unit}</span></div>
+                        <div style={{ textAlign:'right' as const }}>
+                          <div style={{ fontSize:15, fontWeight:800, color:done?color:t.textDim }}>{val||0}<span style={{ fontSize:10, color:t.textMuted }}>{h.unit}</span></div>
+                          <div style={{ fontSize:10, color:t.textMuted }}>Tap to log</div>
+                        </div>
                       </div>
-                      <div style={{ height:5, background:t.surfaceHigh, borderRadius:3, marginBottom:8, overflow:'hidden' }}>
+                      <div style={{ height:5, background:t.surfaceHigh, borderRadius:3, marginTop:8, overflow:'hidden' }}>
                         <div style={{ height:'100%', width:pct+'%', background:'linear-gradient(90deg,'+color+','+color+'bb)', borderRadius:3, transition:'width 0.4s ease' }} />
-                      </div>
-                      <div style={{ display:'flex', gap:8 }}>
-                        <input type="number" placeholder={'Enter '+h.unit+'...'} defaultValue={val||''}
-                          onBlur={e=>logHabit(h.id, +e.target.value||0)}
-                          style={{ flex:1, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
-                        <button onClick={e=>{ const inp = e.currentTarget.previousElementSibling as HTMLInputElement; logHabit(h.id, +inp.value||0) }}
-                          style={{ background:'linear-gradient(135deg,'+color+','+color+'cc)', border:'none', borderRadius:8, padding:'7px 14px', fontSize:11, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Log</button>
                       </div>
                     </div>
                   )
@@ -465,43 +463,8 @@ export default function ClientDashboard() {
             </div>
           </div>
 
-          {/* Recent PRs */}
-          {recentPRs.length > 0 && (
-            <div style={{ background:'linear-gradient(135deg,'+t.yellow+'12,'+t.orange+'08)', border:'1px solid '+t.yellow+'25', borderRadius:14, padding:'14px 16px', marginBottom:14 }} className="fade">
-              <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginBottom:10 }}>🏆 Recent PRs</div>
-              {recentPRs.map((pr:any, i:number) => (
-                <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0', borderBottom: i < recentPRs.length-1 ? '1px solid '+t.yellow+'15' : 'none' }}>
-                  <div style={{ width:5, height:5, borderRadius:'50%', background:t.yellow, flexShrink:0 }} />
-                  <div style={{ flex:1, fontSize:12, color:t.text }}>{pr.exercise?.name}</div>
-                  <div style={{ fontSize:12, fontWeight:700, color:t.yellow }}>{pr.weight_pr}lbs</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Recent workouts */}
-          {workoutLogs.length > 0 && (
-            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 16px', marginBottom:14 }} className="fade">
-              <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Recent Workouts</div>
-              {workoutLogs.map((w:any, i:number) => (
-                <div key={w.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom: i < workoutLogs.length-1 ? '1px solid '+t.border : 'none' }}>
-                  <div style={{ width:30, height:30, borderRadius:8, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, flexShrink:0 }}>💪</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12, fontWeight:600 }}>Workout Session</div>
-                    <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.started_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}</div>
-                  </div>
-                  {w.finished_at && (
-                    <div style={{ fontSize:11, color:t.orange, fontWeight:700 }}>
-                      {Math.round((new Date(w.finished_at).getTime()-new Date(w.started_at).getTime())/60000)}m
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Empty state for new clients */}
-          {workoutLogs.length === 0 && recentPRs.length === 0 && habits.length === 0 && (
+          {habits.length === 0 && !nextSession && (
             <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+t.teal+'25', borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
               <div style={{ fontSize:32, marginBottom:10 }}>🚀</div>
               <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>You're all set!</div>
@@ -548,7 +511,7 @@ export default function ClientDashboard() {
 
           {/* ── MESSAGES TAB ── */}
           {activeNav === 'messages' && (
-            <div style={{ margin:'-16px -16px', height:'calc(100vh - 52px - 60px)' }}>
+            <div style={{ height:'calc(100vh - 52px - 60px)', overflow:'hidden' }}>
               {profile && coachProfileId ? (
                 <RichMessageThread
                   myId={profile.id}
@@ -609,10 +572,46 @@ export default function ClientDashboard() {
           </button>
         </div>
 
+        {/* ── Log Habit Popup ── */}
+        {logPopup && (
+          <>
+            <div onClick={()=>setLogPopup(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40, backdropFilter:'blur(4px)' }} />
+            <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', padding:'24px 20px 40px', zIndex:41, fontFamily:"'DM Sans',sans-serif" }}>
+              {/* Handle bar */}
+              <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }} />
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
+                <span style={{ fontSize:24 }}>{logPopup.habit.icon||'📊'}</span>
+                <div>
+                  <div style={{ fontSize:16, fontWeight:800 }}>{logPopup.habit.label}</div>
+                  <div style={{ fontSize:12, color:t.textMuted }}>Target: {logPopup.habit.target}{logPopup.habit.unit}</div>
+                </div>
+              </div>
+              <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:20 }}>
+                <input
+                  type="number"
+                  autoFocus
+                  inputMode="numeric"
+                  placeholder={'0'}
+                  value={logPopup.draft}
+                  onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
+                  onKeyDown={e=>{ if(e.key==='Enter'){ logHabit(logPopup.habit.id, +logPopup.draft||0); setLogPopup(null) }}}
+                  style={{ flex:1, background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                />
+                <div style={{ fontSize:16, fontWeight:700, color:t.textMuted, flexShrink:0 }}>{logPopup.habit.unit}</div>
+              </div>
+              <button
+                onClick={()=>{ logHabit(logPopup.habit.id, +logPopup.draft||0); setLogPopup(null) }}
+                style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Save ✓
+              </button>
+            </div>
+          </>
+        )}
+
         {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
-            <button key={n.id} onClick={()=>setActiveNav(n.id)}
+            <button key={n.id} onClick={()=> n.id === 'metrics' ? router.push('/dashboard/client/metrics') : setActiveNav(n.id)}
               style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, cursor:'pointer', padding:'8px 0', position:'relative' }}>
               {activeNav === n.id && (
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
