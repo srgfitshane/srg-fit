@@ -40,6 +40,9 @@ export default function ClientDetail() {
   const [expandedWorkout,    setExpandedWorkout]    = useState<string|null>(null)
   const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
+  const [nutritionEdit, setNutritionEdit] = useState(false)
+  const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
+  const [nutritionSaving, setNutritionSaving] = useState(false)
   const [program,       setProgram]       = useState<any>(null)
   const [dailyPulse,    setDailyPulse]    = useState<any[]>([])
   const [journalEntries,setJournalEntries]= useState<any[]>([])
@@ -117,6 +120,16 @@ export default function ClientDetail() {
         .eq('is_active', true)
         .single()
       setNutritionPlan(nutritionData || null)
+      if (nutritionData) {
+        setNutritionForm({
+          calories: String(nutritionData.calories_target || ''),
+          protein:  String(nutritionData.protein_g || ''),
+          carbs:    String(nutritionData.carbs_g || ''),
+          fat:      String(nutritionData.fat_g || ''),
+          water:    String(nutritionData.water_oz || '64'),
+          notes:    nutritionData.notes || '',
+        })
+      }
 
       const { data: programData } = await supabase
         .from('programs')
@@ -586,26 +599,44 @@ export default function ClientDetail() {
           {/* NUTRITION TAB */}
           {activeTab === 'nutrition' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              {nutritionPlan ? (
-                <>
-                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-                      <div>
-                        <div style={{ fontSize:15, fontWeight:800 }}>{nutritionPlan.name}</div>
-                        <div style={{ fontSize:12, color:t.textMuted, marginTop:2, textTransform:'capitalize' }}>{nutritionPlan.approach} approach</div>
-                      </div>
-                      <button onClick={()=>router.push('/dashboard/coach/nutrition')}
-                        style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        Edit Plan
-                      </button>
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
+
+                {/* Header */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+                  <div>
+                    <div style={{ fontSize:15, fontWeight:800 }}>🥗 Nutrition Targets</div>
+                    <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>
+                      {nutritionPlan ? 'Active plan · tap Edit to adjust' : 'No plan set yet'}
                     </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
+                  </div>
+                  <button onClick={() => {
+                    if (!nutritionEdit && nutritionPlan) {
+                      setNutritionForm({
+                        calories: String(nutritionPlan.calories_target || ''),
+                        protein:  String(nutritionPlan.protein_g || ''),
+                        carbs:    String(nutritionPlan.carbs_g || ''),
+                        fat:      String(nutritionPlan.fat_g || ''),
+                        water:    String(nutritionPlan.water_oz || '64'),
+                        notes:    nutritionPlan.notes || '',
+                      })
+                    }
+                    setNutritionEdit(e => !e)
+                  }}
+                    style={{ background:nutritionEdit?t.surfaceHigh:t.tealDim, border:'1px solid '+(nutritionEdit?t.border:t.teal+'40'), borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:nutritionEdit?t.textMuted:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {nutritionEdit ? 'Cancel' : nutritionPlan ? 'Edit' : '+ Set Plan'}
+                  </button>
+                </div>
+
+                {/* View mode — macro tiles */}
+                {!nutritionEdit && nutritionPlan && (
+                  <>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom: nutritionPlan.notes ? 16 : 0 }}>
                       {[
-                        { label:'Calories',  val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : '—', color:t.orange },
-                        { label:'Protein',   val: nutritionPlan.protein_g ? nutritionPlan.protein_g+'g' : '—', color:t.teal },
-                        { label:'Carbs',     val: nutritionPlan.carbs_g ? nutritionPlan.carbs_g+'g' : '—', color:t.yellow },
-                        { label:'Fat',       val: nutritionPlan.fat_g ? nutritionPlan.fat_g+'g' : '—', color:t.purple },
-                        { label:'Water',     val: nutritionPlan.water_oz ? nutritionPlan.water_oz+'oz' : '—', color:'#38bdf8' },
+                        { label:'Calories', val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : '—', color:t.orange },
+                        { label:'Protein',  val: nutritionPlan.protein_g  ? nutritionPlan.protein_g+'g'  : '—', color:t.teal   },
+                        { label:'Carbs',    val: nutritionPlan.carbs_g    ? nutritionPlan.carbs_g+'g'    : '—', color:t.yellow },
+                        { label:'Fat',      val: nutritionPlan.fat_g      ? nutritionPlan.fat_g+'g'      : '—', color:t.purple },
+                        { label:'Water',    val: nutritionPlan.water_oz   ? nutritionPlan.water_oz+'oz'  : '—', color:'#38bdf8' },
                       ].map(s => (
                         <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' }}>
                           <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
@@ -614,23 +645,86 @@ export default function ClientDetail() {
                       ))}
                     </div>
                     {nutritionPlan.notes && (
-                      <div style={{ marginTop:16, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.5 }}>
-                        <strong>Coach notes:</strong> {nutritionPlan.notes}
+                      <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
+                        <strong>Notes:</strong> {nutritionPlan.notes}
                       </div>
                     )}
+                  </>
+                )}
+
+                {/* Empty state */}
+                {!nutritionEdit && !nutritionPlan && (
+                  <div style={{ textAlign:'center', padding:'32px 0', color:t.textMuted }}>
+                    <div style={{ fontSize:36, marginBottom:10 }}>🥗</div>
+                    <div style={{ fontSize:13 }}>No nutrition plan set. Hit "+ Set Plan" to add targets.</div>
                   </div>
-                </>
-              ) : (
-                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>🥗</div>
-                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No nutrition plan assigned</div>
-                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Create a nutrition plan for this client</div>
-                  <button onClick={()=>router.push('/dashboard/coach/nutrition')}
-                    style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    Go to Nutrition
-                  </button>
-                </div>
-              )}
+                )}
+
+                {/* Edit mode — inline form */}
+                {nutritionEdit && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                      {[
+                        { label:'Calories (kcal)', key:'calories', placeholder:'2000', color:t.orange },
+                        { label:'Protein (g)',      key:'protein',  placeholder:'150',  color:t.teal   },
+                        { label:'Carbs (g)',        key:'carbs',    placeholder:'200',  color:t.yellow },
+                        { label:'Fat (g)',          key:'fat',      placeholder:'65',   color:t.purple },
+                        { label:'Water (oz)',       key:'water',    placeholder:'64',   color:'#38bdf8' },
+                      ].map(f => (
+                        <div key={f.key}>
+                          <div style={{ fontSize:11, fontWeight:700, color:f.color, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.06em' }}>{f.label}</div>
+                          <input
+                            type="number"
+                            value={(nutritionForm as any)[f.key]}
+                            onChange={e => setNutritionForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            placeholder={f.placeholder}
+                            style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:14, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' as any }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.06em' }}>Coach Notes (visible to client)</div>
+                      <textarea
+                        value={nutritionForm.notes}
+                        onChange={e => setNutritionForm(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Focus on hitting protein first. Don't stress about exact calories..."
+                        rows={3}
+                        style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', resize:'none', lineHeight:1.6, boxSizing:'border-box' as any }}
+                      />
+                    </div>
+                    <button
+                      disabled={nutritionSaving}
+                      onClick={async () => {
+                        if (!coachId) return
+                        setNutritionSaving(true)
+                        const payload = {
+                          client_id: clientId, coach_id: coachId,
+                          name: 'Nutrition Plan',
+                          calories_target: parseInt(nutritionForm.calories) || null,
+                          protein_g:  parseInt(nutritionForm.protein)  || null,
+                          carbs_g:    parseInt(nutritionForm.carbs)    || null,
+                          fat_g:      parseInt(nutritionForm.fat)      || null,
+                          water_oz:   parseInt(nutritionForm.water)    || 64,
+                          notes:      nutritionForm.notes || null,
+                          is_active: true,
+                        }
+                        if (nutritionPlan) {
+                          await supabase.from('nutrition_plans').update(payload).eq('id', nutritionPlan.id)
+                          setNutritionPlan({ ...nutritionPlan, ...payload })
+                        } else {
+                          const { data: newPlan } = await supabase.from('nutrition_plans').insert(payload).select().single()
+                          setNutritionPlan(newPlan)
+                        }
+                        setNutritionSaving(false)
+                        setNutritionEdit(false)
+                      }}
+                      style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:nutritionSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:nutritionSaving?0.6:1 }}>
+                      {nutritionSaving ? 'Saving...' : '✓ Save Nutrition Plan'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

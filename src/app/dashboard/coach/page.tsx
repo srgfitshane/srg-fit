@@ -24,28 +24,25 @@ const getGreeting = () => {
 
 const CLIENT_COLORS = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 
-// Always-visible nav items
+// Always-visible nav — things you touch every session
 const NAV_ESSENTIALS = [
-  { label:'Outreach',  icon:'📣', path:'/dashboard/coach/outreach'  },
-  { label:'Messages',  icon:'💬', path:'/dashboard/coach/messages'  },
-  { label:'Community', icon:'🏘️', path:'/dashboard/coach/community' },
-  { label:'Programs',  icon:'📋', path:'/dashboard/coach/programs'  },
+  { label:'Messages',   icon:'💬', path:'/dashboard/coach/messages'  },
+  { label:'Community',  icon:'🏘️', path:'/dashboard/coach/community' },
+  { label:'Programs',   icon:'📋', path:'/dashboard/coach/programs'  },
+  { label:'Workouts',   icon:'💪', path:'/dashboard/coach/workouts'  },
 ]
 
-// Shown when expanded (Habits removed — lives on client profiles)
+// Shown when expanded — tools you need occasionally
 const NAV_EXPANDED = [
-  { label:'Workouts',   icon:'💪', path:'/dashboard/coach/workouts'   },
-  { label:'Nutrition',  icon:'🥗', path:'/dashboard/coach/nutrition'  },
-  { label:'Check-ins',  icon:'✅', path:'/dashboard/coach/checkins'   },
-  { label:'Calendar',   icon:'📅', path:'/dashboard/coach/calendar'   },
-  { label:'Progress',   icon:'📈', path:'/dashboard/coach/progress'   },
-  { label:'Resources',  icon:'📚', path:'/dashboard/coach/resources'  },
-  { label:'AI Insights',icon:'🤖', path:'/dashboard/coach/insights'   },
-  { label:'Reports',    icon:'📊', path:'/dashboard/coach/reports'    },
-  { label:'Exercises',  icon:'🏋️', path:'/dashboard/coach/exercises'  },
-  { label:'Invites',    icon:'📨', path:'/dashboard/coach/invites'    },
-  { label:'Forms',      icon:'📝', path:'/dashboard/coach/onboarding' },
-  { label:'Plans',      icon:'💳', path:'/dashboard/coach/plans'      },
+  { label:'Outreach',    icon:'📣', path:'/dashboard/coach/outreach'  },
+  { label:'Calendar',    icon:'📅', path:'/dashboard/coach/calendar'   },
+  { label:'Resources',   icon:'📚', path:'/dashboard/coach/resources'  },
+  { label:'Check-ins',   icon:'✅', path:'/dashboard/coach/checkins'   },
+  { label:'AI Insights', icon:'🧠', path:'/dashboard/coach/insights'   },
+  { label:'Exercises',   icon:'🏋️', path:'/dashboard/coach/exercises'  },
+  { label:'Forms',       icon:'📝', path:'/dashboard/coach/onboarding' },
+  { label:'Plans',       icon:'💳', path:'/dashboard/coach/plans'      },
+  { label:'Invites',     icon:'📨', path:'/dashboard/coach/invites'    },
 ]
 
 export default function CoachDashboard() {

@@ -73,7 +73,11 @@ Deno.serve(async (req: Request) => {
       content: parsed,
       source_data: {
         checkins_analyzed: context.recentCheckins?.length || 0,
+        daily_pulse_analyzed: context.dailyPulse?.length || 0,
         sessions_analyzed: context.recentSessions?.length || 0,
+        has_nutrition_plan: !!context.nutritionPlan,
+        active_habits: context.activeHabits?.length || 0,
+        journal_entries_shared: context.recentJournal?.length || 0,
         weeks_of_data: context.weeksOfData,
       },
       priority,
@@ -92,16 +96,24 @@ Deno.serve(async (req: Request) => {
 
 // ── Context gathering ──────────────────────────────────────────────────────
 async function gatherClientContext(supabase: any, client_id: string, coach_id: string) {
-  const [clientRes, checkinsRes, sessionsRes, progressionRes, programRes] = await Promise.all([
+  const [clientRes, checkinsRes, dailyPulseRes, sessionsRes, progressionRes, programRes, nutritionRes, habitsRes, journalRes] = await Promise.all([
     supabase.from("clients")
       .select("*, profile:profiles!clients_profile_id_fkey(full_name)")
       .eq("id", client_id).single(),
 
+    // Legacy check-ins
     supabase.from("check_ins")
       .select("*")
       .eq("client_id", client_id)
       .order("created_at", { ascending: false })
       .limit(6),
+
+    // Daily pulse check-ins (the active table)
+    supabase.from("daily_checkins")
+      .select("*")
+      .eq("client_id", client_id)
+      .order("checkin_date", { ascending: false })
+      .limit(14),
 
     supabase.from("workout_sessions")
       .select("*, exercise_logs(*)")
@@ -122,6 +134,27 @@ async function gatherClientContext(supabase: any, client_id: string, coach_id: s
       .eq("is_template", false)
       .order("created_at", { ascending: false })
       .limit(1),
+
+    // Active nutrition plan
+    supabase.from("nutrition_plans")
+      .select("calories_target, protein_g, carbs_g, fat_g, water_oz, notes, approach")
+      .eq("client_id", client_id)
+      .eq("is_active", true)
+      .single(),
+
+    // Active habits + recent completion rate
+    supabase.from("habits")
+      .select("id, name, habit_type, target, active")
+      .eq("client_id", client_id)
+      .eq("active", true),
+
+    // Recent journal entries (non-private only — respects privacy)
+    supabase.from("journal_entries")
+      .select("entry_date, body, is_private")
+      .eq("client_id", client_id)
+      .eq("is_private", false)
+      .order("entry_date", { ascending: false })
+      .limit(7),
   ]);
 
   if (!clientRes.data) return null;
@@ -133,9 +166,13 @@ async function gatherClientContext(supabase: any, client_id: string, coach_id: s
   return {
     client: { id: client_id, name: clientRes.data.profile?.full_name || "Client" },
     recentCheckins: checkinsRes.data || [],
+    dailyPulse: dailyPulseRes.data || [],
     recentSessions: sessionsRes.data || [],
     progressionData: progressionRes.data || [],
     activeProgram: programRes.data?.[0] || null,
+    nutritionPlan: nutritionRes.data || null,
+    activeHabits: habitsRes.data || [],
+    recentJournal: journalRes.data || [],
     weeksOfData,
   };
 }
@@ -148,6 +185,21 @@ function buildPrompt(type: InsightType, ctx: any): string {
 
   const dataBlock = JSON.stringify({
     client: clientName,
+    nutrition_plan: ctx.nutritionPlan ? {
+      calories_target: ctx.nutritionPlan.calories_target,
+      protein_g: ctx.nutritionPlan.protein_g,
+      carbs_g: ctx.nutritionPlan.carbs_g,
+      fat_g: ctx.nutritionPlan.fat_g,
+      approach: ctx.nutritionPlan.approach,
+    } : null,
+    active_habits: ctx.activeHabits.map((h: any) => ({ name: h.name, type: h.habit_type, target: h.target })),
+    daily_pulse: ctx.dailyPulse.slice(0, 7).map((c: any) => ({
+      date: c.checkin_date,
+      sleep_score: c.sleep_score,
+      mood_score: c.mood_score,
+      energy_score: c.energy_score,
+      stress_score: c.stress_score,
+    })),
     recent_checkins: ctx.recentCheckins.slice(0, 4).map((c: any) => ({
       date: c.created_at?.split("T")[0],
       weight: c.weight,
@@ -175,6 +227,10 @@ function buildPrompt(type: InsightType, ctx: any): string {
       avg_rpe: p.avg_rpe,
       trend: p.trend,
       weight_change_pct: p.weight_change_pct,
+    })),
+    shared_journal_entries: ctx.recentJournal.map((j: any) => ({
+      date: j.entry_date,
+      excerpt: j.body?.slice(0, 200),
     })),
   }, null, 2);
 
