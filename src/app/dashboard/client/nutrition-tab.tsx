@@ -154,32 +154,37 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     setSearchQ(val)
     clearTimeout(searchTimer.current)
     if (!val.trim()) { setSearchResults([]); return }
-    searchTimer.current = setTimeout(() => doSearch(val), 500)
+    searchTimer.current = setTimeout(() => doSearch(val), 300)
   }
   async function doSearch(q: string) {
     setSearching(true)
     try {
-      // Search all data types — Foundation + SR Legacy give the best basic foods (eggs, chicken, etc)
-      // Branded gives packaged products. No dataType filter = all types.
+      // No sortBy — it breaks results. All dataTypes, no filter.
       const params = new URLSearchParams({
         api_key: USDA_KEY,
         query: q,
-        pageSize: '20',
-        sortBy: 'dataType.keyword',
-        sortOrder: 'asc',
+        pageSize: '15',
       })
       const res = await fetch(FDC_URL+'/foods/search?'+params.toString())
       const data = await res.json()
       const foods = (data.foods || []) as any[]
 
-      // Dedupe by cleaned name + prefer Foundation/SR Legacy over Branded for generics
+      // Prefer Foundation/SR Legacy (government-measured) over Branded
+      const priority = (f: any) => {
+        if (f.dataType === 'Foundation') return 0
+        if (f.dataType === 'SR Legacy') return 1
+        if (f.dataType === 'Survey (FNDDS)') return 2
+        return 3
+      }
+      const sorted = [...foods].sort((a,b) => priority(a) - priority(b))
+
+      // Dedupe by cleaned name
       const seen = new Set<string>()
-      const deduped = foods.filter(f => {
-        const key = cleanFoodName(f.description).toLowerCase().slice(0, 40)
+      const deduped = sorted.filter(f => {
+        const key = cleanFoodName(f.description).toLowerCase().slice(0,40)
         if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      }).slice(0, 12)
+        seen.add(key); return true
+      }).slice(0, 10)
 
       setSearchResults(deduped)
     } catch { setSearchResults([]) }
