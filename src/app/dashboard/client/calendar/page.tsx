@@ -64,6 +64,7 @@ export default function ClientCalendarPage() {
   const router   = useRouter()
 
   const [items,     setItems]     = useState<CalItem[]>([])
+  const [journalDates, setJournalDates] = useState<Set<string>>(new Set())
   const [loading,   setLoading]   = useState(true)
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [viewYear,  setViewYear]  = useState(today.getFullYear())
@@ -87,8 +88,8 @@ export default function ClientCalendarPage() {
       .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
     if (!clientData) { setLoading(false); return }
 
-    // Load both calendar events and workout sessions in parallel
-    const [{ data: calEvts }, { data: sessions }] = await Promise.all([
+    // Load calendar events, workout sessions, and journal entries in parallel
+    const [{ data: calEvts }, { data: sessions }, { data: journals }] = await Promise.all([
       supabase.from('calendar_events').select('*')
         .eq('coach_id', clientData.coach_id)
         .eq('client_id', clientData.id)
@@ -96,7 +97,14 @@ export default function ClientCalendarPage() {
       supabase.from('workout_sessions').select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client')
         .eq('client_id', clientData.id)
         .order('scheduled_date'),
+      supabase.from('journal_entries').select('entry_date, is_private')
+        .eq('client_id', clientData.id)
+        .order('entry_date', { ascending: false })
+        .limit(365),
     ])
+
+    // Store journal dates for dot indicators
+    setJournalDates(new Set((journals || []).map((j:any) => j.entry_date)))
 
     const merged: CalItem[] = []
 
@@ -195,9 +203,12 @@ export default function ClientCalendarPage() {
               { color:'#00c9b1', label:'In progress' },
               { color:'#22c55e', label:'Completed' },
               { color:'#8b5cf6', label:'Coach event' },
+              { color:'#a78bfa', label:'Journal entry', icon:'✍️' },
             ].map(l => (
               <div key={l.label} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:t.textMuted }}>
-                <div style={{ width:8, height:8, borderRadius:'50%', background:l.color, flexShrink:0 }}/>
+                {l.icon
+                  ? <span style={{ fontSize:10 }}>{l.icon}</span>
+                  : <div style={{ width:8, height:8, borderRadius:'50%', background:l.color, flexShrink:0 }}/>}
                 {l.label}
               </div>
             ))}
@@ -232,8 +243,8 @@ export default function ClientCalendarPage() {
                 {cells.map((d, i) => {
                   const isToday  = d ? isSameDay(d, today) : false
                   const dayItems = d ? itemsForDay(d) : []
-                  const hasWorkout = dayItems.some(e => e.type === 'workout')
-                  const hasEvent   = dayItems.some(e => e.type === 'calendar')
+                  const dateStr  = d ? d.toISOString().split('T')[0] : ''
+                  const hasJournal = d ? journalDates.has(dateStr) : false
                   return (
                     <div key={i}
                       onClick={() => { if(d && dayItems.length) setSelected(dayItems[0]) }}
@@ -244,7 +255,7 @@ export default function ClientCalendarPage() {
                         borderRadius: 8,
                         padding: '4px 5px',
                         opacity: d ? 1 : 0.25,
-                        cursor: d && dayItems.length ? 'pointer' : 'default',
+                        cursor: d && (dayItems.length || hasJournal) ? 'pointer' : 'default',
                         position: 'relative' as const,
                       }}>
                       {d && (
@@ -253,11 +264,12 @@ export default function ClientCalendarPage() {
                             {d.getDate()}
                           </div>
                           {/* Dot indicators on mobile */}
-                          {mobile && dayItems.length > 0 && (
-                            <div style={{ display:'flex', gap:2, flexWrap:'wrap' }}>
+                          {mobile && (dayItems.length > 0 || hasJournal) && (
+                            <div style={{ display:'flex', gap:2, flexWrap:'wrap', alignItems:'center' }}>
                               {dayItems.slice(0,3).map(e => (
                                 <div key={e.id} style={{ width:6, height:6, borderRadius:'50%', background:e.color, flexShrink:0 }}/>
                               ))}
+                              {hasJournal && <span style={{ fontSize:8, lineHeight:1 }}>✍️</span>}
                               {dayItems.length > 3 && <div style={{ fontSize:8, color:t.textMuted }}>+{dayItems.length-3}</div>}
                             </div>
                           )}
@@ -268,6 +280,9 @@ export default function ClientCalendarPage() {
                               {e.icon} {e.title}
                             </div>
                           ))}
+                          {!mobile && hasJournal && (
+                            <div style={{ fontSize:9, fontWeight:700, color:'#a78bfa', marginTop:1 }}>✍️ Journal</div>
+                          )}
                           {!mobile && dayItems.length > 2 && (
                             <div style={{ fontSize:8, color:t.textMuted, fontWeight:600 }}>+{dayItems.length-2} more</div>
                           )}

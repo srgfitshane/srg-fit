@@ -89,6 +89,9 @@ export default function ClientDashboard() {
   const [journalPrivate,   setJournalPrivate]   = useState(true)
   const [journalSaved,     setJournalSaved]     = useState(false)
   const [journalSaving,    setJournalSaving]    = useState(false)
+  const [journalDate,      setJournalDate]      = useState('')
+  const [pastEntries,      setPastEntries]      = useState<any[]>([])
+  const [pastEntriesOpen,  setPastEntriesOpen]  = useState(false)
   const router   = useRouter()
   const supabase = createClient()
   const today    = new Date().toISOString().split('T')[0]
@@ -203,7 +206,18 @@ export default function ClientDashboard() {
         if (todayJournal) {
           setJournalText(todayJournal.body || '')
           setJournalPrivate(todayJournal.is_private ?? true)
+          setJournalDate(today)
         }
+
+        // Load past journal entries (last 30, excluding today)
+        const { data: pastData } = await supabase
+          .from('journal_entries')
+          .select('*')
+          .eq('client_id', clientData.id)
+          .neq('entry_date', today)
+          .order('entry_date', { ascending: false })
+          .limit(30)
+        setPastEntries(pastData || [])
       }
 
       setLoading(false)
@@ -251,20 +265,40 @@ export default function ClientDashboard() {
     if (!clientRecord || !journalText.trim()) return
     setJournalSaving(true)
     await supabase.from('journal_entries').upsert({
-      client_id:   clientRecord.id,
-      entry_date:  today,
-      body:        journalText.trim(),
-      is_private:  journalPrivate,
+      client_id:  clientRecord.id,
+      entry_date: today,
+      body:       journalText.trim(),
+      is_private: journalPrivate,
     }, { onConflict: 'client_id,entry_date' })
+    setJournalDate(today)
     setJournalSaving(false)
     setJournalSaved(true)
     setTimeout(() => setJournalSaved(false), 2500)
+    // Refresh past entries list
+    const { data: pastData } = await supabase
+      .from('journal_entries')
+      .select('*')
+      .eq('client_id', clientRecord.id)
+      .neq('entry_date', today)
+      .order('entry_date', { ascending: false })
+      .limit(30)
+    setPastEntries(pastData || [])
   }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  // Reset journal if the client keeps the app open past midnight
+  useEffect(() => {
+    if (journalDate && journalDate !== today) {
+      setJournalText('')
+      setJournalPrivate(true)
+      setJournalSaved(false)
+      setJournalDate(today)
+    }
+  }, [today, journalDate])
 
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif" }}>
@@ -475,6 +509,12 @@ export default function ClientDashboard() {
                   <div style={{ fontSize:14, fontWeight:800 }}>How did today go?</div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Your daily journal</div>
                 </div>
+                {pastEntries.length > 0 && (
+                  <button onClick={()=>setPastEntriesOpen(true)}
+                    style={{ background:'none', border:'1px solid '+t.border, borderRadius:20, padding:'4px 11px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                    Past entries
+                  </button>
+                )}
               </div>
               <textarea
                 value={journalText}
@@ -484,7 +524,6 @@ export default function ClientDashboard() {
                 style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' }}
               />
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10 }}>
-                {/* Privacy toggle */}
                 <button onClick={()=>setJournalPrivate(p=>!p)}
                   style={{ display:'flex', alignItems:'center', gap:7, background:journalPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(journalPrivate?t.border:t.teal+'40'), borderRadius:20, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={journalPrivate?t.textMuted:t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -650,6 +689,48 @@ export default function ClientDashboard() {
             </svg>
           </button>
         </div>
+        )}
+
+        {/* ── Past Journal Entries Sheet ── */}
+        {pastEntriesOpen && (
+          <>
+            <div onClick={()=>setPastEntriesOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40, backdropFilter:'blur(4px)' }}/>
+            <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:41, fontFamily:"'DM Sans',sans-serif", maxHeight:'75vh', display:'flex', flexDirection:'column' }}>
+              <div style={{ padding:'14px 18px 10px', flexShrink:0 }}>
+                <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 16px' }}/>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ fontSize:15, fontWeight:800 }}>✍️ Past Journal Entries</div>
+                  <button onClick={()=>setPastEntriesOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, lineHeight:1 }}>✕</button>
+                </div>
+              </div>
+              <div style={{ overflowY:'auto', padding:'0 18px 32px', flex:1 }}>
+                {pastEntries.length === 0 ? (
+                  <div style={{ textAlign:'center', padding:'40px 0', color:t.textMuted, fontSize:13 }}>No previous entries yet</div>
+                ) : pastEntries.map((entry:any) => (
+                  <div key={entry.id} style={{ borderBottom:'1px solid '+t.border, paddingBottom:14, marginBottom:14 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:t.teal }}>
+                        {new Date(entry.entry_date+'T00:00:00').toLocaleDateString([], { weekday:'short', month:'long', day:'numeric' })}
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={entry.is_private?t.textMuted:t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {entry.is_private
+                            ? <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>
+                            : <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>}
+                        </svg>
+                        <span style={{ fontSize:10, color:entry.is_private?t.textMuted:t.teal, fontWeight:600 }}>
+                          {entry.is_private ? 'Private' : 'Shared'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:13, color:t.textDim, lineHeight:1.6, whiteSpace:'pre-wrap' as const }}>
+                      {entry.body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
 
         {/* ── Log Habit Popup ── */}
