@@ -175,6 +175,35 @@ export default function ClientDashboard() {
           .eq('onboarding_forms.is_checkin_type', true)
           .limit(3)
         setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type))
+
+        // Load today's mental check-in if already submitted
+        const { data: todayCheckin } = await supabase
+          .from('daily_checkins')
+          .select('*')
+          .eq('client_id', clientData.id)
+          .eq('checkin_date', today)
+          .single()
+        if (todayCheckin) {
+          setMentalCheckin({
+            stress: todayCheckin.stress_score || 5,
+            mood:   todayCheckin.mood_score   || 5,
+            energy: todayCheckin.energy_score || 5,
+          })
+          setMentalSubmitted(true)
+          setMentalCollapsed(true)
+        }
+
+        // Load today's journal entry if already written
+        const { data: todayJournal } = await supabase
+          .from('journal_entries')
+          .select('*')
+          .eq('client_id', clientData.id)
+          .eq('entry_date', today)
+          .single()
+        if (todayJournal) {
+          setJournalText(todayJournal.body || '')
+          setJournalPrivate(todayJournal.is_private ?? true)
+        }
       }
 
       setLoading(false)
