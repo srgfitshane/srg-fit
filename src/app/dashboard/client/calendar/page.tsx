@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import ClientBottomNav from '@/components/client/ClientBottomNav'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -400,6 +401,7 @@ export default function ClientCalendarPage() {
           </div>
         </div>
       </div>
+      <ClientBottomNav />
     </>
   )
 }

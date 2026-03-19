@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import ClientBottomNav from '@/components/client/ClientBottomNav'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
@@ -141,7 +142,7 @@ export default function ClientProgressPage() {
   if (loading) return <div style={{color:t.textMuted,padding:40,textAlign:'center'}}>Loading...</div>
 
   return (
-    <div style={{ background:t.bg, minHeight:'100vh', color:t.text, fontFamily:'system-ui,sans-serif', padding:24 }}>
+    <div style={{ background:t.bg, minHeight:'100vh', color:t.text, fontFamily:'system-ui,sans-serif', padding:'24px 24px 0' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24, flexWrap:'wrap', gap:10 }}>
         <div>
           <h1 style={{ fontSize:22, fontWeight:800, margin:0 }}>📈 My Progress</h1>
@@ -438,5 +439,6 @@ export default function ClientProgressPage() {
         </div>
       )}
     </div>
+    <ClientBottomNav />
   )
 }
