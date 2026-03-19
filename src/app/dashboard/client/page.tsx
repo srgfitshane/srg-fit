@@ -80,6 +80,8 @@ export default function ClientDashboard() {
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
+  // Habit daily refresh tracking
+  const [habitLoadDate, setHabitLoadDate] = useState('')
   // Mental health check-in
   const [mentalCheckin,    setMentalCheckin]    = useState({ stress:5, mood:5, energy:5 })
   const [mentalSubmitted,  setMentalSubmitted]  = useState(false)
@@ -133,6 +135,7 @@ export default function ClientDashboard() {
         const logMap: Record<string,number> = {}
         habitLogData?.forEach((l:any) => { logMap[l.habit_id] = l.value })
         setHabitLogs(logMap)
+        setHabitLoadDate(today)
 
         const { data: milestoneData } = await supabase
           .from('milestones')
@@ -229,6 +232,8 @@ export default function ClientDashboard() {
   const logHabit = async (habitId: string, value: number) => {
     if (!clientRecord) return
     setHabitLogs(prev => ({ ...prev, [habitId]: value }))
+
+    // Write to habit_logs (primary log)
     const existing = await supabase
       .from('habit_logs')
       .select('id')
@@ -240,6 +245,29 @@ export default function ClientDashboard() {
       await supabase.from('habit_logs').update({ value }).eq('id', existing.data.id)
     } else {
       await supabase.from('habit_logs').insert({ habit_id: habitId, client_id: clientRecord.id, logged_date: today, value })
+    }
+
+    // Mirror trackable numeric habits into daily_checkins for coach trend view
+    const habit = habits.find((h:any) => h.id === habitId)
+    if (habit && habit.habit_type !== 'check' && value > 0) {
+      const labelKey = habit.label?.toLowerCase().trim()
+      const columnMap: Record<string, string> = {
+        'sleep':        'sleep_hours',
+        'sleep hours':  'sleep_hours',
+        'daily steps':  'steps',
+        'steps':        'steps',
+        'water':        'water_oz',
+        'drink water':  'water_oz',
+        'hydration':    'water_oz',
+      }
+      const col = Object.entries(columnMap).find(([k]) => labelKey?.includes(k))?.[1]
+      if (col) {
+        await supabase.from('daily_checkins').upsert({
+          client_id:    clientRecord.id,
+          checkin_date: today,
+          [col]:        value,
+        }, { onConflict: 'client_id,checkin_date' })
+      }
     }
   }
 
@@ -299,6 +327,14 @@ export default function ClientDashboard() {
       setJournalDate(today)
     }
   }, [today, journalDate])
+
+  // Reset habit logs if the client keeps the app open past midnight
+  useEffect(() => {
+    if (habitLoadDate && habitLoadDate !== today) {
+      setHabitLogs({})
+      setHabitLoadDate(today)
+    }
+  }, [today, habitLoadDate])
 
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif" }}>
@@ -430,24 +466,34 @@ export default function ClientDashboard() {
           </div>
 
           {/* ── 4. TODAY'S WORKOUT ── */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }}/>
+          <div style={{ background:t.surface, border:'1px solid '+(nextSession ? t.border : t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
+            <div style={{ height:3, background: nextSession ? 'linear-gradient(90deg,'+t.teal+','+t.orange+')' : 'linear-gradient(90deg,'+t.purple+','+t.teal+')' }}/>
             <div style={{ padding:'14px 16px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:800 }}>{nextSession ? nextSession.title : "Today's Workout"}</div>
-                  <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
-                    {nextSession ? (nextSession.scheduled_date ? `Scheduled ${nextSession.scheduled_date}` : 'Ready when you are') : 'No workout assigned yet'}
+              {nextSession ? (
+                <>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                    <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:800 }}>{nextSession.title}</div>
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
+                        {nextSession.scheduled_date ? `Scheduled ${nextSession.scheduled_date}` : 'Ready when you are'}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={()=>router.push(`/dashboard/client/workout/${nextSession.id}`)}
+                    style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Start Workout 💪
+                  </button>
+                </>
+              ) : (
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>🛏️</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:800 }}>Rest Day!</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Recovery is part of the program — enjoy it 💜</div>
                   </div>
                 </div>
-              </div>
-              <button
-                onClick={()=>nextSession && router.push(`/dashboard/client/workout/${nextSession.id}`)}
-                disabled={!nextSession}
-                style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:nextSession?'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)':t.surfaceHigh, color:nextSession?'#000':t.textMuted, fontSize:13, fontWeight:800, cursor:nextSession?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
-                {nextSession ? 'Start Workout 💪' : 'No Workout Assigned'}
-              </button>
+              )}
             </div>
           </div>
 
