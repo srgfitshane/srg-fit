@@ -49,6 +49,17 @@ export default function ClientDetail() {
   const [showArchive, setShowArchive] = useState(false)
   const [showDelete,  setShowDelete]  = useState(false)
   const [actioning,   setActioning]   = useState(false)
+  // Check-in schedule
+  const [checkinSchedule,     setCheckinSchedule]     = useState<any>(null)
+  const [checkinAssignments,  setCheckinAssignments]  = useState<any[]>([])
+  const [scheduleForm,        setScheduleForm]        = useState({ send_day:0, send_time:'08:00', active:true })
+  const [scheduleSaving,      setScheduleSaving]      = useState(false)
+  const [scheduleSaved,       setScheduleSaved]       = useState(false)
+  const [sendingNow,          setSendingNow]          = useState(false)
+  const [expandedCheckin,     setExpandedCheckin]     = useState<string|null>(null)
+  const [respondingTo,        setRespondingTo]        = useState<string|null>(null)
+  const [responseText,        setResponseText]        = useState('')
+  const [savingResponse,      setSavingResponse]      = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
@@ -152,6 +163,26 @@ export default function ClientDetail() {
         .eq('client_id', clientId).eq('is_private', false)
         .order('entry_date', { ascending: false }).limit(30)
       setJournalEntries(journalData || [])
+
+      // Check-in schedule + assignment history
+      const { data: schedData } = await supabase
+        .from('check_in_schedules').select('*')
+        .eq('client_id', clientId).eq('coach_id', user.id)
+        .order('created_at', { ascending: false }).limit(1).single()
+      setCheckinSchedule(schedData || null)
+      if (schedData) {
+        setScheduleForm({
+          send_day:  schedData.send_day  ?? 0,
+          send_time: schedData.send_time ?? '08:00',
+          active:    schedData.active    ?? true,
+        })
+      }
+      const { data: assignData } = await supabase
+        .from('client_form_assignments').select('*, form:onboarding_forms(title)')
+        .eq('client_id', clientId)
+        .not('checkin_schedule_id', 'is', null)
+        .order('assigned_at', { ascending: false }).limit(20)
+      setCheckinAssignments(assignData || [])
 
       setLoading(false)
     }
@@ -543,37 +574,243 @@ export default function ClientDetail() {
 
           {/* CHECK-INS TAB */}
           {activeTab === 'checkins' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              {checkins.length === 0 ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+              {/* ── Schedule Card ── */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+                  <div>
+                    <div style={{ fontSize:15, fontWeight:800 }}>📅 Weekly Schedule</div>
+                    <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>
+                      {checkinSchedule?.active
+                        ? `Sends every ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][scheduleForm.send_day]} at ${scheduleForm.send_time}`
+                        : 'No active schedule — check-ins are manual only'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!coachId) return
+                      setScheduleSaving(true)
+                      const now = new Date()
+                      // Calculate next send date
+                      const next = new Date()
+                      next.setDate(now.getDate() + ((scheduleForm.send_day - now.getDay() + 7) % 7 || 7))
+                      const [h, m] = scheduleForm.send_time.split(':')
+                      next.setHours(+h, +m, 0, 0)
+                      if (checkinSchedule) {
+                        await supabase.from('check_in_schedules').update({
+                          send_day:  scheduleForm.send_day,
+                          send_time: scheduleForm.send_time,
+                          active:    scheduleForm.active,
+                          next_send_at: next.toISOString(),
+                        }).eq('id', checkinSchedule.id)
+                        setCheckinSchedule((p:any) => ({ ...p, ...scheduleForm, next_send_at: next.toISOString() }))
+                      } else {
+                        const { data: newSched } = await supabase.from('check_in_schedules').insert({
+                          coach_id: coachId, client_id: clientId,
+                          send_day:  scheduleForm.send_day,
+                          send_time: scheduleForm.send_time,
+                          active:    scheduleForm.active,
+                          frequency: 'weekly',
+                          next_send_at: next.toISOString(),
+                        }).select().single()
+                        setCheckinSchedule(newSched)
+                      }
+                      setScheduleSaving(false)
+                      setScheduleSaved(true)
+                      setTimeout(() => setScheduleSaved(false), 2000)
+                    }}
+                    style={{ background:scheduleSaved?t.greenDim:t.tealDim, border:'1px solid '+(scheduleSaved?t.green:t.teal)+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:scheduleSaved?t.green:t.teal, cursor:scheduleSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {scheduleSaved ? '✓ Saved!' : scheduleSaving ? 'Saving...' : 'Save Schedule'}
+                  </button>
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                  {/* Day picker */}
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Send Day</div>
+                    <select value={scheduleForm.send_day}
+                      onChange={e => setScheduleForm(p => ({ ...p, send_day: +e.target.value }))}
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', outline:'none' }}>
+                      {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i) => (
+                        <option key={i} value={i}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Time picker */}
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Send Time</div>
+                    <input type="time" value={scheduleForm.send_time}
+                      onChange={e => setScheduleForm(p => ({ ...p, send_time: e.target.value }))}
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', outline:'none' }} />
+                  </div>
+                  {/* Active toggle */}
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Status</div>
+                    <button onClick={() => setScheduleForm(p => ({ ...p, active: !p.active }))}
+                      style={{ width:'100%', padding:'10px 12px', borderRadius:9, border:'1px solid '+(scheduleForm.active?t.teal+'40':t.border), background:scheduleForm.active?t.tealDim:t.surfaceHigh, fontSize:13, fontWeight:700, color:scheduleForm.active?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      {scheduleForm.active ? '✓ Active' : '⏸ Paused'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Send Now */}
+                <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid '+t.border }}>
+                  <button
+                    disabled={sendingNow}
+                    onClick={async () => {
+                      if (!coachId || !checkinSchedule) return
+                      setSendingNow(true)
+                      // Find the check-in form (is_checkin_type = true)
+                      const { data: ciForm } = await supabase
+                        .from('onboarding_forms').select('id')
+                        .eq('coach_id', coachId).eq('is_checkin_type', true).limit(1).single()
+                      if (ciForm) {
+                        const { data: newAssign } = await supabase.from('client_form_assignments').insert({
+                          coach_id: coachId, client_id: clientId,
+                          form_id: ciForm.id,
+                          checkin_schedule_id: checkinSchedule.id,
+                          status: 'pending',
+                          note: 'Sent manually by coach',
+                        }).select().single()
+                        if (newAssign) {
+                          setCheckinAssignments(p => [newAssign, ...p])
+                          // Push notification to client
+                          const clientProfile = client?.profile_id
+                          if (clientProfile) {
+                            await supabase.functions.invoke('send-notification', {
+                              body: {
+                                user_id: clientProfile,
+                                notification_type: 'checkin_due',
+                                title: 'Check-in time! 📋',
+                                body: 'Coach Shane sent your weekly check-in. Tap to fill it out.',
+                                link_url: '/dashboard/client/checkin',
+                              }
+                            })
+                          }
+                        }
+                      }
+                      setSendingNow(false)
+                    }}
+                    style={{ background:checkinSchedule?t.orangeDim:'transparent', border:'1px solid '+(checkinSchedule?t.orange+'40':t.border), borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:checkinSchedule?t.orange:t.textMuted, cursor:sendingNow||!checkinSchedule?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!checkinSchedule?0.5:1 }}>
+                    {sendingNow ? 'Sending...' : '📤 Send Check-in Now'}
+                  </button>
+                  {!checkinSchedule && <span style={{ fontSize:11, color:t.textMuted, marginLeft:10 }}>Save a schedule first to enable manual sends</span>}
+                </div>
+              </div>
+
+              {/* ── History ── */}
+              <div style={{ fontSize:13, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
+                History ({checkinAssignments.length})
+              </div>
+
+              {checkinAssignments.length === 0 ? (
                 <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>✅</div>
-                  <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No check-ins yet</div>
-                  <div style={{ fontSize:13, color:t.textMuted }}>Check-ins will appear here once the client submits them</div>
+                  <div style={{ fontSize:32, marginBottom:12 }}>📋</div>
+                  <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No check-ins sent yet</div>
+                  <div style={{ fontSize:13, color:t.textMuted }}>Save a schedule above or use "Send Now" to send the first one</div>
                 </div>
-              ) : checkins.map((c:any) => (
-                <div key={c.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                    <div style={{ fontSize:14, fontWeight:700 }}>{new Date(c.submitted_at).toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
-                    <div style={{ fontSize:11, color:t.textMuted }}>{new Date(c.submitted_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</div>
-                  </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:12 }}>
-                    {[
-                      { label:'Weight',     val: c.weight ? c.weight+'lbs' : '—',           color:t.teal   },
-                      { label:'Sleep',      val: c.sleep_hours ? c.sleep_hours+'hrs' : '—', color:t.purple },
-                      { label:'Motivation', val: c.motivation ? c.motivation+'/10' : '—',   color:t.orange },
-                      { label:'Stress',     val: c.stress ? c.stress+'/10' : '—',           color:t.red    },
-                    ].map(s => (
-                      <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', textAlign:'center' }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
-                        <div style={{ fontSize:18, fontWeight:800, color:s.color }}>{s.val}</div>
+              ) : checkinAssignments.map((a:any) => {
+                const isExpanded = expandedCheckin === a.id
+                const response = a.response || {}
+                const statusColor = a.status === 'completed' ? t.green : a.status === 'pending' ? t.orange : t.textMuted
+                const snoozed = a.snoozed_until && new Date(a.snoozed_until) > new Date()
+                return (
+                  <div key={a.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?t.teal+'40':t.border), borderRadius:16, overflow:'hidden' }}>
+                    {/* Header */}
+                    <div onClick={() => setExpandedCheckin(isExpanded ? null : a.id)}
+                      style={{ display:'flex', alignItems:'center', gap:14, padding:'16px 20px', cursor:'pointer' }}>
+                      <div style={{ width:38, height:38, borderRadius:11, background:a.status==='completed'?t.greenDim:t.orangeDim, border:'1px solid '+(a.status==='completed'?t.green+'40':t.orange+'40'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                        {a.status === 'completed' ? '✅' : snoozed ? '⏰' : '📋'}
                       </div>
-                    ))}
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>
+                          {new Date(a.assigned_at).toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}
+                        </div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>
+                          {a.status === 'completed' && a.completed_at
+                            ? `Submitted ${new Date(a.completed_at).toLocaleDateString([], { month:'short', day:'numeric' })} at ${new Date(a.completed_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`
+                            : snoozed ? `Snoozed until ${new Date(a.snoozed_until).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}` : 'Pending response'}
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:statusColor, textTransform:'capitalize' }}>{a.status}</span>
+                        {a.coach_response && <span style={{ fontSize:10, color:t.teal, background:t.tealDim, borderRadius:20, padding:'2px 8px' }}>Replied</span>}
+                        <span style={{ color:t.textMuted, fontSize:12, transform:isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
+                      </div>
+                    </div>
+
+                    {/* Expanded response */}
+                    {isExpanded && a.status === 'completed' && (
+                      <div style={{ borderTop:'1px solid '+t.border, padding:'16px 20px' }}>
+                        {/* Render response fields */}
+                        {Object.entries(response).length > 0 ? (
+                          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16 }}>
+                            {Object.entries(response).map(([key, val]: any) => (
+                              <div key={key} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 14px' }}>
+                                <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{key.replace(/_/g,' ')}</div>
+                                <div style={{ fontSize:13, color:t.text, lineHeight:1.6 }}>{String(val)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize:13, color:t.textMuted, marginBottom:16 }}>No response data</div>
+                        )}
+
+                        {/* Coach response */}
+                        {a.coach_response ? (
+                          <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
+                            <strong>Your response:</strong> {a.coach_response}
+                            <button onClick={() => { setRespondingTo(a.id); setResponseText(a.coach_response) }}
+                              style={{ marginLeft:10, background:'none', border:'none', color:t.teal, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif", textDecoration:'underline' }}>
+                              Edit
+                            </button>
+                          </div>
+                        ) : respondingTo === a.id ? (
+                          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                            <textarea value={responseText} onChange={e => setResponseText(e.target.value)} rows={3}
+                              placeholder="Write your response to this check-in..."
+                              style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.6 }} />
+                            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                              <button onClick={() => { setRespondingTo(null); setResponseText('') }}
+                                style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                Cancel
+                              </button>
+                              <button disabled={savingResponse || !responseText.trim()}
+                                onClick={async () => {
+                                  setSavingResponse(true)
+                                  await supabase.from('client_form_assignments').update({
+                                    coach_response: responseText,
+                                    coach_responded_at: new Date().toISOString(),
+                                  }).eq('id', a.id)
+                                  setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: responseText } : x))
+                                  setRespondingTo(null); setResponseText(''); setSavingResponse(false)
+                                }}
+                                style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:savingResponse||!responseText.trim()?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                {savingResponse ? 'Saving...' : '✓ Send Response'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setRespondingTo(a.id); setResponseText('') }}
+                            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                            💬 Respond to Check-in
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Pending — show pending state */}
+                    {isExpanded && a.status === 'pending' && (
+                      <div style={{ borderTop:'1px solid '+t.border, padding:'16px 20px', color:t.textMuted, fontSize:13 }}>
+                        {snoozed
+                          ? `Client snoozed this check-in until ${new Date(a.snoozed_until).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}.`
+                          : 'Waiting for client to submit this check-in.'}
+                      </div>
+                    )}
                   </div>
-                  {c.wins && <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {c.wins}</div>}
-                  {c.struggles && <div style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.red, marginBottom:8 }}><strong>Struggles:</strong> {c.struggles}</div>}
-                  {c.coach_note && <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.teal }}><strong>Your note:</strong> {c.coach_note}</div>}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

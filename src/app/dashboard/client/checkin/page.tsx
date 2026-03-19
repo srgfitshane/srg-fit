@@ -53,9 +53,11 @@ const SliderRow = ({ label, value, onChange, color, min=1, max=10, lowLabel='Low
 
 export default function CheckinForm() {
   const [clientRecord, setClientRecord] = useState<any>(null)
+  const [assignment,   setAssignment]   = useState<any>(null)  // pending check-in assignment
   const [alreadyDone,  setAlreadyDone]  = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [submitting,   setSubmitting]   = useState(false)
+  const [snoozing,     setSnoozing]     = useState(false)
   const [done,         setDone]         = useState(false)
   const [step,         setStep]         = useState(0)
   const router   = useRouter()
@@ -88,58 +90,116 @@ export default function CheckinForm() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       const { data: clientData } = await supabase
-        .from('clients')
-        .select('id, coach_id')
-        .eq('profile_id', user.id)
-        .single()
+        .from('clients').select('id, coach_id, profile_id')
+        .eq('profile_id', user.id).single()
       setClientRecord(clientData)
       if (clientData) {
-        const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6)
-        const { data: recent } = await supabase
-          .from('checkins').select('id').eq('client_id', clientData.id)
-          .gte('submitted_at', weekAgo.toISOString()).limit(1)
-        if (recent && recent.length > 0) setAlreadyDone(true)
+        // Find the most recent pending check-in assignment (not snoozed past now)
+        const { data: pending } = await supabase
+          .from('client_form_assignments')
+          .select('*, form:onboarding_forms(title, is_checkin_type)')
+          .eq('client_id', clientData.id)
+          .eq('status', 'pending')
+          .not('checkin_schedule_id', 'is', null)
+          .or(`snoozed_until.is.null,snoozed_until.lte.${new Date().toISOString()}`)
+          .order('assigned_at', { ascending: false })
+          .limit(1).single()
+        if (pending) {
+          setAssignment(pending)
+        } else {
+          // Fall back: check if already done recently (legacy path)
+          const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6)
+          const { data: recent } = await supabase
+            .from('client_form_assignments').select('id')
+            .eq('client_id', clientData.id).eq('status', 'completed')
+            .not('checkin_schedule_id', 'is', null)
+            .gte('completed_at', weekAgo.toISOString()).limit(1)
+          if (recent && recent.length > 0) setAlreadyDone(true)
+        }
       }
       setLoading(false)
     }
     load()
   }, [])
 
+  const handleSnooze = async () => {
+    if (!assignment) return
+    setSnoozing(true)
+    const snoozeUntil = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    await supabase.from('client_form_assignments')
+      .update({ snoozed_until: snoozeUntil.toISOString() })
+      .eq('id', assignment.id)
+    setSnoozing(false)
+    router.push('/dashboard/client')
+  }
+
   const handleSubmit = async () => {
     if (!clientRecord) return
     setSubmitting(true)
-    const now = new Date()
-    const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay())
-    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)
-    await supabase.from('checkins').insert({
-      client_id:          clientRecord.id,
-      coach_id:           clientRecord.coach_id,
-      weight:             weight ? +weight : null,
-      sleep_hours:        sleepHours ? +sleepHours : null,
-      sleep_quality:      sleepQual,
-      mood_score:         moodScore,
-      energy_score:       energy,
-      stress:             stress,
-      hunger_score:       hunger,
-      pain_score:         painScore,
-      pain_notes:         painNotes || null,
-      workout_adherence:  workoutAdh,
-      nutrition_adherence:nutritionAdh,
-      habit_adherence:    habitAdh,
-      wins:               wins || null,
-      struggles:          struggles || null,
-      goals_next_week:    goalsNext || null,
-      coach_message:      coachMessage || null,
-      submitted_at:       now.toISOString(),
-      week_start:         weekStart.toISOString().split('T')[0],
-      week_end:           weekEnd.toISOString().split('T')[0],
-    })
-    setSubmitting(false)
-    setDone(true)
+
+    const responseData = {
+      weight_lbs:          weight || null,
+      pain_score:          painScore,
+      pain_notes:          painNotes || null,
+      mood_score:          moodScore,
+      energy_score:        energy,
+      stress_score:        stress,
+      hunger_score:        hunger,
+      sleep_hours:         sleepHours || null,
+      sleep_quality:       sleepQual,
+      workout_adherence:   workoutAdh,
+      nutrition_adherence: nutritionAdh,
+      habit_adherence:     habitAdh,
+      wins:                wins || null,
+      struggles:           struggles || null,
+      goals_next_week:     goalsNext || null,
+      message_to_coach:    coachMessage || null,
+    }
+
+    if (assignment) {
+      // Save to the assignment record
+      await supabase.from('client_form_assignments').update({
+        status:       'completed',
+        response:     responseData,
+        completed_at: new Date().toISOString(),
+      }).eq('id', assignment.id)
+    } else {
+      // No assignment (manual / legacy path) — still save to legacy checkins for backwards compat
+      const now = new Date()
+      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay())
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)
+      await supabase.from('checkins').insert({
+        client_id: clientRecord.id, coach_id: clientRecord.coach_id,
+        weight: weight ? +weight : null,
+        sleep_hours: sleepHours ? +sleepHours : null, sleep_quality: sleepQual,
+        mood_score: moodScore, energy_score: energy, stress: stress, hunger_score: hunger,
+        pain_score: painScore, pain_notes: painNotes || null,
+        workout_adherence: workoutAdh, nutrition_adherence: nutritionAdh, habit_adherence: habitAdh,
+        wins: wins || null, struggles: struggles || null,
+        goals_next_week: goalsNext || null, coach_message: coachMessage || null,
+        submitted_at: now.toISOString(),
+        week_start: weekStart.toISOString().split('T')[0],
+        week_end: weekEnd.toISOString().split('T')[0],
+      })
+    }
+
+    // Notify coach + trigger AI insights
     if (clientRecord.coach_id) {
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          user_id: clientRecord.coach_id,
+          notification_type: 'checkin_submitted',
+          title: 'Check-in received 📋',
+          body: 'A client just submitted their weekly check-in.',
+          link_url: '/dashboard/coach',
+        }
+      }).catch(() => {})
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'checkin_brief')
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'red_flag')
     }
+
+    setSubmitting(false)
+    setDone(true)
   }
 
   if (loading) return (
@@ -297,6 +357,13 @@ export default function CheckinForm() {
               </button>
             )}
           </div>
+          {/* Snooze — only shown if this is a scheduled check-in */}
+          {assignment && (
+            <button onClick={handleSnooze} disabled={snoozing}
+              style={{ width:'100%', marginTop:10, background:'none', border:'1px solid '+t.border, borderRadius:12, padding:'10px', fontSize:12, fontWeight:600, color:t.textMuted, cursor:snoozing?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              {snoozing ? 'Snoozing...' : '⏰ Remind me in 24 hours'}
+            </button>
+          )}
         </div>
       </div>
       <ClientBottomNav />
