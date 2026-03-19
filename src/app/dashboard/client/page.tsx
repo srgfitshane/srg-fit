@@ -161,11 +161,12 @@ export default function ClientDashboard() {
           .limit(5)
         setWorkoutLogs(wlData || [])
 
-        // Next upcoming workout session
+        // Today's workout session — only show if scheduled for today or already in progress
         const { data: nextSess } = await supabase
           .from('workout_sessions')
-          .select('id, title, scheduled_date')
+          .select('id, title, scheduled_date, status')
           .eq('client_id', clientData.id)
+          .or(`scheduled_date.eq.${today},status.eq.in_progress`)
           .in('status', ['assigned', 'in_progress'])
           .order('scheduled_date', { ascending: true })
           .limit(1)

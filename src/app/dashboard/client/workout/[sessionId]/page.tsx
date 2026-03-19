@@ -127,6 +127,15 @@ export default function ActiveWorkoutPage() {
     setSetData(prev => ({ ...prev, [exId]: [...prev[exId], defaultSet()] }))
   }
 
+  async function cancelWorkout() {
+    // Reset session back to assigned so it can be started again
+    await supabase.from('workout_sessions').update({
+      status: 'assigned',
+      started_at: null,
+    }).eq('id', sessionId)
+    router.push('/dashboard/client')
+  }
+
   async function finishWorkout() {
     setSaving(true)
     await supabase.from('workout_sessions').update({
@@ -164,7 +173,7 @@ export default function ActiveWorkoutPage() {
     <div style={{minHeight:'100vh',background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',color:t.textMuted,fontFamily:"'DM Sans',sans-serif"}}>Loading workout...</div>
   )
 
-  if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t}/>
+  if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase}/>
 
   return (
     <>
@@ -174,13 +183,17 @@ export default function ActiveWorkoutPage() {
 
         {/* Top bar */}
         <div style={{background:t.surface,borderBottom:`1px solid ${t.border}`,padding:'12px 16px',display:'flex',alignItems:'center',gap:12,position:'sticky',top:0,zIndex:50}}>
-          <button onClick={()=>router.push('/dashboard/client')}
+          <button onClick={cancelWorkout}
             style={{background:'none',border:'none',color:t.textDim,cursor:'pointer',fontSize:20,lineHeight:1}}>←</button>
           <div style={{flex:1}}>
             <div style={{fontWeight:800,fontSize:15}}>{session?.title}</div>
             {session?.day_label && <div style={{fontSize:11,color:t.textDim}}>{session.day_label}</div>}
           </div>
           <div style={{fontSize:16,fontWeight:800,color:t.teal,fontVariantNumeric:'tabular-nums'}}>⏱ {fmtTime(elapsedSeconds)}</div>
+          <button onClick={cancelWorkout}
+            style={{background:t.redDim,border:'1px solid '+t.red+'40',borderRadius:8,padding:'5px 11px',fontSize:11,fontWeight:700,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+            Cancel
+          </button>
         </div>
 
         {/* Rest timer banner */}
@@ -360,11 +373,13 @@ export default function ActiveWorkoutPage() {
   )
 }
 
-function WorkoutComplete({ session, elapsed, router, t }: any) {
+function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase }: any) {
   const fmtTime = (s: number) => `${Math.floor(s/60)}m ${s%60}s`
   const [countdown, setCountdown] = useState(4)
+  const [cancelled, setCancelled] = useState(false)
 
   useEffect(() => {
+    if (cancelled) return
     const interval = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
@@ -376,7 +391,17 @@ function WorkoutComplete({ session, elapsed, router, t }: any) {
       })
     }, 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [cancelled])
+
+  const goBack = async () => {
+    setCancelled(true)
+    // Revert session back to in_progress so they can finish
+    await supabase.from('workout_sessions').update({
+      status: 'in_progress',
+      completed_at: null,
+    }).eq('id', sessionId)
+    router.back()
+  }
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
@@ -391,8 +416,12 @@ function WorkoutComplete({ session, elapsed, router, t }: any) {
           Crushed it. Your coach will review this session and leave feedback. Be Kind to Yourself & Stay Awesome 💪
         </p>
         <button onClick={()=>router.push('/dashboard/client')}
-          style={{background:t.accent,border:'none',borderRadius:14,padding:'14px 32px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-          Back to Dashboard {countdown > 0 ? `(${countdown})` : ''}
+          style={{background:t.accent,border:'none',borderRadius:14,padding:'14px 32px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
+          Back to Dashboard {!cancelled && countdown > 0 ? `(${countdown})` : ''}
+        </button>
+        <button onClick={goBack}
+          style={{background:'none',border:'1px solid '+t.border,borderRadius:14,padding:'10px 24px',fontSize:13,fontWeight:600,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+          Wait — I'm not done yet
         </button>
       </div>
     </>
