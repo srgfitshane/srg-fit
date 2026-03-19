@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -43,6 +43,12 @@ export default function ClientCommunityPage() {
   const [replyOpen,    setReplyOpen]    = useState<string|null>(null)
   const [replyPosting, setReplyPosting] = useState<string|null>(null)
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
+  // Media attach
+  const [mediaFile,    setMediaFile]    = useState<File|null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string|null>(null)
+  const [mediaType,    setMediaType]    = useState<'image'|'video'|null>(null)
+  const [uploading,    setUploading]    = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load() }, [])
 
@@ -110,13 +116,49 @@ export default function ClientCommunityPage() {
     return () => { supabase.removeChannel(ch) }
   }, [coachId])
 
+  const attachMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const isVideo = file.type.startsWith('video/')
+    const isImage = file.type.startsWith('image/')
+    if (!isVideo && !isImage) return
+    setMediaFile(file)
+    setMediaType(isVideo ? 'video' : 'image')
+    setMediaPreview(URL.createObjectURL(file))
+    e.target.value = ''
+  }
+
+  const clearMedia = () => {
+    if (mediaPreview) URL.revokeObjectURL(mediaPreview)
+    setMediaFile(null); setMediaPreview(null); setMediaType(null)
+  }
+
   const post = async () => {
-    if (!draft.trim() || !me || !coachId) return
+    if (!draft.trim() && !mediaFile) return
+    if (!me || !coachId) return
     setPosting(true)
+    let imageUrl: string|null = null
+    let videoUrl: string|null = null
+    if (mediaFile && mediaType) {
+      setUploading(true)
+      const ext  = mediaFile.name.split('.').pop()
+      const path = `${me.id}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('community-media').upload(path, mediaFile, { upsert: false })
+      if (!error) {
+        const { data: urlData } = supabase.storage.from('community-media').getPublicUrl(path)
+        if (mediaType === 'image') imageUrl = urlData.publicUrl
+        else videoUrl = urlData.publicUrl
+      }
+      setUploading(false)
+    }
     await supabase.from('community_posts').insert({
-      coach_id: coachId, author_id: me.id, author_role: 'client', body: draft.trim()
+      coach_id: coachId, author_id: me.id, author_role: 'client',
+      body: draft.trim(),
+      ...(imageUrl && { image_url: imageUrl }),
+      ...(videoUrl && { video_url: videoUrl }),
     })
-    setDraft(''); setPosting(false); await loadPosts()
+    setDraft(''); clearMedia(); setPosting(false); await loadPosts()
   }
 
   const submitReply = async (postId: string) => {
@@ -198,10 +240,41 @@ export default function ClientCommunityPage() {
                   placeholder="Share a win, ask a question, hype someone up... 🔥"
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", lineHeight:1.5 }}
                 />
-                <div style={{ display:'flex', justifyContent:'flex-end', marginTop:6 }}>
-                  <button onClick={post} disabled={posting||!draft.trim()}
-                    style={{ background:draft.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':'transparent', border:'1px solid '+(draft.trim()?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:draft.trim()?'#000':t.textMuted, cursor:posting||!draft.trim()?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {posting ? '...' : 'Post 🔥'}
+
+                {/* Media preview */}
+                {mediaPreview && (
+                  <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
+                    {mediaType === 'image'
+                      ? <img src={mediaPreview} alt="attach" style={{ width:'100%', maxHeight:240, objectFit:'cover', display:'block' }}/>
+                      : <video src={mediaPreview} controls style={{ width:'100%', maxHeight:240, display:'block' }}/>
+                    }
+                    <button onClick={clearMedia}
+                      style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* Toolbar */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
+                  <div style={{ display:'flex', gap:6 }}>
+                    {/* Hidden file input — accepts images + videos */}
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={attachMedia}
+                      style={{ display:'none' }}/>
+                    <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','image/*'); fileInputRef.current?.click() }}
+                      title="Add photo"
+                      style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>
+                      🖼️
+                    </button>
+                    <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','video/*'); fileInputRef.current?.click() }}
+                      title="Add video"
+                      style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>
+                      🎥
+                    </button>
+                  </div>
+                  <button onClick={post} disabled={posting || uploading || (!draft.trim() && !mediaFile)}
+                    style={{ background:(draft.trim()||mediaFile)?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':'transparent', border:'1px solid '+((draft.trim()||mediaFile)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {uploading ? 'Uploading...' : posting ? '...' : 'Post 🔥'}
                   </button>
                 </div>
               </div>
@@ -242,7 +315,21 @@ export default function ClientCommunityPage() {
                   </div>
 
                   {/* Body */}
-                  <div style={{ fontSize:13, lineHeight:1.65, marginBottom:10 }}>{p.body}</div>
+                  {p.body && <div style={{ fontSize:13, lineHeight:1.65, marginBottom:10 }}>{p.body}</div>}
+
+                  {/* Media */}
+                  {p.image_url && (
+                    <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
+                      <img src={p.image_url} alt="" style={{ width:'100%', maxHeight:320, objectFit:'cover', display:'block', cursor:'pointer' }}
+                        onClick={()=>window.open(p.image_url,'_blank')}/>
+                    </div>
+                  )}
+                  {p.video_url && (
+                    <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
+                      <video src={p.video_url} controls playsInline
+                        style={{ width:'100%', maxHeight:320, display:'block', background:'#000' }}/>
+                    </div>
+                  )}
 
                   {/* Reactions + Reply */}
                   <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
