@@ -19,7 +19,8 @@ const t = {
 
 const TABS = [
   { id:'overview',   label:'Overview',   icon:'👤' },
-  { id:'program',    label:'Program',    icon:'💪' },
+  { id:'workouts',   label:'Workouts',   icon:'💪' },
+  { id:'program',    label:'Program',    icon:'📋' },
   { id:'nutrition',  label:'Nutrition',  icon:'🥗' },
   { id:'checkins',   label:'Check-ins',  icon:'✅' },
   { id:'pulse',      label:'Daily Pulse',icon:'🧠' },
@@ -36,6 +37,8 @@ export default function ClientDetail() {
   const [checkins, setCheckins] = useState<any[]>([])
   const [metrics,  setMetrics]  = useState<any[]>([])
   const [workouts, setWorkouts] = useState<any[]>([])
+  const [expandedWorkout,    setExpandedWorkout]    = useState<string|null>(null)
+  const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
   const [program,       setProgram]       = useState<any>(null)
   const [dailyPulse,    setDailyPulse]    = useState<any[]>([])
@@ -52,6 +55,16 @@ export default function ClientDetail() {
   const supabase = createClient()
   const clientId = params.id as string
 
+  async function loadWorkoutDetail(sessionId: string) {
+    if (workoutDetails[sessionId]) { setExpandedWorkout(sessionId); return }
+    const [{ data: exs }, { data: sets }] = await Promise.all([
+      supabase.from('session_exercises').select('*').eq('session_id', sessionId).order('order_index'),
+      supabase.from('exercise_sets').select('*').eq('session_id', sessionId).order('set_number'),
+    ])
+    setWorkoutDetails(prev => ({ ...prev, [sessionId]: { exercises: exs||[], sets: sets||[] } }))
+    setExpandedWorkout(sessionId)
+  }
+
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -60,7 +73,7 @@ export default function ClientDetail() {
 
       const { data: clientData } = await supabase
         .from('clients')
-        .select(`*, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)`)
+        .select('*, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)')
         .eq('id', clientId)
         .single()
       setClient(clientData)
@@ -94,7 +107,7 @@ export default function ClientDetail() {
         .select('*')
         .eq('client_id', clientId)
         .order('scheduled_date', { ascending: false })
-        .limit(5)
+        .limit(20)
       setWorkouts(workoutData || [])
 
       const { data: nutritionData } = await supabase
@@ -243,7 +256,7 @@ export default function ClientDetail() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{'*{box-sizing:border-box;margin:0;padding:0;}body{background:'+t.bg+';}'}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
@@ -419,6 +432,102 @@ export default function ClientDetail() {
           )}
 
 
+          {/* ── WORKOUTS TAB ── */}
+          {activeTab === 'workouts' && (
+            <div>
+              <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Workout Sessions</div>
+              <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap any session to see the full set-by-set log.</div>
+              {workouts.length === 0 ? (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
+                  No workout sessions yet.
+                </div>
+              ) : workouts.map((w:any) => {
+                const isExpanded = expandedWorkout === w.id
+                const detail = workoutDetails[w.id]
+                const statusColor = w.status === 'completed' ? t.green : w.status === 'in_progress' ? t.orange : t.textMuted
+                const fmtDuration = (s:number) => s ? Math.floor(s/60)+'m '+s%60+'s' : null
+                return (
+                  <div key={w.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?t.teal+'50':t.border), borderRadius:16, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
+                    {/* Session header — tap to expand */}
+                    <div onClick={()=>{ isExpanded ? setExpandedWorkout(null) : loadWorkoutDetail(w.id) }}
+                      style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', cursor:'pointer' }}>
+                      <div style={{ width:40, height:40, borderRadius:12, background:w.status==='completed'?t.greenDim:t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green+'40':t.orange+'40'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                        {w.status==='completed'?'✅':'💪'}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{w.title || w.name || 'Workout Session'}</div>
+                        <div style={{ fontSize:11, color:t.textMuted, display:'flex', gap:10, flexWrap:'wrap' as const }}>
+                          <span>{new Date(w.scheduled_date||w.created_at).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</span>
+                          {w.duration_seconds && <span>⏱ {fmtDuration(w.duration_seconds)}</span>}
+                          {w.session_rpe && <span>RPE {w.session_rpe}/10</span>}
+                          {w.mood && <span>{w.mood}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:statusColor, textTransform:'capitalize' as const }}>{w.status}</span>
+                        <span style={{ color:t.textMuted, fontSize:14, transform: isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
+                      </div>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div style={{ borderTop:'1px solid '+t.border, padding:'16px 18px' }}>
+                        {!detail ? (
+                          <div style={{ color:t.textMuted, fontSize:13, textAlign:'center' as const }}>Loading...</div>
+                        ) : detail.exercises.length === 0 ? (
+                          <div style={{ color:t.textMuted, fontSize:13, textAlign:'center' as const }}>No exercises logged for this session.</div>
+                        ) : detail.exercises.map((ex:any) => {
+                          const exSets = detail.sets.filter((s:any) => s.session_exercise_id === ex.id)
+                          const hasVideo = ex.client_video_url
+                          return (
+                            <div key={ex.id} style={{ marginBottom:16 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                                <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>{ex.exercise_name}</div>
+                                <div style={{ fontSize:11, color:t.textMuted }}>Target: {ex.sets_prescribed}×{ex.reps_prescribed}{ex.weight_prescribed?' @ '+ex.weight_prescribed:''}</div>
+                                {hasVideo && (
+                                  <a href={ex.client_video_url} target="_blank" rel="noreferrer"
+                                    style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color:t.purple, background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:20, padding:'3px 10px', textDecoration:'none' }}>
+                                    📹 Form Check
+                                  </a>
+                                )}
+                              </div>
+                              {exSets.length > 0 ? (
+                                <div style={{ background:t.surfaceHigh, borderRadius:10, overflow:'hidden' }}>
+                                  <div style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', gap:0, padding:'6px 12px', borderBottom:'1px solid '+t.border }}>
+                                    {['Set','Reps','Weight','RPE','Notes'].map(h=>(
+                                      <div key={h} style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>{h}</div>
+                                    ))}
+                                  </div>
+                                  {exSets.map((s:any,i:number)=>(
+                                    <div key={s.id} style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', gap:0, padding:'8px 12px', borderBottom: i<exSets.length-1?'1px solid '+t.border+'66':'none', background: s.is_warmup?t.orangeDim:'transparent' }}>
+                                      <div style={{ fontSize:12, fontWeight:700, color:s.is_warmup?t.orange:t.textDim }}>{s.is_warmup?'W':s.set_number}</div>
+                                      <div style={{ fontSize:13, fontWeight:700 }}>{s.reps_completed||'—'}</div>
+                                      <div style={{ fontSize:13, fontWeight:700 }}>{s.weight_value!=null ? s.weight_value+(s.weight_unit||'lbs') : s.weight_unit==='bw' ? 'BW' : '—'}</div>
+                                      <div style={{ fontSize:13, fontWeight:700, color:s.rpe>=8?t.red:s.rpe>=6?t.orange:t.green }}>{s.rpe||'—'}</div>
+                                      <div style={{ fontSize:11, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{s.notes||'—'}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize:12, color:t.textMuted, fontStyle:'italic' }}>Sets not logged individually</div>
+                              )}
+                            </div>
+                          )
+                        })}
+                        {/* Client notes */}
+                        {w.notes_client && (
+                          <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.teal, marginTop:8 }}>
+                            <strong>Client note:</strong> {w.notes_client}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           {/* CHECK-INS TAB */}
           {activeTab === 'checkins' && (
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -570,7 +679,7 @@ export default function ClientDetail() {
                   Cancel
                 </button>
                 <button onClick={assignForm} disabled={!assignFormId || assigning || assignedDone}
-                  style={{ flex:2, background:assignedDone?t.green:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:assignedDone?'#000':'#fff', cursor:!assignFormId||assigning||assignedDone?'not-allowed':'pointer', opacity:!assignFormId||assigning?.5:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
+                  style={{ flex:2, background:assignedDone?t.green:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:assignedDone?'#000':'#fff', cursor:!assignFormId||assigning||assignedDone?'not-allowed':'pointer', opacity:!assignFormId||assigning?0.5:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
                   {assignedDone ? '✓ Form Sent!' : assigning ? 'Sending...' : '📝 Send Form'}
                 </button>
               </div>
@@ -842,10 +951,10 @@ function CoachMetricsTab({ metrics, t }: { metrics: any[], t: any }) {
       {/* Summary stats */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:10 }}>
         {[
-          { label:'Current Weight', val: latest?.weight ? `${latest.weight} lbs` : '—', color: t.teal },
-          { label:'Weight Change', val: wChange !== null ? `${wChange > 0 ? '+' : ''}${wChange} lbs` : '—', color: wChange !== null ? (wChange < 0 ? t.green : t.red) : t.textMuted },
-          { label:'Body Fat', val: latest?.body_fat ? `${latest.body_fat}%` : '—', color: t.orange },
-          { label:'BF% Change', val: bfChange !== null ? `${bfChange > 0 ? '+' : ''}${bfChange}%` : '—', color: bfChange !== null ? (bfChange < 0 ? t.green : t.red) : t.textMuted },
+          { label:'Current Weight', val: latest?.weight ? latest.weight+' lbs' : '—', color: t.teal },
+          { label:'Weight Change', val: wChange !== null ? (wChange > 0 ? '+' : '')+wChange+' lbs' : '—', color: wChange !== null ? (wChange < 0 ? t.green : t.red) : t.textMuted },
+          { label:'Body Fat', val: latest?.body_fat ? latest.body_fat+'%' : '—', color: t.orange },
+          { label:'BF% Change', val: bfChange !== null ? (bfChange > 0 ? '+' : '')+bfChange+'%' : '—', color: bfChange !== null ? (bfChange < 0 ? t.green : t.red) : t.textMuted },
           { label:'Entries', val: metrics.length, color: t.purple },
         ].map(s => (
           <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px' }}>
@@ -1015,7 +1124,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
           </div>
           {checkinForms.length > 0 && (
             <button onClick={()=>setShowSchedule(true)}
-              style={{ background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              style={{ background:'linear-gradient(135deg,${t.purple},${t.purple}cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               + Schedule Check-in
             </button>
           )}
@@ -1070,7 +1179,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
               </div>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={()=>setShowSchedule(false)} style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
-                <button onClick={saveSchedule} disabled={!schedFormId||scheduling} style={{ flex:2, background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#fff', cursor:!schedFormId||scheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!schedFormId||scheduling?.5:1 }}>
+                <button onClick={saveSchedule} disabled={!schedFormId||scheduling} style={{ flex:2, background:'linear-gradient(135deg,${t.purple},${t.purple}cc)', border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#fff', cursor:!schedFormId||scheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!schedFormId||scheduling?.5:1 }}>
                   {scheduling ? 'Saving...' : '📅 Save Schedule'}
                 </button>
               </div>
@@ -1083,7 +1192,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
       <div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
           <div style={{ fontSize:14, fontWeight:800 }}>📝 Sent Forms ({assignments.length})</div>
-          <button onClick={onAssign} style={{ background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Send Form</button>
+          <button onClick={onAssign} style={{ background:'linear-gradient(135deg,${t.purple},${t.purple}cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Send Form</button>
         </div>
 
         {assignments.length === 0 ? (
@@ -1134,7 +1243,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
       const { data } = await supabase
         .from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${coachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${coachId})`)
+        .or('and(sender_id.eq.${coachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${coachId})')
         .order('created_at', { ascending: true })
       setThread(data || [])
       // Mark incoming as read
@@ -1148,7 +1257,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
   useEffect(() => {
     if (!profileId) return
     const channel = supabase.channel('mini-thread-' + profileId)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:`recipient_id=eq.${coachId}` }, (payload) => {
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:'recipient_id=eq.${coachId}' }, (payload) => {
         const msg = payload.new as any
         if (msg.sender_id === profileId) {
           setThread(prev => [...prev, msg])
@@ -1183,7 +1292,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
       {/* Header */}
       <div style={{ padding:'14px 18px', borderBottom:'1px solid '+c.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ fontSize:13, fontWeight:800 }}>💬 Messages</div>
-        <a href={`/dashboard/coach/messages?client=${client.id}`}
+        <a href={'/dashboard/coach/messages?client=${client.id}'}
           style={{ fontSize:11, fontWeight:700, color:c.teal, textDecoration:'none' }}>
           Open full view →
         </a>
@@ -1219,7 +1328,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
       <div style={{ borderTop:'1px solid '+c.border, padding:'12px 16px', display:'flex', gap:8, alignItems:'flex-end' }}>
         <textarea ref={inputRef}
           value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={handleKey}
-          placeholder={`Message ${client.profile?.full_name?.split(' ')[0] || 'client'}...`}
+          placeholder={'Message '+(client.profile?.full_name?.split(' ')[0] || 'client')+'...'}
           rows={1}
           style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:10, padding:'9px 12px', fontSize:13, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:100, overflowY:'auto' }}
           onInput={e=>{ const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px' }}
@@ -1301,7 +1410,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:2 }}>Assigned Program</div>
             <div style={{ fontSize:12, color:t.textMuted }}>
-              {program ? `Currently: ${program.name}` : 'No program assigned yet'}
+              {program ? 'Currently: ${program.name}' : 'No program assigned yet'}
             </div>
           </div>
           <button onClick={() => router.push('/dashboard/coach/programs')}
@@ -1326,14 +1435,14 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                 {clientProgs.length > 0 && (
                   <optgroup label="Client Programs">
                     {clientProgs.map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.name}{p.goal ? ` · ${p.goal}` : ''}</option>
+                      <option key={p.id} value={p.id}>{p.name}{p.goal ? ' · ${p.goal}' : ''}</option>
                     ))}
                   </optgroup>
                 )}
                 {templates.length > 0 && (
                   <optgroup label="Templates (will assign a copy)">
                     {templates.map((p: any) => (
-                      <option key={p.id} value={p.id}>📐 {p.name}{p.goal ? ` · ${p.goal}` : ''}</option>
+                      <option key={p.id} value={p.id}>📐 {p.name}{p.goal ? ' · ${p.goal}' : ''}</option>
                     ))}
                   </optgroup>
                 )}
@@ -1347,7 +1456,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
 
             {dirty && (
               <button onClick={saveAssignment} disabled={saving}
-                style={{ width:'100%', background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.7:1 }}>
+                style={{ width:'100%', background:'linear-gradient(135deg,${t.teal},${t.teal}cc)', border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.7:1 }}>
                 {saving ? 'Saving...' : '💾 Save Program Assignment'}
               </button>
             )}
@@ -1363,7 +1472,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
       {/* Active program details */}
       {program && (
         <div style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:16, padding:20 }}>
-          <div style={{ height:3, background:`linear-gradient(90deg,${t.teal},${t.orange})`, borderRadius:3, marginBottom:16, marginTop:-20, marginLeft:-20, marginRight:-20 }} />
+          <div style={{ height:3, background:'linear-gradient(90deg,${t.teal},${t.orange})', borderRadius:3, marginBottom:16, marginTop:-20, marginLeft:-20, marginRight:-20 }} />
           <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>{program.name}</div>
           {program.description && <div style={{ fontSize:13, color:t.textMuted, marginBottom:14, lineHeight:1.6 }}>{program.description}</div>}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:14 }}>
