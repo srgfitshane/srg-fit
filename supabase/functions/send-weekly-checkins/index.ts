@@ -9,7 +9,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  * and advances next_send_at by 7 days.
  *
  * To schedule via Supabase Dashboard:
- *   Cron expression: every 15 min → */15 * * * *
+ *   Cron expression: every 15 min (asterisk-slash-15 asterisk asterisk asterisk asterisk)
  *   HTTP POST to: /functions/v1/send-weekly-checkins
  */
 
