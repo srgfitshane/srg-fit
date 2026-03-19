@@ -672,7 +672,7 @@ export default function ClientDetail() {
                     </select>
                     <button
                       onClick={() => {
-                        const target = scheduleForm.form_id || forms.find((f:any) => f.is_checkin_type)?.id
+                        const target = scheduleForm.form_id || forms.find((f:any) => f.form_type === 'check_in' || f.is_checkin_type)?.id
                         if (target) router.push(`/dashboard/coach/onboarding?edit=${target}`)
                         else router.push('/dashboard/coach/onboarding')
                       }}
