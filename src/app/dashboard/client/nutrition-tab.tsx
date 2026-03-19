@@ -168,12 +168,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   function pickUSDAFood(food: any) {
     const nutrients = food.foodNutrients || []
     const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? Math.round(n.value*10)/10 : null }
-    setPendingFood({ food_name: food.description, calories: get('energy'), protein_g: get('protein'), carbs_g: get('carbohydrate'), fat_g: get('total lipid'), serving_size: food.servingSize ? `${food.servingSize}${food.servingSizeUnit||'g'}` : '100g' })
+    setPendingFood({ food_name: food.description, calories: get('energy'), protein_g: get('protein'), carbs_g: get('carbohydrate'), fat_g: get('total lipid'), serving_size: food.servingSize ? food.servingSize+(food.servingSizeUnit||'g') : '100g' })
   }
 
   // ── Barcode scanner (Quagga via CDN) ──────────────────────────────────────
+  const detectedRef = useRef(false)
+
   async function startScanner() {
-    setScannerActive(true); setBarcodeErr('')
+    setScannerActive(true); setBarcodeErr(''); detectedRef.current = false
     if (!(window as any).Quagga) {
       await new Promise<void>((resolve, reject) => {
         const s = document.createElement('script')
@@ -187,18 +189,31 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     quaggaRef.current = Quagga
     setTimeout(() => {
       Quagga.init({
-        inputStream: { name:'Live', type:'LiveStream', target: scannerRef.current, constraints: { facingMode:'environment', width:320, height:240 } },
+        inputStream: { name:'Live', type:'LiveStream', target: scannerRef.current, constraints: { facingMode:'environment', width:400, height:300 } },
         decoder: { readers: ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'] },
         locate: true,
+        numOfWorkers: 2,
+        frequency: 10,
       }, (err: any) => {
         if (err) { setBarcodeErr('Camera access denied or unavailable.'); setScannerActive(false); return }
         Quagga.start()
       })
       Quagga.onDetected((result: any) => {
+        // Guard against duplicate fires
+        if (detectedRef.current) return
         const code = result?.codeResult?.code
-        if (code) { Quagga.stop(); setScannerActive(false); lookupBarcode(code) }
+        const errors = result?.codeResult?.decodedCodes?.filter((x:any) => x.error != null).map((x:any) => x.error) || []
+        const avgErr = errors.length ? errors.reduce((a:number,b:number)=>a+b,0)/errors.length : 1
+        // Only accept if confidence is reasonable (avg error below 0.15)
+        if (!code || avgErr > 0.15) return
+        detectedRef.current = true
+        setTimeout(() => {
+          try { Quagga.stop() } catch {}
+          setScannerActive(false)
+          lookupBarcode(code)
+        }, 100)
       })
-    }, 100)
+    }, 150)
   }
   function stopScanner() {
     if (quaggaRef.current) { try { quaggaRef.current.stop() } catch {} }
