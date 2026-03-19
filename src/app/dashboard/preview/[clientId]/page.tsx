@@ -53,6 +53,18 @@ export default function CoachProxyDashboard() {
 
   useEffect(() => {
     if (!clientId) return
+    // Reset all state when switching clients so stale data never bleeds through
+    setClientProfile(null)
+    setClientRecord(null)
+    setHabits([])
+    setHabitLogs({})
+    setMilestones([])
+    setRecentPRs([])
+    setWorkoutLogs([])
+    setNextSession(null)
+    setPendingCheckins([])
+    setActiveNav('today')
+    setLoading(true)
     const load = async () => {
       // Verify coach is logged in
       const { data: { user } } = await supabase.auth.getUser()

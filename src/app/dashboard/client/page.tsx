@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import RichMessageThread from '@/components/messaging/RichMessageThread'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import NutritionTab from './nutrition-tab'
@@ -66,6 +66,14 @@ const NavIcon = ({ id, active }: { id: string, active: boolean }) => {
 }
 
 export default function ClientDashboard() {
+  return (
+    <Suspense fallback={null}>
+      <ClientDashboardInner />
+    </Suspense>
+  )
+}
+
+function ClientDashboardInner() {
   const [profile,      setProfile]      = useState<any>(null)
   const [clientRecord, setClientRecord] = useState<any>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
@@ -95,7 +103,8 @@ export default function ClientDashboard() {
   const [journalDate,      setJournalDate]      = useState('')
   const [pastEntries,      setPastEntries]      = useState<any[]>([])
   const [pastEntriesOpen,  setPastEntriesOpen]  = useState(false)
-  const router   = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const today    = new Date().toISOString().split('T')[0]
 
@@ -228,6 +237,16 @@ export default function ClientDashboard() {
       setLoading(false)
     }
     load()
+
+    // Read ?tab param from bottom nav (e.g. coming from Resources page)
+    const tab = searchParams.get('tab')
+    if (tab) setActiveNav(tab)
+
+    // Midnight refresh — re-run when the date rolls over so Today tab stays fresh
+    const now = new Date()
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime()
+    const midnightTimer = setTimeout(() => { load() }, msUntilMidnight)
+    return () => clearTimeout(midnightTimer)
   }, [])
 
 

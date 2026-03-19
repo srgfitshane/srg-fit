@@ -1,5 +1,6 @@
 'use client'
-import { useRouter, usePathname } from 'next/navigation'
+import { Suspense } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 
 const t = {
   surface: '#0f0f1a', border: '#252538',
@@ -7,11 +8,11 @@ const t = {
 }
 
 const NAV = [
-  { id: 'today',     label: 'Home',      path: '/dashboard/client' },
-  { id: 'nutrition', label: 'Nutrition', path: '/dashboard/client' },
-  { id: 'resources', label: 'Resources', path: '/dashboard/client/resources' },
-  { id: 'messages',  label: 'Messages',  path: '/dashboard/client' },
-  { id: 'metrics',   label: 'Metrics',   path: '/dashboard/client/progress' },
+  { id: 'today',     label: 'Home',      path: '/dashboard/client',           tab: 'today'     },
+  { id: 'nutrition', label: 'Nutrition', path: '/dashboard/client',           tab: 'nutrition' },
+  { id: 'resources', label: 'Resources', path: '/dashboard/client/resources', tab: ''          },
+  { id: 'messages',  label: 'Messages',  path: '/dashboard/client',           tab: 'messages'  },
+  { id: 'metrics',   label: 'Metrics',   path: '/dashboard/client/progress',  tab: ''          },
 ]
 
 const NavIcon = ({ id, active }: { id: string; active: boolean }) => {
@@ -46,21 +47,38 @@ const NavIcon = ({ id, active }: { id: string; active: boolean }) => {
 }
 
 export default function ClientBottomNav() {
-  const router   = useRouter()
-  const pathname = usePathname()
+  return (
+    <Suspense fallback={null}>
+      <BottomNavInner />
+    </Suspense>
+  )
+}
+
+function BottomNavInner() {
+  const router       = useRouter()
+  const pathname     = usePathname()
+  const searchParams = useSearchParams()
 
   const active = (() => {
-    if (pathname === '/dashboard/client') return 'today'
-    if (pathname.startsWith('/dashboard/client/resources'))                                           return 'resources'
+    if (pathname.startsWith('/dashboard/client/resources'))                                              return 'resources'
     if (pathname.startsWith('/dashboard/client/progress') || pathname.startsWith('/dashboard/client/metrics')) return 'metrics'
-    if (pathname.startsWith('/dashboard/client/community'))                                           return 'messages'
+    if (pathname.startsWith('/dashboard/client/community'))                                              return 'messages'
+    if (pathname === '/dashboard/client') {
+      const tab = searchParams.get('tab')
+      if (tab === 'nutrition') return 'nutrition'
+      if (tab === 'messages')  return 'messages'
+      if (tab === 'today')     return 'today'
+      return 'today'
+    }
     return ''
   })()
 
   const handleClick = (n: typeof NAV[0]) => {
-    // nutrition and messages navigate back to main dashboard and let it handle tab routing
-    // For now navigate to path and let main page handle internal tabs
-    router.push(n.path)
+    if (n.tab) {
+      router.push(n.path + '?tab=' + n.tab)
+    } else {
+      router.push(n.path)
+    }
   }
 
   return (
