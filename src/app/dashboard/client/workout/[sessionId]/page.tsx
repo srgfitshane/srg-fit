@@ -135,9 +135,9 @@ export default function ActiveWorkoutPage() {
     if (!user) { setVideoUploading(prev => ({ ...prev, [exId]: false })); return }
     const ext = file.name.split('.').pop()
     const path = `${user.id}/${sessionId}/${exId}_${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('workout-clips').upload(path, file)
+    const { error } = await supabase.storage.from('form_checks').upload(path, file)
     if (!error) {
-      const { data: urlData } = supabase.storage.from('workout-clips').getPublicUrl(path)
+      const { data: urlData } = supabase.storage.from('form_checks').getPublicUrl(path)
       setVideoUploads(prev => ({ ...prev, [exId]: urlData.publicUrl }))
       // Save url to session_exercise row
       await supabase.from('session_exercises').update({ client_video_url: urlData.publicUrl }).eq('id', exId)
