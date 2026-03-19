@@ -362,6 +362,21 @@ export default function ActiveWorkoutPage() {
 
 function WorkoutComplete({ session, elapsed, router, t }: any) {
   const fmtTime = (s: number) => `${Math.floor(s/60)}m ${s%60}s`
+  const [countdown, setCountdown] = useState(4)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          clearInterval(interval)
+          router.push('/dashboard/client')
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
@@ -377,7 +392,7 @@ function WorkoutComplete({ session, elapsed, router, t }: any) {
         </p>
         <button onClick={()=>router.push('/dashboard/client')}
           style={{background:t.accent,border:'none',borderRadius:14,padding:'14px 32px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-          Back to Dashboard
+          Back to Dashboard {countdown > 0 ? `(${countdown})` : ''}
         </button>
       </div>
     </>
