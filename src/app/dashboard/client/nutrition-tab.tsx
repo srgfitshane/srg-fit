@@ -40,7 +40,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const searchTimer = useRef<any>(null)
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
   const [pendingFood,    setPendingFood]    = useState<Partial<FoodEntry> | null>(null)
+  const [pendingServings,setPendingServings]= useState(1)
   const [saving,         setSaving]         = useState(false)
+  const [editingEntry,   setEditingEntry]   = useState<string|null>(null)  // entry id being adjusted
+  const [editServings,   setEditServings]   = useState(1)
   const [barcodeVal,     setBarcodeVal]     = useState('')
   const [barcodeResult,  setBarcodeResult]  = useState<any>(null)
   const [barcodeErr,     setBarcodeErr]     = useState('')
@@ -88,15 +91,20 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   async function commitEntry(meal_time: string) {
     if (!pendingFood) return
     setSaving(true)
+    const s = pendingServings
     const currentLog = await ensureLog()
     const { data: saved } = await supabase.from('food_entries').insert({
       daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
-      food_name: pendingFood.food_name || '', serving_size: pendingFood.serving_size || '1 serving', serving_qty: 1,
-      calories: pendingFood.calories ?? null, protein_g: pendingFood.protein_g ?? null,
-      carbs_g: pendingFood.carbs_g ?? null, fat_g: pendingFood.fat_g ?? null,
+      food_name: pendingFood.food_name || '',
+      serving_size: `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
+      serving_qty: s,
+      calories:  pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
+      protein_g: pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
+      carbs_g:   pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
+      fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
     }).select().single()
     if (saved) { const next = [...entries, saved]; setEntries(next); await recalcTotals(currentLog.id, next) }
-    setPendingFood(null); setAddMode('none')
+    setPendingFood(null); setPendingServings(1); setAddMode('none')
     setSearchQ(''); setSearchResults([])
     setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
     setBarcodeVal(''); setBarcodeResult(null); setBarcodeErr('')
@@ -108,6 +116,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     const updated = entries.filter(e => e.id !== id)
     setEntries(updated)
     if (log) await recalcTotals(log.id, updated)
+  }
+
+  async function updateEntryServings(entry: FoodEntry, newServings: number) {
+    // Find original per-serving values from serving_qty stored in DB
+    // We stored scaled values, so divide by old qty and multiply by new
+    const oldQty = (entry as any).serving_qty || 1
+    const scale = newServings / oldQty
+    const updated = {
+      serving_qty: newServings,
+      serving_size: `${newServings > 1 ? newServings+'x ' : ''}${(entry.serving_size || '').replace(/^\d+x\s*/,'')}`,
+      calories:  entry.calories  != null ? Math.round(entry.calories  * scale * 10) / 10 : null,
+      protein_g: entry.protein_g != null ? Math.round(entry.protein_g * scale * 10) / 10 : null,
+      carbs_g:   entry.carbs_g   != null ? Math.round(entry.carbs_g   * scale * 10) / 10 : null,
+      fat_g:     entry.fat_g     != null ? Math.round(entry.fat_g     * scale * 10) / 10 : null,
+    }
+    await supabase.from('food_entries').update(updated).eq('id', entry.id)
+    const next = entries.map(e => e.id === entry.id ? { ...e, ...updated } : e)
+    setEntries(next)
+    if (log) await recalcTotals(log.id, next)
+    setEditingEntry(null)
   }
 
   async function recalcTotals(logId: string, ents: any[]) {
@@ -393,9 +421,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.teal}40`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>Adding: {pendingFood.food_name}</div>
-            <div style={{ fontSize:11, color:t.textMuted, marginBottom:14 }}>
-              {pendingFood.calories?`${Math.round(pendingFood.calories)} kcal`:''}{pendingFood.protein_g?` · ${pendingFood.protein_g}g protein`:''} · {pendingFood.serving_size}
+
+            {/* Servings stepper */}
+            <div style={{ display:'flex', alignItems:'center', gap:12, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>SERVINGS</div>
+                <div style={{ fontSize:13, fontWeight:700, color:t.teal }}>
+                  {pendingFood.calories != null ? `${Math.round(pendingFood.calories * pendingServings)} kcal` : '—'}
+                  {pendingFood.protein_g != null ? ` · ${Math.round(pendingFood.protein_g * pendingServings * 10)/10}g P` : ''}
+                </div>
+                <div style={{ fontSize:11, color:t.textMuted }}>{pendingServings}x {pendingFood.serving_size}</div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:0, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
+                <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                  style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
+                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:32, textAlign:'center' }}>{pendingServings}</div>
+                <button onClick={()=>setPendingServings(s=>Math.round((s+0.5)*10)/10)}
+                  style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
+              </div>
             </div>
+
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
@@ -406,7 +451,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 </button>
               ))}
             </div>
-            <button onClick={()=>{ setPendingFood(null); setBarcodeResult(null) }}
+            <button onClick={()=>{ setPendingFood(null); setPendingServings(1); setBarcodeResult(null) }}
               style={{ background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'8px 16px', fontSize:12, color:t.textMuted, cursor:'pointer' }}>← Back</button>
           </div>
         )}
@@ -432,14 +477,32 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   <span style={{ fontSize:11, color:t.orange, marginLeft:'auto', fontWeight:700 }}>{Math.round(mealCals)} kcal</span>
                 </div>
                 {mealEntries.map((e:FoodEntry)=>(
-                  <div key={e.id} style={{ display:'flex', alignItems:'center', gap:8, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:5 }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
-                      <div style={{ fontSize:11, color:t.textMuted }}>
-                        {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}
+                  <div key={e.id} style={{ background:t.surface, border:`1px solid ${editingEntry===e.id?t.teal+'60':t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:5, transition:'border-color 0.15s' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings((e as any).serving_qty||1) }}>
+                        <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>
+                          {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}
+                        </div>
                       </div>
+                      <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>×</button>
                     </div>
-                    <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>×</button>
+                    {editingEntry === e.id && (
+                      <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ fontSize:11, color:t.textMuted, flex:1 }}>Adjust servings:</div>
+                        <div style={{ display:'flex', alignItems:'center', gap:0, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
+                          <button onClick={()=>setEditServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                            style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>−</button>
+                          <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:28, textAlign:'center' }}>{editServings}</div>
+                          <button onClick={()=>setEditServings(s=>Math.round((s+0.5)*10)/10)}
+                            style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>+</button>
+                        </div>
+                        <button onClick={()=>updateEntryServings(e, editServings)}
+                          style={{ background:t.teal, border:'none', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#0f0f0f', cursor:'pointer' }}>
+                          Save
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
