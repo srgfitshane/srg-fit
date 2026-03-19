@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -187,7 +187,7 @@ export default function ClientCommunityPage() {
           <div style={{ fontSize:11, color:t.textMuted }}>{Object.keys(profiles).length} members</div>
         </div>
 
-        <div style={{ padding:'14px 14px', display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ padding:'14px 14px 88px 14px', display:'flex', flexDirection:'column', gap:12 }}>
 
           {/* Compose */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:14 }}>
@@ -342,6 +342,7 @@ export default function ClientCommunityPage() {
           })}
         </div>
       </div>
+      <ClientBottomNav />
     </>
   )
 }

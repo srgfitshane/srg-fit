@@ -1,6 +1,5 @@
 'use client'
-import { Suspense } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 const t = {
   surface: '#0f0f1a', border: '#252538',
@@ -38,7 +37,6 @@ const NavIcon = ({ id, active }: { id: string; active: boolean }) => {
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
     </svg>
   )
-  // metrics = bar chart
   return (
     <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
@@ -46,32 +44,21 @@ const NavIcon = ({ id, active }: { id: string; active: boolean }) => {
   )
 }
 
-export default function ClientBottomNav() {
-  return (
-    <Suspense fallback={null}>
-      <BottomNavInner />
-    </Suspense>
-  )
+// Active tab detection — pathname only, no searchParams needed.
+// The main client page handles ?tab param internally via its own useSearchParams.
+// This component just needs to know which standalone page we're on.
+function getActive(pathname: string): string {
+  if (pathname.startsWith('/dashboard/client/resources'))   return 'resources'
+  if (pathname.startsWith('/dashboard/client/progress'))    return 'metrics'
+  if (pathname.startsWith('/dashboard/client/metrics'))     return 'metrics'
+  if (pathname.startsWith('/dashboard/client/community'))   return 'messages'
+  return 'today'
 }
 
-function BottomNavInner() {
-  const router       = useRouter()
-  const pathname     = usePathname()
-  const searchParams = useSearchParams()
-
-  const active = (() => {
-    if (pathname.startsWith('/dashboard/client/resources'))                                              return 'resources'
-    if (pathname.startsWith('/dashboard/client/progress') || pathname.startsWith('/dashboard/client/metrics')) return 'metrics'
-    if (pathname.startsWith('/dashboard/client/community'))                                              return 'messages'
-    if (pathname === '/dashboard/client') {
-      const tab = searchParams.get('tab')
-      if (tab === 'nutrition') return 'nutrition'
-      if (tab === 'messages')  return 'messages'
-      if (tab === 'today')     return 'today'
-      return 'today'
-    }
-    return ''
-  })()
+export default function ClientBottomNav() {
+  const router   = useRouter()
+  const pathname = usePathname()
+  const active   = getActive(pathname)
 
   const handleClick = (n: typeof NAV[0]) => {
     if (n.tab) {
@@ -88,7 +75,7 @@ function BottomNavInner() {
         position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
         width: '100%', maxWidth: 480,
         background: t.surface, borderTop: '1px solid ' + t.border,
-        display: 'flex', alignItems: 'center', height: 60, zIndex: 50,
+        display: 'flex', alignItems: 'center', height: 60, zIndex: 9999,
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
         {NAV.map(n => (
