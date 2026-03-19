@@ -73,7 +73,15 @@ export default function ClientDashboard() {
   )
 }
 
-function ClientDashboardInner() {
+export function ClientDashboardPreview({ overrideClientId }: { overrideClientId: string }) {
+  return (
+    <Suspense fallback={null}>
+      <ClientDashboardInner overrideClientId={overrideClientId} />
+    </Suspense>
+  )
+}
+
+function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string } = {}) {
   const [profile,      setProfile]      = useState<any>(null)
   const [clientRecord, setClientRecord] = useState<any>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
@@ -109,27 +117,7 @@ function ClientDashboardInner() {
   const today    = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      const { data: prof } = await supabase
-        .from('profiles').select('*').eq('id', user.id).single()
-      setProfile(prof)
-
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('profile_id', user.id)
-        .eq('active', true)
-        .single()
-      setClientRecord(clientData)
-
-      if (clientData) {
-        // Fetch coach's profile ID for messaging
-        const { data: coachProf } = await supabase
-          .from('profiles').select('id').eq('id', clientData.coach_id).single()
-        if (coachProf) setCoachProfileId(coachProf.id)
+    const loadClientData = async (clientData: any, todayStr: string) => {
         const { data: habitData } = await supabase
           .from('habits')
           .select('*')
@@ -141,7 +129,7 @@ function ClientDashboardInner() {
           .from('habit_logs')
           .select('*')
           .eq('client_id', clientData.id)
-          .eq('logged_date', today)
+          .eq('logged_date', todayStr)
         const logMap: Record<string,number> = {}
         habitLogData?.forEach((l:any) => { logMap[l.habit_id] = l.value })
         setHabitLogs(logMap)
@@ -176,7 +164,7 @@ function ClientDashboardInner() {
           .from('workout_sessions')
           .select('id, title, scheduled_date, status')
           .eq('client_id', clientData.id)
-          .or(`scheduled_date.eq.${today},status.eq.in_progress`)
+          .or(`scheduled_date.eq.${todayStr},status.eq.in_progress`)
           .in('status', ['assigned', 'in_progress'])
           .order('scheduled_date', { ascending: true })
           .limit(1)
@@ -198,7 +186,7 @@ function ClientDashboardInner() {
           .from('daily_checkins')
           .select('*')
           .eq('client_id', clientData.id)
-          .eq('checkin_date', today)
+          .eq('checkin_date', todayStr)
           .single()
         if (todayCheckin) {
           setMentalCheckin({
@@ -215,12 +203,12 @@ function ClientDashboardInner() {
           .from('journal_entries')
           .select('*')
           .eq('client_id', clientData.id)
-          .eq('entry_date', today)
+          .eq('entry_date', todayStr)
           .single()
         if (todayJournal) {
           setJournalText(todayJournal.body || '')
           setJournalPrivate(todayJournal.is_private ?? true)
-          setJournalDate(today)
+          setJournalDate(todayStr)
         }
 
         // Load past journal entries (last 30, excluding today)
@@ -228,14 +216,55 @@ function ClientDashboardInner() {
           .from('journal_entries')
           .select('*')
           .eq('client_id', clientData.id)
-          .neq('entry_date', today)
+          .neq('entry_date', todayStr)
           .order('entry_date', { ascending: false })
           .limit(30)
         setPastEntries(pastData || [])
+    } // end loadClientData
+
+    const load = async () => {
+      // ── Coach preview mode: load by client record ID directly ──
+      if (overrideClientId) {
+        const { data: clientData } = await supabase
+          .from('clients').select('*').eq('id', overrideClientId).single()
+        if (!clientData) { setLoading(false); return }
+        setClientRecord(clientData)
+        const { data: prof } = await supabase
+          .from('profiles').select('*').eq('id', clientData.profile_id).single()
+        setProfile(prof)
+        const { data: coachProf } = await supabase
+          .from('profiles').select('id').eq('id', clientData.coach_id).single()
+        if (coachProf) setCoachProfileId(coachProf.id)
+        await loadClientData(clientData, today)
+        setLoading(false)
+        return
+      }
+
+      // ── Normal client mode ──
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      const { data: prof } = await supabase
+        .from('profiles').select('*').eq('id', user.id).single()
+      setProfile(prof)
+
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('profile_id', user.id)
+        .eq('active', true)
+        .single()
+      setClientRecord(clientData)
+
+      if (clientData) {
+        const { data: coachProf } = await supabase
+          .from('profiles').select('id').eq('id', clientData.coach_id).single()
+        if (coachProf) setCoachProfileId(coachProf.id)
+        await loadClientData(clientData, today)
       }
 
       setLoading(false)
-    }
+    } // end load
     load()
 
     // Read ?tab param from bottom nav (e.g. coming from Resources page)
@@ -379,6 +408,23 @@ function ClientDashboardInner() {
 
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', flexDirection:'column', maxWidth:480, margin:'0 auto', position:'relative' }}>
 
+        {/* Coach preview banner */}
+        {overrideClientId && (
+          <div style={{ background:`linear-gradient(135deg,${t.orange}ee,${t.orange}bb)`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:18 }}>🎽</span>
+              <div>
+                <div style={{ fontSize:12, fontWeight:800, color:'#000', lineHeight:1.3 }}>Logging for {profile?.full_name}</div>
+                <div style={{ fontSize:10, color:'rgba(0,0,0,0.6)', fontWeight:600 }}>Coach mode — fully interactive</div>
+              </div>
+            </div>
+            <button onClick={() => router.back()}
+              style={{ background:'rgba(0,0,0,0.15)', border:'1px solid rgba(0,0,0,0.2)', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              ← Back
+            </button>
+          </div>
+        )}
+
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:52, flexShrink:0, position:'sticky', top:0, zIndex:10 }}>
           <div style={{ fontSize:15, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
@@ -390,7 +436,7 @@ function ClientDashboardInner() {
               <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
           </button>
-          {profile?.id && <NotificationBell userId={profile.id} accentColor={t.teal} />}
+          {!overrideClientId && profile?.id && <NotificationBell userId={profile.id} accentColor={t.teal} />}
           <button onClick={()=>setActiveNav('billing')}
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', padding:'6px 0 6px 6px', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
