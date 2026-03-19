@@ -25,11 +25,11 @@ const getGreeting = () => {
 }
 
 const NAV = [
-  { id:'today',     icon:'home',     label:'Home'      },
-  { id:'training',  icon:'training', label:'Training'  },
-  { id:'nutrition', icon:'nutrition',label:'Nutrition' },
-  { id:'messages',  icon:'messages', label:'Messages'  },
-  { id:'metrics',   icon:'metrics',  label:'Metrics'   },
+  { id:'today',     icon:'home',      label:'Home'      },
+  { id:'nutrition', icon:'nutrition', label:'Nutrition' },
+  { id:'resources', icon:'resources', label:'Resources' },
+  { id:'messages',  icon:'messages',  label:'Messages'  },
+  { id:'metrics',   icon:'metrics',   label:'Metrics'   },
 ]
 
 // SVG icons — cleaner than emoji for bottom nav
@@ -41,9 +41,9 @@ const NavIcon = ({ id, active }: { id: string, active: boolean }) => {
       <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><polyline points="9 21 9 12 15 12 15 21"/>
     </svg>
   )
-  if (id === 'training') return (
+  if (id === 'resources') return (
     <svg {...s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={active?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
+      <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
     </svg>
   )
   if (id === 'nutrition') return (
@@ -413,57 +413,6 @@ export default function ClientDashboard() {
             </div>
           )}
 
-          {/* Progress quick link */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }} />
-            <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:40, height:40, borderRadius:12, background:t.teal+'18', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>📈</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:800 }}>My Progress</div>
-                <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Charts, measurements & progress photos</div>
-              </div>
-              <button onClick={()=>router.push('/dashboard/client/progress')}
-                style={{ background:t.teal+'22', color:t.teal, border:'1px solid '+t.teal+'44',
-                  borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                View →
-              </button>
-            </div>
-          </div>
-
-          {/* Resources quick link */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.orange+','+t.purple+')' }} />
-            <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:40, height:40, borderRadius:12, background:t.orange+'18', border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>📚</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:800 }}>Resource Library</div>
-                <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Guides, videos & articles from your coach</div>
-              </div>
-              <button onClick={()=>router.push('/dashboard/client/resources')}
-                style={{ background:t.orange+'22', color:t.orange, border:'1px solid '+t.orange+'44',
-                  borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                Browse →
-              </button>
-            </div>
-          </div>
-
-          {/* Community quick link */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
-            <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:40, height:40, borderRadius:12, background:t.teal+'18', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🏘️</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:800 }}>SRG Fit Community</div>
-                <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Share wins & hype up your crew</div>
-              </div>
-              <button onClick={()=>router.push('/dashboard/client/community')}
-                style={{ background:t.teal+'22', color:t.teal, border:'1px solid '+t.teal+'44',
-                  borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                Join →
-              </button>
-            </div>
-          </div>
-
           {/* Empty state for new clients */}
           {habits.length === 0 && !nextSession && (
             <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+t.teal+'25', borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
@@ -483,31 +432,6 @@ export default function ClientDashboard() {
           {/* ── NUTRITION TAB ── */}
           {activeNav === 'nutrition' && (
             <NutritionTab clientRecord={clientRecord} supabase={supabase} t={t} />
-          )}
-
-          {/* ── METRICS TAB ── */}
-          {activeNav === 'metrics' && (
-            <div style={{ paddingBottom:32 }}>
-              <div style={{ fontSize:15, fontWeight:800, marginBottom:16 }}>📈 My Metrics</div>
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'28px 20px', textAlign:'center' as const, marginBottom:14 }}>
-                <div style={{ fontSize:32, marginBottom:10 }}>📊</div>
-                <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>Log your measurements</div>
-                <div style={{ fontSize:13, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>Track weight, body fat, and measurements over time</div>
-                <button onClick={() => router.push('/dashboard/client/metrics')}
-                  style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px 24px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  Open Metrics →
-                </button>
-              </div>
-              <button onClick={() => router.push('/dashboard/client/progress')}
-                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
-                <div style={{ width:44, height:44, borderRadius:12, background:t.teal+'18', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>📸</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:t.text }}>Progress Photos & Charts</div>
-                  <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>See your full progress history</div>
-                </div>
-                <span style={{ color:t.textMuted, fontSize:16 }}>→</span>
-              </button>
-            </div>
           )}
 
           {/* ── MESSAGES TAB ── */}
@@ -597,7 +521,7 @@ export default function ClientDashboard() {
           )}
 
           {/* Tagline — shown on nutrition, metrics, and other content tabs */}
-          {activeNav !== 'today' && activeNav !== 'messages' && activeNav !== 'billing' && activeNav !== 'training' && (
+          {activeNav !== 'today' && activeNav !== 'messages' && activeNav !== 'billing' && (
           <div style={{ textAlign:'center', padding:'8px 0 24px', fontSize:12, color:t.textMuted, fontStyle:'italic' }}>
             Be Kind to Yourself & Stay Awesome 💪
           </div>
@@ -676,7 +600,12 @@ export default function ClientDashboard() {
         {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
-            <button key={n.id} onClick={()=>{ if(n.id === 'metrics'){ router.push('/dashboard/client/metrics'); return } if(n.id !== 'messages') setMessagesView('hub'); setActiveNav(n.id) }}
+            <button key={n.id} onClick={()=>{ 
+              if(n.id === 'metrics'){ router.push('/dashboard/client/progress'); return }
+              if(n.id === 'resources'){ router.push('/dashboard/client/resources'); return }
+              if(n.id !== 'messages') setMessagesView('hub')
+              setActiveNav(n.id) 
+            }}
               style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, cursor:'pointer', padding:'8px 0', position:'relative' }}>
               {activeNav === n.id && (
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
