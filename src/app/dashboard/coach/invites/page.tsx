@@ -25,9 +25,15 @@ export default function InvitesPage() {
   const [loading,   setLoading]   = useState(true)
   const [coachId,   setCoachId]   = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [modalMode, setModalMode] = useState<'invite'|'inperson'>('invite')
   const [sending,   setSending]   = useState(false)
   const [filter,    setFilter]    = useState<'all'|'pending'|'accepted'|'cancelled'>('all')
   const [form, setForm] = useState({ email:'', full_name:'', message:'', onboarding_form_id:'' })
+
+  // In-person client form
+  const [ipForm, setIpForm] = useState({ full_name:'', email:'', phone:'', notes:'' })
+  const [ipSaving, setIpSaving] = useState(false)
+  const [ipDone,   setIpDone]   = useState(false)
 
   // Post-send "What's next?" modal
   const [showNext,     setShowNext]     = useState(false)
@@ -96,6 +102,39 @@ export default function InvitesPage() {
     setInvites(p => p.map(i => i.id === id ? { ...i, status: 'pending' } : i))
   }
 
+  const addInPersonClient = async () => {
+    if (!ipForm.full_name || !coachId) return
+    setIpSaving(true)
+    // 1. Create a bare-bones profile row (no auth user — coach manages everything)
+    const { data: newProfile, error: profErr } = await supabase
+      .from('profiles')
+      .insert({ full_name: ipForm.full_name, email: ipForm.email || null, role: 'client' })
+      .select()
+      .single()
+    if (profErr || !newProfile) { setIpSaving(false); alert('Failed to create profile: ' + profErr?.message); return }
+
+    // 2. Create the client record linked to the coach
+    const { error: clientErr } = await supabase
+      .from('clients')
+      .insert({
+        profile_id: newProfile.id,
+        coach_id: coachId,
+        active: true,
+        subscription_status: 'active',
+        coach_notes: ipForm.notes || null,
+      })
+    if (clientErr) { setIpSaving(false); alert('Failed to create client: ' + clientErr.message); return }
+
+    setIpSaving(false)
+    setIpDone(true)
+    // Reload client list after a moment
+    setTimeout(() => {
+      setShowModal(false)
+      setIpForm({ full_name:'', email:'', phone:'', notes:'' })
+      setIpDone(false)
+    }, 1800)
+  }
+
   const filtered = filter === 'all' ? invites : invites.filter(i => i.status === filter)
   const statusColor = (s: string) => s === 'accepted' ? t.green : s === 'pending' ? t.orange : t.textMuted
   const statusBg   = (s: string) => s === 'accepted' ? t.greenDim : s === 'pending' ? t.orangeDim : t.surfaceHigh
@@ -118,9 +157,9 @@ export default function InvitesPage() {
             <div style={{ fontSize:22, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Client Invites</div>
             <div style={{ fontSize:12, color:t.textMuted }}>{invites.filter(i=>i.status==='pending').length} pending · {invites.filter(i=>i.status==='accepted').length} accepted</div>
           </div>
-          <button onClick={()=>setShowModal(true)}
+          <button onClick={()=>{ setShowModal(true); setModalMode('invite') }}
             style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:11, padding:'10px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            + Invite Client
+            + Add Client
           </button>
         </div>
 
@@ -171,48 +210,113 @@ export default function InvitesPage() {
           </div>
         )}
 
-        {/* ── Send invite modal ── */}
+        {/* ── Add Client modal ── */}
         {showModal && (
           <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:20 }}>
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:460 }}>
-              <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>Invite a Client</div>
-              <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>They'll get an email with a link to sign up and get started.</div>
 
-              <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Email *</div>
-                  <input value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} placeholder="client@email.com" type="email" style={sty} />
-                </div>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Name (optional)</div>
-                  <input value={form.full_name} onChange={e=>setForm(p=>({...p,full_name:e.target.value}))} placeholder="First Last" style={sty} />
-                </div>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Attach a Form</div>
-                  <select value={form.onboarding_form_id} onChange={e=>setForm(p=>({...p,onboarding_form_id:e.target.value}))}
-                    style={{ ...sty, appearance:'none' as any, color:form.onboarding_form_id?t.text:t.textMuted }}>
-                    <option value="">None (assign later)</option>
-                    {forms.map(f => <option key={f.id} value={f.id} style={{ background:t.surfaceHigh }}>{f.title}{f.is_default?' (default)':''}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Personal Note (optional)</div>
-                  <textarea value={form.message} onChange={e=>setForm(p=>({...p,message:e.target.value}))} rows={3}
-                    placeholder="Hey! I'm excited to work with you..."
-                    style={{ ...sty, resize:'vertical' as any }} />
-                </div>
-              </div>
-
-              <div style={{ display:'flex', gap:10, marginTop:20 }}>
-                <button onClick={()=>{ setShowModal(false); setForm({ email:'', full_name:'', message:'', onboarding_form_id:'' }) }}
-                  style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  Cancel
+              {/* Mode toggle */}
+              <div style={{ display:'flex', gap:6, marginBottom:20, background:t.surfaceHigh, borderRadius:12, padding:4 }}>
+                <button onClick={()=>setModalMode('invite')}
+                  style={{ flex:1, padding:'8px', borderRadius:9, fontSize:13, fontWeight:700, cursor:'pointer', border:'none', background:modalMode==='invite'?t.teal:'transparent', color:modalMode==='invite'?'#000':t.textMuted, fontFamily:"'DM Sans',sans-serif", transition:'all 0.15s' }}>
+                  📨 Invite via Email
                 </button>
-                <button onClick={sendInvite} disabled={!form.email || sending}
-                  style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:sending||!form.email?'not-allowed':'pointer', opacity:(!form.email||sending)?.5:1, fontFamily:"'DM Sans',sans-serif" }}>
-                  {sending ? 'Sending...' : '📨 Send Invite'}
+                <button onClick={()=>setModalMode('inperson')}
+                  style={{ flex:1, padding:'8px', borderRadius:9, fontSize:13, fontWeight:700, cursor:'pointer', border:'none', background:modalMode==='inperson'?t.orange:'transparent', color:modalMode==='inperson'?'#000':t.textMuted, fontFamily:"'DM Sans',sans-serif", transition:'all 0.15s' }}>
+                  🤝 In-Person Only
                 </button>
               </div>
+
+              {/* ── Invite mode ── */}
+              {modalMode === 'invite' && (<>
+                <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>Invite a Client</div>
+                <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>They'll get an email with a link to sign up and get started.</div>
+
+                <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Email *</div>
+                    <input value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} placeholder="client@email.com" type="email" style={sty} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Name (optional)</div>
+                    <input value={form.full_name} onChange={e=>setForm(p=>({...p,full_name:e.target.value}))} placeholder="First Last" style={sty} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Attach a Form</div>
+                    <select value={form.onboarding_form_id} onChange={e=>setForm(p=>({...p,onboarding_form_id:e.target.value}))}
+                      style={{ ...sty, appearance:'none' as any, color:form.onboarding_form_id?t.text:t.textMuted }}>
+                      <option value="">None (assign later)</option>
+                      {forms.map(f => <option key={f.id} value={f.id} style={{ background:t.surfaceHigh }}>{f.title}{f.is_default?' (default)':''}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Personal Note (optional)</div>
+                    <textarea value={form.message} onChange={e=>setForm(p=>({...p,message:e.target.value}))} rows={3}
+                      placeholder="Hey! I'm excited to work with you..."
+                      style={{ ...sty, resize:'vertical' as any }} />
+                  </div>
+                </div>
+
+                <div style={{ display:'flex', gap:10, marginTop:20 }}>
+                  <button onClick={()=>{ setShowModal(false); setForm({ email:'', full_name:'', message:'', onboarding_form_id:'' }) }}
+                    style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Cancel
+                  </button>
+                  <button onClick={sendInvite} disabled={!form.email || sending}
+                    style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:sending||!form.email?'not-allowed':'pointer', opacity:(!form.email||sending)?.5:1, fontFamily:"'DM Sans',sans-serif" }}>
+                    {sending ? 'Sending...' : '📨 Send Invite'}
+                  </button>
+                </div>
+              </>)}
+
+              {/* ── In-person mode ── */}
+              {modalMode === 'inperson' && (<>
+                <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>Add In-Person Client</div>
+                <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>No app access, no invite, no payment flow — just adds them to your client roster so you can track their programs and notes.</div>
+
+                {ipDone ? (
+                  <div style={{ textAlign:'center', padding:'24px 0' }}>
+                    <div style={{ fontSize:36, marginBottom:10 }}>✅</div>
+                    <div style={{ fontSize:16, fontWeight:800 }}>{ipForm.full_name} added!</div>
+                    <div style={{ fontSize:12, color:t.textMuted, marginTop:4 }}>They're now in your client roster.</div>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Full Name *</div>
+                      <input value={ipForm.full_name} onChange={e=>setIpForm(p=>({...p,full_name:e.target.value}))} placeholder="First Last" style={sty} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Email (optional — for reference only)</div>
+                      <input value={ipForm.email} onChange={e=>setIpForm(p=>({...p,email:e.target.value}))} placeholder="their@email.com" type="email" style={sty} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Phone (optional)</div>
+                      <input value={ipForm.phone} onChange={e=>setIpForm(p=>({...p,phone:e.target.value}))} placeholder="(555) 555-5555" style={sty} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Notes (optional)</div>
+                      <textarea value={ipForm.notes} onChange={e=>setIpForm(p=>({...p,notes:e.target.value}))} rows={2}
+                        placeholder="e.g. Tuesday/Thursday sessions, parking lot gym..."
+                        style={{ ...sty, resize:'vertical' as any }} />
+                    </div>
+                  </div>
+                )}
+
+                {!ipDone && (
+                  <div style={{ display:'flex', gap:10, marginTop:20 }}>
+                    <button onClick={()=>{ setShowModal(false); setIpForm({ full_name:'', email:'', phone:'', notes:'' }) }}
+                      style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      Cancel
+                    </button>
+                    <button onClick={addInPersonClient} disabled={!ipForm.full_name || ipSaving}
+                      style={{ flex:2, background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:ipSaving||!ipForm.full_name?'not-allowed':'pointer', opacity:(!ipForm.full_name||ipSaving)?.5:1, fontFamily:"'DM Sans',sans-serif" }}>
+                      {ipSaving ? 'Adding...' : '🤝 Add Client'}
+                    </button>
+                  </div>
+                )}
+              </>)}
+
             </div>
           </div>
         )}

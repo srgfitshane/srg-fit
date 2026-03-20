@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 
 const t = {
@@ -21,18 +21,31 @@ const SECTIONS = [
   { id:'lifestyle',  label:'Lifestyle',          icon:'🌙' },
   { id:'nutrition',  label:'Nutrition',          icon:'🥗' },
   { id:'health',     label:'Health',             icon:'❤️' },
+  { id:'account',    label:'Account',            icon:'⚙️' },
 ]
+
+// Account tab doesn't count toward intake progress
+const INTAKE_SECTIONS = ['personal','stats','training','goals','lifestyle','nutrition','health']
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 const EQUIPMENT = ['Barbell','Dumbbells','Cables','Machines','Bodyweight','Resistance Bands','Kettlebells','Pull-up Bar']
 
 export default function ClientProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfilePageInner />
+    </Suspense>
+  )
+}
+
+function ProfilePageInner() {
   const supabase = createClient()
   const router   = useRouter()
+  const searchParams = useSearchParams()
   const [clientId,  setClientId]  = useState<string|null>(null)
   const [profile,   setProfile]   = useState<any>(null)
   const [intake,    setIntake]    = useState<any>({})
-  const [section,   setSection]   = useState('personal')
+  const [section,   setSection]   = useState(searchParams.get('section') || 'personal')
   const [saving,    setSaving]    = useState(false)
   const [saved,     setSaved]     = useState(false)
   const [loading,   setLoading]   = useState(true)
@@ -170,6 +183,7 @@ export default function ClientProfilePage() {
   )
 
   const completedSections = SECTIONS.filter(s => {
+    if (!INTAKE_SECTIONS.includes(s.id)) return false
     if (s.id === 'personal') return intake.date_of_birth || intake.phone
     if (s.id === 'stats')    return intake.starting_weight_lbs || intake.height_inches
     if (s.id === 'training') return intake.training_experience
@@ -193,7 +207,7 @@ export default function ClientProfilePage() {
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", padding:0 }}>← Back</button>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>My Profile</div>
-            <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedSections}/{SECTIONS.length} sections complete</div>
+            <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedSections}/{INTAKE_SECTIONS.length} sections complete</div>
           </div>
           <button onClick={save} disabled={saving}
             style={{ background: saved?t.green:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', opacity:saving?.6:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
@@ -503,6 +517,64 @@ export default function ClientProfilePage() {
                   {saving ? 'Saving...' : saved ? '✓ All Saved!' : '💾 Save Everything'}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* ── ACCOUNT ── */}
+          {section === 'account' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+
+              {/* Account info */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px' }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Signed In As</div>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:44, height:44, borderRadius:'50%', background:t.tealDim, border:'1px solid '+t.teal+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
+                    {profile?.avatar_url
+                      ? <img src={profile.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
+                      : profile?.full_name?.charAt(0) || '?'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700 }}>{profile?.full_name || 'Your Name'}</div>
+                    <div style={{ fontSize:12, color:t.textMuted }}>{profile?.email || ''}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Update Info */}
+              <button onClick={()=>setSection('personal')}
+                style={{ display:'flex', alignItems:'center', gap:14, background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%' }}>
+                <div style={{ width:40, height:40, borderRadius:11, background:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>✏️</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:t.text }}>Update My Info</div>
+                  <div style={{ fontSize:12, color:t.textMuted, marginTop:1 }}>Edit your profile, goals, health info</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+
+              {/* Manage Subscription */}
+              <button onClick={()=>router.push('/dashboard/client?tab=billing')}
+                style={{ display:'flex', alignItems:'center', gap:14, background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%' }}>
+                <div style={{ width:40, height:40, borderRadius:11, background:t.orangeDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>💳</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:t.text }}>Manage Subscription</div>
+                  <div style={{ fontSize:12, color:t.textMuted, marginTop:1 }}>View plan, billing history, cancel</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+
+              {/* Log Out */}
+              <button onClick={async () => {
+                await supabase.auth.signOut()
+                router.push('/login')
+              }}
+                style={{ display:'flex', alignItems:'center', gap:14, background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:14, padding:'16px 18px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%', marginTop:8 }}>
+                <div style={{ width:40, height:40, borderRadius:11, background:t.red+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🚪</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:t.red }}>Log Out</div>
+                  <div style={{ fontSize:12, color:t.red+'99', marginTop:1 }}>Sign out of your account</div>
+                </div>
+              </button>
+
             </div>
           )}
 

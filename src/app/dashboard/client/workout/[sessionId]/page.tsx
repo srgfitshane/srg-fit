@@ -185,7 +185,7 @@ export default function ActiveWorkoutPage() {
   }
 
   const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
-  const allLogged = exercises.every(ex => (setData[ex.id]||[]).some(s=>s.logged))
+  const allLogged = exercises.length > 0 && exercises.every(ex => (setData[ex.id]||[]).some(s=>s.logged))
 
   if (loading) return (
     <div style={{minHeight:'100vh',background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',color:t.textMuted,fontFamily:"'DM Sans',sans-serif"}}>Loading workout...</div>
