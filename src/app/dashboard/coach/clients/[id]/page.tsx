@@ -1726,14 +1726,24 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
+  // Start date + scheduling
+  const [startDates, setStartDates] = useState<Record<string,string>>({})
+  const [scheduling, setScheduling] = useState<string|null>(null)
+  const [scheduleMode, setScheduleMode] = useState<Record<string,'add'|'replace'>>({})
+  const [scheduleDone, setScheduleDone] = useState<string|null>(null)
 
   const load = async () => {
     const { data: clientProgs } = await supabase.from('programs')
-      .select('id, name, goal, duration_weeks, difficulty, status, created_at, active')
+      .select('id, name, goal, duration_weeks, difficulty, status, created_at, active, start_date')
       .eq('client_id', clientId).eq('is_template', false)
       .order('created_at', { ascending: false })
     setClientPrograms(clientProgs || [])
-
+    // Pre-fill start dates
+    const dates: Record<string,string> = {}
+    for (const p of (clientProgs || [])) {
+      if (p.start_date) dates[p.id] = p.start_date
+    }
+    setStartDates(dates)
     const { data: tmpl } = await supabase.from('programs')
       .select('id, name, goal, duration_weeks')
       .eq('coach_id', coachId).eq('is_template', true)
@@ -1754,9 +1764,97 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     setEditSaving(false)
   }
 
+  const saveStartDate = async (id: string, date: string) => {
+    await supabase.from('programs').update({ start_date: date || null }).eq('id', id)
+    setClientPrograms(prev => prev.map(p => p.id === id ? { ...p, start_date: date } : p))
+  }
+
+  const scheduleProgram = async (progId: string) => {
+    const startDate = startDates[progId]
+    if (!startDate) return
+    setScheduling(progId)
+    const mode = scheduleMode[progId] || 'add'
+
+    // Fetch blocks for this program
+    const { data: blocks } = await supabase.from('workout_blocks')
+      .select('*, block_exercises(*)')
+      .eq('program_id', progId)
+      .order('week_number').order('order_index')
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    // Delete old assigned sessions if replace mode
+    if (mode === 'replace') {
+      const { data: oldSessions } = await supabase.from('workout_sessions').select('id')
+        .eq('program_id', progId).eq('status', 'assigned')
+      for (const sess of (oldSessions || [])) {
+        await supabase.from('session_exercises').delete().eq('session_id', sess.id)
+      }
+      await supabase.from('workout_sessions').delete().eq('program_id', progId).eq('status', 'assigned')
+    }
+
+    // Calculate week start (Monday of the start date's week)
+    const start = new Date(startDate + 'T12:00:00')
+    const dayOfWeek = start.getDay()
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    const weekStart = new Date(start)
+    weekStart.setDate(weekStart.getDate() + diffToMonday)
+
+    const DAY_OFFSETS: Record<string,number> = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 }
+    const sessionsToInsert: any[] = []
+
+    for (const block of (blocks || [])) {
+      if (!block.day_of_week || !(block.day_of_week in DAY_OFFSETS)) continue
+      const weekOffset = (block.week_number - 1) * 7
+      const dayOffset = DAY_OFFSETS[block.day_of_week]
+      const sessionDate = new Date(weekStart)
+      sessionDate.setDate(sessionDate.getDate() + weekOffset + dayOffset)
+      sessionsToInsert.push({
+        client_id: clientId,
+        program_id: progId,
+        block_id: block.id,
+        coach_id: user?.id,
+        title: block.day_label || block.name,
+        scheduled_date: sessionDate.toISOString().split('T')[0],
+        date: sessionDate.toISOString().split('T')[0],
+        status: 'assigned',
+        week_number: block.week_number,
+        day_label: block.day_of_week,
+      })
+    }
+
+    if (sessionsToInsert.length > 0) {
+      const { data: insertedSessions } = await supabase.from('workout_sessions').insert(sessionsToInsert).select()
+      // Populate session_exercises from each block
+      for (const session of (insertedSessions || [])) {
+        const block = (blocks || []).find((b:any) => b.id === session.block_id)
+        const exes = (block?.block_exercises || []).sort((a:any,b:any) => a.order_index - b.order_index)
+        if (exes.length === 0) continue
+        await supabase.from('session_exercises').insert(
+          exes.map((ex:any) => ({
+            session_id: session.id,
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise?.name || '',
+            sets_prescribed: ex.sets || 3,
+            reps_prescribed: ex.reps || '',
+            weight_prescribed: ex.target_weight || '',
+            rest_seconds: ex.rest_seconds || null,
+            notes_coach: ex.notes || null,
+            order_index: ex.order_index,
+          }))
+        )
+      }
+      // Save the start date on the program
+      await saveStartDate(progId, startDate)
+    }
+
+    setScheduling(null)
+    setScheduleDone(progId)
+    setTimeout(() => setScheduleDone(null), 3000)
+  }
+
   const deleteProgram = async (id: string) => {
     setDeleting(true)
-    // Delete sessions, then exercises, then the program
     const { data: sessions } = await supabase.from('workout_sessions').select('id').eq('program_id', id)
     for (const sess of (sessions || [])) {
       await supabase.from('session_exercises').delete().eq('session_id', sess.id)
@@ -1778,7 +1876,6 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const assignProgram = async () => {
     if (!assignId) return
     setAssigning(true)
-    // Unlink all other client programs first
     await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId).neq('id', assignId)
     await supabase.from('programs').update({ client_id: clientId }).eq('id', assignId)
     const { data: newProg } = await supabase.from('programs').select('*').eq('id', assignId).single()
@@ -1792,7 +1889,6 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const createFromTemplate = async () => {
     if (!newName.trim()) return
     setCreating(true)
-    // Get chosen template blocks+exercises
     const srcId = assignId
     const { data: newProg } = await supabase.from('programs').insert({
       coach_id: coachId, client_id: clientId,
@@ -1828,13 +1924,6 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     setCreating(false)
   }
 
-  const unassignAll = async () => {
-    await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId)
-    setClientPrograms(prev => prev.map(p => ({ ...p, client_id: null })))
-    onProgramChange(null)
-    await load()
-  }
-
   if (loading) return <div style={{ color:t.textMuted, fontSize:13, padding:20 }}>Loading programs...</div>
 
   return (
@@ -1851,7 +1940,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={()=>{ setShowAssign(true); setShowCreate(false) }}
             style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            + Assign Existing
+            + Assign Template
           </button>
           <button onClick={()=>{ setShowCreate(true); setShowAssign(false) }}
             style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -1860,18 +1949,16 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         </div>
       </div>
 
-      {/* Assign existing program panel */}
+      {/* Assign template panel */}
       {showAssign && (
         <div style={{ background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:14, padding:18 }}>
-          <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Assign an existing program</div>
-          <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>This will unlink any currently assigned programs and link the selected one.</div>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:6 }}>Assign a template to this client</div>
+          <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Creates a copy of the template for this client. Changes won't affect the original.</div>
           <select value={assignId} onChange={e=>setAssignId(e.target.value)}
             style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, marginBottom:10 }}>
-            <option value="">— Choose a program —</option>
-            {clientPrograms.map(p => <option key={p.id} value={p.id}>{p.name} (already assigned to client)</option>)}
-            {templates.length > 0 && <optgroup label="── Templates ──">
-              {templates.map(p => <option key={p.id} value={p.id}>📐 {p.name}</option>)}
-            </optgroup>}
+            <option value="">— Choose a template —</option>
+            {templates.map(p => <option key={p.id} value={p.id}>📐 {p.name}{p.goal ? ' · '+p.goal : ''}</option>)}
+            {templates.length === 0 && <option disabled>No templates yet — create one in Programs</option>}
           </select>
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={()=>setShowAssign(false)}
@@ -1880,13 +1967,13 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
             </button>
             <button onClick={assignProgram} disabled={!assignId || assigning}
               style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!assignId||assigning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!assignId||assigning?0.5:1 }}>
-              {assigning ? 'Assigning...' : '✓ Assign Program'}
+              {assigning ? 'Assigning...' : '✓ Assign Template'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Create new program from template */}
+      {/* Create new program panel */}
       {showCreate && (
         <div style={{ background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:18 }}>
           <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Create new program for this client</div>
@@ -1916,22 +2003,29 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         </div>
       )}
 
-      {/* Program list */}
+      {/* Program cards */}
       {clientPrograms.length === 0 ? (
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px 20px', textAlign:'center' as const }}>
           <div style={{ fontSize:36, marginBottom:12 }}>📋</div>
           <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No programs yet</div>
-          <div style={{ fontSize:13, color:t.textMuted }}>Create a new program or assign an existing one above.</div>
+          <div style={{ fontSize:13, color:t.textMuted }}>Create a new program or assign a template above.</div>
         </div>
       ) : clientPrograms.map((p: any) => {
         const isActive = program?.id === p.id
         const isEditing = editingId === p.id
         const isDeleteConfirm = deleteConfirm === p.id
+        const isScheduling = scheduling === p.id
+        const isDone = scheduleDone === p.id
+        const currentStartDate = startDates[p.id] || ''
+        const currentMode = scheduleMode[p.id] || 'add'
+
         return (
           <div key={p.id} style={{ background:t.surface, border:'1px solid '+(isActive ? t.teal+'60' : t.border), borderRadius:16, overflow:'hidden' }}>
             {isActive && <div style={{ height:3, background:`linear-gradient(90deg,${t.teal},${t.orange})` }} />}
             <div style={{ padding:18 }}>
-              <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+
+              {/* Name row */}
+              <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:14 }}>
                 <div style={{ flex:1 }}>
                   {isEditing ? (
                     <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)}
@@ -1948,8 +2042,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                {/* Action buttons */}
+                <div style={{ display:'flex', gap:6, flexShrink:0, flexWrap:'wrap' as const, justifyContent:'flex-end' }}>
                   {isEditing ? (
                     <>
                       <button onClick={()=>saveRename(p.id)} disabled={editSaving}
@@ -1957,7 +2051,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                         {editSaving ? '...' : '✓ Save'}
                       </button>
                       <button onClick={()=>setEditingId(null)}
-                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         Cancel
                       </button>
                     </>
@@ -1977,26 +2071,71 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                       )}
                       <button onClick={()=>router.push('/dashboard/coach/programs/'+p.id)}
                         style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        Edit
+                        ✏️ Edit Program
                       </button>
                       <button onClick={()=>{ setEditingId(p.id); setEditName(p.name) }}
-                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         Rename
                       </button>
                       <button onClick={()=>setDeleteConfirm(p.id)}
-                        style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        Delete
+                        style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'5px 10px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        🗑
                       </button>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Delete confirm inline */}
+              {/* ── Schedule Section ── */}
+              <div style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px' }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>Schedule Sessions</div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                  {/* Start date */}
+                  <div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:4 }}>Start Date</div>
+                    <input type="date"
+                      value={currentStartDate}
+                      onChange={e => setStartDates(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }} />
+                    <div style={{ fontSize:10, color:t.textMuted, marginTop:3 }}>Week 1 starts on the Monday of this week</div>
+                  </div>
+
+                  {/* Mode toggle */}
+                  <div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:4 }}>If sessions exist</div>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {(['add','replace'] as const).map(mode => (
+                        <button key={mode} onClick={()=>setScheduleMode(prev=>({...prev,[p.id]:mode}))}
+                          style={{ flex:1, padding:'8px 4px', borderRadius:8, border:'1px solid '+(currentMode===mode?t.teal+'60':t.border), background:currentMode===mode?t.tealDim:'transparent', fontSize:11, fontWeight:700, color:currentMode===mode?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          {mode === 'add' ? '➕ Add' : '🔄 Replace'}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:10, color:t.textMuted, marginTop:3 }}>
+                      {currentMode === 'replace' ? 'Removes existing assigned sessions first' : 'Keeps existing sessions'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Schedule button */}
+                {isDone ? (
+                  <div style={{ background:t.greenDim, border:'1px solid '+t.green+'40', borderRadius:9, padding:'10px 14px', fontSize:13, fontWeight:700, color:t.green, textAlign:'center' as const }}>
+                    ✓ Sessions scheduled!
+                  </div>
+                ) : (
+                  <button onClick={()=>scheduleProgram(p.id)} disabled={!currentStartDate || isScheduling}
+                    style={{ width:'100%', background:currentStartDate?`linear-gradient(135deg,${t.orange},${t.orange}cc)`:'transparent', border:'1px solid '+(currentStartDate?'transparent':t.border), borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:currentStartDate?'#000':t.textMuted, cursor:!currentStartDate||isScheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!currentStartDate?0.5:1 }}>
+                    {isScheduling ? '⏳ Scheduling...' : currentStartDate ? '📤 Schedule Sessions' : 'Set a start date first'}
+                  </button>
+                )}
+              </div>
+
+              {/* Delete confirm */}
               {isDeleteConfirm && (
-                <div style={{ marginTop:14, background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'12px 14px' }}>
+                <div style={{ marginTop:12, background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'12px 14px' }}>
                   <div style={{ fontSize:13, fontWeight:700, color:t.red, marginBottom:10 }}>
-                    Delete "{p.name}"? This will also delete all workout sessions from this program. This cannot be undone.
+                    Delete "{p.name}"? This removes all workout sessions too. Cannot be undone.
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={()=>setDeleteConfirm(null)}
@@ -2005,7 +2144,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                     </button>
                     <button onClick={()=>deleteProgram(p.id)} disabled={deleting}
                       style={{ flex:2, background:t.red, border:'none', borderRadius:8, padding:'8px', fontSize:12, fontWeight:800, color:'#fff', cursor:deleting?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:deleting?0.7:1 }}>
-                      {deleting ? 'Deleting...' : '🗑 Yes, Delete Program'}
+                      {deleting ? 'Deleting...' : '🗑 Yes, Delete'}
                     </button>
                   </div>
                 </div>
