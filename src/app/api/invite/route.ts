@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
             'Authorization': `Bearer ${resendKey}`,
           },
           body: JSON.stringify({
-            from: 'SRG Fit <onboarding@resend.dev>',
+            from: 'SRG Fit <noreply@srg.fitness>',
             to: [email],
             subject: `${coachName} invited you to SRG Fit`,
             html: `
