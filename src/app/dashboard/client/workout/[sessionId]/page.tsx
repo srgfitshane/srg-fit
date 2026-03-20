@@ -400,12 +400,19 @@ export default function ActiveWorkoutPage() {
                       </div>
                     )}
 
-                    {/* Video link */}
+                    {/* Video embed — inline iframe, no account picker */}
                     {ex.exercise?.video_url && (
-                      <a href={ex.exercise.video_url} target="_blank" rel="noreferrer"
-                        style={{display:'inline-flex',alignItems:'center',gap:6,marginTop:10,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:8,padding:'6px 12px'}}>
-                        ▶ Watch Demo
-                      </a>
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Demo Video</div>
+                        <div style={{position:'relative',width:'100%',paddingTop:'56.25%',borderRadius:10,overflow:'hidden',background:'#000'}}>
+                          <iframe
+                            src={ex.exercise.video_url.replace('/view','/preview').replace('/edit','/preview')}
+                            style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',border:'none'}}
+                            allow="autoplay"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
                     )}
 
                     {/* No data fallback */}
