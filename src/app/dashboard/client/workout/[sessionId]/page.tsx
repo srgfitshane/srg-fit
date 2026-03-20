@@ -34,6 +34,7 @@ export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<any>(null)
   const [exercises, setExercises] = useState<any[]>([])
   const [setData, setSetData] = useState<Record<string, SetData[]>>({})
+  const [prevSets, setPrevSets] = useState<Record<string, {reps:number|null, weight:number|null, unit:string}[]>>({})
   const [activeExIdx, setActiveExIdx] = useState(0)
   const [restTimer, setRestTimer] = useState<number|null>(null)
   const [restActive, setRestActive] = useState(false)
@@ -87,9 +88,57 @@ export default function ActiveWorkoutPage() {
       initSets[ex.id] = Array.from({length: count}, defaultSet)
     }
 
+    // Fetch previous session sets for same exercises
+    const prev: Record<string, {reps:number|null, weight:number|null, unit:string}[]> = {}
+    if (exs && exs.length > 0) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        // Get all completed sessions for this client
+        const { data: completedSessions } = await supabase
+          .from('workout_sessions')
+          .select('id')
+          .eq('client_id', user.id)
+          .eq('status', 'completed')
+          .neq('id', sessionId)
+          .order('completed_at', { ascending: false })
+          .limit(20)
+
+        if (completedSessions && completedSessions.length > 0) {
+          const completedIds = completedSessions.map((s:any) => s.id)
+          for (const ex of exs) {
+            // Find session_exercises with same name in those sessions
+            const { data: priorExs } = await supabase
+              .from('session_exercises')
+              .select('id')
+              .eq('exercise_name', ex.exercise_name)
+              .in('session_id', completedIds)
+              .limit(1)
+
+            if (priorExs && priorExs.length > 0) {
+              const { data: priorSets } = await supabase
+                .from('exercise_sets')
+                .select('set_number, reps_completed, weight_value, weight_unit')
+                .eq('session_exercise_id', priorExs[0].id)
+                .order('set_number')
+                .limit(6)
+
+              if (priorSets && priorSets.length > 0) {
+                prev[ex.id] = priorSets.map((s:any) => ({
+                  reps: s.reps_completed,
+                  weight: s.weight_value,
+                  unit: s.weight_unit || 'lbs'
+                }))
+              }
+            }
+          }
+        }
+      }
+    }
+
     setSession(sess)
     setExercises(exs || [])
     setSetData(initSets)
+    setPrevSets(prev)
     setLoading(false)
   }
 
@@ -441,9 +490,11 @@ export default function ActiveWorkoutPage() {
               </div>
 
               <div style={{display:'grid',gap:10,marginBottom:12}}>
-                {setsArr.map((s,idx)=>(
+                {setsArr.map((s,idx)=>{
+                  const prior = prevSets[ex.id]?.[idx]
+                  return (
                   <div key={idx} style={{background:s.logged?t.greenDim:t.surface,border:`1px solid ${s.logged?t.green:t.border}`,borderRadius:14,padding:'14px 16px',transition:'all 0.2s'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:prior?6:10}}>
                       <span style={{fontSize:12,fontWeight:800,color:s.logged?t.green:t.textDim,minWidth:40}}>
                         {s.is_warmup?'Warm-up':`Set ${idx+1}`}
                       </span>
@@ -454,6 +505,17 @@ export default function ActiveWorkoutPage() {
                       </label>
                       {s.logged && <span style={{fontSize:12,color:t.green,fontWeight:700}}>✓ Logged</span>}
                     </div>
+                    {/* Previous session hint */}
+                    {prior && (
+                      <div style={{fontSize:11,color:t.textMuted,marginBottom:8,paddingLeft:2,display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{color:t.teal,opacity:0.7}}>↩</span>
+                        <span>Last time: </span>
+                        <span style={{color:t.textDim,fontWeight:700}}>
+                          {prior.reps ? `${prior.reps} reps` : '—'}
+                          {prior.weight && prior.unit !== 'bw' ? ` @ ${prior.weight}${prior.unit}` : prior.unit === 'bw' ? ' bodyweight' : ''}
+                        </span>
+                      </div>
+                    )}
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
                       <div>
                         <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
@@ -494,7 +556,8 @@ export default function ActiveWorkoutPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
 
               <button onClick={()=>addSet(ex.id)}
