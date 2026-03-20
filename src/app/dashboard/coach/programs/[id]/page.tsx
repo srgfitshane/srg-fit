@@ -310,8 +310,30 @@ export default function ProgramBuilder() {
         setSendingSessions(false); return
       }
 
-      const { error } = await supabase.from('workout_sessions').insert(sessionsToInsert)
+      const { data: insertedSessions, error } = await supabase
+        .from('workout_sessions').insert(sessionsToInsert).select()
       if (error) { setSendError(error.message); setSendingSessions(false); return }
+
+      // Populate session_exercises from each block's block_exercises
+      for (const session of (insertedSessions || [])) {
+        const block = blocks.find(b => b.id === session.block_id)
+        const exes = (block?.block_exercises || [])
+          .sort((a: any, b: any) => a.order_index - b.order_index)
+        if (exes.length === 0) continue
+        await supabase.from('session_exercises').insert(
+          exes.map((ex: any) => ({
+            session_id: session.id,
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise?.name || '',
+            sets_prescribed: ex.sets || 3,
+            reps_prescribed: ex.reps || '',
+            weight_prescribed: ex.target_weight || '',
+            rest_seconds: ex.rest_seconds || null,
+            notes_coach: ex.notes || null,
+            order_index: ex.order_index,
+          }))
+        )
+      }
       setSendDone(true)
       setTimeout(() => { setShowSend(false); setSendDone(false) }, 2200)
     } catch (e: any) {

@@ -236,9 +236,9 @@ export default function CoachDashboard() {
                     style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     Archived
                   </button>
-                  <button onClick={()=>{ setShowInvite(true); setInviteMsg('') }}
+                  <button onClick={()=>router.push('/dashboard/coach/invites')}
                     style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    + Invite Client
+                    + Add Client
                   </button>
                 </div>
               </div>
@@ -248,8 +248,8 @@ export default function CoachDashboard() {
                   <div style={{ fontSize:40, marginBottom:12 }}>👥</div>
                   <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>No clients yet</div>
                   <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Invite your first client to get started</div>
-                  <button onClick={()=>setShowInvite(true)} style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    + Invite Client
+                  <button onClick={()=>router.push('/dashboard/coach/invites')} style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 22px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    + Add Client
                   </button>
                 </div>
               ) : (
@@ -328,9 +328,9 @@ export default function CoachDashboard() {
                 </div>
               </div>
 
-              <button onClick={()=>{ setShowInvite(true); setInviteMsg('') }}
+              <button onClick={()=>router.push('/dashboard/coach/invites')}
                 style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:14, padding:'14px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                + Invite New Client
+                + Add Client
               </button>
             </div>
 
