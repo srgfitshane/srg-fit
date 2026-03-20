@@ -1712,162 +1712,316 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
 
 // ── ProgramTab ────────────────────────────────────────────────────────────
 function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t, onProgramChange }: any) {
-  const [allPrograms, setAllPrograms] = useState<any[]>([])
+  const [clientPrograms, setClientPrograms] = useState<any[]>([])
+  const [templates, setTemplates] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedId, setSelectedId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [dirty, setDirty] = useState(false)
+  const [editingId, setEditingId] = useState<string|null>(null)
+  const [editName, setEditName] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<string|null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [showAssign, setShowAssign] = useState(false)
+  const [assignId, setAssignId] = useState('')
+  const [assigning, setAssigning] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
-    supabase.from('programs')
-      .select('id, name, goal, duration_weeks, is_template')
-      .eq('coach_id', coachId)
-      .order('is_template', { ascending: false })
+  const load = async () => {
+    const { data: clientProgs } = await supabase.from('programs')
+      .select('id, name, goal, duration_weeks, difficulty, status, created_at, active')
+      .eq('client_id', clientId).eq('is_template', false)
+      .order('created_at', { ascending: false })
+    setClientPrograms(clientProgs || [])
+
+    const { data: tmpl } = await supabase.from('programs')
+      .select('id, name, goal, duration_weeks')
+      .eq('coach_id', coachId).eq('is_template', true)
       .order('name')
-      .then(({ data }: any) => { setAllPrograms(data || []); setLoading(false) })
-  }, [coachId])
-
-  useEffect(() => {
-    setSelectedId(program?.id || '')
-    setDirty(false)
-  }, [program?.id])
-
-  const handleChange = (id: string) => {
-    setSelectedId(id)
-    setDirty(id !== (program?.id || ''))
-    setSaved(false)
+    setTemplates(tmpl || [])
+    setLoading(false)
   }
 
-  const saveAssignment = async () => {
-    if (!dirty) return
-    setSaving(true)
-    if (selectedId) {
-      // Link this program to the client
-      await supabase.from('programs').update({ client_id: clientId }).eq('id', selectedId)
-      // Unlink any previously assigned programs (set client_id to null) except the new one
-      if (program?.id && program.id !== selectedId) {
-        await supabase.from('programs').update({ client_id: null }).eq('id', program.id)
-      }
-      const { data: newProg } = await supabase.from('programs').select('*').eq('id', selectedId).single()
-      onProgramChange(newProg)
-    } else {
-      // Unassign current program
-      if (program?.id) {
-        await supabase.from('programs').update({ client_id: null }).eq('id', program.id)
-      }
-      onProgramChange(null)
+  useEffect(() => { load() }, [clientId])
+
+  const saveRename = async (id: string) => {
+    if (!editName.trim()) return
+    setEditSaving(true)
+    await supabase.from('programs').update({ name: editName.trim() }).eq('id', id)
+    setClientPrograms(prev => prev.map(p => p.id === id ? { ...p, name: editName.trim() } : p))
+    if (program?.id === id) onProgramChange({ ...program, name: editName.trim() })
+    setEditingId(null)
+    setEditSaving(false)
+  }
+
+  const deleteProgram = async (id: string) => {
+    setDeleting(true)
+    // Delete sessions, then exercises, then the program
+    const { data: sessions } = await supabase.from('workout_sessions').select('id').eq('program_id', id)
+    for (const sess of (sessions || [])) {
+      await supabase.from('session_exercises').delete().eq('session_id', sess.id)
+      await supabase.from('exercise_sets').delete().eq('session_id', sess.id)
     }
-    setSaving(false)
-    setSaved(true)
-    setDirty(false)
-    setTimeout(() => setSaved(false), 2500)
+    await supabase.from('workout_sessions').delete().eq('program_id', id)
+    const { data: blocks } = await supabase.from('workout_blocks').select('id').eq('program_id', id)
+    for (const b of (blocks || [])) {
+      await supabase.from('block_exercises').delete().eq('block_id', b.id)
+    }
+    await supabase.from('workout_blocks').delete().eq('program_id', id)
+    await supabase.from('programs').delete().eq('id', id)
+    setClientPrograms(prev => prev.filter(p => p.id !== id))
+    if (program?.id === id) onProgramChange(null)
+    setDeleteConfirm(null)
+    setDeleting(false)
   }
 
-  const templates = allPrograms.filter(p => p.is_template)
-  const clientProgs = allPrograms.filter(p => !p.is_template)
+  const assignProgram = async () => {
+    if (!assignId) return
+    setAssigning(true)
+    // Unlink all other client programs first
+    await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId).neq('id', assignId)
+    await supabase.from('programs').update({ client_id: clientId }).eq('id', assignId)
+    const { data: newProg } = await supabase.from('programs').select('*').eq('id', assignId).single()
+    onProgramChange(newProg)
+    await load()
+    setShowAssign(false)
+    setAssignId('')
+    setAssigning(false)
+  }
+
+  const createFromTemplate = async () => {
+    if (!newName.trim()) return
+    setCreating(true)
+    // Get chosen template blocks+exercises
+    const srcId = assignId
+    const { data: newProg } = await supabase.from('programs').insert({
+      coach_id: coachId, client_id: clientId,
+      name: newName.trim(), is_template: false, status: 'active',
+    }).select().single()
+    if (newProg && srcId) {
+      const { data: srcBlocks } = await supabase.from('workout_blocks')
+        .select('*, block_exercises(*)')
+        .eq('program_id', srcId)
+      for (const b of (srcBlocks || [])) {
+        const { data: nb } = await supabase.from('workout_blocks').insert({
+          program_id: newProg.id, name: b.name, day_label: b.day_label,
+          week_number: b.week_number, order_index: b.order_index,
+          day_of_week: b.day_of_week, group_types: b.group_types || {},
+        }).select().single()
+        if (nb) {
+          for (const ex of (b.block_exercises || [])) {
+            await supabase.from('block_exercises').insert({
+              block_id: nb.id, exercise_id: ex.exercise_id,
+              sets: ex.sets, reps: ex.reps, target_weight: ex.target_weight,
+              rest_seconds: ex.rest_seconds, rpe: ex.rpe, notes: ex.notes,
+              order_index: ex.order_index, exercise_role: ex.exercise_role,
+            })
+          }
+        }
+      }
+    }
+    if (newProg) onProgramChange(newProg)
+    await load()
+    setShowCreate(false)
+    setNewName('')
+    setAssignId('')
+    setCreating(false)
+  }
+
+  const unassignAll = async () => {
+    await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId)
+    setClientPrograms(prev => prev.map(p => ({ ...p, client_id: null })))
+    onProgramChange(null)
+    await load()
+  }
+
+  if (loading) return <div style={{ color:t.textMuted, fontSize:13, padding:20 }}>Loading programs...</div>
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
 
-      {/* Assignment card */}
-      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <div>
-            <div style={{ fontSize:15, fontWeight:800, marginBottom:2 }}>Assigned Program</div>
-            <div style={{ fontSize:12, color:t.textMuted }}>
-              {program ? 'Currently: ${program.name}' : 'No program assigned yet'}
-            </div>
+      {/* Header actions */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div>
+          <div style={{ fontSize:15, fontWeight:800 }}>Programs</div>
+          <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>
+            {clientPrograms.length} program{clientPrograms.length !== 1 ? 's' : ''} for this client
           </div>
-          <button onClick={() => router.push('/dashboard/coach/programs')}
-            style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            Manage Programs →
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={()=>{ setShowAssign(true); setShowCreate(false) }}
+            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            + Assign Existing
+          </button>
+          <button onClick={()=>{ setShowCreate(true); setShowAssign(false) }}
+            style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            + New Program
           </button>
         </div>
+      </div>
 
-        {loading ? (
-          <div style={{ color:t.textMuted, fontSize:13 }}>Loading programs...</div>
-        ) : (
-          <>
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:8 }}>
-                Select Program
-              </label>
-              <select
-                value={selectedId}
-                onChange={e => handleChange(e.target.value)}
-                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+(dirty?t.orange:t.border), borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}>
-                <option value="">— No program assigned —</option>
-                {clientProgs.length > 0 && (
-                  <optgroup label="Client Programs">
-                    {clientProgs.map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.name}{p.goal ? ' · ${p.goal}' : ''}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {templates.length > 0 && (
-                  <optgroup label="Templates (will assign a copy)">
-                    {templates.map((p: any) => (
-                      <option key={p.id} value={p.id}>📐 {p.name}{p.goal ? ' · ${p.goal}' : ''}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-              {allPrograms.length === 0 && (
-                <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>
-                  No programs yet. <span onClick={() => router.push('/dashboard/coach/programs')} style={{ cursor:'pointer', textDecoration:'underline' }}>Create one first →</span>
+      {/* Assign existing program panel */}
+      {showAssign && (
+        <div style={{ background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:14, padding:18 }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Assign an existing program</div>
+          <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>This will unlink any currently assigned programs and link the selected one.</div>
+          <select value={assignId} onChange={e=>setAssignId(e.target.value)}
+            style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, marginBottom:10 }}>
+            <option value="">— Choose a program —</option>
+            {clientPrograms.map(p => <option key={p.id} value={p.id}>{p.name} (already assigned to client)</option>)}
+            {templates.length > 0 && <optgroup label="── Templates ──">
+              {templates.map(p => <option key={p.id} value={p.id}>📐 {p.name}</option>)}
+            </optgroup>}
+          </select>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={()=>setShowAssign(false)}
+              style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              Cancel
+            </button>
+            <button onClick={assignProgram} disabled={!assignId || assigning}
+              style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!assignId||assigning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!assignId||assigning?0.5:1 }}>
+              {assigning ? 'Assigning...' : '✓ Assign Program'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create new program from template */}
+      {showCreate && (
+        <div style={{ background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:18 }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Create new program for this client</div>
+          <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Program Name *</div>
+            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Phase 1 — Strength Foundation"
+              style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, boxSizing:'border-box' as const }} />
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Start from template (optional)</div>
+            <select value={assignId} onChange={e=>setAssignId(e.target.value)}
+              style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}>
+              <option value="">— Start blank —</option>
+              {templates.map(p => <option key={p.id} value={p.id}>📐 {p.name}</option>)}
+            </select>
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={()=>{ setShowCreate(false); setNewName(''); setAssignId('') }}
+              style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              Cancel
+            </button>
+            <button onClick={createFromTemplate} disabled={!newName.trim() || creating}
+              style={{ flex:2, background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!newName.trim()||creating?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newName.trim()||creating?0.5:1 }}>
+              {creating ? 'Creating...' : '✓ Create Program'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Program list */}
+      {clientPrograms.length === 0 ? (
+        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px 20px', textAlign:'center' as const }}>
+          <div style={{ fontSize:36, marginBottom:12 }}>📋</div>
+          <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No programs yet</div>
+          <div style={{ fontSize:13, color:t.textMuted }}>Create a new program or assign an existing one above.</div>
+        </div>
+      ) : clientPrograms.map((p: any) => {
+        const isActive = program?.id === p.id
+        const isEditing = editingId === p.id
+        const isDeleteConfirm = deleteConfirm === p.id
+        return (
+          <div key={p.id} style={{ background:t.surface, border:'1px solid '+(isActive ? t.teal+'60' : t.border), borderRadius:16, overflow:'hidden' }}>
+            {isActive && <div style={{ height:3, background:`linear-gradient(90deg,${t.teal},${t.orange})` }} />}
+            <div style={{ padding:18 }}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                <div style={{ flex:1 }}>
+                  {isEditing ? (
+                    <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)}
+                      onKeyDown={e=>{ if(e.key==='Enter') saveRename(p.id); if(e.key==='Escape') setEditingId(null) }}
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.orange+'60', borderRadius:8, padding:'7px 10px', fontSize:14, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }} />
+                  ) : (
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
+                      {isActive && <span style={{ fontSize:10, fontWeight:800, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:20, padding:'2px 8px' }}>ACTIVE</span>}
+                    </div>
+                  )}
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:3 }}>
+                    {[p.goal, p.duration_weeks ? p.duration_weeks+'w' : null, p.difficulty].filter(Boolean).join(' · ') || 'No details set'}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                  {isEditing ? (
+                    <>
+                      <button onClick={()=>saveRename(p.id)} disabled={editSaving}
+                        style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'5px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {editSaving ? '...' : '✓ Save'}
+                      </button>
+                      <button onClick={()=>setEditingId(null)}
+                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {!isActive && (
+                        <button onClick={async ()=>{
+                          await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId).neq('id', p.id)
+                          await supabase.from('programs').update({ client_id: clientId }).eq('id', p.id)
+                          const { data: newProg } = await supabase.from('programs').select('*').eq('id', p.id).single()
+                          onProgramChange(newProg)
+                          await load()
+                        }}
+                          style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          Set Active
+                        </button>
+                      )}
+                      <button onClick={()=>router.push('/dashboard/coach/programs/'+p.id)}
+                        style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Edit
+                      </button>
+                      <button onClick={()=>{ setEditingId(p.id); setEditName(p.name) }}
+                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Rename
+                      </button>
+                      <button onClick={()=>setDeleteConfirm(p.id)}
+                        style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Delete confirm inline */}
+              {isDeleteConfirm && (
+                <div style={{ marginTop:14, background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'12px 14px' }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:t.red, marginBottom:10 }}>
+                    Delete "{p.name}"? This will also delete all workout sessions from this program. This cannot be undone.
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={()=>setDeleteConfirm(null)}
+                      style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:8, padding:'8px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      Cancel
+                    </button>
+                    <button onClick={()=>deleteProgram(p.id)} disabled={deleting}
+                      style={{ flex:2, background:t.red, border:'none', borderRadius:8, padding:'8px', fontSize:12, fontWeight:800, color:'#fff', cursor:deleting?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:deleting?0.7:1 }}>
+                      {deleting ? 'Deleting...' : '🗑 Yes, Delete Program'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-
-            {dirty && (
-              <button onClick={saveAssignment} disabled={saving}
-                style={{ width:'100%', background:'linear-gradient(135deg,${t.teal},${t.teal}cc)', border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.7:1 }}>
-                {saving ? 'Saving...' : '💾 Save Program Assignment'}
-              </button>
-            )}
-            {saved && (
-              <div style={{ background:t.greenDim, border:'1px solid '+t.green+'40', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.green, fontWeight:700, textAlign:'center' as const }}>
-                ✓ Program assigned successfully!
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Active program details */}
-      {program && (
-        <div style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:16, padding:20 }}>
-          <div style={{ height:3, background:'linear-gradient(90deg,${t.teal},${t.orange})', borderRadius:3, marginBottom:16, marginTop:-20, marginLeft:-20, marginRight:-20 }} />
-          <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>{program.name}</div>
-          {program.description && <div style={{ fontSize:13, color:t.textMuted, marginBottom:14, lineHeight:1.6 }}>{program.description}</div>}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:14 }}>
-            {[
-              { label:'Duration',  val: program.duration_weeks ? program.duration_weeks+'w' : '—', color:t.teal },
-              { label:'Frequency', val: program.sessions_per_week ? program.sessions_per_week+'x/wk' : '—', color:t.orange },
-              { label:'Level',     val: program.difficulty || '—', color:t.purple },
-              { label:'Goal',      val: program.goal || '—', color:t.green },
-            ].map(s => (
-              <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' as const }}>
-                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
-                <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
-              </div>
-            ))}
           </div>
-          <button onClick={() => router.push('/dashboard/coach/programs/'+program.id)}
-            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            Open in Builder →
-          </button>
-        </div>
-      )}
+        )
+      })}
 
       {/* Recent workout sessions */}
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
         <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Workout Sessions</div>
-        {workouts.length > 0 ? workouts.map((w:any, i:number) => (
-          <div key={w.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 0', borderBottom: i < workouts.length-1 ? '1px solid '+t.border : 'none' }}>
-            <div style={{ width:36, height:36, borderRadius:10, background: w.status==='completed' ? t.greenDim : t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>
-              {w.status==='completed' ? '✅' : '📋'}
+        {workouts.length > 0 ? workouts.slice(0,10).map((w:any, i:number) => (
+          <div key={w.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom: i < Math.min(workouts.length,10)-1 ? '1px solid '+t.border : 'none' }}>
+            <div style={{ width:34, height:34, borderRadius:9, background: w.status==='completed' ? t.greenDim : t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>
+              {w.status==='completed' ? '✅' : '💪'}
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:600 }}>{w.title || w.name || 'Workout'}</div>
