@@ -327,11 +327,6 @@ export default function CoachDashboard() {
                   {navExpanded && NAV_EXPANDED.map(item => <NavBtn key={item.label} item={item} />)}
                 </div>
               </div>
-
-              <button onClick={()=>router.push('/dashboard/coach/invites')}
-                style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:14, padding:'14px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                + Add Client
-              </button>
             </div>
 
           </div>{/* end 2-col */}

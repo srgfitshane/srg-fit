@@ -22,12 +22,11 @@ const GOAL_OPTIONS = [
 ]
 const goalMeta = (g: string) => GOAL_OPTIONS.find(o => o.value === g) || { label: g, icon:'📋', color: t.teal }
 
-type Tab = 'templates' | 'client'
+type Tab = 'templates'
 
 export default function ProgramsList() {
   const [tab,          setTab]          = useState<Tab>('templates')
   const [templates,    setTemplates]    = useState<any[]>([])
-  const [clientProgs,  setClientProgs]  = useState<any[]>([])
   const [clients,      setClients]      = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
   const [showNew,      setShowNew]      = useState(false)
@@ -38,8 +37,6 @@ export default function ProgramsList() {
   const [newGoal,      setNewGoal]      = useState('general')
   const [newDesc,      setNewDesc]      = useState('')
   const [newWeeks,     setNewWeeks]     = useState('')
-  const [newClient,    setNewClient]    = useState('')
-  const [newIsTemplate,setNewIsTemplate]= useState(true)
   const [creating,     setCreating]     = useState(false)
   // Assign form
   const [assignClient, setAssignClient] = useState('')
@@ -58,7 +55,6 @@ export default function ProgramsList() {
       .eq('coach_id', user?.id)
       .order('created_at', { ascending: false })
     setTemplates((all || []).filter(p => p.is_template))
-    setClientProgs((all || []).filter(p => !p.is_template))
     const { data: cls } = await supabase
       .from('clients')
       .select(`*, profile:profiles!clients_profile_id_fkey(full_name)`)
@@ -75,8 +71,8 @@ export default function ProgramsList() {
     const { data: prog } = await supabase.from('programs').insert({
       name: newName,
       coach_id: user?.id,
-      client_id: (!newIsTemplate && newClient) ? newClient : null,
-      is_template: newIsTemplate,
+      client_id: null,
+      is_template: true,
       goal: newGoal,
       description: newDesc || null,
       duration_weeks: newWeeks ? parseInt(newWeeks) : null,
@@ -133,16 +129,14 @@ export default function ProgramsList() {
     router.push('/dashboard/coach/programs/'+newProg.id)
   }
 
-  const openNew = (isTemplate: boolean) => {
-    setNewIsTemplate(isTemplate)
-    setNewName(''); setNewGoal('general'); setNewDesc(''); setNewWeeks(''); setNewClient('')
+  const openNew = () => {
+    setNewName(''); setNewGoal('general'); setNewDesc(''); setNewWeeks('')
     setShowNew(true)
   }
 
 
-  const ProgramCard = ({ p, isTemplate }: { p: any, isTemplate: boolean }) => {
+  const ProgramCard = ({ p }: { p: any }) => {
     const gm = goalMeta(p.goal)
-    const originTemplate = isTemplate ? null : templates.find(t => t.id === p.template_id)
     const [editing,    setEditing]    = useState(false)
     const [editName,   setEditName]   = useState(p.name)
     const [editDesc,   setEditDesc]   = useState(p.description || '')
@@ -213,7 +207,6 @@ export default function ProgramsList() {
       await supabase.from('workout_blocks').delete().eq('program_id', p.id)
       await supabase.from('programs').delete().eq('id', p.id)
       setTemplates(prev => prev.filter(x => x.id !== p.id))
-      setClientProgs(prev => prev.filter(x => x.id !== p.id))
     }
 
     const btnBase: React.CSSProperties = {
@@ -224,7 +217,7 @@ export default function ProgramsList() {
     return (
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden', transition:'all 0.15s ease', cursor: editing ? 'default' : 'pointer' }}
         onClick={()=>{ if (!editing) router.push('/dashboard/coach/programs/'+p.id) }}
-        onMouseEnter={e=>{ if (!editing) e.currentTarget.style.borderColor=(isTemplate?t.orange:t.teal)+'50' }}
+        onMouseEnter={e=>{ if (!editing) e.currentTarget.style.borderColor=t.orange+'50' }}
         onMouseLeave={e=>{ if (!editing) e.currentTarget.style.borderColor=t.border }}>
 
         {/* Color bar top */}
@@ -234,7 +227,7 @@ export default function ProgramsList() {
           {/* Name row */}
           <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom: editing ? 10 : 10 }}>
             <div style={{ flex:1, marginRight:8 }}>
-              {isTemplate && !editing && (
+              {!editing && (
                 <div style={{ fontSize:9, fontWeight:900, color:t.orange, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>
                   📐 Template
                 </div>
@@ -281,13 +274,6 @@ export default function ProgramsList() {
             </div>
           )}
 
-          {/* Client or template origin */}
-          {!isTemplate && !editing && p.client?.profile?.full_name && (
-            <div style={{ fontSize:12, color:t.teal, fontWeight:700, marginBottom:6 }}>👤 {p.client.profile.full_name}</div>
-          )}
-          {!isTemplate && !editing && originTemplate && (
-            <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>📐 From: {originTemplate.name}</div>
-          )}
           {!editing && p.description && (
             <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.5, marginBottom:10, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
               {p.description}
@@ -310,7 +296,7 @@ export default function ProgramsList() {
             ) : (
               <>
                 <div style={{ fontSize:10, color:t.textMuted }}>
-                  {p.start_date ? 'Started '+new Date(p.start_date).toLocaleDateString() : isTemplate ? 'Template' : 'No start date'}
+                  {p.start_date ? 'Created '+new Date(p.start_date).toLocaleDateString() : 'Template'}
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }} onClick={e=>e.stopPropagation()}>
                   {/* Edit */}
@@ -323,13 +309,11 @@ export default function ProgramsList() {
                     style={{ ...btnBase, background:t.orange+'18', border:'1px solid '+t.orange+'40', color:t.orange, opacity:duping?0.5:1 }}>
                     {duping ? '⏳' : '📋'}
                   </button>
-                  {/* Assign (templates only) */}
-                  {isTemplate && (
-                    <button onClick={e=>{ e.stopPropagation(); setAssignClient(''); setAssignStart(''); setShowAssign(p) }}
-                      style={{ ...btnBase, background:t.tealDim, border:'1px solid '+t.teal+'40', color:t.teal }}>
-                      + Assign
-                    </button>
-                  )}
+                  {/* Assign to client */}
+                  <button onClick={e=>{ e.stopPropagation(); setAssignClient(''); setAssignStart(''); setShowAssign(p) }}
+                    style={{ ...btnBase, background:t.tealDim, border:'1px solid '+t.teal+'40', color:t.teal }}>
+                    + Assign to Client
+                  </button>
                   {/* Delete */}
                   {!confirmDel ? (
                     <button onClick={e=>{ e.stopPropagation(); setConfirmDel(true) }}
@@ -348,7 +332,7 @@ export default function ProgramsList() {
                       </button>
                     </>
                   )}
-                  <div style={{ fontSize:11, color:isTemplate?t.orange:t.teal, fontWeight:700 }}>Open →</div>
+                  <div style={{ fontSize:11, color:t.orange, fontWeight:700 }}>Open →</div>
                 </div>
               </>
             )}
@@ -371,88 +355,38 @@ export default function ProgramsList() {
           <div style={{ width:1, height:28, background:t.border }} />
           <div style={{ fontSize:14, fontWeight:800 }}>Programs</div>
           <div style={{ flex:1 }} />
-          <button onClick={()=>openNew(tab==='templates')}
-            style={{ background:'linear-gradient(135deg,'+(tab==='templates'?t.orange:t.teal)+','+(tab==='templates'?t.orange:t.teal)+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            {tab === 'templates' ? '+ New Template' : '+ New Client Program'}
+          <button onClick={()=>openNew()}
+            style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            + New Template
           </button>
         </div>
 
-        {/* Tabs */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', gap:4, height:48, alignItems:'flex-end' }}>
-          {([['templates','📐 Templates', templates.length], ['client','👤 Client Programs', clientProgs.length]] as const).map(([v,label,count]) => (
-            <button key={v} onClick={()=>setTab(v)}
-              style={{ padding:'10px 18px', border:'none', background:'transparent', borderBottom:'3px solid '+(tab===v?(v==='templates'?t.orange:t.teal):'transparent'), fontSize:13, fontWeight:700, color:tab===v?(v==='templates'?t.orange:t.teal):t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:8 }}>
-              {label}
-              <span style={{ background:tab===v?(v==='templates'?t.orange:t.teal)+'20':t.surfaceHigh, borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:800, color:tab===v?(v==='templates'?t.orange:t.teal):t.textMuted }}>
-                {count}
-              </span>
-            </button>
-          ))}
-        </div>
-
+        {/* Content */}
         <div style={{ maxWidth:960, margin:'0 auto', padding:28 }}>
           {loading ? (
             <div style={{ color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
-          ) : tab === 'templates' ? (
-            <>
-              {templates.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'64px 20px' }}>
-                  <div style={{ fontSize:48, marginBottom:16 }}>📐</div>
-                  <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>No templates yet</div>
-                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.7 }}>
-                    Templates are reusable program blueprints.<br/>Build once, assign to any client.
-                  </div>
-                  <button onClick={()=>openNew(true)}
-                    style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    + Create First Template
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
-                  {templates.map(p => <ProgramCard key={p.id} p={p} isTemplate={true} />)}
-                  <div onClick={()=>openNew(true)}
-                    style={{ background:'transparent', border:'2px dashed '+t.border, borderRadius:18, padding:'32px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, minHeight:140, justifyContent:'center' }}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=t.orange+'50'}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
-                    <span style={{ fontSize:28 }}>+</span>New Template
-                  </div>
-                </div>
-              )}
-            </>
+          ) : templates.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'64px 20px' }}>
+              <div style={{ fontSize:48, marginBottom:16 }}>📐</div>
+              <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>No templates yet</div>
+              <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.7 }}>
+                Templates are reusable program blueprints.<br/>Build once, assign to any client from their profile.
+              </div>
+              <button onClick={()=>openNew()}
+                style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                + Create First Template
+              </button>
+            </div>
           ) : (
-            <>
-              {clientProgs.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'64px 20px' }}>
-                  <div style={{ fontSize:48, marginBottom:16 }}>👤</div>
-                  <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>No client programs yet</div>
-                  <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.7 }}>
-                    Assign a template to a client, or create a program from scratch.
-                  </div>
-                  <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap' }}>
-                    {templates.length > 0 && (
-                      <button onClick={()=>setTab('templates')}
-                        style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        📐 Use a Template
-                      </button>
-                    )}
-                    <button onClick={()=>openNew(false)}
-                      style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                      + From Scratch
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
-                  {clientProgs.map(p => <ProgramCard key={p.id} p={p} isTemplate={false} />)}
-                  <div onClick={()=>openNew(false)}
-                    style={{ background:'transparent', border:'2px dashed '+t.border, borderRadius:18, padding:'32px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, minHeight:140, justifyContent:'center' }}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=t.teal+'50'}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
-                    <span style={{ fontSize:28 }}>+</span>New Client Program
-                  </div>
-                </div>
-              )}
-            </>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
+              {templates.map(p => <ProgramCard key={p.id} p={p} />)}
+              <div onClick={()=>openNew()}
+                style={{ background:'transparent', border:'2px dashed '+t.border, borderRadius:18, padding:'32px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, minHeight:140, justifyContent:'center' }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=t.orange+'50'}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=t.border}>
+                <span style={{ fontSize:28 }}>+</span>New Template
+              </div>
+            </div>
           )}
         </div>
 
@@ -462,15 +396,15 @@ export default function ProgramsList() {
           <div onClick={()=>setShowNew(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:460, padding:28, maxHeight:'90vh', overflowY:'auto' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
-                <div style={{ fontSize:18, fontWeight:900, color: newIsTemplate ? t.orange : t.teal }}>
-                  {newIsTemplate ? '📐 New Template' : '👤 New Client Program'}
+                <div style={{ fontSize:18, fontWeight:900, color:t.orange }}>
+                  📐 New Template
                 </div>
               </div>
 
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Name *</div>
                 <input value={newName} onChange={e=>setNewName(e.target.value)}
-                  placeholder={newIsTemplate ? "e.g. 12-Week Powerlifting Peaking" : "e.g. Alex's Hypertrophy Block"}
+                  placeholder="e.g. 12-Week Powerlifting Peaking"
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
               </div>
 
@@ -487,22 +421,12 @@ export default function ProgramsList() {
                 </div>
               </div>
 
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12, marginBottom:14 }}>
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Duration (weeks)</div>
                   <input type="number" value={newWeeks} onChange={e=>setNewWeeks(e.target.value)} placeholder="e.g. 12"
                     style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
                 </div>
-                {!newIsTemplate && (
-                  <div>
-                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Assign to Client</div>
-                    <select value={newClient} onChange={e=>setNewClient(e.target.value)}
-                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}>
-                      <option value=''>— Select —</option>
-                      {clients.map(c => <option key={c.id} value={c.id}>{c.profile?.full_name}</option>)}
-                    </select>
-                  </div>
-                )}
               </div>
 
               <div style={{ marginBottom:20 }}>
@@ -513,7 +437,7 @@ export default function ProgramsList() {
               </div>
 
               <button onClick={createProgram} disabled={!newName||creating}
-                style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(newIsTemplate?t.orange:t.teal)+','+(newIsTemplate?t.orange:t.teal)+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:!newName||creating?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newName||creating?0.6:1 }}>
+                style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:!newName||creating?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newName||creating?0.6:1 }}>
                 {creating ? 'Creating...' : 'Create & Open Builder →'}
               </button>
             </div>
