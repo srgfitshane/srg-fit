@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     } catch (_) {}
 
     // Generate password-set link
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace('http://localhost:3000', '') || 'https://srg-fit.vercel.app'
+    const siteUrl = 'https://srg-fit.vercel.app'
     const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
