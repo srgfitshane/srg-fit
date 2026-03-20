@@ -64,25 +64,27 @@ export default function InvitesPage() {
   const sendInvite = async () => {
     if (!form.email || !coachId) return
     setSending(true)
-    const payload: any = { coach_id: coachId, email: form.email.trim().toLowerCase() }
-    if (form.full_name) payload.full_name = form.full_name
-    if (form.message) payload.message = form.message
-    if (form.onboarding_form_id) payload.onboarding_form_id = form.onboarding_form_id
-    const { data, error } = await supabase.from('client_invites').insert(payload).select().single()
-    if (!error && data) {
-      const { data: fnResult } = await supabase.functions.invoke('send-invite-email', { body: { invite_id: data.id } })
-      setInvites(p => [data, ...p])
-      setLastInvite(data)
-      // Capture result to show if email was sent or link needed
-      if (fnResult?.note || fnResult?.invite_url) {
-        setSendResult({ url: fnResult.invite_url, note: fnResult.note })
-      }
+    try {
+      const res = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.trim().toLowerCase(), fullName: form.full_name || form.email, coachId })
+      })
+      const result = await res.json()
+      if (!res.ok) { alert(result.error || 'Failed to send invite'); setSending(false); return }
+      // Show the invite link in case email didn't land
+      if (result.invite_link) setSendResult({ url: result.invite_link })
+      // Reload invites list to reflect new entry
+      const { data: inv } = await supabase.from('client_invites').select('*').eq('coach_id', coachId).order('created_at', { ascending: false })
+      setInvites(inv || [])
+      // For "what's next" modal, create a stub invite object
+      setLastInvite({ id: '', email: form.email, full_name: form.full_name || null, status: 'pending', created_at: new Date().toISOString(), expires_at: '', accepted_at: null, message: null })
       const chosenForm = form.onboarding_form_id || forms.find(f=>f.is_default)?.id || ''
       setNextFormId(chosenForm)
       setShowModal(false)
       setForm({ email:'', full_name:'', message:'', onboarding_form_id:'' })
       setShowNext(true)
-    }
+    } catch (e: any) { alert(e.message) }
     setSending(false)
   }
 
