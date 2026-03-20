@@ -26,7 +26,7 @@ function defaultSet(): SetData {
 }
 export default function ActiveWorkoutPage() {
   const supabase = createClient()
-  const [videoUploads, setVideoUploads]   = useState<Record<string,string>>({}) // exId → url
+  const [videoUploads, setVideoUploads]   = useState<Record<string,string>>({})
   const [videoUploading, setVideoUploading] = useState<Record<string,boolean>>({})
   const router = useRouter()
   const { sessionId } = useParams()
@@ -42,6 +42,12 @@ export default function ActiveWorkoutPage() {
   const [finishForm, setFinishForm] = useState({ session_rpe:'', energy_level:'3', mood:'good', notes_client:'' })
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  // Preview toggle per exercise
+  const [previewOpen, setPreviewOpen] = useState<Record<string,boolean>>({})
+  // Skip state per exercise
+  const [skipOpen, setSkipOpen] = useState<Record<string,boolean>>({})
+  const [skipNote, setSkipNote] = useState<Record<string,string>>({})
+  const [skipped, setSkipped] = useState<Record<string,boolean>>({})
   const timerRef = useRef<any>(null)
   const restRef = useRef<any>(null)
 
@@ -68,7 +74,12 @@ export default function ActiveWorkoutPage() {
       .eq('id', sessionId).eq('status','assigned').not('program_id', 'is', null)
 
     const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
-    const { data: exs } = await supabase.from('session_exercises').select('*').eq('session_id', sessionId).order('order_index')
+    // Join exercise detail for preview
+    const { data: exs } = await supabase
+      .from('session_exercises')
+      .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, thumbnail_url)')
+      .eq('session_id', sessionId)
+      .order('order_index')
 
     const initSets: Record<string,SetData[]> = {}
     for (const ex of exs || []) {
@@ -129,6 +140,20 @@ export default function ActiveWorkoutPage() {
     setSetData(prev => ({ ...prev, [exId]: [...prev[exId], defaultSet()] }))
   }
 
+  async function skipExercise(exId: string) {
+    const note = skipNote[exId] || ''
+    await supabase.from('session_exercises').update({
+      notes_client: note ? `[SKIPPED] ${note}` : '[SKIPPED]',
+      sets_completed: 0,
+    }).eq('id', exId)
+    setSkipped(prev => ({ ...prev, [exId]: true }))
+    setSkipOpen(prev => ({ ...prev, [exId]: false }))
+    // Auto-advance to next non-skipped exercise
+    const nextIdx = exercises.findIndex((ex, i) => i > activeExIdx && !skipped[ex.id])
+    if (nextIdx !== -1) setActiveExIdx(nextIdx)
+    else if (activeExIdx < exercises.length - 1) setActiveExIdx(activeExIdx + 1)
+  }
+
   async function uploadFormVideo(exId: string, file: File) {
     setVideoUploading(prev => ({ ...prev, [exId]: true }))
     const { data: { user } } = await supabase.auth.getUser()
@@ -185,7 +210,9 @@ export default function ActiveWorkoutPage() {
   }
 
   const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
-  const allLogged = exercises.length > 0 && exercises.every(ex => (setData[ex.id]||[]).some(s=>s.logged))
+  const allLogged = exercises.length > 0 && exercises.every(ex =>
+    skipped[ex.id] || (setData[ex.id]||[]).some(s=>s.logged)
+  )
 
   if (loading) return (
     <div style={{minHeight:'100vh',background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',color:t.textMuted,fontFamily:"'DM Sans',sans-serif"}}>Loading workout...</div>
@@ -255,10 +282,11 @@ export default function ActiveWorkoutPage() {
             const done = (setData[ex.id]||[]).filter(s=>s.logged).length
             const total = ex.sets_prescribed || setData[ex.id]?.length || 0
             const complete = done >= total && total > 0
+            const isSkipped = skipped[ex.id]
             return (
               <button key={ex.id} onClick={()=>setActiveExIdx(i)}
-                style={{flexShrink:0,background:activeExIdx===i?t.tealDim:(complete?t.greenDim:t.surfaceHigh),border:`1px solid ${activeExIdx===i?t.teal:complete?t.green:t.border}`,borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:700,color:activeExIdx===i?t.teal:complete?t.green:t.textDim,cursor:'pointer',whiteSpace:'nowrap'}}>
-                {complete ? '✓ ' : ''}{i+1}. {ex.exercise_name.split(' ').slice(0,2).join(' ')}
+                style={{flexShrink:0,background:activeExIdx===i?t.tealDim:(isSkipped?'#1a1a1a':(complete?t.greenDim:t.surfaceHigh)),border:`1px solid ${activeExIdx===i?t.teal:isSkipped?t.border:(complete?t.green:t.border)}`,borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:700,color:activeExIdx===i?t.teal:isSkipped?t.textMuted:(complete?t.green:t.textDim),cursor:'pointer',whiteSpace:'nowrap',textDecoration:isSkipped?'line-through':'none'}}>
+                {isSkipped ? '⏭ ' : complete ? '✓ ' : ''}{i+1}. {ex.exercise_name.split(' ').slice(0,2).join(' ')}
               </button>
             )
           })}
@@ -271,29 +299,136 @@ export default function ActiveWorkoutPage() {
           return (
             <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
               <div style={{marginBottom:16}}>
-                <h2 style={{fontSize:20,fontWeight:900,marginBottom:4}}>{ex.exercise_name}</h2>
-                <div style={{fontSize:13,color:t.textDim,marginBottom:8}}>
-                  Target: {ex.sets_prescribed} × {ex.reps_prescribed}
-                  {ex.weight_prescribed && ` @ ${ex.weight_prescribed}`}
+                {/* Name + action buttons row */}
+                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:6}}>
+                  <div style={{flex:1}}>
+                    <h2 style={{fontSize:20,fontWeight:900,marginBottom:4}}>{ex.exercise_name}</h2>
+                    <div style={{fontSize:13,color:t.textDim}}>
+                      Target: {ex.sets_prescribed} × {ex.reps_prescribed}
+                      {ex.weight_prescribed && ` @ ${ex.weight_prescribed}`}
+                    </div>
+                  </div>
+                  {/* Skip button */}
+                  {!skipped[ex.id] && (
+                    <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
+                      style={{flexShrink:0,background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?t.red+'50':t.border),borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                      ⏭ Skip
+                    </button>
+                  )}
+                  {skipped[ex.id] && (
+                    <span style={{fontSize:12,fontWeight:700,color:t.textMuted,background:t.surfaceHigh,borderRadius:9,padding:'6px 12px'}}>⏭ Skipped</span>
+                  )}
                 </div>
-                {ex.notes_coach && <div style={{fontSize:12,color:t.orange,marginTop:4,marginBottom:8}}>💬 {ex.notes_coach}</div>}
+
+                {ex.notes_coach && <div style={{fontSize:12,color:t.orange,marginBottom:10}}>📌 {ex.notes_coach}</div>}
+
+                {/* Skip panel */}
+                {skipOpen[ex.id] && !skipped[ex.id] && (
+                  <div style={{background:t.redDim,border:'1px solid '+t.red+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+                    <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:8}}>Skip this exercise?</div>
+                    <input
+                      value={skipNote[ex.id]||''}
+                      onChange={e=>setSkipNote(prev=>({...prev,[ex.id]:e.target.value}))}
+                      placeholder="Optional: why are you skipping? (coach will see this)"
+                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const}}
+                    />
+                    <div style={{display:'flex',gap:8}}>
+                      <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:false}))}
+                        style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'8px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                        Cancel
+                      </button>
+                      <button onClick={()=>skipExercise(ex.id)}
+                        style={{flex:2,background:t.red,border:'none',borderRadius:8,padding:'8px',fontSize:12,fontWeight:800,color:'#fff',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                        ⏭ Yes, Skip Exercise
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview toggle button */}
+                <button onClick={()=>setPreviewOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
+                  style={{display:'flex',alignItems:'center',gap:6,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:600,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:previewOpen[ex.id]?0:0}}>
+                  <span style={{fontSize:14}}>{previewOpen[ex.id]?'▲':'▼'}</span>
+                  {previewOpen[ex.id] ? 'Hide preview' : 'See exercise'}
+                </button>
+
+                {/* Preview panel */}
+                {previewOpen[ex.id] && (
+                  <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'14px',marginTop:8}}>
+                    {/* Thumbnail / video */}
+                    {ex.exercise?.thumbnail_url && (
+                      <img src={ex.exercise.thumbnail_url} alt={ex.exercise_name}
+                        style={{width:'100%',borderRadius:8,marginBottom:10,maxHeight:180,objectFit:'cover'}}/>
+                    )}
+
+                    {/* Muscles */}
+                    {(ex.exercise?.muscles?.length > 0 || ex.exercise?.secondary_muscles?.length > 0) && (
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>Muscles</div>
+                        <div style={{display:'flex',flexWrap:'wrap' as const,gap:5}}>
+                          {(ex.exercise?.muscles||[]).map((m:string)=>(
+                            <span key={m} style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700,color:t.teal}}>{m}</span>
+                          ))}
+                          {(ex.exercise?.secondary_muscles||[]).map((m:string)=>(
+                            <span key={m} style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:6,padding:'2px 8px',fontSize:11,color:t.textDim}}>{m}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Equipment */}
+                    {ex.exercise?.equipment && (
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Equipment</div>
+                        <div style={{fontSize:12,color:t.text}}>{ex.exercise.equipment}</div>
+                      </div>
+                    )}
+
+                    {/* Description */}
+                    {ex.exercise?.description && (
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Description</div>
+                        <div style={{fontSize:13,color:t.textDim,lineHeight:1.6}}>{ex.exercise.description}</div>
+                      </div>
+                    )}
+
+                    {/* Coaching cues */}
+                    {ex.exercise?.cues && (
+                      <div>
+                        <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Coaching Cues</div>
+                        <div style={{fontSize:13,color:t.orange,lineHeight:1.7,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
+                      </div>
+                    )}
+
+                    {/* Video link */}
+                    {ex.exercise?.video_url && (
+                      <a href={ex.exercise.video_url} target="_blank" rel="noreferrer"
+                        style={{display:'inline-flex',alignItems:'center',gap:6,marginTop:10,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:8,padding:'6px 12px'}}>
+                        ▶ Watch Demo
+                      </a>
+                    )}
+
+                    {/* No data fallback */}
+                    {!ex.exercise?.description && !ex.exercise?.cues && !ex.exercise?.muscles?.length && !ex.exercise?.video_url && (
+                      <div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No preview available for this exercise yet.</div>
+                    )}
+                  </div>
+                )}
 
                 {/* Form check video upload */}
-                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{display:'flex',alignItems:'center',gap:10,marginTop:10}}>
                   <label style={{display:'flex',alignItems:'center',gap:7,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:'1px solid '+(videoUploads[ex.id]?t.green+'50':t.border),borderRadius:10,padding:'8px 14px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,transition:'all 0.2s'}}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                     </svg>
-                    {videoUploading[ex.id] ? 'Uploading...' : videoUploads[ex.id] ? '✓ Form check uploaded' : 'Upload form check video'}
+                    {videoUploading[ex.id] ? 'Uploading...' : videoUploads[ex.id] ? '✓ Form check uploaded' : 'Upload form check'}
                     <input type="file" accept="video/*" capture="environment" style={{display:'none'}}
                       disabled={videoUploading[ex.id]}
                       onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
                   </label>
                   {videoUploads[ex.id] && (
                     <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
-                      style={{fontSize:11,color:t.teal,textDecoration:'none',fontWeight:600}}>
-                      View ↗
-                    </a>
+                      style={{fontSize:11,color:t.teal,textDecoration:'none',fontWeight:600}}>View ↗</a>
                   )}
                 </div>
               </div>
