@@ -1,0 +1,1147 @@
+﻿node.exe : Initialising login role...
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Initialising login role...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+Γöé                  id                  Γöé                              name                              Γöé
+Γö£ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö╝ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöñ
+Γöé 77397276-a8d5-4365-86ca-abf1115ec2c9 Γöé 45 Degree Hyperextension Arms To Chest                         Γöé
+Γöé 1ad098a1-02bb-49e0-ab15-7a32da7595d7 Γöé 45 Degree Side Bend                                            Γöé
+Γöé b9444aae-6484-4b9a-84d6-e19cd5c57b31 Γöé 45 Degree Twisting Hyperextension                              Γöé
+Γöé 9ced1211-81dd-431c-870d-ddadcfca9cf4 Γöé 90 Degree Heel Touch                                           Γöé
+Γöé 9a62919d-e90e-4b2a-9550-5a25039b92e4 Γöé Ab Wheel Rollout                                               Γöé
+Γöé 7c589b41-e328-4cb3-ae9b-9b7869cc1cbb Γöé Abdominal Crunches                                             Γöé
+Γöé b2c6cd1d-e46e-458b-a3b7-89ab88c10acb Γöé Abdominal Crunches Machine                                     Γöé
+Γöé 553c3f32-18c6-4246-b041-e952a8944ad7 Γöé Abdominal Crunches With Hold                                   Γöé
+Γöé 4b43962d-256d-498d-b665-7e2c9b5ed052 Γöé Abdominal Stretch                                              Γöé
+Γöé b9c0101e-e980-4112-97ed-649b4d1d53de Γöé Above Head Chest Stretch                                       Γöé
+Γöé f09d5cad-b251-4100-b0e3-b8e1703ad6d0 Γöé Across Chest Shoulder Stretch                                  Γöé
+Γöé 647ea00a-69e0-47e8-ac2d-dd03a6a9a83d Γöé Across Chest Shoulder Stretch                                  Γöé
+Γöé 774f4cd1-1124-4759-a512-b9b1e2ad77a8 Γöé Adductor Dynamic Stretch                                       Γöé
+Γöé b7e0bb29-25e2-4e0b-965a-d444ac0bb556 Γöé Adductor Stretch                                               Γöé
+Γöé 5b981c41-e091-4133-932d-7c0f78ac5e32 Γöé Adductor Stretch Side Standing                                 Γöé
+Γöé 704c89b6-f1e2-45c3-a60a-1b2016cc3d53 Γöé Air Bike Crunch                                                Γöé
+Γöé 019ad670-a41a-4870-b1d3-63fc96579402 Γöé Air Punches March                                              Γöé
+Γöé 6e4abe08-12f2-49f0-9d41-62251d7de111 Γöé Air Twisting Crunch                                            Γöé
+Γöé de8ad5a0-e2e8-436e-b8f4-3da9962d2834 Γöé All Fours Quad Stretch                                         Γöé
+Γöé 6dfa0beb-0b56-4693-8e81-89b5c4058360 Γöé Alternate Bicep Curl Standing Dumbbells                        Γöé
+Γöé 1f660393-05a9-48bf-8305-370fa7be1f7b Γöé Alternate Biceps Curl Resistance Band                          Γöé
+Γöé 33eb1a7c-afb2-4b4e-a5ca-913e9f58ddc8 Γöé Alternate Hammer Curl Seated Dumbbells                         Γöé
+Γöé a17276fd-2052-4a59-9eb0-4e6d998c43d4 Γöé Alternate Hammer Curl Standing Dumbbells                       Γöé
+Γöé 55abd31c-ccf0-4e4f-9e33-be030893c157 Γöé Alternate Heel Touch Side Kick Squat                           Γöé
+Γöé 80cec250-2260-47b1-8fd7-67434b72ed2b Γöé Alternate Heel Touches                                         Γöé
+Γöé 5d4ac708-0ae2-45fc-a7cd-8b751e920d38 Γöé Alternate Leg Pull                                             Γöé
+Γöé 80a6262e-71da-469d-bf05-0a6ff9e71420 Γöé Alternate Leg Raise                                            Γöé
+Γöé d032236c-2a9c-4006-be8e-81fa629bb7ca Γöé Alternate Leg Raise With Head Up                               Γöé
+Γöé 61aed4ec-c652-426f-8a30-c3a9c1c98ef6 Γöé Alternate Lying Floor Leg Raise                                Γöé
+Γöé 7343f0aa-61bc-46d0-95fc-cbab3d308531 Γöé Alternate Oblique Crunch                                       Γöé
+Γöé 11183e21-0fc1-4a48-a34d-490313724df3 Γöé Alternate Punching                                             Γöé
+Γöé 3f62e2d4-46ad-48e7-895f-d4918ab9aee1 Γöé Alternate Sprinter Lunge                                       Γöé
+Γöé 800d38d4-4d3a-49c1-8174-a13f36cb1da3 Γöé Alternate Superman                                             Γöé
+Γöé 344cfdeb-25f3-4aa2-93f7-65d72594414e Γöé Alternate Toe Tap Leg Lift                                     Γöé
+Γöé 0479bdea-8417-40a6-9470-a85f87ab6d22 Γöé Alternating Biceps Curl Seated Dumbbells                       Γöé
+Γöé 26e37585-4d43-4b08-8e58-676c4255fed6 Γöé Alternating Biceps Hammer Curls Resistance Band                Γöé
+Γöé 9f018f07-2965-4747-bff7-94124ede3950 Γöé Alternating Hammer Curls Seated Dumbbells                      Γöé
+Γöé 2e49cc0e-d112-4f32-b185-ce23d0daa199 Γöé Alternating Hamstring Curl With Punch                          Γöé
+Γöé 387d052a-c6cb-474a-8c36-a52335c353de Γöé Alternating Leg Downward Dog                                   Γöé
+Γöé 7ef8f506-1cbe-45ab-8572-e3e70c7a5eb7 Γöé Alternating Leg Lifts                                          Γöé
+Γöé b20b2477-f535-40b0-adb4-9abb7743f155 Γöé Alternating Lunge With Rotation                                Γöé
+Γöé 2caa2012-216c-41c7-9bb5-63824041eb6f Γöé Alternating Oblique Sit Ups                                    Γöé
+Γöé ebcf1375-fb97-494b-b2dd-887c22b9672f Γöé Alternating Step Out                                           Γöé
+Γöé 14f4f297-1e5e-44d8-9cbc-1191354cd483 Γöé Alternating Toe Tap                                            Γöé
+Γöé 297c3c82-6c07-4d1f-adab-53d757845272 Γöé Ankle Circles                                                  Γöé
+Γöé 796a2536-6ad4-49ad-95a6-eef56d9861d1 Γöé Ankle Dorsal Flexion                                           Γöé
+Γöé 823c31ac-7ffa-40be-94ab-27ec18164b9f Γöé Ankle Plantar Flexion                                          Γöé
+Γöé 1a6a1f66-cbe6-42e2-8454-faf82b0fdf1c Γöé Archer Push Up                                                 Γöé
+Γöé 9aecbfe8-89a8-43fa-825e-f662714b49c4 Γöé Archer Step Back                                               Γöé
+Γöé 0417ddfc-dd91-4fdc-803c-f92929da5d5b Γöé Arm Circle                                                     Γöé
+Γöé b98b79c9-e8b1-4d88-a742-ab5ab779cb9d Γöé Arm Circle                                                     Γöé
+Γöé 8cb93f94-2db0-4bbb-a18a-614a8e19ec37 Γöé Arm Circles Backward                                           Γöé
+Γöé 1458c4ce-2f1b-481c-8495-7955bd56a923 Γöé Arm Crossover                                                  Γöé
+Γöé f456b2ff-dd12-4863-857e-59d6b5d4cb74 Γöé Arm Crossover Chest Out                                        Γöé
+Γöé 55d82e7b-2611-43eb-90c6-0cf05c86d4e5 Γöé Arm Double Crossover                                           Γöé
+Γöé 7d49d686-d2ab-45fc-a509-bfd3b8c97074 Γöé Arm Pulses                                                     Γöé
+Γöé bcfc3e54-93fc-4945-8432-5a7eaf2f66da Γöé Arm Pulses Cross                                               Γöé
+Γöé 8468c423-a609-429e-832b-0508221936ff Γöé Arm Pulses Palms Downwards                                     Γöé
+Γöé 326a42a8-cd20-4dce-8890-0e17c9b8b631 Γöé Arm Pulses Palms Upwards                                       Γöé
+Γöé 9b5ce5b2-8db6-4b8c-9596-dc9ebbaf4567 Γöé Arm Rotation Knee Lift                                         Γöé
+Γöé 8d40906e-835d-447b-a2e7-69e1791e4f81 Γöé Arm Swing Side To Side                                         Γöé
+Γöé efae40f9-a60e-4eda-b57e-1442e929af2c Γöé Arms Up And Down                                               Γöé
+Γöé dce7bd10-5802-4357-8fba-ad879f696e99 Γöé Arnold Press Cable Resistance Band Standin                     Γöé
+Γöé 0ab00345-e6b1-42eb-8b49-f1bb1fb624fa Γöé Arnold Press Dumbbel                                           Γöé
+Γöé f55a8fad-0494-45a3-bf11-49341dc59e75 Γöé Around The World Superman Hold                                 Γöé
+Γöé d3adb620-db1d-486c-8dae-e8562b42312b Γöé Assisted Chin Up Normal Width Reverse Grip                     Γöé
+Γöé 46a16f39-580c-40af-bccf-4c2a63fad912 Γöé Assisted Chin Up Reverse Close Grip                            Γöé
+Γöé 556d0c51-8dbd-480d-9ed2-f079bda10424 Γöé Assisted Chin Up Reverse Wide Grip                             Γöé
+Γöé 83a70e41-4bc3-4ff3-a6f9-b6011083f197 Γöé Assisted Close Grip Underhand Chin Up                          Γöé
+Γöé 7619598d-e9af-4a9c-b1d1-b0366b0b2686 Γöé Assisted Sit Ups                                               Γöé
+Γöé 98b5cf8e-6ad7-406d-a3a0-4b288a919e9a Γöé Assisted Weighted Push Up                                      Γöé
+Γöé 24eb26bb-cfc9-4a15-8705-f8d1c84d83ed Γöé Back And Shoulder Stretch                                      Γöé
+Γöé acf7b746-5e0b-4337-ade3-0c6c7e51c07b Γöé Back Extension Machine                                         Γöé
+Γöé bbe39b74-5f71-4c0d-88a2-6307ac632cfa Γöé Back Extension On Exercise Ball                                Γöé
+Γöé d5877a7e-19b4-422f-a2f0-96cd3fa325f1 Γöé Back Lever                                                     Γöé
+Γöé 555645d5-4b15-4aa8-b35f-40bac4738194 Γöé Back Pec Stretch                                               Γöé
+Γöé 9c0d20fc-9cdf-4748-bed9-245e9277fb92 Γöé Back Slaps Wrap Around Stretch                                 Γöé
+Γöé b1fb4b71-ba9c-4862-ae70-83fd2ab3a3ce Γöé Back Squeeze                                                   Γöé
+Γöé c2b9eeec-1f98-4e9c-b4e7-0d50787fd9ba Γöé Back Stretch Dynamic                                           Γöé
+Γöé 043f4aa3-7438-4331-aeda-04c2f7a67263 Γöé Back Stretch Standing With Bench                               Γöé
+Γöé 28ae0442-ab15-41e8-93cf-f5bd3cb93b99 Γöé Backhand Rais                                                  Γöé
+Γöé 05bd1e12-50ef-45bc-a1f4-21bdee1c3090 Γöé Backward Abdominal Stretch                                     Γöé
+Γöé 72b06d4f-60f0-4b13-a481-b1a37720dd5e Γöé Backward Forward Turn To Side Neck Stretch                     Γöé
+Γöé 1d854a6e-37cc-4814-86e9-f44aa577a664 Γöé Balance Board Lateral Squat                                    Γöé
+Γöé 445bfa1e-067a-4572-8c3e-cdf7478c2862 Γöé Band Bent-over Row                                             Γöé
+Γöé 850b2a42-d063-4131-b558-306493f427b7 Γöé Band Bicycle Crunch                                            Γöé
+Γöé 64616262-d0f1-4ed2-aaf3-893a1aa2cb47 Γöé Band Close-grip Biceps Curl                                    Γöé
+Γöé c62bd76b-cea0-404c-a807-ee4e44ba432c Γöé Band Cross Abduction                                           Γöé
+Γöé ab9b42b7-e0d0-4f7d-9d04-88d4f7cb429b Γöé Band Deadlift                                                  Γöé
+Γöé bae16911-d7d4-4c1d-b8ad-74daf9067639 Γöé Barbell Back Squat                                             Γöé
+Γöé f851d72f-96c4-422b-9dfc-00a1b99844b6 Γöé Barbell Back Wide Shrug                                        Γöé
+Γöé d716e773-6f85-4ec6-8695-60c8df0bd4ac Γöé Barbell Behind Neck Military Pres                              Γöé
+Γöé 22de9f2a-55bf-46c4-a5bf-6a99a73bf17e Γöé Barbell Behind Neck Push Pres                                  Γöé
+Γöé 8f1a3c7b-6fff-40d3-9bf1-03dbac10ef73 Γöé Barbell Bench Press                                            Γöé
+Γöé 4e6d7c46-72f9-4528-88a9-5133b6a8f84f Γöé Barbell Bench Squats                                           Γöé
+Γöé ee658632-f197-4b48-8a54-b55f667c1b1f Γöé Barbell Bent Over Row Pronated Grip                            Γöé
+Γöé 202cd071-d04b-4510-a231-863f28b87667 Γöé Barbell Bent Over Row Supinated Grip                           Γöé
+Γöé 5377f765-7663-443f-bbbc-c51fb55e4586 Γöé Barbell Bicep Curl Close Grip                                  Γöé
+Γöé 98f9acce-5c5e-4807-b12f-cf232b61f095 Γöé Barbell Bicep Curl Normal Grip                                 Γöé
+Γöé cb9d73fb-a201-4d05-8645-fa44c0dc9910 Γöé Barbell Bicep Curl Wide Grip                                   Γöé
+Γöé e8b9c44a-8a11-4154-a9ad-3dfde4ba029c Γöé Barbell Biceps Curl                                            Γöé
+Γöé 76263733-f3c7-46f6-bfd6-dabdf3307f9d Γöé Barbell Box Squat                                              Γöé
+Γöé 6cb5b2c2-fe4f-4980-bfff-b890d85641c9 Γöé Barbell Clean And Jerk Split Squat                             Γöé
+Γöé 7f84a2e7-be89-41b3-b803-c0de4fa96306 Γöé Barbell Clean And Press                                        Γöé
+Γöé a0f52469-f45e-4c69-866e-90b3d1376ef9 Γöé Barbell Clean Deadlift                                         Γöé
+Γöé c7148133-9163-4de9-a68a-6fdf92220c51 Γöé Barbell Clean Grip Front Squat                                 Γöé
+Γöé 3502874a-0a78-4870-bbc8-7e555f6864e5 Γöé Barbell Clean Pull                                             Γöé
+Γöé 12d4b119-414d-4f9c-82a0-2f5f57075cbe Γöé Barbell Close Grip Bench Press                                 Γöé
+Γöé 388b0097-c227-44d9-9a51-c93f98b587d7 Γöé Barbell Close Grip Press                                       Γöé
+Γöé a6722be3-6abd-49e3-bdd7-18f6f6545e20 Γöé Barbell Curtsy Lunges                                          Γöé
+Γöé 1ced8964-1491-4b90-b10a-d69b756f438f Γöé Barbell Deadlift                                               Γöé
+Γöé 03c76294-ce3f-49bb-b7b8-83466efa7f59 Γöé Barbell Drag Biceps Curl                                       Γöé
+Γöé 4f1ca32e-a1e3-4237-bf15-0aab2c00d69e Γöé Barbell Drag Curl                                              Γöé
+Γöé aa425878-c616-4af7-b185-edcbc62e1210 Γöé Barbell Floor Chest Press                                      Γöé
+Γöé 7b5c0599-d7ed-4dc2-b419-ae7ebd25adfe Γöé Barbell Front Chest Bench Squat                                Γöé
+Γöé 3e7d2527-adbd-4ebe-9bc4-bc2351a86061 Γöé Barbell Front Chest Lunges                                     Γöé
+Γöé c36df55d-9912-4c02-ae69-bbc262f896f4 Γöé Barbell Front Chest Squat                                      Γöé
+Γöé 4b8323c1-1300-43b6-8629-b75a8190ce24 Γöé Barbell Front Lunges With Small Pause                          Γöé
+Γöé 1e85090e-4730-4f00-89de-727a7f7d504c Γöé Barbell Front Raise                                            Γöé
+Γöé c612ca74-eea6-487e-8c5b-8c42a2f2dd9a Γöé Barbell Front Squats                                           Γöé
+Γöé d61c60cf-cf37-48b0-b6b0-8a25657b07cb Γöé Barbell Full Clean                                             Γöé
+Γöé 35455fd9-7be6-43e3-8e08-b8e9e54ddd3b Γöé Barbell Full Squat                                             Γöé
+Γöé 6ace362e-0569-4560-8515-2cd6f53e0747 Γöé Barbell Full Squat Side Pov                                    Γöé
+Γöé 8f14ced2-c449-45d1-8b7d-e7846494844d Γöé Barbell Glute Bridge                                           Γöé
+Γöé e2c5d606-32ff-4323-b4c0-2f74ed2a2f8e Γöé Barbell Good Morning                                           Γöé
+Γöé d08654ad-ad86-4454-9e03-2ba4dee851cb Γöé Barbell Incline Bench Press                                    Γöé
+Γöé e485a12b-ab6e-4f58-ba01-4ef03d85d6f3 Γöé Barbell Jefferson Split Squat                                  Γöé
+Γöé f25baf88-a53f-4549-b984-a4fed98b35f7 Γöé Barbell Jefferson Squat                                        Γöé
+Γöé 2b60de8a-986c-4c6f-94f5-8ce9e919b213 Γöé Barbell Jm Bench Press                                         Γöé
+Γöé 8350a343-b81c-4658-9673-cb41efe39e0f Γöé Barbell Jump Squat                                             Γöé
+Γöé 820fabff-3967-48a9-bbbd-2c394287d0cf Γöé Barbell Kas Glute Bridge                                       Γöé
+Γöé 1ba16325-a96f-4539-b214-7edd9eb7f443 Γöé Barbell Kneeling Squat                                         Γöé
+Γöé edcaf299-5ec1-4f67-9389-41e0747c2286 Γöé Barbell Lap Curl                                               Γöé
+Γöé 11348987-f0ce-4c89-bd19-45630652c32b Γöé Barbell Lateral Lunges                                         Γöé
+Γöé 6b3c0f34-afa6-4a0d-94ac-61982515a8df Γöé Barbell Low Bar Squat                                          Γöé
+Γöé 794f2310-dbe1-48e1-9e7e-4c61b18cd6f3 Γöé Barbell Lunges                                                 Γöé
+Γöé c859483a-c37e-4d98-925a-e63eb41c0408 Γöé Barbell Lunges On The Spot                                     Γöé
+Γöé 02623265-3f46-485f-8b5e-1de1be33cf88 Γöé Barbell Lying Close Grip Press                                 Γöé
+Γöé f4fcd904-d399-40d9-821a-d51e2fe53872 Γöé Barbell Lying Triceps Extension                                Γöé
+Γöé fb02451e-827b-4f21-997f-a211ad68c8b5 Γöé Barbell Lying Triceps Skull Crushers                           Γöé
+Γöé 8c76c103-d421-4c64-a162-e7c536e1f625 Γöé Barbell Muscle Clean                                           Γöé
+Γöé 3866a3fb-7b22-45fd-b867-1ba89c24c2a6 Γöé Barbell Narrow Stance Squat                                    Γöé
+Γöé 08a33291-f592-40e6-995b-52c24a7f937e Γöé Barbell One Arm Single Deadlift                                Γöé
+Γöé 77e57225-9afb-4f07-b161-d9bbce921882 Γöé Barbell Overhead Lunges                                        Γöé
+Γöé 407d7b37-54bf-4594-8b2b-48c92a2725a8 Γöé Barbell Overhead Shru                                          Γöé
+Γöé 0a2ebdbc-c770-4432-ac85-42eb95b9af7b Γöé Barbell Overhead Squat                                         Γöé
+Γöé 7ad0c7e4-ed53-42ab-93e2-9c3485ad619d Γöé Barbell Pause Lunges                                           Γöé
+Γöé 2b5f5cdc-28c1-41ed-aebc-cf4b21b72c0d Γöé Barbell Pendlay Row                                            Γöé
+Γöé 4302b556-0152-44ea-9af9-2bb83e440f4c Γöé Barbell Power Clean                                            Γöé
+Γöé 2d5fe42d-6f93-4a99-a10b-c2eff397bb8d Γöé Barbell Power Clean From Blocks                                Γöé
+Γöé eebe9aba-8968-4c0b-84f4-4bdf7749a9d7 Γöé Barbell Power Jerk                                             Γöé
+Γöé cf80b648-99dc-4e21-9674-683672a6b970 Γöé Barbell Power Snatch                                           Γöé
+Γöé f0c549d0-a266-4d3d-b323-e02bb16b4a09 Γöé Barbell Preacher Curl                                          Γöé
+Γöé 7bf8aa03-344d-4b16-b48a-532838b10a95 Γöé Barbell Pullover To Press                                      Γöé
+Γöé f69799b7-ce14-4f40-9d48-637c1efc2447 Γöé Barbell Push Bent Over Row                                     Γöé
+Γöé c3749584-8907-411a-a21d-4a690f2b5eff Γöé Barbell Quarter Squat                                          Γöé
+Γöé 0c6c3652-c9e8-41d3-8ddb-fc369529ad24 Γöé Barbell Rack Pull                                              Γöé
+Γöé f312cd94-bd86-48eb-b0d1-1eddde82a998 Γöé Barbell Rear Delt Rais                                         Γöé
+Γöé d086e05b-9d18-4510-b6c6-766c68912810 Γöé Barbell Rear Lunge On Box                                      Γöé
+Γöé 40aee743-373f-4915-ba6b-8323d1b5bdec Γöé Barbell Rear Lunges                                            Γöé
+Γöé b13c288a-ac37-41f0-9281-f04270946246 Γöé Barbell Reverse Biceps Curl                                    Γöé
+Γöé 7b879078-1dbc-4919-ba7a-a1312728dd55 Γöé Barbell Reverse Close Grip Bench Press                         Γöé
+Γöé 463579df-0841-4fef-a01b-9775db251ae4 Γöé Barbell Reverse Grip Bench Press                               Γöé
+Γöé 171107e9-ac66-42ab-987f-e2c447851891 Γöé Barbell Reverse Grip Bent Over Row                             Γöé
+Γöé d6962e41-bba2-4753-9ce8-23dac279d74a Γöé Barbell Reverse Spider Curl                                    Γöé
+Γöé 8992c426-6769-460d-811a-c9f0a679c945 Γöé Barbell Rollout                                                Γöé
+Γöé be1b4c97-b4dc-45b7-81e3-a23ca61166af Γöé Barbell Row                                                    Γöé
+Γöé 979c4c9e-9da4-4be8-896e-81a2bf130676 Γöé Barbell Seated Concentration Biceps Curl                       Γöé
+Γöé 001f7043-c82a-4b7a-9339-2de2b4ba6933 Γöé Barbell Seated Good Morning                                    Γöé
+Γöé bed0ef08-7e83-4efc-8738-25adf1db1afc Γöé Barbell Seated Military Press Front Of Rac                     Γöé
+Γöé 53465d21-6eb7-47d0-b08d-1b3ca2f5e397 Γöé Barbell Seated On Knee Calve Raises                            Γöé
+Γöé 6e887e84-a751-4d7c-924c-141be373adce Γöé Barbell Seated Overhead Pres                                   Γöé
+Γöé 343800fb-48f5-4e83-96f2-05c635ec6056 Γöé Barbell Seated Overhead Triceps Press                          Γöé
+Γöé a3a6166b-c2f7-4373-8842-c81ab9217273 Γöé Barbell Seated Twist                                           Γöé
+Γöé 6b53a2c8-7330-4afe-adb7-357766f02d96 Γöé Barbell Seated Twist On Exercise Ball                          Γöé
+Γöé c471b9eb-f7b3-4f2c-9454-4a34b21768fa Γöé Barbell Shrugs                                                 Γöé
+Γöé 748db5dc-3cab-4791-9251-60c8492f2e67 Γöé Barbell Side Bends                                             Γöé
+Γöé 58274fb7-5ce0-4675-9b0b-dd62a4dd43fc Γöé Barbell Side Split Squat                                       Γöé
+Γöé 45eed1a3-d56a-43b4-8282-3d33244f589a Γöé Barbell Single Arm Biceps Curl                                 Γöé
+Γöé 68093267-968b-4860-b02d-c461b857c56b Γöé Barbell Single Leg Deadlift                                    Γöé
+Γöé e22f91d3-bac8-4cd5-b54b-7d959315f09c Γöé Barbell Single Leg Split Squat                                 Γöé
+Γöé 86f6c284-cd0b-4406-9e7d-1befee2de8be Γöé Barbell Snatch                                                 Γöé
+Γöé 1e6ef158-948b-41c7-900a-893b82429a27 Γöé Barbell Snatch Balance                                         Γöé
+Γöé 202deda8-aed4-4f1d-a9bd-c07211356cad Γöé Barbell Snatch Deadlift Close Grip                             Γöé
+Γöé a966701e-d064-487b-b5b0-467ec529a6d2 Γöé Barbell Snatch Deadlift Wide Grip                              Γöé
+Γöé fd5b8c6f-b588-49d3-a558-5664c331f93a Γöé Barbell Snatch From Blocks                                     Γöé
+Γöé 7bfabfae-ce4b-4884-95d7-c5932b05cc0e Γöé Barbell Snatch Pull                                            Γöé
+Γöé 1ffc925d-4586-4d6b-a13f-299fbc9b105c Γöé Barbell Split Clean                                            Γöé
+Γöé 8d03a2a4-bc70-4f9d-8a82-ace3ebeced60 Γöé Barbell Split Jerk                                             Γöé
+Γöé 1f3680b7-a3aa-40ad-9e44-de465d7387a0 Γöé Barbell Split Squat                                            Γöé
+Γöé bf942c9c-ede1-4e70-a7a7-51689de340b1 Γöé Barbell Squat Back Pov                                         Γöé
+Γöé 87a1b1a6-0fb7-4884-b502-96811042c656 Γöé Barbell Squat To Grass                                         Γöé
+Γöé b350d6df-3219-4a09-b365-8b5231e2c828 Γöé Barbell Squat With 2 Sec Hold                                  Γöé
+Γöé 4c43c9eb-68e0-432f-bb84-7450116fe21c Γöé Barbell Standing Back Wrist Curl                               Γöé
+Γöé 118ec4ed-d36d-4148-bdac-701365cc2a24 Γöé Barbell Standing Close Grip Curl                               Γöé
+Γöé 39f86268-36e1-44c0-a443-c9dc8554b952 Γöé Barbell Standing Close Grip Military Pres                      Γöé
+Γöé 33240b14-3bd5-42c9-9729-4a013ed901f9 Γöé Barbell Standing Concentration Curl                            Γöé
+Γöé 56f09377-0659-42e6-b25f-cf9b01406a2a Γöé Barbell Standing Military Pres                                 Γöé
+Γöé 65b4558d-57ef-44db-8ea1-68e3fa5898b5 Γöé Barbell Standing Overhead Triceps Extension                    Γöé
+Γöé 43940f6b-b710-47f6-86c3-2bb9b24a73c1 Γöé Barbell Standing Shoulder Pres                                 Γöé
+Γöé db61e71b-9299-4086-a87d-cba8465872dc Γöé Barbell Standing Twist                                         Γöé
+Γöé dffedc3d-ddfa-49f3-bb66-03c927413581 Γöé Barbell Standing Wide Grip Biceps Curls                        Γöé
+Γöé 4be7998c-fc17-46a4-be6d-9865598545f0 Γöé Barbell Standing Wide Grip Military Pres                       Γöé
+Γöé a4e8a1a2-73ac-4519-8001-8a736da5b619 Γöé Barbell Step Up On Bench                                       Γöé
+Γöé 7a7ca8ac-285d-45b5-807b-fb5f3825c25a Γöé Barbell Stiff Leg Deadlift                                     Γöé
+Γöé 12c832dd-42c1-43b2-b15f-f358c822ea14 Γöé Barbell Straight Leg Deadlift                                  Γöé
+Γöé 1164e922-2a6d-4732-accf-73f3d5efd3ab Γöé Barbell Sumo Deadlift                                          Γöé
+Γöé 5721fede-bfdd-431e-8627-0467c29c4432 Γöé Barbell Sumo Deadlift                                          Γöé
+Γöé f375c5b5-f068-4085-a56e-9282f7b8fbf5 Γöé Barbell Thruster                                               Γöé
+Γöé 8ab23994-c89b-4785-b9fb-0d8a261115a8 Γöé Barbell Underhand Bent-over Row                                Γöé
+Γöé bf967ab7-e621-43f7-8f71-19030ca41c76 Γöé Barbell Upright Row                                            Γöé
+Γöé dff9d8d5-5d2e-4d32-a3ab-1fb4965d7e24 Γöé Barbell Wide Bench Press                                       Γöé
+Γöé e353dd23-8586-46e0-b952-6eba03843547 Γöé Barbell Wide Grip Biceps Curl                                  Γöé
+Γöé 8e1a1eef-3bc0-4fe3-a58e-e4283b19a228 Γöé Barbell Wide Grip Upright Row                                  Γöé
+Γöé a10022a8-0dcd-422b-9795-1b255fe25f20 Γöé Barbell Wide Shru                                              Γöé
+Γöé 8963097b-b559-4d7f-88e1-add7cae0aa01 Γöé Barbell Wrist Curl On Knees                                    Γöé
+Γöé fd8ef164-9bbb-4362-83f8-40345b6e0031 Γöé Barbell Wrist Curl Wide Legs                                   Γöé
+Γöé 833ffd9d-2413-4e9d-8260-d91508d9d20b Γöé Barbell Wrist Extension On Knees                               Γöé
+Γöé b6bffd02-2a4b-4012-9afe-bfd7a0c524fb Γöé Barbell Zercher Squat                                          Γöé
+Γöé 327deafd-e18f-4059-a566-26aac1e2a38d Γöé Basic Toe Touch                                                Γöé
+Γöé a2790f82-e40e-4cc7-afd6-6a900a624305 Γöé Basketball Shot Jump                                           Γöé
+Γöé de241e9b-def9-460b-bc5c-b68241ad3878 Γöé Behind Neck Press Resistance Band Cable                        Γöé
+Γöé 15e58bab-0fa0-444a-bd08-6425b2915596 Γöé Bench Alternating Step Ups                                     Γöé
+Γöé f7fed571-b734-4583-a8fd-85911483adbf Γöé Bench Decline Ab Crunch                                        Γöé
+Γöé 96f6587f-2b99-4c86-abad-25c647420582 Γöé Bench Knee Tucks                                               Γöé
+Γöé a7088b5b-5419-4183-ae93-1ee34f72c475 Γöé Bent Arm Chest Stretch                                         Γöé
+Γöé 9a628218-058a-4392-98c4-57f86baaa6a3 Γöé Bent Knee Back To Side Kick                                    Γöé
+Γöé 113280c8-6963-476e-8264-46cf64407296 Γöé Bent Knee Lying Twist                                          Γöé
+Γöé 17acf4e5-6f4b-4a31-8dce-4f303625ca9c Γöé Bent Knee Lying Twist (on Stability Ball)                      Γöé
+Γöé e436fefb-2e16-40d1-b43a-6bb4b95a49c1 Γöé Bent Leg Side Kick (kneeling)                                  Γöé
+Γöé ac721835-fe07-4a9c-9f7f-4829f154152b Γöé Bent Over Rear Delt Fly Dumbbel                                Γöé
+Γöé 49344644-fe59-4063-8ad6-ead15d9587fe Γöé Bent Over Rear Deltoid Fly Resistance Ban                      Γöé
+Γöé cbe6eb26-95fe-457b-8a63-44314d597a86 Γöé Bent Over Row Resistance Band                                  Γöé
+Γöé 3812c0f1-ff6d-4709-962e-425b24bd679b Γöé Bent Over Twist                                                Γöé
+Γöé 5a498ad1-e736-43b0-9970-89a3cfbe72c3 Γöé Bent-over Row With Bar                                         Γöé
+Γöé 5dd4851a-c3b8-4189-9d22-d5ee790704ea Γöé Bicep Curl Low Cable Machine Normal Grip                       Γöé
+Γöé 948d8643-d495-4d9f-912d-0533f3e125cc Γöé Biceps Curl Cable                                              Γöé
+Γöé 3a89afba-8dcf-423d-a5fd-be1da463bb74 Γöé Biceps Curl Cable Wide Grip                                    Γöé
+Γöé 76f03779-fbda-4569-b5d1-cce662cd0ea9 Γöé Biceps Curl Cable Wide Grip Crossover Machine                  Γöé
+Γöé bc7b15bd-6572-4aef-9a25-18efb7c6e02a Γöé Biceps Curl Front Step                                         Γöé
+Γöé 6dc10446-2118-48cc-b326-98c739b921d5 Γöé Biceps Curl Resistance Band                                    Γöé
+Γöé cbd07327-3439-42bc-bec5-242fe7c397e7 Γöé Biceps Curl To Shoulder Press Resistance Band                  Γöé
+Γöé 7d315237-8c28-4023-a920-8f60f3aeff84 Γöé Biceps Curl To Shoulder Press Resistance Band                  Γöé
+Γöé b06db86e-5d17-4067-9de3-f57b41d2e881 Γöé Biceps Leg Concentration Curl                                  Γöé
+Γöé 6df58a2c-082a-42da-8e3b-06073e7200fb Γöé Biceps Stretch Behind The Back                                 Γöé
+Γöé aaa44ce5-fb90-491f-8356-cbc5ea8c35b8 Γöé Bicycle Air Legs                                               Γöé
+Γöé 251a9348-6c5b-4871-9697-c4e937d0b527 Γöé Bicycle Recline Walk                                           Γöé
+Γöé d6593a67-822d-4148-ab01-ce0adb4ae7eb Γöé Bicycle Twisting Crunch                                        Γöé
+Γöé 81b8a5bb-4bc9-4e53-b431-3cb84e648aed Γöé Bicycles                                                       Γöé
+Γöé c31ed701-64fb-4dcc-a5bc-b229d9c274b1 Γöé Bicycles Crunches                                              Γöé
+Γöé 29635c68-1861-4ff8-b3da-a88d0c413fe2 Γöé Bird Dog                                                       Γöé
+Γöé ebd3f934-c077-4be6-a0b3-0777481beafa Γöé Bird Dog                                                       Γöé
+Γöé d4f3c773-a3a6-45c4-a11d-bad4363bc4ad Γöé Bird Dog (version 2)                                           Γöé
+Γöé 2b4b14ad-47ce-4ff1-8792-ad37ea820d69 Γöé Boat Stretch                                                   Γöé
+Γöé 6c170fff-6b2a-4760-8ac1-29de49e5b3bc Γöé Body Slide                                                     Γöé
+Γöé 62b58a3d-1b6e-40b1-b9ca-5c4d7d1a5f91 Γöé Body Throw                                                     Γöé
+Γöé dd066891-53bd-4841-8253-6196478608f2 Γöé Body-up                                                        Γöé
+Γöé 71c995cf-30d8-4ed3-ba31-ad934598259d Γöé Bodyweight Bent Over Rear Delt Fl                              Γöé
+Γöé f3b3b41c-466b-41d6-adfe-1df4a46a3ba4 Γöé Bodyweight Forward Lunge                                       Γöé
+Γöé acbacf59-8168-448b-aa52-ed05972d74ab Γöé Bodyweight Front Slam                                          Γöé
+Γöé 4dd90da4-54cf-4e48-a6c1-1e540c8ab85d Γöé Bodyweight Keeling To Hand Tap                                 Γöé
+Γöé 7f9c063f-1bda-47de-b7e0-209406525930 Γöé Bodyweight Knee Thrust                                         Γöé
+Γöé d97784bf-828b-44de-abd3-a84e07ece06b Γöé Bodyweight Kneeling Hold To Stand                              Γöé
+Γöé cbf6fd4e-8e17-47de-870e-99aace62d7cc Γöé Bodyweight Kneeling Push-up Row                                Γöé
+Γöé cd98d69b-b400-4bb0-8de8-916fa3aa511d Γöé Bodyweight Kneeling Sissy Squat                                Γöé
+Γöé 4c796d3f-3140-440a-a64e-aecc0b7e2bb7 Γöé Bodyweight Kneeling To Hand Tap                                Γöé
+Γöé f4164495-c347-4439-b18a-2338d1dab1a9 Γöé Bodyweight Kneeling Triceps Extension                          Γöé
+Γöé 6dc0a86a-02bf-4a41-bbbb-6b7afb780718 Γöé Bodyweight Muscle-up                                           Γöé
+Γöé 92dd406a-b49e-46c5-8c00-c5525897d5be Γöé Bodyweight Overhead Squat                                      Γöé
+Γöé de48493a-36ef-40db-a61a-bd80d9e40ce7 Γöé Bodyweight Overhead Triceps Extension                          Γöé
+Γöé 4fe17e8a-fe3e-448e-ae2f-ebe3bfe21843 Γöé Bodyweight Pulse Forward Lunge                                 Γöé
+Γöé a4efc4e2-af07-47ed-b1b9-1bfe0fa38ba7 Γöé Bodyweight Pulse Squat                                         Γöé
+Γöé 29bc48f0-f1e5-4a57-88bd-22bb06ed74f8 Γöé Bodyweight Pulse Squat Arms To Chest                           Γöé
+Γöé d93060aa-34bf-4e15-9574-2a16eb120609 Γöé Bodyweight Rear Lunge                                          Γöé
+Γöé b4798c89-3c45-48a1-8189-0fb5548f07fa Γöé Bodyweight Rear Lunge Front Raise                              Γöé
+Γöé 918abba4-1331-40ef-9f97-5ba0b67d009b Γöé Bodyweight Single Leg Deadlift                                 Γöé
+Γöé 6a4f8610-654e-45aa-b484-f6f7bbed3037 Γöé Bodyweight Squat                                               Γöé
+Γöé 87c114b5-21ea-4f76-a8dd-1664a9e949be Γöé Bodyweight Squat To Front Leg                                  Γöé
+Γöé 82a0506c-8bdb-4d7e-be19-81c9838dfbe4 Γöé Bodyweight Squat To Side Leg                                   Γöé
+Γöé bcf8bc2d-c356-4976-8921-5b9bbb19aa3e Γöé Bodyweight Squat To Side To Front Leg                          Γöé
+Γöé 02a74d3b-275b-40f8-8906-41299e1cc203 Γöé Bodyweight Squats                                              Γöé
+Γöé 38011ebd-2cce-4658-9ab1-8248c27d5408 Γöé Bodyweight Squats Hold                                         Γöé
+Γöé 8f0450e2-29cf-4a71-a0bf-0e80cec9ecdf Γöé Bodyweight Standing Around World Wall Supporte                 Γöé
+Γöé 851882c2-cd19-4c87-b57e-6723037239d5 Γöé Bodyweight Standing Back Stretch                               Γöé
+Γöé aee0ec38-59cb-4d31-aa25-6c1a014679a0 Γöé Bodyweight Standing Fly                                        Γöé
+Γöé d0ea9178-71a3-42bc-8dab-b14b204c8ada Γöé Bodyweight Standing Military Pres                              Γöé
+Γöé 6e67b25e-52c1-4d6e-98fc-e6afa2b8e5f9 Γöé Bodyweight Standing Military Press Wall Supporte               Γöé
+Γöé f6d7184d-20aa-4655-ae90-42d2baef1b05 Γöé Bodyweight Standing Shru                                       Γöé
+Γöé 5095b39e-4c54-4551-9ca4-c8b64c8425db Γöé Bodyweight Standing Triangle Fly                               Γöé
+Γöé 59cbf854-20b8-4cad-b243-60410bd05679 Γöé Bodyweight Step-up On Step Box                                 Γöé
+Γöé 1bf4e18a-7da5-4f46-a3db-d640a9038c42 Γöé Bodyweight Svend Press                                         Γöé
+Γöé a2b6e7ab-f924-48b0-900b-64ab54d7c8c5 Γöé Bodyweight Triceps Extension                                   Γöé
+Γöé e2a7a519-e97f-4339-aae1-3c4dfb39265a Γöé Bodyweight Wall Squat                                          Γöé
+Γöé 54b13070-ef85-4efd-9732-ab1fa38ff962 Γöé Bodyweight Windmill                                            Γöé
+Γöé fa6f5db8-9ce9-4f12-9ec5-2082f4bc69b4 Γöé Bodyweight Windmill Cut                                        Γöé
+Γöé bf5a2226-a3f2-48ca-b8d5-f27db32bf885 Γöé Bottoms-up Half Rep                                            Γöé
+Γöé b185b6c9-3685-4925-9330-de51af15b0e0 Γöé Bouncing Circle Draw                                           Γöé
+Γöé 9802ef2a-91eb-446b-a0a6-88337c1d6197 Γöé Bouncing Inner Thigh Tap                                       Γöé
+Γöé 709a055c-2988-49c1-80c6-2946020d1eda Γöé Box Jump                                                       Γöé
+Γöé 9779e287-57f9-417d-a536-3c2c35db02dd Γöé Box Jump Squats                                                Γöé
+Γöé a58f84d7-dda6-46dd-b410-d0d94303a773 Γöé Boxing Jab                                                     Γöé
+Γöé 487a59b8-39c9-4074-a842-dc5781498fea Γöé Boxing Left Hook                                               Γöé
+Γöé 482f87a6-5113-4c5e-ab21-75ebc244bd01 Γöé Boxing Left Uppercut                                           Γöé
+Γöé e67f0c2c-6f43-4cc5-91f8-77577db26e2e Γöé Boxing Right Cross                                             Γöé
+Γöé de46ca64-f145-438d-8852-d19563697a35 Γöé Boxing Right Hook                                              Γöé
+Γöé 017c5edc-713c-431e-8244-e10b297a687d Γöé Boxing Right Uppercut                                          Γöé
+Γöé 5641de6a-b784-4054-b063-64b59f40d13e Γöé Brazillian Crunches                                            Γöé
+Γöé 7962f3b6-8e11-44c8-99e7-a94b1fbca1c7 Γöé Bridge - Mountain Climber (cross Body)                         Γöé
+Γöé da3bfede-b537-46cf-8b56-8fab529fa4c2 Γöé Bridge Hip Abduction                                           Γöé
+Γöé 48f421a1-4700-413d-bb45-41276dbe80ac Γöé Bridge Pose Setu Bandhasana                                    Γöé
+Γöé b9e37dff-39b7-4ec6-9773-9862d069b435 Γöé Bridge With Alternating Leg Raise                              Γöé
+Γöé 385dd485-3944-4b62-a8bb-62e87dc5c0fa Γöé Briskly Walking                                                Γöé
+Γöé b81d03fc-8b34-4adb-8d33-d3ed527a3820 Γöé Briskly Walking (360 Degrees)                                  Γöé
+Γöé b37fe5e4-0c61-4c4a-9a04-7a68d4eb079c Γöé Bulgarian Split Squat                                          Γöé
+Γöé 41d544d8-fb53-48fa-8f9a-abaa025b5aa5 Γöé Burpee                                                         Γöé
+Γöé b2b3b900-1938-42a2-b0b8-31cc3e5ff469 Γöé Burpee                                                         Γöé
+Γöé ead9792a-1595-4f94-87bd-acafb87dd5bb Γöé Burpee Squat                                                   Γöé
+Γöé 11f21c19-01c3-421a-acc6-6160f4c22932 Γöé Butt Kick With Row                                             Γöé
+Γöé bd9402c3-9159-4012-9a0c-e48c879559e3 Γöé Butt Kicks                                                     Γöé
+Γöé 23790b2f-d6e3-44c4-873a-6f39e04c52b1 Γöé Butt Kicks                                                     Γöé
+Γöé 4a59f2f7-ba94-41c4-8ec2-c3ee3d77c921 Γöé Butt Kicks Slow                                                Γöé
+Γöé 2dc5909f-7ec7-4c29-9140-8a185f639b4a Γöé Butterfly Yoga Flaps                                           Γöé
+Γöé f4cda69d-3336-43fd-b321-7e0049832571 Γöé Butterfly Yoga Pose                                            Γöé
+Γöé 159a65cf-facf-41ab-8d47-1b1d37d06982 Γöé Cable Alternate Triceps Extension                              Γöé
+Γöé 8b54ef8b-9446-4798-a6a7-bffd537b35fe Γöé Cable Bar Lateral Pulldown                                     Γöé
+Γöé 402f590a-e5b6-48b1-bb9c-a287b7dfb128 Γöé Cable Bench Fly Press                                          Γöé
+Γöé 50912b01-0d11-4c67-a062-cb12678662ac Γöé Cable Bench Press                                              Γöé
+Γöé a7a4e38a-4b86-4a57-935b-3b6a444ca994 Γöé Cable Bent Over Lateral Raise Single Arm                       Γöé
+Γöé 64acf3a7-49c9-4f20-af7b-83c7e5053e83 Γöé Cable Bent Over One Arm Lateral Rais                           Γöé
+Γöé 2c23a64c-37e6-4669-8acd-b8aebcf17c5e Γöé Cable Bent Over Reverse Grip Row                               Γöé
+Γöé 801562ac-0e06-4521-b876-f78cd41e5b74 Γöé Cable Bent Over Row                                            Γöé
+Γöé 0bbacefb-a71e-4318-b661-7f098e2c9212 Γöé Cable Biceps Curl (ez-bar)                                     Γöé
+Γöé 04699c67-29fe-49d1-a4a2-bcc12150b15e Γöé Cable Close Grip Curl                                          Γöé
+Γöé be5d48cc-5e40-427b-8027-296d59b25e73 Γöé Cable Fly Machine Mid                                          Γöé
+Γöé 91027fe8-66f9-4591-86d8-109b23be65ec Γöé Cable Front Raises Straight Bar                                Γöé
+Γöé fb601f8f-8029-4cb2-be29-3e10c7b9bc8f Γöé Cable Lateral Raise                                            Γöé
+Γöé 0a20c309-5a8c-44ea-bf38-c8866cea30aa Γöé Cable Lateral Raises                                           Γöé
+Γöé 27a767ff-5e7a-4172-bfd3-83f7fbf2f0d8 Γöé Cable Leaning Lateral Rais                                     Γöé
+Γöé e7842341-c113-4faf-9762-71acdb380351 Γöé Cable Low Fly                                                  Γöé
+Γöé 5156ba20-10a8-4ea4-b349-b1e534c8e02a Γöé Cable Low Seated Row                                           Γöé
+Γöé ea68105d-5489-4931-9ded-5c1f9cfd37c2 Γöé Cable Lying Extension Pullover (with Cables Attachment)        Γöé
+Γöé bd604058-6914-486f-a18b-fc408feb76ef Γöé Cable Lying Fly                                                Γöé
+Γöé fc796a2a-6514-4f1a-a177-0220e4fc1b61 Γöé Cable Lying Triceps Extension                                  Γöé
+Γöé e439c57e-2a9a-402e-8962-7dc052b30f16 Γöé Cable Lying Triceps Extension (low)                            Γöé
+Γöé 8d1461db-856b-4a95-8aad-f8db64ebc36c Γöé Cable Machine High To Low                                      Γöé
+Γöé 06bf5a4b-dc1e-44ee-b476-1e8a4ef4029e Γöé Cable Machine Low To High                                      Γöé
+Γöé ba4cbfa5-628f-42aa-88f2-c3f3baa555f6 Γöé Cable Middle Fly                                               Γöé
+Γöé 8c11e47f-3061-4671-8f85-38af9c01dd63 Γöé Cable Narrow Chair Stand-up                                    Γöé
+Γöé 56fb0efb-2007-44e9-84c3-7915ac1d060f Γöé Cable Neutral Grip Kickback                                    Γöé
+Γöé 52236f30-fb70-4a48-8bbf-356117ec5b8c Γöé Cable One Arm Bent Over Row                                    Γöé
+Γöé 0dc84f0f-704c-4533-bea3-048dfa7bac07 Γöé Cable One Arm Curl                                             Γöé
+Γöé b4c7bcf2-aff4-4139-9922-0d293dee2871 Γöé Cable One Arm Front Rais                                       Γöé
+Γöé a6e4ec13-b571-49ef-8def-787be6be23ca Γöé Cable One Arm Inner Biceps Curl                                Γöé
+Γöé 16248e44-5caf-4c97-b04b-c94e7b91ff9d Γöé Cable One Arm Lateral Bent Over                                Γöé
+Γöé 56ebaa2f-56de-4217-bae3-a96821d060d6 Γöé Cable Overhead Curl                                            Γöé
+Γöé 89e666b4-cfed-47f4-998b-d427aaeaf2f8 Γöé Cable Overhead Extension Rope                                  Γöé
+Γöé 66bd2667-ae37-449e-936f-a1bbe918b210 Γöé Cable Palm Rotational Row                                      Γöé
+Γöé 5785e61c-6af5-4108-a268-f806d08881a4 Γöé Cable Preacher Curl                                            Γöé
+Γöé 88b19dee-12d0-4894-bbea-d9e34369d744 Γöé Cable Pull Through                                             Γöé
+Γöé 10c0f264-ccc2-4b1a-8d65-bab4d686ccbd Γöé Cable Pulldown                                                 Γöé
+Γöé ceea6d58-e6c1-4ba8-8896-4aa7fa1ad17a Γöé Cable Pulldown (pro Lat Bar)                                   Γöé
+Γöé 9d16eaeb-cece-4220-8219-f552644e8af8 Γöé Cable Pushdown                                                 Γöé
+Γöé 9f46f30d-c94f-4b05-8741-0e2132b62662 Γöé Cable Pushdown (straight Arm)                                  Γöé
+Γöé 8275bc50-0dea-4464-bd14-680279ab57fc Γöé Cable Rear Delt Fly                                            Γöé
+Γöé bbf86198-b1cd-4826-adfb-fc6529461d55 Γöé Cable Rear Drive                                               Γöé
+Γöé 5e63609b-85ad-408c-b36f-968320cfcc5e Γöé Cable Rear Drive Bent Ar                                       Γöé
+Γöé 1e19930e-adac-4334-9e0b-8b198dc01136 Γöé Cable Rear Pulldown                                            Γöé
+Γöé ad5aa8cd-0960-4cd7-9277-b9d2139a6318 Γöé Cable Reverse Curl                                             Γöé
+Γöé c64eeb09-e2c4-4fb5-a2e1-bcebf1bd1794 Γöé Cable Reverse Fly                                              Γöé
+Γöé 8c512ca1-0a77-4737-a550-68b8be574611 Γöé Cable Reverse Grip Pushdown                                    Γöé
+Γöé 762afcab-5a70-4dd4-8acd-bd11fbdad314 Γöé Cable Reverse Grip Straight Back Seated High Row               Γöé
+Γöé 81fab407-6db5-4203-bce1-0892984708cd Γöé Cable Reverse Grip Triceps Push Down Straight Bar              Γöé
+Γöé 6831f7c0-0ca6-4bdd-ab1a-3e7af353e1ed Γöé Cable Reverse Grip Triceps Pushdown (ez-bar)                   Γöé
+Γöé 18a3856f-6e8e-4ebc-a311-8ea8fd92e91e Γöé Cable Reverse Grip Triceps Pushdown Back Side Pov              Γöé
+Γöé ad94a59b-5570-4014-bf4e-c71084c063be Γöé Cable Row                                                      Γöé
+Γöé e540d7d9-2930-41f5-8bcc-684f647f2be1 Γöé Cable Seated On Floor Row                                      Γöé
+Γöé e6ce4c30-7e9c-437b-ad5e-369f7feb8334 Γöé Cable Seated One Arm Alternate Row                             Γöé
+Γöé c138b6e3-4b74-4c30-b041-0c1d5713b1fb Γöé Cable Seated Rear Lateral Rais                                 Γöé
+Γöé ef33136f-1dab-4d1b-94cd-8047c370ab93 Γöé Cable Seated Row                                               Γöé
+Γöé b8fb583f-bfbd-45c4-b4f6-4597209d4bce Γöé Cable Seated Supine Grip Row                                   Γöé
+Γöé 1a1dea12-b57a-486b-b886-09d953b1e58d Γöé Cable Standing-up Straight Crossovers                          Γöé
+Γöé cceecdae-a878-470f-99a3-87c1e3d64166 Γöé Cable Straight Arm Pulldown                                    Γöé
+Γöé 01a62d05-3798-4c46-8ce5-81dde9764389 Γöé Cable Triceps Overhead Extension(ez Bar)                       Γöé
+Γöé f70afb9e-6f08-4c3a-8010-cc183adaadfa Γöé Cable Triceps Push Down Elbow Out(v Bar)                       Γöé
+Γöé 8f2d5ea4-8062-47f9-a660-7a2ded0f7ff2 Γöé Cable Triceps Push Down Ez Bar                                 Γöé
+Γöé 7c27417c-dc8c-4ecf-867d-010458f73bae Γöé Cable Triceps Push Down Ez Bar Close Grip                      Γöé
+Γöé 233aec3d-bc81-4282-9f71-7d6b9cb8308b Γöé Cable Triceps Push Down Ez Bar Wide Grip                       Γöé
+Γöé 0411c7b9-253e-4858-b948-fae0c9c0e4fd Γöé Cable Triceps Push Down Straight Bar                           Γöé
+Γöé 053fe26c-c67c-458f-84f6-b038fb4394c5 Γöé Cable Triceps Push Down V Bar                                  Γöé
+Γöé 002f49bb-f255-4cb9-b75f-559fa47711bf Γöé Cable Twist                                                    Γöé
+Γöé ba0f4e2e-0779-405d-bd55-2ef63f8f58a3 Γöé Cable Twist (up-down)                                          Γöé
+Γöé d26e3769-6b61-4368-bce5-124457ac72cb Γöé Cable Twisting Pull                                            Γöé
+Γöé ee549d94-7854-4f86-be39-f285d844e887 Γöé Cable Upper Chest Crossovers                                   Γöé
+Γöé 0d823d8b-8722-4a59-9ee8-bdceb2342d2c Γöé Cable Upright Row With Ez Bar                                  Γöé
+Γöé e139caf6-01bf-483b-94af-25cb2cda5861 Γöé Cable Upright Row With Straight Bar                            Γöé
+Γöé 2738b4f3-422b-4cd5-8f29-1b31d0d699ca Γöé Cable Wrist Curl                                               Γöé
+Γöé a3925357-e9dc-47dc-a1eb-2aa22b9c9e4e Γöé Cable Y Rais                                                   Γöé
+Γöé cc0c31f1-74c8-4e7c-8626-38dcdd9442eb Γöé Calf Push Stretch With Hands Against Wall                      Γöé
+Γöé 8f98f7c0-0b50-4d9b-877f-c273347211fa Γöé Calf Push Stretch With Hands Against Wall V.2                  Γöé
+Γöé 2c3e0870-3873-4515-8434-39c744f76792 Γöé Calf Raise                                                     Γöé
+Γöé e09d5f99-a520-4dab-986c-e055f2860292 Γöé Calf Stretch With Hands Against Wall                           Γöé
+Γöé fa2040cd-ce8d-4cbd-8b04-2b81968a183e Γöé Calf Stretch With Rope                                         Γöé
+Γöé b1d28f8f-f7c9-45dd-93b6-724f90ad2208 Γöé Calves Stretch On Stairs                                       Γöé
+Γöé 7c7622c3-a262-4d61-9010-3ebca3aff786 Γöé Captains Chair Leg Raise                                       Γöé
+Γöé 307ad15a-07eb-4089-89ee-e0c3174f8934 Γöé Captains Chair Straight Leg Raise                              Γöé
+Γöé 12930ed5-abfa-4b2b-b6a6-8bf9c2668714 Γöé Cardio Lunge                                                   Γöé
+Γöé a7734858-3eac-4ae9-a756-fa7c6bb428b0 Γöé Cat Stretch                                                    Γöé
+Γöé 50362eed-2093-4256-a204-3c6499ea8935 Γöé Ceiling Look Stretch                                           Γöé
+Γöé 0cda5559-3360-4a95-8f72-24c432241d94 Γöé Chair Back Lunge Left Resistance Band                          Γöé
+Γöé 58a775b2-b687-482d-b502-04cbe7382dac Γöé Chair Back Lunge Right Resistance Band                         Γöé
+Γöé 8879a365-4772-42ac-8ba2-1b75b632afe6 Γöé Chair Elevated Single Leg Glute Bridge                         Γöé
+Γöé 8f4f5321-ce53-4762-a08c-757f8c5ea3ff Γöé Chair Feet Elevated Glute Bridge                               Γöé
+Γöé b03033c7-77e2-4dc2-8070-b6638827f2e5 Γöé Chair Frog Feet Elevated Glute Bridge Bodyweight               Γöé
+Γöé 8411299e-8dc0-46a4-b08f-e1246f45ff4a Γöé Chest Bench Press Correct Stance                               Γöé
+Γöé 75ddebb5-99fd-4fda-a0f0-2eefc42e8900 Γöé Chest Fly High To Low Resistance Band                          Γöé
+Γöé 5a73bc86-8d8a-4d2a-8ec1-e25eb13b8931 Γöé Chest Fly Low To High Resistance Band                          Γöé
+Γöé 2b240ddc-a29a-4e2a-9067-e24604357670 Γöé Chest Fly Side Step                                            Γöé
+Γöé 683f477c-7b53-4bd7-a786-9cebe9136b92 Γöé Chest Lift With Rotation                                       Γöé
+Γöé b90105d5-14d1-4798-b823-73b3930eef41 Γöé Chest Out Hands Behind (hold)                                  Γöé
+Γöé 5b3f56ac-04f1-431a-ae77-dfa03f8d6f77 Γöé Chest Press Front Resistance Band                              Γöé
+Γöé ea0f7575-dbd4-48b9-8f99-b0541d3c0a06 Γöé Chest Press High To Low Cable Resistance Band                  Γöé
+Γöé 99d3cb90-c7e3-4a08-bc92-cd8dda73c6cf Γöé Chest Press Low To High Resistance Band                        Γöé
+Γöé 12670896-6267-458d-922e-d920e69bd9f1 Γöé Chest Raise And Rotate                                         Γöé
+Γöé bb324b34-4529-4aec-b08c-feea601b88e5 Γöé Chest Stretch With Exercise Ball                               Γöé
+Γöé 3fa7ed0e-34a1-4656-8712-33d84a6c4dc4 Γöé Chest Tap Push-u                                               Γöé
+Γöé 8e89f642-68c4-4e58-b8b7-76a5cda6270c Γöé Child Pose                                                     Γöé
+Γöé 2279b85b-901e-4451-9552-f10998594e1d Γöé Child Pose Up                                                  Γöé
+Γöé 720e418f-1dea-4e53-88cb-039939b21994 Γöé Chin Up                                                        Γöé
+Γöé 5d7ebfcf-fd3a-43ac-b7c5-3020286199c3 Γöé Chin Up Reverse Close Grip                                     Γöé
+Γöé 08c5ce65-46ea-4701-bae9-74dd3ed6c558 Γöé Chin Up Reverse Normal Grip                                    Γöé
+Γöé 568c1e1a-46e9-463e-9c37-ebec27142683 Γöé Chin Up Reverse Wide Grip                                      Γöé
+Γöé 57f334bc-d003-488b-b575-945fc7d2198a Γöé Chin-up (isometric And Negative)                               Γöé
+Γöé 1bbee4fe-8280-4161-bb9f-c1ee066c461a Γöé Chin-ups (narrow Parallel Grip)                                Γöé
+Γöé 3946efdf-3436-4b24-a18a-03f8a80b83bf Γöé Circle Elbow Arm                                               Γöé
+Γöé 7136bf51-2750-4ef8-9208-95641917f6f6 Γöé Circles Knee Stretch                                           Γöé
+Γöé 8f2b8338-0362-48f9-9b8e-a403be3a8847 Γöé Clap Curtsy Squat                                              Γöé
+Γöé ad8c6317-4ff8-49c7-ad54-57cd710457b2 Γöé Clap Jack                                                      Γöé
+Γöé e18747f2-ecb0-4857-8bba-984292414362 Γöé Clap Push Ups                                                  Γöé
+Γöé 4c26b5ed-9a40-4813-b56c-074785f4bd37 Γöé Climber A Padded Stool Supported                               Γöé
+Γöé 1c3e3f7d-0456-4f09-b258-47f9d3c6a7b6 Γöé Clock Push Ups                                                 Γöé
+Γöé 92c7784e-eeb2-41ad-885f-1b5d833b117a Γöé Close-grip Push-up                                             Γöé
+Γöé 9ae04cbb-8f8a-498e-a631-ad23210a36b7 Γöé Close-reverse Grip Chin-up                                     Γöé
+Γöé c39c4a1e-2121-44d2-9f68-3a3804b68ee6 Γöé Cluster                                                        Γöé
+Γöé 61f2079a-0e4a-454b-9f98-51829067de6b Γöé Cobra Full Push Up                                             Γöé
+Γöé e898de93-0633-4d0e-9ff6-bbf81fce6946 Γöé Cobra Push U                                                   Γöé
+Γöé 85e5d8c3-e345-41ae-9e2b-a9ef73339632 Γöé Cobra Side Ab Stretch                                          Γöé
+Γöé 299145d9-5206-49ea-8e95-0c102a375538 Γöé Cobra Yoga Pose Hol                                            Γöé
+Γöé dcf82f23-683b-42ef-9a2e-ba3670ea8d31 Γöé Cocoons                                                        Γöé
+Γöé 5f777d77-5e51-4de2-bc3d-b88b4ebc8d1a Γöé Concentration Curls Dumbbell                                   Γöé
+Γöé b58d7936-ec1f-493d-96d1-985cc354f998 Γöé Control Balance                                                Γöé
+Γöé 7810ae60-ddb7-45b2-802f-78c85d8125ab Γöé Corner Touch                                                   Γöé
+Γöé 88adc640-d122-4d88-96da-212236e77110 Γöé Corner Wall Chest Stretch                                      Γöé
+Γöé b6515989-de7d-4cd9-a81b-5768cf864585 Γöé Cossack Squat                                                  Γöé
+Γöé 74c816fa-1ada-44a4-be43-bc0958b542d0 Γöé Counterbalanced Skater Squat                                   Γöé
+Γöé 1ca38c27-d544-4135-86e5-efb79be5b3d2 Γöé Crab Pose                                                      Γöé
+Γöé 9c85df97-6fa8-4161-8cb6-b681fc0a1a58 Γöé Crab Twist Toe Touch                                           Γöé
+Γöé e2f9b1a6-9f82-43cc-8424-ad251de17db0 Γöé Criss Cross Arms Lift                                          Γöé
+Γöé d88ce18d-9fde-4174-acc8-fe1db85f5a3c Γöé Criss Cross Elbow To Knee                                      Γöé
+Γöé 6ada16b0-8fe6-4b16-8039-8148edcec8ef Γöé Criss Cross Jack                                               Γöé
+Γöé d87a2ab8-974a-4a3d-9b7a-4021b7f8ded5 Γöé Criss Cross Jump                                               Γöé
+Γöé e35349eb-0417-4b52-9b89-3c8b25038703 Γöé Criss Cross Leg Raises                                         Γöé
+Γöé 52743df8-1464-4273-bc66-59400418f133 Γöé Cross Over Shoulder Stretch                                    Γöé
+Γöé 824f67af-ba8a-48fd-87fa-9e7274b00e58 Γöé Crossed Arms Front Leg Kick                                    Γöé
+Γöé e5e59236-d039-4eff-b03b-2c12ae1c1895 Γöé Crossover Kneeling Hip Flexor Stretch                          Γöé
+Γöé 0597c028-d08d-403d-a3fb-d27ac7da3f0c Γöé Crouching Heel Back Calf Stretch                               Γöé
+Γöé 44fd4bd6-462e-4d57-ab1e-620971336851 Γöé Crunch (arms Straight)                                         Γöé
+Γöé 8a1aaeb8-f95d-434a-b4f0-f0bd25842234 Γöé Crunch (hands Overhead)                                        Γöé
+Γöé 5482a2a8-0c30-4fdf-90c5-4eaf400d3211 Γöé Crunch (legs On Stability Ball)                                Γöé
+Γöé d6127550-8afa-4e1c-8818-dd0e1c287262 Γöé Crunch (on Bosu Ball)                                          Γöé
+Γöé a9868b02-0c2b-4226-8e9a-37f9e4ce8a7f Γöé Crunch (on Stability Ball)                                     Γöé
+Γöé b270320a-1883-4a9e-8958-c7cfba987512 Γöé Crunch (straight Leg Up)                                       Γöé
+Γöé 704575a5-df28-4f79-b88e-81d06f3cc306 Γöé Crunch Floor                                                   Γöé
+Γöé dfb3dbc9-40f4-4db0-9a5d-e89d1483a700 Γöé Crunch Frog On Floor                                           Γöé
+Γöé 5c61c908-edd4-4d45-8714-a4708f2cc6c4 Γöé Crunch Leg Raise                                               Γöé
+Γöé 56a6e17d-5bc5-47d7-b347-f51df1bb1c6e Γöé Crunch With Medicine Ball                                      Γöé
+Γöé 068bfb7d-f38f-4728-97c8-4e877401dbb7 Γöé Curtsy Lunge Bodyweight                                        Γöé
+Γöé 97476480-4e74-4921-9b34-4e1676997d1d Γöé Curtsy Lunge Slide With Towel                                  Γöé
+Γöé 3b1fd3f9-e5c1-4145-b994-7375980827b8 Γöé Curtsy Lunges Resistance Band                                  Γöé
+Γöé ff2c7f57-6043-4978-8f11-d7ad496f0af8 Γöé Curtsy Squat                                                   Γöé
+Γöé 40b5c468-ab03-46c3-8b41-01578165e908 Γöé Dead Bug                                                       Γöé
+Γöé bcc2f222-244b-48a1-b6fc-deb184bde9bf Γöé Dead Bug                                                       Γöé
+Γöé 8bdca4a3-2d81-4d71-8264-fff336a4606f Γöé Dead Bug Extended Arms                                         Γöé
+Γöé 2607afa6-803e-4271-9a62-8a9fcf0b6b02 Γöé Dead Hang Stretch                                              Γöé
+Γöé 1d4f7fec-3286-46e0-b063-bdfccb148a9e Γöé Decline Bench Oblique Crunches Bodyweight                      Γöé
+Γöé 038857b1-a4a9-402f-89da-b6ccd1baf6d1 Γöé Decline Bench Oblique Crunches Dumbbells                       Γöé
+Γöé 07844417-dedd-4c3f-a76a-fcd6b17e6858 Γöé Decline Bench Sit-up                                           Γöé
+Γöé f0fcac24-3185-4b93-86e3-74b1ac004c5a Γöé Decline Bent Leg Reverse Crunch                                Γöé
+Γöé 2f481334-6c21-4e54-9ac3-8df4983b9543 Γöé Decline Chair Push Up Diamond                                  Γöé
+Γöé bec8afc0-7f42-460a-a471-f3f0f4e66cd5 Γöé Decline Diamond Pike Push-up                                   Γöé
+Γöé 4b27a4b7-3379-4d77-8320-679a6606c3db Γöé Decline Kneeling Push Up                                       Γöé
+Γöé 68632b17-799f-4e7c-9c93-566b67dce219 Γöé Decline Kneeling Push Up On Box                                Γöé
+Γöé 79e2370a-72b9-4c66-b52a-f53cb3a17a3b Γöé Decline Push Up                                                Γöé
+Γöé 1b007104-c453-4095-bdba-8a64f36c4463 Γöé Decline Push Up Against Wall                                   Γöé
+Γöé d00e4165-ef72-4d4a-b2e5-6b1d07aa609a Γöé Decline Shoulder Tap                                           Γöé
+Γöé 93415c3c-57c6-4e63-9f3d-31614b62a9d6 Γöé Decline Sit Up                                                 Γöé
+Γöé 8109b416-e8cd-4316-8d82-8a1efe4b85db Γöé Decline Sit Ups Bodyweight                                     Γöé
+Γöé 278abe73-bf46-461d-b5ed-1a2e58e3db42 Γöé Decline Sit Ups Dumbbells                                      Γöé
+Γöé a9615408-e44c-4808-9b8d-a545f78363f9 Γöé Deep Push-up                                                   Γöé
+Γöé 2b5a437f-6a8f-4bca-9f4c-d0e1b36f03b7 Γöé Diagonal Chop Cable                                            Γöé
+Γöé 49a427c2-d7bd-47fb-bcb1-0476a965d2e0 Γöé Diagonal Chop Left                                             Γöé
+Γöé 58c9c7e9-522e-4833-a5c0-2239cfb516d1 Γöé Diagonal Chop Right                                            Γöé
+Γöé 25e0f074-1078-4a69-a364-7ce9412f639e Γöé Diagonal Lunge                                                 Γöé
+Γöé 34c3b166-f0dd-4959-ba5b-529443722381 Γöé Diagonal Opens                                                 Γöé
+Γöé e4cfe94c-8096-41fd-9248-692e082637e7 Γöé Diagonal Punch                                                 Γöé
+Γöé cf95c4b7-f441-4e27-8c19-8bc87bbcb0a4 Γöé Diamond Push Up                                                Γöé
+Γöé 76b4d863-0aa9-4599-96e2-37e809cecc7d Γöé Diamond Push-up                                                Γöé
+Γöé e0231ad7-ce23-44ef-9022-be333ba7b4f5 Γöé Diamond Push-up (on Knees)                                     Γöé
+Γöé e501c609-f6a5-4e6c-a7b8-e2eb284e1365 Γöé Dip                                                            Γöé
+Γöé 8437d6b2-48ea-4ba5-8495-e929dc3b9d05 Γöé Donkey Kicks Bodyweight                                        Γöé
+Γöé 56de1b15-eaef-4451-8326-79fe9f6b9e8f Γöé Doorway Biceps Curl                                            Γöé
+Γöé 6cc1b9b1-2438-4bc9-afb1-5e0843051e6a Γöé Double Jump Squat                                              Γöé
+Γöé d6cd8161-c671-4c70-9263-cd9f90c21487 Γöé Double Knee Drive                                              Γöé
+Γöé fe0074dc-594b-408c-8d99-62c6496ad5e1 Γöé Double Punch Front Leg Lift                                    Γöé
+Γöé 5b5ee468-861e-480b-941e-a8d25a7cd99d Γöé Downward Dog Sprint                                            Γöé
+Γöé 442a4701-8a85-4ba3-a438-cd57d4930bf8 Γöé Drag Curl Dumbbell                                             Γöé
+Γöé fdb6d549-31d0-4046-b2c7-54ef0795ef4a Γöé Drag Curl Resistance Band                                      Γöé
+Γöé 81e620a6-6f10-44bf-ba95-b853b6496902 Γöé Dumbbell Ab Crunch Dumbbell                                    Γöé
+Γöé 5a6c454a-0db3-46fb-9078-75aaa7f673bf Γöé Dumbbell Alternate Bench Press (high Start)                    Γöé
+Γöé acc07f7e-bfd0-479f-9286-016640fec540 Γöé Dumbbell Alternate Biceps Curl                                 Γöé
+Γöé 386f9d92-43b7-473e-820a-4a3dcd2caf9f Γöé Dumbbell Alternate Biceps Curl (version 2)                     Γöé
+Γöé feedb146-79e6-4296-aaa5-b4fd478835fb Γöé Dumbbell Alternate Seated Hammer Curl                          Γöé
+Γöé ba07b88e-6c0d-479b-95ee-01aef79ee3e4 Γöé Dumbbell Alternate Shoulder Press                              Γöé
+Γöé 03ddc614-94db-4004-958d-25005c6a584a Γöé Dumbbell Alternate Side Press                                  Γöé
+Γöé 75f7aed8-9b14-4531-b494-e215d78825b8 Γöé Dumbbell Alternating Press (version 2)                         Γöé
+Γöé 83cff07d-6df1-4839-8bb9-a0721dec26fa Γöé Dumbbell Armpit Ro                                             Γöé
+Γöé c10812a8-cfd4-4fee-bebd-ba2c39aeeca4 Γöé Dumbbell Arnold Press (version 2)                              Γöé
+Γöé 06d2b47c-a883-4596-a770-5e01bb623ee0 Γöé Dumbbell Around The Worl                                       Γöé
+Γöé 3c38b479-9532-4a33-815b-2e1381568c1c Γöé Dumbbell Bar Grip Sumo Squat                                   Γöé
+Γöé 1fe1bcaa-83c6-45ba-a34f-7bd0289726bf Γöé Dumbbell Bench Press                                           Γöé
+Γöé 84e8190d-581f-4a2a-a4bd-01e541258101 Γöé Dumbbell Bench Seated Press                                    Γöé
+Γöé 5e22dc0f-391f-490f-b96a-5a993ff4ad9b Γöé Dumbbell Bench Squat                                           Γöé
+Γöé 0de605a8-f584-4cf1-a704-f3cac9f8b6ca Γöé Dumbbell Bent Arm Lateral Raise                                Γöé
+Γöé 10bbc8ce-bf5e-4e6b-b40c-52f20b953f55 Γöé Dumbbell Bent Arm Pullover                                     Γöé
+Γöé a82ac6e4-460e-43cb-80fd-b2def5655839 Γöé Dumbbell Bent-over Reverse Row                                 Γöé
+Γöé 92bfe872-c66f-4ced-baca-d46eead472d4 Γöé Dumbbell Bent-over Row                                         Γöé
+Γöé 3a80c2d6-398e-44a4-8df5-06b1b7c223a4 Γöé Dumbbell Bicep Curl To Shoulder Pres                           Γöé
+Γöé 1e18789a-9b2a-42c1-a846-934e3c54f44a Γöé Dumbbell Biceps Curl With Overhead Extension On Stability Ball Γöé
+Γöé b0df8903-2e11-4833-8b7f-ab12a2c696ce Γöé Dumbbell Bulgarian Box Split Squat                             Γöé
+Γöé 2d3d8899-b750-4ef4-bc1a-ea8c22fe6eb3 Γöé Dumbbell Chest Press Decline                                   Γöé
+Γöé d33661a2-9b3d-4f35-864e-f229f0743814 Γöé Dumbbell Chest Press Flat                                      Γöé
+Γöé c91c02ca-c4cf-43c2-9553-ffa2c06d775f Γöé Dumbbell Chest Press Incline Bench                             Γöé
+Γöé bffc5077-092b-4697-8942-5ae94050e7e1 Γöé Dumbbell Chest Pull Over                                       Γöé
+Γöé 3d7e6712-7379-4744-826e-67a9a06e7adc Γöé Dumbbell Chest Supported Lateral Raises                        Γöé
+Γöé a50573b1-ef6b-4851-abb4-67853236e596 Γöé Dumbbell Close Grip Shoulder Press Sit U                       Γöé
+Γöé 9f505c23-93d3-449f-bad7-04592ac79b9c Γöé Dumbbell Close Legs Deadlift                                   Γöé
+Γöé 142e50fe-d337-4360-b023-6d42db08afbe Γöé Dumbbell Close-grip Simultaneous Curl                          Γöé
+Γöé 2dc9a8db-9062-41bf-92f3-674fe9ca5682 Γöé Dumbbell Cossack Squats (version 2)                            Γöé
+Γöé beaed03f-5ceb-4265-867e-439e4f602d82 Γöé Dumbbell Cross Body Hammer Curl (version 2)                    Γöé
+Γöé 09c134cc-3fd8-4acf-8871-875c5457a557 Γöé Dumbbell Crunch Hold With Legs Off                             Γöé
+Γöé 207dea46-6fd3-4e38-94e5-cb94687ffd1c Γöé Dumbbell Cuban Press (version 2)                               Γöé
+Γöé 6776f70e-638a-4423-b33b-ed4716c3265a Γöé Dumbbell Curl                                                  Γöé
+Γöé 60deb127-02f6-443b-9ff3-d2eed1f6d32b Γöé Dumbbell Curtsy Lunge                                          Γöé
+Γöé 9ef3782a-15a9-4512-84ef-b7419641b44b Γöé Dumbbell Decline Alternate Bench Press                         Γöé
+Γöé 447c0b8d-7142-4a09-9880-c13c01eb135e Γöé Dumbbell Decline Bench Press                                   Γöé
+Γöé 2643a458-ccc2-4b10-b4f1-ec44a12ffacf Γöé Dumbbell Decline Fly                                           Γöé
+Γöé e11f95df-b4a5-4ca1-b3e8-2c88f47a517d Γöé Dumbbell Decline Fly Version 2                                 Γöé
+Γöé 311bb827-f97e-4ae4-92d8-140670d18ba2 Γöé Dumbbell Decline Hammer Press                                  Γöé
+Γöé 52767769-c416-4432-aab2-dca77d5f7313 Γöé Dumbbell Decline One Arm Hammer Press                          Γöé
+Γöé c4dc5201-794b-4227-aaf8-d61c99d00baa Γöé Dumbbell Decline Overhead Sit-up                               Γöé
+Γöé 873adda0-17e9-44a8-88a6-55bdc1c91b1d Γöé Dumbbell Decline Shrug                                         Γöé
+Γöé 38b48719-d1aa-440a-ad08-7a0bbad317a1 Γöé Dumbbell Decline Sit-up                                        Γöé
+Γöé 977c1833-1359-48ca-98dc-ef2e6cb5492d Γöé Dumbbell Decline Triceps Pull-over Extension                   Γöé
+Γöé 85614aeb-41c2-4d70-a321-446f01aca6c3 Γöé Dumbbell Decline Twist Fly                                     Γöé
+Γöé 50c693be-ce5d-4674-9752-1a1231af6a13 Γöé Dumbbell Diagonal Chop                                         Γöé
+Γöé 52dc6816-3ef9-44c5-8c94-3426eccb6876 Γöé Dumbbell Drag Over Shoulder Bicep Curl                         Γöé
+Γöé aa33c013-ee8e-49d6-b18b-63033063f79c Γöé Dumbbell External Rotatio                                      Γöé
+Γöé a96600bb-7ba2-408f-9232-4323b274757b Γöé Dumbbell External Rotation                                     Γöé
+Γöé ef446413-fe0f-4a54-a372-607ef11028e7 Γöé Dumbbell Face Down Lying Shoulder Pres                         Γöé
+Γöé 93b193c2-ccf3-4b33-9a0f-e67b5b4bc1fc Γöé Dumbbell Face Down Lying Shoulder Press                        Γöé
+Γöé a0515f47-1564-482c-8c47-1143e129e65a Γöé Dumbbell Farmer Walks                                          Γöé
+Γöé 387e501f-a13c-4174-b12c-00b028ceefee Γöé Dumbbell Floor Fly                                             Γöé
+Γöé cf08d585-45ad-4035-9fce-946c60337eb6 Γöé Dumbbell Fly Flat Bench                                        Γöé
+Γöé 062bb607-34fb-4f57-9473-9d89c67c4398 Γöé Dumbbell Fly Flat Bench Slow                                   Γöé
+Γöé 915fe60c-5627-46ce-a89d-f843a82f158e Γöé Dumbbell Fly Incline Bench                                     Γöé
+Γöé a9986fd5-af7e-48c4-bf57-cf0d6933c642 Γöé Dumbbell Front Rack Lunge                                      Γöé
+Γöé ba7bbbed-0f9a-4dce-9936-d5e1bce80f56 Γöé Dumbbell Front Raise                                           Γöé
+Γöé f7b072ff-0396-495d-ad05-ff41ae3650ce Γöé Dumbbell Front Raise (version 2)                               Γöé
+Γöé a976ab41-6a8d-4057-9efd-134f5a4ac3d3 Γöé Dumbbell Front Squat                                           Γöé
+Γöé f37e1f7a-7b4f-4e82-8591-f6de7c0ea1b1 Γöé Dumbbell Glute Bridge                                          Γöé
+Γöé 823887aa-3b47-4736-b373-7a62ca1d0ca5 Γöé Dumbbell Goblet 2 Sec Hold Squat                               Γöé
+Γöé 09992864-c3a8-4f21-af21-d33eab09d0b3 Γöé Dumbbell Goblet Curtsy Lunge                                   Γöé
+Γöé 42200363-5866-4fa6-991f-103f58aa839e Γöé Dumbbell Goblet Split Squat                                    Γöé
+Γöé 48e4e289-5d43-43b3-a2f9-235dd901040f Γöé Dumbbell Goblet Split Squat Front Foot Elevanted               Γöé
+Γöé ea998ed8-4c52-4f07-ac9e-69608cf61826 Γöé Dumbbell Half Biceps Curl For 21s                              Γöé
+Γöé f7f3e2c7-dcb6-459a-b74d-5e3bd841b4a1 Γöé Dumbbell Half Kneeling Military Pres                           Γöé
+Γöé d2fe5b94-7286-4f20-b963-b1e6eeb96bcd Γöé Dumbbell Hammer Curl                                           Γöé
+Γöé 4aee3a26-6ad6-4265-8119-47d95419bb74 Γöé Dumbbell Hammer Curl Simultaneous Arms                         Γöé
+Γöé 53e51169-b71c-4676-9859-4c7d579bdb0a Γöé Dumbbell Hammer Grip Incline Bench Two Arm Row                 Γöé
+Γöé 8f19e24c-6795-4495-8f0b-cb7953d4ddea Γöé Dumbbell Hammer Preacher Curl Simultaneous Arms                Γöé
+Γöé 628cf0a1-f012-49f1-9570-0fd5eb2872a2 Γöé Dumbbell Hammer Srtict Curl                                    Γöé
+Γöé e0ea2456-1bd3-4a83-9c2f-bf12310ac03c Γöé Dumbbell Hang Power Clean                                      Γöé
+Γöé f08c3dde-2b0c-4c39-97a1-7640867f1462 Γöé Dumbbell High Curl                                             Γöé
+Γöé e96b2a99-8aa8-4593-b3d7-6a45d0e380d3 Γöé Dumbbell Incline Alternate Bicep Curl                          Γöé
+Γöé cc8a74f0-7950-4c94-a178-cd1fd369c37e Γöé Dumbbell Incline Alternate Curl                                Γöé
+Γöé 9f7cb1f6-3fcf-4ae2-ae69-22bd27a6ddd1 Γöé Dumbbell Incline Alternate Hammer Curl                         Γöé
+Γöé b2f870cb-4dfe-45b3-806a-18072b05086e Γöé Dumbbell Incline Alternate Press                               Γöé
+Γöé 130a67c1-f451-4c98-ac9a-019136c27e6f Γöé Dumbbell Incline Bench Press                                   Γöé
+Γöé ea06cda5-3a11-4101-a19f-e18b16ba695b Γöé Dumbbell Incline Biceps Simultaneous Curl                      Γöé
+Γöé a16056e1-65e5-44c8-a5b8-1a77460845bd Γöé Dumbbell Incline Breeding                                      Γöé
+Γöé 2a86542b-4541-40b6-81b0-908144033ab7 Γöé Dumbbell Incline Fly                                           Γöé
+Γöé 51cf4623-e91e-4f88-b2e3-c57999efe1cf Γöé Dumbbell Incline Fly On Exercise Ball                          Γöé
+Γöé 68eeb79c-8d25-4497-93d8-45ac1ca0c586 Γöé Dumbbell Incline Front Raise                                   Γöé
+Γöé 829beb95-2022-4f2d-ae70-95851074c236 Γöé Dumbbell Incline Hammer Shoulder Press                         Γöé
+Γöé e40116b1-bd22-4a07-90ae-afe9c61ff2d8 Γöé Dumbbell Incline Hammer Simultaneous Curl                      Γöé
+Γöé 75771073-cf5c-4628-8c34-8a3d16bc6c35 Γöé Dumbbell Incline Lying Front Raise                             Γöé
+Γöé 60789116-ad85-438c-a11a-013bb9d84c92 Γöé Dumbbell Incline One Arm Lateral Raise                         Γöé
+Γöé 989e9d35-bbb2-4eff-a2db-6792141416f6 Γöé Dumbbell Incline One Arm Press                                 Γöé
+Γöé 7f7b0dc8-ceb6-4061-808e-cf8faffb4b4f Γöé Dumbbell Incline Palm-in Press                                 Γöé
+Γöé 92fd027c-2365-467a-9bde-51965f2ad869 Γöé Dumbbell Incline Rear Lateral Raise                            Γöé
+Γöé d84072af-5762-4cf4-8ad2-404a2d65c81d Γöé Dumbbell Incline Row                                           Γöé
+Γöé c11c8ad8-1f90-4296-ac40-1c694bf662df Γöé Dumbbell Incline Shrug                                         Γöé
+Γöé 8f63bff5-c8bc-4b51-a466-4af913701942 Γöé Dumbbell Incline Simultaneous Curl                             Γöé
+Γöé f9ea9ea9-2fa3-4969-a0a6-3b3446e501f1 Γöé Dumbbell Incline Squeeze Press                                 Γöé
+Γöé 8fee94ba-56e1-477a-a3c4-66fb1bc818f9 Γöé Dumbbell Incline Svend Close Grip Press                        Γöé
+Γöé 8bfcdcc6-c98e-4d6d-a9b8-20e2e1a2416e Γöé Dumbbell Incline Triceps Extension                             Γöé
+Γöé 14497b0f-d7ff-4c4b-a591-b673e19fe76b Γöé Dumbbell Incline Twisted Fly                                   Γöé
+Γöé cd359937-2386-4466-b89e-04c6478d2f4e Γöé Dumbbell Incline Two Arm Extension                             Γöé
+Γöé 2445ccec-e061-4415-9ee6-c92965da1dda Γöé Dumbbell Iron Cross                                            Γöé
+Γöé 7b5dc16e-6058-4d59-82d8-b9eefd25840c Γöé Dumbbell Jumping Squat                                         Γöé
+Γöé 6a240119-f600-4686-82a8-0870cfc6a593 Γöé Dumbbell Kickback                                              Γöé
+Γöé 65dabcc9-2263-4fae-af54-a47293ed6628 Γöé Dumbbell Kneeling Arnold Press                                 Γöé
+Γöé 5c3e53ab-56e0-4254-ba8d-918998418b9b Γöé Dumbbell Kneeling Hold To Stand Clean Grip                     Γöé
+Γöé 020a9a12-cdb6-4f1d-bed4-0670a2f01407 Γöé Dumbbell Kneeling Squat                                        Γöé
+Γöé 74c1db0f-cf80-4a0e-a4ff-a6366b8a5375 Γöé Dumbbell Lateral Raise                                         Γöé
+Γöé 3c42ebdc-2884-4864-8961-653c9a27b0ec Γöé Dumbbell Lateral To Front Raise                                Γöé
+Γöé 32d1915d-9ab5-435f-850c-eb65070a3861 Γöé Dumbbell Leaning Fly                                           Γöé
+Γöé dc5bbbd0-95cb-4c2a-8690-da3bc2256106 Γöé Dumbbell Low Windmill                                          Γöé
+Γöé 541d5ecf-e354-490d-80e2-8dbd2820afa6 Γöé Dumbbell Lunge Alternating On The Spot                         Γöé
+Γöé 3b04e49b-2ca6-495e-881a-10b7b7de245a Γöé Dumbbell Lunge On The Spot                                     Γöé
+Γöé 3e17c8c1-c137-45e0-96bc-29f55700f962 Γöé Dumbbell Lunge Pulse                                           Γöé
+Γöé fe8ea1de-385a-4b0d-b8e7-d0d4aac6112d Γöé Dumbbell Lying External Shoulder Rotatio                       Γöé
+Γöé 923fa792-26af-4d14-8d80-6d894ceeeae5 Γöé Dumbbell Lying One Arm Rear Lateral Raise                      Γöé
+Γöé 85d08e22-d1c5-4dff-b89e-a98cab130e4f Γöé Dumbbell Lying One Arm Supinated Triceps Extension             Γöé
+Γöé f0f504e2-0820-4d9d-b716-d0fa7e181fea Γöé Dumbbell Lying Pronation Rotation On Floor                     Γöé
+Γöé ca96be59-0eb2-423d-81b4-15441565c8a0 Γöé Dumbbell Lying Rear Delt Row                                   Γöé
+Γöé d9c86ee1-6f11-4e9b-8de2-949b5d64dbef Γöé Dumbbell Lying Rear Lateral Raise                              Γöé
+Γöé 6eaf9644-f1da-485c-9f82-c5deea6f1da8 Γöé Dumbbell Lying Supine Curl                                     Γöé
+Γöé 97e04184-7580-49b9-b55b-33b5072d1e38 Γöé Dumbbell Lying Triceps Extension                               Γöé
+Γöé f341851d-6759-4209-ab4a-55d2d4f2c4ff Γöé Dumbbell Lying Triceps Extension On Floor                      Γöé
+Γöé 0d287fb7-bdd2-4b4d-80ce-b300091d371b Γöé Dumbbell Narrow Stance Squats                                  Γöé
+Γöé 9f4a06e0-1aeb-4d2e-8a0f-b3ed47f329ed Γöé Dumbbell One Arm Floor Fly                                     Γöé
+Γöé d8ef4079-baa3-4870-a7b6-00de3d21c839 Γöé Dumbbell One Arm Floor Press                                   Γöé
+Γöé 786cdf09-6e65-4261-9804-c72f4af8559b Γöé Dumbbell One Arm Front Raise                                   Γöé
+Γöé 2ea3ab04-c896-46b2-8fc7-53184f8607dd Γöé Dumbbell One Arm Hammer Preacher Curl                          Γöé
+Γöé f32ed0ec-9a60-4e50-8aa5-81ffa271b43d Γöé Dumbbell One Arm Kickback                                      Γöé
+Γöé 05d1f2eb-463b-4057-af46-0df91bc9f49d Γöé Dumbbell One Arm Lateral Raise                                 Γöé
+Γöé 068fc8f8-4025-479a-8df9-e579bd0b9175 Γöé Dumbbell One Arm Lateral Raises                                Γöé
+Γöé 131c32ca-6b67-444d-9fe1-3e29153c39d6 Γöé Dumbbell One Arm Low Fly                                       Γöé
+Γöé b8306a95-1246-4ed0-ab15-c0fec50c1743 Γöé Dumbbell One Arm Revers Wrist Curl                             Γöé
+Γöé 9c145b9a-c19b-442b-a01e-61cf3bb5b430 Γöé Dumbbell One Arm Reverse Preacher Curl                         Γöé
+Γöé d6df97b2-c94b-4b06-89c8-2b026eced504 Γöé Dumbbell One Arm Row (rack Support)                            Γöé
+Γöé 87648224-7116-4e30-82c2-eea4c260a4b7 Γöé Dumbbell One Arm Seated Neutral Wrist Curl                     Γöé
+Γöé 3687b6fc-a3ca-433f-acb9-864428519dcc Γöé Dumbbell One Arm Shoulder Press (version 2)                    Γöé
+Γöé a6bb4a16-cd13-4292-8358-19d2c3fe31b1 Γöé Dumbbell One Arm Snatch                                        Γöé
+Γöé f52ff4ea-9c75-417f-97e9-21ace94892f2 Γöé Dumbbell One Arm Triceps Extension (on Bench)                  Γöé
+Γöé b02bee9f-9fef-4d95-aa28-e923f4749b6f Γöé Dumbbell One Arm Wide Grip Bench Press                         Γöé
+Γöé 34e2aa0f-d4a4-4993-b435-e264680caa9c Γöé Dumbbell One Arm Wrist Curl                                    Γöé
+Γöé 249863f2-eed6-4991-a5ae-9e7a56735daf Γöé Dumbbell One Arm Zottman Preacher Curl                         Γöé
+Γöé 38865577-01c3-4982-a355-b271d02feb24 Γöé Dumbbell Over Bench Reverse Wrist Curl                         Γöé
+Γöé 852fa2bc-ec61-4fac-9cc3-bbf54fecb8d8 Γöé Dumbbell Over Bench Wrist Curl                                 Γöé
+Γöé 93765fce-af5c-4234-89ba-5e4d25921f8c Γöé Dumbbell Overhead Extension Seated                             Γöé
+Γöé ae1c1956-4e8f-4f0d-af6f-c5e1edabe821 Γöé Dumbbell Overhead Extension Standing                           Γöé
+Γöé 85fd4cdd-e149-481a-ada8-64fa75e266cb Γöé Dumbbell Overhead Lunge                                        Γöé
+Γöé 899ac1bf-ee4d-40d0-8270-55d56e0f0995 Γöé Dumbbell Overhead Sit-up                                       Γöé
+Γöé f2767cba-7916-4bde-88e4-61573ea542d5 Γöé Dumbbell Plyo Squat                                            Γöé
+Γöé 8009eb05-4508-40a5-8812-833c99d7f5ac Γöé Dumbbell Preacher Curl                                         Γöé
+Γöé 73394015-ad1a-49e0-bb8a-c7ee1779a5c5 Γöé Dumbbell Preacher Curl (turned Torso)                          Γöé
+Γöé 4d81137f-f616-446f-8eb1-75354b5b44ad Γöé Dumbbell Preacher Curl Over Exercise Ball                      Γöé
+Γöé 07655cdc-7d14-433b-a370-5a92a31fa824 Γöé Dumbbell Press Squat                                           Γöé
+Γöé 8868bd36-0865-4f7f-8ff0-073b330f43b3 Γöé Dumbbell Pronate-grip Triceps Extension                        Γöé
+Γöé 5411676e-facc-4491-854e-b4a2de907f06 Γöé Dumbbell Prone Incline Curl                                    Γöé
+Γöé 67952089-5fac-478a-a745-34ab17f7c9ee Γöé Dumbbell Prone Incline Hammer Curl                             Γöé
+Γöé fee9ff3f-2ad9-4a0d-bf62-d4ec3e94cbef Γöé Dumbbell Pullover                                              Γöé
+Γöé 0f511e2c-7ca2-4846-84a0-c328b8babd45 Γöé Dumbbell Pullover (version 2)                                  Γöé
+Γöé 4a300029-8e2e-4dde-b7c1-efe8c358ee6d Γöé Dumbbell Pullover Hip Extension On Exercise Ball               Γöé
+Γöé a201f40f-8269-4177-82c1-0f27700e2cb1 Γöé Dumbbell Push Press                                            Γöé
+Γöé 7452ff80-6400-4a6b-b98c-03c95eb40560 Γöé Dumbbell Rdl Stretch Isometric                                 Γöé
+Γöé 3676e6a5-6537-4e4e-979d-8857cb3d7fc1 Γöé Dumbbell Rear Delt Row                                         Γöé
+Γöé 64abb9b7-8027-41b8-bdfd-166f610fde03 Γöé Dumbbell Rear Full Shrugs                                      Γöé
+Γöé 590d61ae-690f-4351-9f5f-7b7ed98e8ca6 Γöé Dumbbell Rear Lateral Raise                                    Γöé
+Γöé f159eae5-30e3-4f5c-b55e-7609345b27c8 Γöé Dumbbell Rear Lunge                                            Γöé
+Γöé 2278fecf-b972-4e54-b017-c85d8a40888f Γöé Dumbbell Rear Lunge From Step                                  Γöé
+Γöé 88239b5a-241c-40e7-b1ef-d12480f2f840 Γöé Dumbbell Renegade Row                                          Γöé
+Γöé 4d0eef34-a387-4dd7-b2cf-e20394b8f9eb Γöé Dumbbell Revers Grip Biceps Curl                               Γöé
+Γöé bbc3723b-c791-4021-8c42-25577b4af8be Γöé Dumbbell Reverse Fly                                           Γöé
+Γöé 8e88e20c-d126-455a-b5c4-c3a69e5c1068 Γöé Dumbbell Reverse Lunge On The Spot                             Γöé
+Γöé d731484f-876e-4d82-9b22-77ccdf6f3ff2 Γöé Dumbbell Reverse Lunges Pulses                                 Γöé
+Γöé 51dec72a-3465-417b-be10-8f4f9eeefe06 Γöé Dumbbell Reverse Spider Curl                                   Γöé
+Γöé 441cb087-75ab-4347-a02e-3ef134d5df0d Γöé Dumbbell Reverse Wrist Curl                                    Γöé
+Γöé e1639c42-dba8-4d17-ac1d-33a8000d84d2 Γöé Dumbbell Russian Twist With Legs Floor Off                     Γöé
+Γöé f8796691-1169-4f88-b709-b8a01bc1f774 Γöé Dumbbell Scott Press                                           Γöé
+Γöé 40de574f-baad-4862-a6d9-bdf60632e383 Γöé Dumbbell Scott Press (360 Degrees)                             Γöé
+Γöé a231fee0-df75-4182-aa92-125566acc5f2 Γöé Dumbbell Seated Alternate Front Raise                          Γöé
+Γöé aee897be-3433-4a30-83b9-c885f881c300 Γöé Dumbbell Seated Alternate Press                                Γöé
+Γöé e60d916c-ea2e-4f67-ac4c-82f8fa407989 Γöé Dumbbell Seated Alternate Shoulder Press                       Γöé
+Γöé ce73133c-a5a6-41f0-8072-d65d5aeeac2e Γöé Dumbbell Seated Bench Extension                                Γöé
+Γöé 070da3a3-468e-474a-9730-12b34bf43f7c Γöé Dumbbell Seated Bent Arm Lateral Raise                         Γöé
+Γöé 808b1ce4-a968-42fb-bfa7-fa5ef67b8e36 Γöé Dumbbell Seated Close Grip Press                               Γöé
+Γöé 8b1e174f-ec54-40e3-ada1-6f989b8f212b Γöé Dumbbell Seated Curl                                           Γöé
+Γöé cb3d361f-416d-410f-b50c-8ba30304f98d Γöé Dumbbell Seated Front Raise                                    Γöé
+Γöé 1cbd8ae1-d1a8-4ce6-b298-025c2c94744d Γöé Dumbbell Seated Hammer Curl                                    Γöé
+Γöé 19ad552d-e773-4d5c-8956-ee7f97cc5e0c Γöé Dumbbell Seated Kickback                                       Γöé
+Γöé e18f082c-fed1-4c53-86c2-889d8f0bf3ef Γöé Dumbbell Seated Lateral Raise                                  Γöé
+Γöé eb1cc47e-784f-42e4-819e-ccc85217519a Γöé Dumbbell Seated Neutral Wrist Curl                             Γöé
+Γöé f0eb673c-ad19-487a-8075-770aed6e2384 Γöé Dumbbell Seated On Exercise Ball Shoulder Pres                 Γöé
+Γöé 6a03e197-efe4-407b-8359-0494f05d03c9 Γöé Dumbbell Seated Preacher Curl                                  Γöé
+Γöé 75e582c1-4454-4b15-ad49-c2e0f4e6c9db Γöé Dumbbell Seated Revers Grip Concentration Curl                 Γöé
+Γöé 014b83b1-313e-4f8b-a717-10b9bf43ee88 Γöé Dumbbell Seated Shoulder Press                                 Γöé
+Γöé 3659dd55-78dd-41b1-afde-27668344a811 Γöé Dumbbell Seated Shoulder Press Parallel Gri                    Γöé
+Γöé 745ca54a-9fd7-4b87-8cd0-50fc0dd328bc Γöé Dumbbell Shrug                                                 Γöé
+Γöé 994ee4ee-5964-4ae1-808f-ede8c7b44d26 Γöé Dumbbell Side Bend                                             Γöé
+Γöé df2055e0-39c0-4e6a-896a-b866c1f876a4 Γöé Dumbbell Side Bridge Raises                                    Γöé
+Γöé 0ebfa431-6917-4d39-8576-43376019e289 Γöé Dumbbell Side Lunge Alternating                                Γöé
+Γöé 6ef13a62-79c9-4137-8b3f-c91a4b6ada68 Γöé Dumbbell Side Lunge Left N Right                               Γöé
+Γöé b2c41209-925a-4563-ab2a-5a8b5fed4911 Γöé Dumbbell Side Lunge Single Leg                                 Γöé
+Γöé cc93d62c-cdd9-4c33-8237-bd73baa8c9a7 Γöé Dumbbell Side Lying One Hand Raise                             Γöé
+Γöé 87eb6043-5781-436d-8557-f90fc3f82066 Γöé Dumbbell Side Squat Side To Side                               Γöé
+Γöé b178c8de-4e73-4e79-a206-0dd793f4dd67 Γöé Dumbbell Simultaneous Biceps Curl                              Γöé
+Γöé 97ebe4cb-c74b-445a-8a2d-bdb5c641a8f0 Γöé Dumbbell Single Arm Floor Press                                Γöé
+Γöé b3d2c072-5ca9-4d0b-9c1a-4bdd1f88f9ba Γöé Dumbbell Single Arm Floor Press From Close Elbow               Γöé
+Γöé 00a48ef9-3b99-4258-af24-d3d45ba5ba0d Γöé Dumbbell Single Arm Leaning Lateral Raise                      Γöé
+Γöé 6534e7c3-cfaf-4695-99fc-fe2d05787704 Γöé Dumbbell Single Arm Overhead Carry                             Γöé
+Γöé db503884-ea9a-4aed-a161-0bce6900cb37 Γöé Dumbbell Single Arm Shoulder Pres                              Γöé
+Γöé eb6cc41a-fdeb-4e1a-be82-5dd35cd220ad Γöé Dumbbell Single Arm Starfish Crunch                            Γöé
+Γöé 9e170a1c-89e2-4a5b-9c63-809f78f20309 Γöé Dumbbell Single Arm Underhand Front Raise                      Γöé
+Γöé 7195202b-4f04-41d9-b20e-c3b93ddf5b66 Γöé Dumbbell Single Leg Deadlift                                   Γöé
+Γöé 71178dbf-d474-43ce-a88c-344fed1bd859 Γöé Dumbbell Single Leg Glute Bridge                               Γöé
+Γöé 01d77d17-391f-486a-a750-f26fba4e465c Γöé Dumbbell Single Leg Split Squat                                Γöé
+Γöé 2501bfde-ecea-4f69-ab15-1d07adac4a4d Γöé Dumbbell Single Leg Squat                                      Γöé
+Γöé e38be6e4-dfb9-4168-825e-c75b9e40efa6 Γöé Dumbbell Single Leg Squat With Support (pistol)                Γöé
+Γöé 53eb1df7-d77a-49ad-88ed-6a9802732bf6 Γöé Dumbbell Single Leg Step-up                                    Γöé
+Γöé b8045a0a-3d85-4ea4-bd45-52825b08eb2c Γöé Dumbbell Split Squat                                           Γöé
+Γöé 57a35d62-0f4e-4517-b5a0-21578aa60943 Γöé Dumbbell Squats                                                Γöé
+Γöé 17c38b4f-7e26-496c-a39e-7e35c8e91584 Γöé Dumbbell Squats To Shoulder Press                              Γöé
+Γöé 04792b41-14a3-43f9-8cfc-6bfa931ae6e5 Γöé Dumbbell Standing Alternate Raise                              Γöé
+Γöé 5523ff29-c74b-4388-a28c-84140521fa28 Γöé Dumbbell Standing Alternate Vertical Front Raises              Γöé
+Γöé 58510f40-cf65-4374-8a67-1108972e55f1 Γöé Dumbbell Standing Around World                                 Γöé
+Γöé 09441026-6f2a-4410-811c-3f76770c1264 Γöé Dumbbell Standing Behind Back Shoulders Press                  Γöé
+Γöé 64540308-d6f7-4036-8620-fd3197ba87f9 Γöé Dumbbell Standing Both Arms Kickback                           Γöé
+Γöé 99814976-bcc9-4386-aca5-db534942102d Γöé Dumbbell Standing Concentration Curl                           Γöé
+Γöé 87793003-2134-4fa2-b283-d065c417eab5 Γöé Dumbbell Standing Curl Arnold Press                            Γöé
+Γöé bb4b950b-a2d0-454c-b46a-13cc83e67c14 Γöé Dumbbell Standing Hammer Drag Curl                             Γöé
+Γöé 8602c372-a321-4185-87d6-219f10600a9a Γöé Dumbbell Standing One Arm Concentration Curl                   Γöé
+Γöé 4e2c1ab9-9075-400b-adef-607723592caa Γöé Dumbbell Standing One Arm Curl (over Incline Bench)            Γöé
+Γöé 5ca26734-db82-4303-a77e-14a4add35c5f Γöé Dumbbell Standing One Arm Curl Over Incline Bench              Γöé
+Γöé 8d4aa9b4-b5c1-4bd1-9a44-bd73c8853d88 Γöé Dumbbell Standing One Arm Extension                            Γöé
+Γöé 0f693286-b751-4da8-b3bc-420604f72b57 Γöé Dumbbell Standing Palms In Press                               Γöé
+Γöé 46011d73-68f0-4c40-a22f-24aab38919a4 Γöé Dumbbell Standing Preacher Curl                                Γöé
+Γöé 9f7283b1-ffb3-4af5-8dae-9f653c198324 Γöé Dumbbell Standing Reverse Curl                                 Γöé
+Γöé b9f060ee-3f6d-4a4f-893a-04f1e847d277 Γöé Dumbbell Standing Simultaneous Biceps Curl                     Γöé
+Γöé 9720031f-5de4-4ab1-8a09-c0613c03961f Γöé Dumbbell Standing Simultaneous Front Raise Above Head          Γöé
+Γöé 4474be3a-5cdf-44d3-ba0c-4df4f824a7f3 Γöé Dumbbell Standing Single Arm Cross Raise                       Γöé
+Γöé 93d34128-68f4-4ace-8e72-93403ac42906 Γöé Dumbbell Standing Triceps Extension                            Γöé
+Γöé 27c17978-578a-4789-9fb4-80386120eea8 Γöé Dumbbell Standing Wide Simultaneous Biceps Curl                Γöé
+Γöé 5d91151d-08fa-4cc2-8d85-7ff4d290b4f4 Γöé Dumbbell Standing Wrist Curl                                   Γöé
+Γöé bf6217cf-97d9-4129-ae21-cb715217cb40 Γöé Dumbbell Starfish Crunch Alternating                           Γöé
+Γöé 3960987d-b5f8-4b39-a849-5701e2cffdd5 Γöé Dumbbell Static Lunge                                          Γöé
+Γöé 5b11420c-57ef-4175-9436-1a5defd72385 Γöé Dumbbell Step Up On Bench                                      Γöé
+Γöé 1afb1513-f3ee-425f-8c98-87b6b800e991 Γöé Dumbbell Step-up                                               Γöé
+Γöé 5ed40db8-e90b-4d71-b546-932c7bd831a8 Γöé Dumbbell Step-up With Knee Raise                               Γöé
+Γöé 65c829bd-eb14-4192-a071-99a884746985 Γöé Dumbbell Stiff Leg Deadlift                                    Γöé
+Γöé a12f0151-3ae2-4269-8443-f46f59f207ca Γöé Dumbbell Straight Arm Crunch                                   Γöé
+Γöé bc0cbcfe-1a85-4ecb-83b5-89e16fc57222 Γöé Dumbbell Straight Arm Twisting Sit-up                          Γöé
+Γöé e3bec81f-a080-4cd4-8e6a-c86a579d9e24 Γöé Dumbbell Straight Leg Deadlift                                 Γöé
+Γöé 9bfa555d-73ac-491a-a00b-3d0a172fdbef Γöé Dumbbell Straight Leg Russian Twist                            Γöé
+Γöé 655219d4-b756-4a87-9830-0339f1895415 Γöé Dumbbell Strict Curl                                           Γöé
+Γöé 55833157-b44d-44da-b02e-62c41189c7ed Γöé Dumbbell Suitcase Carry                                        Γöé
+Γöé 1389def9-9adc-43c0-abb7-d1dc48ca2c63 Γöé Dumbbell Sumo Squat Off Benches                                Γöé
+Γöé 8f5f0565-3643-477e-8706-e2c28ae5eab0 Γöé Dumbbell Supported Sissy Squat                                 Γöé
+Γöé 29518cde-232f-474b-aa7a-6cb7deb99238 Γöé Dumbbell Svend Press                                           Γöé
+Γöé fa08b8e3-e082-47ce-a8bc-7cc0d24178bb Γöé Dumbbell Tate Press                                            Γöé
+Γöé 3d389ca3-5982-40b2-99b1-d1297621b1e4 Γöé Dumbbell Triceps Kick Back Single Arm                          Γöé
+Γöé 6e213b9d-c9c9-4fbd-83d6-6643c520d9b4 Γöé Dumbbell Upright Shoulder External Rotatio                     Γöé
+Γöé fa1be873-5585-4937-8d37-9e0424fad4d2 Γöé Dumbbell Upright Shoulder External Rotation                    Γöé
+Γöé fd66ce1c-239c-4395-aca1-4854e5dc8ca6 Γöé Dumbbell V-up                                                  Γöé
+Γöé 612561c6-d921-49a0-961b-20c292eb93f2 Γöé Dumbbell W Pres                                                Γöé
+Γöé e2fe4994-989f-4fab-89c5-832edcb37eca Γöé Dumbbell Waiter Biceps Curl                                    Γöé
+Γöé 6be57cf5-0c5a-484f-8226-9fec4d6050a6 Γöé Dumbbell Zottman Curl                                          Γöé
+Γöé 4312228f-461e-4de3-9b41-ac83e46b418d Γöé Dumbbell Zottman Preacher Curl                                 Γöé
+Γöé c760b353-8e72-40a5-b57a-dbc0baf7d582 Γöé Dumbbells Bent Over Row                                        Γöé
+Γöé 8c6b0c94-896c-43fe-ad31-81f5a7dcaa68 Γöé Dumbbells Bent Over Row Pronated Grip                          Γöé
+Γöé 85154cb6-ec80-49a0-b980-8f24ad518397 Γöé Dumbbells Single Arm Row                                       Γöé
+Γöé a785efd1-ce10-4442-a2ec-0b68e07b43ef Γöé Dumbell Burpee                                                 Γöé
+Γöé 9d5f35ff-5875-43f0-8740-642c5d5c071a Γöé Dumbells Triceps Kick Back Both Arms                           Γöé
+Γöé 81d36f71-febd-4f40-b6f1-5db241d2c80f Γöé Dynamic Back Stretch                                           Γöé
+Γöé 2fdaa46b-6062-41af-914c-9d24505124db Γöé Dynamic Leg Swing                                              Γöé
+Γöé fbaa1978-19fb-43d4-95d1-1a306aa33be1 Γöé Elbow Back Stretch                                             Γöé
+Γöé 87d2bfe3-231b-4421-8228-65a726bbf368 Γöé Elbow Extension And Supination Pronation Forearm Stretch       Γöé
+Γöé d5259c59-c5a5-4dc5-b0ac-2f0b6592ef72 Γöé Elbow Flexor Stretch                                           Γöé
+Γöé 32d4609f-5e16-46f2-abd7-3677670947d7 Γöé Elbow Lift - Reverse Push-up                                   Γöé
+Γöé dea269f4-e35e-49c4-a25b-eeaec93b76e2 Γöé Elbow-extension                                                Γöé
+Γöé f87b4206-6180-4fac-a021-4115042f5c85 Γöé Elbows Back Stretch                                            Γöé
+Γöé 9a088113-51c7-4557-9329-c20fe705e324 Γöé Elevated Push-up                                               Γöé
+Γöé 40e929a0-3934-4566-8f14-7d1652f5b446 Γöé Exercise Ball Back Extension With Hands Behind Head            Γöé
+Γöé 1383d395-6456-437e-b0b9-b989b14177fe Γöé Exercise Ball Back Stretch                                     Γöé
+Γöé f74473eb-7448-4abd-8ef9-d7d01ffa52af Γöé Exercise Ball Body Saw                                         Γöé
+Γöé f39df1a2-7ffd-4844-bade-22dec4f9fd26 Γöé Exercise Ball Hip Flexor Stretch                               Γöé
+Γöé c76c9307-c155-4773-b9a2-16bc6878d091 Γöé Exercise Ball Lat Stretch                                      Γöé
+Γöé 472af4c4-0fbf-42ea-9f54-04b1add9bfd3 Γöé Exercise Ball Lower Back Dynamic Stretch                       Γöé
+Γöé d1c524d5-e4ec-42ff-b31b-954cb8ed05c5 Γöé Exercise Ball Lower Back Prone Stretch                         Γöé
+Γöé 3e45c522-c6fe-404e-968c-5722e79a29b1 Γöé Exercise Ball Lying Side Lat Stretch                           Γöé
+Γöé 7342365a-c1fe-44dc-896f-8ab05f28e1fe Γöé Exercise Ball Lying Side Lat Stretch V.2                       Γöé
+Γöé 8875da0f-a567-48a3-abb9-daf9778ccf05 Γöé Exercise Ball One Legged Diagonal Kick Hamstring Curl          Γöé
+Γöé 99f8c40e-eaf9-43f2-84e2-aa1c48aba9ec Γöé Exercise Ball Seated Hamstring Stretch                         Γöé
+Γöé 670de42b-3194-4509-8463-913765bb35fa Γöé Exercise Ball Seated Quad Stretch                              Γöé
+Γöé c8dd510c-7c3e-4ffb-9b6d-bfa92206999a Γöé Exercise Ball Sit Ups                                          Γöé
+Γöé 1d952559-dc76-45de-9413-ebe1fb3f45d3 Γöé Exercise Ball Wall Squat                                       Γöé
+Γöé f7071b1c-6e6c-40d8-a586-2dcd3986a0e9 Γöé Explosive Push Ups                                             Γöé
+Γöé 5f3ea725-24ee-4476-b017-3c4d48cc8af5 Γöé Extended Side Angle                                            Γöé
+Γöé c049b638-97ba-4296-acf7-6c440a282ad5 Γöé Extension And Inclination Neck Stretch                         Γöé
+Γöé f55957a3-b490-40a6-a5a7-ba65d2a820c4 Γöé Extension Of Arms In Vertical Stretch                          Γöé
+Γöé 8112cb82-2780-4624-b9d3-cb6447c82a8e Γöé Ez Bar Biceps Curl Close Grip                                  Γöé
+Γöé f39f05e7-c263-478e-bf3a-3997a74e07b1 Γöé Ez Bar Biceps Curl Normal Grip                                 Γöé
+Γöé 47366f1c-03f0-4b06-8abd-db73e8470d92 Γöé Ez Bar Biceps Curl Wide Grip                                   Γöé
+Γöé 8666e59c-3e1a-4932-b2ec-6adfb701d9fc Γöé Ez Bar Cable Curl Wide Grip                                    Γöé
+Γöé 0207ad7d-b79a-4147-a058-0502943bdfc1 Γöé Ez Bar Cable Curl Wide Grip Crossover Machine                  Γöé
+Γöé 4e0f3202-7c0b-49e6-a27b-b1f9ead4c199 Γöé Ez Bar Overhead Extensions Standing                            Γöé
+Γöé cdaa8e43-bc45-4f86-b316-677c1a096c35 Γöé Ez Bar Seated Close Grip Shoulder Press                        Γöé
+Γöé 99ba6e60-c0a0-4746-8426-6c91085a292c Γöé Ez Bar Seated Wrist Curl                                       Γöé
+Γöé aa3bd21d-7379-4685-a68e-2bcabcc22aee Γöé Ez Bar Standing Front Raise                                    Γöé
+Γöé 706df582-1ae4-41c0-a896-362fff50a3f7 Γöé Ez Barbell Anti Gravity Press                                  Γöé
+Γöé 8c0ba950-ccdb-4e70-91b5-d84cf5d49ada Γöé Ez Barbell Close Grip Curl                                     Γöé
+Γöé bed3d9fd-4963-4cf6-a867-a2f9cd04d1fa Γöé Ez Barbell Curl                                                Γöé
+Γöé 0c814276-badc-46e9-95b0-58ffc52d342f Γöé Face Pull                                                      Γöé
+Γöé d9b74a2e-f271-4577-8187-aa47a6e37a55 Γöé Farmer Carry                                                   Γöé
+Γöé 102308a2-de3f-4665-9b3c-1cf1bb3a8669 Γöé Fast Feet                                                      Γöé
+Γöé 23468ea5-875c-4f5f-b659-c07916952355 Γöé Feet Together Barbell Squats                                   Γöé
+Γöé a56244cc-a465-4cdd-9170-251c074080f1 Γöé Fire Hydrant Bodyweight                                        Γöé
+Γöé 36436b05-8ea5-46e5-8a6c-144746b01dfe Γöé Fire Hydrant Circle Bodyweight                                 Γöé
+Γöé 294766e0-b7ce-4646-a33d-e6ae4fea3baa Γöé Fixed Bar Stretch                                              Γöé
+Γöé 66551500-246b-4a8d-9fb7-92dbc6f04c94 Γöé Flat Bench Cable Fly                                           Γöé
+Γöé 8c228dcb-61ee-46ea-bf72-0297e6db4c2d Γöé Floor Cable Resistance Band Press                              Γöé
+Γöé 626208d6-3182-4db6-aa23-3ee4816ba6a0 Γöé Flutter Kicks                                                  Γöé
+Γöé 77fd89bd-72b8-46f5-bdd5-7e3caac95d69 Γöé Front Raise Resistance Bands                                   Γöé
+Γöé 95cd6094-12cf-4180-a13c-98cc5cbd55ff Γöé Front Raises Barbell                                           Γöé
+Γöé 515b65c7-3db3-4e49-86be-e7d346e9046c Γöé Front Raises Dumbbell Seate                                    Γöé
+Γöé 13b68d8b-8d89-4a63-ba31-802a80481f05 Γöé Front Shoulder Stretch With Bar                                Γöé
+Γöé bcb9ec9b-1032-488a-bdfe-3673c045abeb Γöé Front Squats Barbell                                           Γöé
+Γöé fa33234d-33a2-4843-a9a7-a734f76bb178 Γöé Front Squats Dumbbell Low                                      Γöé
+Γöé f3b62b68-987b-4926-a293-80db9d3ee46a Γöé Front Squats Dumbbell Over Shoulders                           Γöé
+Γöé e045fd51-8aeb-4171-aa1a-93d4bda130b6 Γöé Front Squats Kettlebell Over Shoulders                         Γöé
+Γöé 004d6ab4-564e-4ab6-b482-6328cb66bdd0 Γöé Full Planche Push Up                                           Γöé
+Γöé 7ddd8060-ffee-4c4c-be9a-5093283e4f00 Γöé Glute Bridge With Abduction Bodyweight                         Γöé
+Γöé 23ebdb68-936c-4148-99d9-968f82050608 Γöé Goblet Kettlebell Squats                                       Γöé
+Γöé e7ecf3ec-921b-47db-b9d9-b988233d793e Γöé Goblet Squat                                                   Γöé
+Γöé b6f53b23-c8d9-42a4-8ee1-f08004fb8551 Γöé Good Morning Resistance Band                                   Γöé
+Γöé db127a74-e4ea-4ec5-a251-7e143fb10b4a Γöé Good Mornings Barbell                                          Γöé
+Γöé 8b0f87c3-d0f8-4c82-bd9e-871db3cb23ac Γöé Good Mornings Dumbbells                                        Γöé
+Γöé c25ffc1d-8fda-42a2-99f2-7160a25ad289 Γöé Good Mornings Kettlebell                                       Γöé
+Γöé ce147c35-6161-4210-91cf-8f07141f208d Γöé Hack Squats Machine                                            Γöé
+Γöé e54704e8-cc3a-4f72-9ba5-e726a3697a10 Γöé Half Burpees                                                   Γöé
+Γöé 4fb76208-bf6b-4446-a851-f1aca45852d3 Γöé Hammer Curl Dumbbells Simultaneous                             Γöé
+Γöé e3a16f67-03b4-434e-befa-d82bd5403600 Γöé Hammer Curl Resistance Band Simultaneous                       Γöé
+Γöé c80d148f-06bd-43b2-bccc-8f95a71e509e Γöé Hamstring Lying Curl Up Stretch                                Γöé
+Γöé a19db9fc-4350-42a2-864e-301b54b692c4 Γöé Hamstring Lying Straight Leg Stretch                           Γöé
+Γöé c446c53f-9d1f-4dc5-9ff9-5cb66e7dfc90 Γöé Handstand Push On Chair                                        Γöé
+Γöé 0d28f0fd-1c38-4487-9c9d-f67b1258199e Γöé Hanging Knee Raises                                            Γöé
+Γöé ba059931-6066-4f74-afc6-0612322f4d74 Γöé Hanging Oblique Crunches                                       Γöé
+Γöé 2b95d8cf-0ea1-4029-bda0-779482f78c68 Γöé Heel Touches                                                   Γöé
+Γöé 2d85faf0-94b0-426d-9902-624d6808d4db Γöé High Knee Twist                                                Γöé
+Γöé c8661a0b-5a05-469e-ad1f-92f9a2603aad Γöé High Knees                                                     Γöé
+Γöé c5820034-e616-47a5-bab6-ea9e9155862e Γöé High Resistance Band Kneeling Crunch                           Γöé
+Γöé bac868d1-bd22-4418-8cb7-ae9775a74b9c Γöé Hip Thrust                                                     Γöé
+Γöé ad5b4b70-2858-44fa-a3f5-2f1dddd2b6a2 Γöé Hollow Hold                                                    Γöé
+Γöé 65b83293-9859-4289-9a3b-7c4f9600d0fc Γöé In And Out Squats Jump Bodyweight                              Γöé
+Γöé 97469761-43ef-42be-b1dc-5c5a3ece0409 Γöé In And Out Squats Jump Bodyweight (2)                          Γöé
+Γöé 0838d3ff-2faa-46f0-8d5b-4e77bfcaa30c Γöé Incline Bench Cable Fly                                        Γöé
+Γöé db9fe401-e9f7-4672-aa3c-f9ebab565c32 Γöé Incline Bench Hammer Curls                                     Γöé
+Γöé eeb968d5-d363-4ac4-8281-4bfcdbff2323 Γöé Incline Diamond Push Up On Bench                               Γöé
+Γöé d6727c67-e364-4f4d-a323-eaf7bd10b04d Γöé Incline Dumbbell Front Rais                                    Γöé
+Γöé c7edc04d-ad11-416c-8f66-2da0799d1735 Γöé Incline Dumbbell Press                                         Γöé
+Γöé 74847daf-a488-49c4-8528-f002de36bcb2 Γöé Incline Lateral Raises Dumbbel                                 Γöé
+Γöé ac5bb2f7-675c-4f30-bd74-13b3c8a111ee Γöé Incline Push Ups On Chair                                      Γöé
+Γöé f1bc9568-5185-4f8a-ac13-00b5bc17c69f Γöé Intermediate Hip Flexor And Quad Stretch                       Γöé
+Γöé 7d84a37c-3a26-4b2a-89a6-47dbbaf6a0b8 Γöé Inverted Rows On Smith Machine                                 Γöé
+Γöé bea2c88a-363f-478d-b86d-8e81b50895cf Γöé Iron Cross Stretch                                             Γöé
+Γöé 3777d610-ca59-4ba1-83e2-0ede6d0e8e92 Γöé Jack Knives                                                    Γöé
+Γöé 7b90314e-4e76-4e4a-b0f6-8070eb3bde9b Γöé Jump Squats Bodyweight                                         Γöé
+Γöé 6e68d8e9-939b-4592-9c86-6e93ea593f62 Γöé Jumping Jack                                                   Γöé
+Γöé 600664c2-2e08-4d3f-a77f-17bcb95b5737 Γöé Kettlebell Half Kneeling Shoulder Press                        Γöé
+Γöé 40677e83-1661-4857-bd77-78bfd3713b1f Γöé Kettlebell Half Lunges                                         Γöé
+Γöé 94d87557-5072-4115-b7a6-2b37f49285ae Γöé Kettlebell Kneeling One Arm Shoulder Press                     Γöé
+Γöé 6285b4d0-823d-476c-8797-07470b2f7155 Γöé Kettlebell Seesaw Pres                                         Γöé
+Γöé 6d0fbe08-2752-421a-8c2d-ce631a300886 Γöé Kettlebell Single Arm Clean And Press                          Γöé
+Γöé c3dd2409-acfb-452a-8b9d-67effa329c19 Γöé Kettlebell Single Arm Overhead Lunge                           Γöé
+Γöé 7152b8cd-c304-4f44-a13c-dd3c656fd6a5 Γöé Kettlebell Situp Press                                         Γöé
+Γöé 008d1ca5-3755-4b1c-a48f-b54317bf6cc3 Γöé Kettlebell Squats                                              Γöé
+Γöé ec7fac75-0325-4b63-9734-b4d2729c6c9e Γöé Kettlebell Standing Bottoms Up One Arm Shoulder Press          Γöé
+Γöé 41b26e45-2959-45ff-98c4-fd80f21bfa61 Γöé Kettlebell Standing Bottoms-up One Arm Shoulder Pres           Γöé
+Γöé 32eecd12-6778-4ffd-aa09-fa7fdd0201de Γöé Kettlebell Strict Press                                        Γöé
+Γöé a7ee48a4-b2a0-4e04-a47f-b88f4965bbfb Γöé Kettlebell Suitcase Deadlift                                   Γöé
+Γöé dcc58259-159f-4547-8894-15d53e00d916 Γöé Kettlebell Sumo Deadlift                                       Γöé
+Γöé 42c3f0a1-b88c-4a89-9413-20906d42d391 Γöé Kettlebell Sumo Deadlift With High Pull                        Γöé
+Γöé 1b8d0ec8-1c8f-46c7-888f-768698ec48cb Γöé Kettlebell Sumo High Pull                                      Γöé
+Γöé 8411eecf-336a-4f1d-9ef3-64f29f389340 Γöé Kettlebell Sumo Squat                                          Γöé
+Γöé 9b642248-6d37-4652-b805-15ee1bd810c0 Γöé Kettlebell Sumo Squat Off Stepbox                              Γöé
+Γöé 54c82049-a6d8-4b60-9fba-06f6df139b8d Γöé Kettlebell Swing                                               Γöé
+Γöé 3b9f9f06-68e0-45a6-82ee-cd71e6cb4b1a Γöé Kettlebell Thruster                                            Γöé
+Γöé ee23441a-9c42-4be9-8ccc-ea8dadb93fc2 Γöé Knee To Chest Stretch                                          Γöé
+Γöé b55f19c8-94e9-443a-b0d0-3eb63415a8e5 Γöé Kneeling Hip Flexor Stretch                                    Γöé
+Γöé efb0fd10-01c7-49a9-96b4-aefa19a2bc2c Γöé Kneeling Lat Floor Stretch                                     Γöé
+Γöé 8c569280-1365-440b-9c04-6c5fc223dd60 Γöé Kneeling Squat Jumps Bodyweight                                Γöé
+Γöé 4317fb78-c947-4429-b6e0-cdaaeeac19ca Γöé Kneeling Wrist Flexor Stretch                                  Γöé
+Γöé cf0bbca3-9729-4957-be08-f51f5f5f01cd Γöé Landmine Chest Press                                           Γöé
+Γöé 286a85c8-40eb-4e7a-9dcf-7ca1fca2c68e Γöé Landmine Row                                                   Γöé
+Γöé c30d1011-995e-4559-9971-37d070270d87 Γöé Lat Pulldown                                                   Γöé
+Γöé fc653111-ea6d-4696-84f4-b337756421cc Γöé Lateral Raise Bodyweight                                       Γöé
+Γöé 0a507770-e23b-47a1-b8ef-0f45f5c00017 Γöé Lateral Raise To Shoulder Press Resistance Band Cable          Γöé
+Γöé aaa4b6ca-524b-4b45-a986-83394d922cc5 Γöé Lateral Raises Dumbbel                                         Γöé
+Γöé 32f4e05b-9214-4ad5-9c55-994c2e9fad42 Γöé Lateral Raises Dumbell Seated With Swing                       Γöé
+Γöé 02f019d7-0a6b-454d-a9e8-90a6c73e681f Γöé Lateral Raises On Cable                                        Γöé
+Γöé a5507853-f7ab-40a6-8567-6c52e9c281aa Γöé Leaning Dumbell Lateral Raise                                  Γöé
+Γöé 02d20ce7-4050-4768-a353-7f89537dfd5d Γöé Leg Curl                                                       Γöé
+Γöé dad8acc9-9de0-4c3b-be45-22fe1499da3b Γöé Leg Extended Stretch On Bench                                  Γöé
+Γöé 09ab7507-88ad-4b8f-8572-a35ffeacee06 Γöé Leg Lift Circles                                               Γöé
+Γöé 3fca97b0-8ce3-4a6d-9bc4-db16b4dd981f Γöé Leg Press                                                      Γöé
+Γöé ace89994-0028-451b-8b90-264b0215392c Γöé Leg Raises (straight Legs)                                     Γöé
+Γöé 62bd936a-a2db-48cf-8a3a-406a15c59465 Γöé Legs Hand Reach Spine Stretch                                  Γöé
+Γöé 733d20a2-28ec-49e5-8f0c-343ea6c66baa Γöé Long Arm Crunches                                              Γöé
+Γöé 9b59a39f-c299-496c-8044-faffc97e3acf Γöé Low Resistance Band Lying Bicep Curl                           Γöé
+Γöé 522a79cc-be82-416b-b3a0-908f77326563 Γöé Low Resistance Band Lying Bicep Curl Half Rep                  Γöé
+Γöé 65f94379-10ed-4b6c-b209-611a1cd2b1e6 Γöé Lunge Front Kick                                               Γöé
+Γöé 8f5e390d-7b76-4259-ace5-50db394349a0 Γöé Lunge Pulses Bodyweight                                        Γöé
+Γöé 08e87f94-4c07-420c-9c67-91dd3643c4d8 Γöé Lunge Pulses Bodyweight _1                                     Γöé
+Γöé 80d52881-2699-4d5c-aca8-2b9c2f2f8306 Γöé Lunge Reverse With Resistance Band                             Γöé
+Γöé 803808ea-dca2-49fe-bc5e-f4bfae0a5b46 Γöé Lunge Rotation Left And Right Bodyweight                       Γöé
+Γöé 8da369d3-3a7f-4189-9a8f-bf3b959e1a9f Γöé Lunge To Knee Drive Left Bodyweight                            Γöé
+Γöé 47ea5ccd-afe0-45dd-8e24-331e39da630a Γöé Lunge To Knee Drive Right Bodyweight                           Γöé
+Γöé c4ca0265-643a-4d89-bc9b-c8e28a6f85be Γöé Lunges Alternate Leg With Pause Bodyweight                     Γöé
+Γöé 4b61166d-6283-4e7c-889f-a7f625fa8dd3 Γöé Lunges Same Leg Side View Bodyweight                           Γöé
+Γöé 60101dbc-3616-4c7f-a690-3085ba33cc61 Γöé Lunging Straight Leg Calf Stretch                              Γöé
+Γöé 138bde98-a941-428c-8b0b-c9ac215fb844 Γöé Lying (prone) Abdomen Stretch                                  Γöé
+Γöé 084b0c8c-408d-41d4-b0dc-071851b0f26c Γöé Lying (prone) Abdominal Stretch (2)                            Γöé
+Γöé 3ac11994-20a7-4327-891d-90e2766937fe Γöé Lying Abs Resistance Band                                      Γöé
+Γöé c570be76-6cde-4722-8356-096bfb010f62 Γöé Lying Back Extension                                           Γöé
+Γöé 72e07b54-db36-4997-8b06-c66b3f054f4c Γöé Lying Bench External Shoulder Rotatio                          Γöé
+Γöé 1133fc93-693d-4f1c-86ec-85afe2396559 Γöé Lying Bench Internal Rotation Stretc                           Γöé
+Γöé 98c8283c-f66c-4619-83a3-b09d0016850e Γöé Lying Crossover Stretch                                        Γöé
+Γöé 08b07d86-2fac-443a-b431-e98ea029a23d Γöé Lying Dumbbell Lateral Rais                                    Γöé
+Γöé 7be56e72-0887-497b-aaee-a0c3dc39596f Γöé Lying Glute Stretch                                            Γöé
+Γöé 61d6f595-da6c-40fe-9049-f928b1f5a40c Γöé Lying Hip Flexor Stretch                                       Γöé
+Γöé d02b5969-ec1e-4fdf-8c4d-ec21bab561ea Γöé Lying Lateral Raises Bodyweigh                                 Γöé
+Γöé f9db262d-af4c-4db4-bdd4-3cd32d0686b1 Γöé Lying Leg Lift                                                 Γöé
+Γöé 5fdd13c1-ca79-46c8-9d00-03ef7c0d09ee Γöé Lying Leg Raise                                                Γöé
+Γöé e59a18a2-fe7e-4021-900d-e1c96f8f6ec0 Γöé Lying Pull Over With Resistance Band Cable                     Γöé
+Γöé 6bf244c8-0f53-4936-9b07-cd46e82564f6 Γöé Lying Quadriceps Stretch                                       Γöé
+Γöé b719711b-778e-41a1-bf6e-826a5f08d166 Γöé Lying Side Quadriceps Stretch                                  Γöé
+Γöé aee1d791-b28c-4af3-a3f6-c9543fda5347 Γöé Lying Single Arm Reverse Dumbbell Fl                           Γöé
+Γöé e006f9e9-e234-4f9e-8b90-f01d5053daf9 Γöé Machine Chest Press Decline                                    Γöé
+Γöé 17d6677d-81cd-43ea-b2c7-c1dd9a36dd74 Γöé Machine Chest Press Flat                                       Γöé
+Γöé 81a9fc4e-b4bf-4769-9382-1587ee7fdc3c Γöé Machine Chest Press Incline                                    Γöé
+Γöé 4899c989-5810-4c1d-9a23-ac7bcaeb8ae9 Γöé Machine Fly                                                    Γöé
+Γöé 0d8493bb-28c7-41a9-b60f-2aa2ccce843f Γöé Machine Lateral Raise                                          Γöé
+Γöé 6f010b17-5405-4ac9-a149-975ceb4c9ca7 Γöé Major Groups Muscle Body Male                                  Γöé
+Γöé 4a86b358-bd87-4da7-897a-98538eb097ee Γöé Middle Back Rotation Stretch                                   Γöé
+Γöé 553fb10e-071e-4fc3-91c2-7057b0d83298 Γöé Middle Crunches                                                Γöé
+Γöé 06b5b164-3a5d-495d-8f7a-d3b7e6b67205 Γöé Military Press Bodyweight                                      Γöé
+Γöé 84ed0ad0-37d0-45dd-853d-3363c54e85fb Γöé Modified Hindu Push Up                                         Γöé
+Γöé fce4440f-8a8d-4950-a5f9-9470835a0645 Γöé Mountain Climbers                                              Γöé
+Γöé ba2edbc6-e835-42cb-b7e1-59b2d688cf5f Γöé Narrow Stance Squats With Resistance Band                      Γöé
+Γöé 9f4aecc5-1e1a-43ec-9299-81a4509fca10 Γöé Normal Push-up                                                 Γöé
+Γöé 247bc04d-f228-473d-ab5d-180128307026 Γöé Oblique Crunch                                                 Γöé
+Γöé 751c7c58-4abf-4f5a-85d4-620bbe9d54e5 Γöé One Arm Reverse Dumbbell Fl                                    Γöé
+Γöé 957da729-a6a0-44cf-b733-17e6d1757a89 Γöé One Arm Shoulder Flexor Stretch                                Γöé
+Γöé 71497a15-d629-4723-b404-e27d182d153b Γöé Over Head Weight Sit Up                                        Γöé
+Γöé 2e3fa542-aa8e-4578-ba47-ae43a51f064b Γöé Over Weight Ab Crunch                                          Γöé
+Γöé fb81d5ae-7242-41ea-817f-f73f8db7697e Γöé Overhand Clap                                                  Γöé
+Γöé 33cee642-41ca-42c4-92ba-7a89996cbc86 Γöé Overhand Tricep Stretching Single Arm                          Γöé
+Γöé c5c04494-8194-434d-8150-aa2bc8fccad4 Γöé Overhead Extension Resistance Band Both Arms                   Γöé
+Γöé 067e02cd-ba9c-4dbe-8a03-519e361d1306 Γöé Overhead Press                                                 Γöé
+Γöé 3b6d2527-0771-45d5-8649-5486cd48be30 Γöé Overhead Triceps Stretch Side Angle                            Γöé
+Γöé e791bb07-a894-42cf-93a4-4ee2c9901e83 Γöé Palm Up Palm Down Rotation                                     Γöé
+Γöé 1e31637b-89b4-4cf0-90da-25982516cddc Γöé Peck Deck Fly Machine                                          Γöé
+Γöé ddec0c0c-a791-4be7-81ed-7df18cf1d7cf Γöé Pendlay Row                                                    Γöé
+Γöé 34aa7ad8-7b3e-4a0b-9f87-6f41527fb686 Γöé Pike Push                                                      Γöé
+Γöé cca64fb2-f5cd-4558-9147-afe8841b30d6 Γöé Pike Push Up                                                   Γöé
+Γöé b5d807c2-1e41-4f7a-ac4e-c675c6b177d2 Γöé Plank                                                          Γöé
+Γöé c70d4293-b0ec-479b-85af-07520c53377a Γöé Plate Front Raise                                              Γöé
+Γöé 4fad1c5f-c287-4e31-a6eb-53f444c709d1 Γöé Plyo Side Lunge Stretch                                        Γöé
+Γöé fed237ce-ef7e-4acb-ae6d-85b1dccce420 Γöé Preacher Curl Barbell                                          Γöé
+Γöé e0cf56e9-708e-45a9-a00d-1b932798096b Γöé Preacher Curl Dumbbells Simultaneous                           Γöé
+Γöé f7c1a250-293a-4580-ada0-b06d3c92483f Γöé Preacher Curl Ez Bar                                           Γöé
+Γöé 4222b5ba-4bbd-4a35-a383-bab16e2c1db3 Γöé Preacher Curl Ez Bar Close Grip                                Γöé
+Γöé 599ad421-2c91-4571-97ae-3a31d0262baf Γöé Preacher Curl Ez Bar Wide Grip                                 Γöé
+Γöé 9a7922d9-7caa-469d-a167-2f4620d86f07 Γöé Preacher Curl Single Arm Dumbbell                              Γöé
+Γöé 1ed2a1bb-d839-41a5-bee0-b407e5b45174 Γöé Preacher Hammer Curl Simultaneous                              Γöé
+Γöé ddf03d21-4acd-4d92-a96e-a782e046324b Γöé Pretzel Stretch                                                Γöé
+Γöé 21cb9d48-bf9e-494a-bf32-f807cc562375 Γöé Prone Bench Row Barbell Reverse Grip                           Γöé
+Γöé 6d113354-9d5e-4503-92d4-ea15fcef2784 Γöé Prone Bench Row Barbell Supinated Grip                         Γöé
+Γöé 14dbd161-39ca-4854-8e46-5326a8b81082 Γöé Prone Bench Row Dumbbells                                      Γöé
+Γöé 900a8fe0-601a-465b-adfb-f4b8d3e8a8ba Γöé Prone Bench Row Dumbbells Pronated Grip                        Γöé
+Γöé ad220018-0cd1-4ad3-a3ef-3188c2a33f0a Γöé Prone Bench Row Dumbbells Supinated Grip                       Γöé
+Γöé bc6414b1-eefc-4023-84b0-a1e62d0d9f43 Γöé Prone Front Raises Barbell On Benc                             Γöé
+Γöé 20b1361b-34ea-4706-a1e6-1a38b6a16bd4 Γöé Prone Front Raises Dumbbell On Benc                            Γöé
+Γöé dc6c8aed-f7bf-46af-b80f-2eb03334ba50 Γöé Prone Lateral Raises Dumbbell On Benc                          Γöé
+Γöé eade373c-b07e-4de2-9de5-2a639efa32f6 Γöé Prone Rear Delt Fly On Benc                                    Γöé
+Γöé 431fcbee-8d60-4a61-8008-0865a04d9c20 Γöé Pull Apart Cable Resistance Band                               Γöé
+Γöé d69dea26-467a-40a8-ade5-0ff3c77e1f29 Γöé Pull Up                                                        Γöé
+Γöé 6eeca436-792c-489f-8239-98b55a729306 Γöé Push Up And Rotation                                           Γöé
+Γöé 9747a7a9-323f-4cc3-81bc-a6a30ce9fd4e Γöé Push Up Plus                                                   Γöé
+Γöé c52dea06-0e09-4136-ac85-ff0624b2bdd0 Γöé Push Ups Bodyweight                                            Γöé
+Γöé 1d85c9d7-7972-468a-8efd-6c0255448cb9 Γöé Raised Leg Crunch                                              Γöé
+Γöé a0dad7c6-c26f-467f-9b35-fcfa8fef4eed Γöé Reaching Up Shoulder Stretch                                   Γöé
+Γöé 68a05eb7-9268-4457-8d0c-2a8e3de6e3e0 Γöé Rear Deltoid Fly Cable Resistance Band                         Γöé
+Γöé b4211d30-3bb0-49cf-951c-913082820428 Γöé Rear Deltoid Stretch                                           Γöé
+Γöé fbb166f1-27ea-4ac0-bd4c-8b8ebb69c94b Γöé Resistance Band Face Pul                                       Γöé
+Γöé ab42063f-7c37-4b9f-bc09-082ac70b1ebd Γöé Reverse Cable Fly On Crossove                                  Γöé
+Γöé 4b6d74d3-d226-4e8e-8105-6d519482889e Γöé Reverse Crunch                                                 Γöé
+Γöé 4cc58f29-3199-4590-a6da-f104f2ddf57b Γöé Reverse Crunch With Kick Out                                   Γöé
+Γöé d84007de-3e10-4713-8990-abcb1d704dae Γöé Reverse Curl Barbell                                           Γöé
+Γöé 6c4342bf-7793-48b0-ab6d-4968860e59b4 Γöé Reverse Curl Dumbbell Simultaneous                             Γöé
+Γöé 0f721bda-06ff-4b53-be3d-9fd3cc6d12fb Γöé Reverse Grip Resistance Band Simultaneous                      Γöé
+Γöé 78f14de3-ab67-40b2-8619-ec66da675b61 Γöé Reverse Lunge Left Resistance Band                             Γöé
+Γöé 67b4a2ec-c63c-4bc3-9393-b0ee5ef11f45 Γöé Reverse Machine Fly                                            Γöé
+Γöé 065808fa-e69f-4f30-b719-b1124daa6725 Γöé Reverse Shoulder Stretc                                        Γöé
+Γöé d99c3627-4a24-4ca8-bbe1-95ca24f9b253 Γöé Romanian Deadlift                                              Γöé
+Γöé 2f9aad19-a4e7-4089-98dc-49c2226c26ee Γöé Runner Stretch                                                 Γöé
+Γöé 84537454-d66b-4178-947c-33dc7493be46 Γöé Russian Twist                                                  Γöé
+Γöé 12bd3bba-6573-48f1-8463-c71ea3e7249c Γöé Russian Twist Weighted Ball                                    Γöé
+Γöé d00b917d-014f-46c9-b1dc-b52fa22bac74 Γöé Scapula Push Up                                                Γöé
+Γöé ec478d3b-8907-4b3f-a477-d35b7a7e1cbc Γöé Scissors Kick                                                  Γöé
+Γöé 025e5f84-7a4a-457b-91a8-e09c782e0c7c Γöé Seated Calf Machine                                            Γöé
+Γöé 87584e01-fea3-437a-ba8d-27bc5495c7aa Γöé Seated Calf Stretch                                            Γöé
+Γöé 6e5f432b-8464-4451-8fc7-109324e1ea46 Γöé Seated Cross Leg Glute Stretch                                 Γöé
+Γöé 15f44d1d-a00d-4746-9960-0ea00dea8856 Γöé Seated Dumbbell One Arm Shoulder Pres                          Γöé
+Γöé 8a97702b-ae1f-430f-9f5b-9f61beb2144c Γöé Seated Dumbbell Rear Delt Fl                                   Γöé
+Γöé 1e8a9292-750d-466c-882d-828f97c7c5ca Γöé Seated Dumbbell Shoulder Pres                                  Γöé
+Γöé 430c0e61-0815-4cc0-b106-d8200cca30a9 Γöé Seated Elbow In Alternating Dumbbell Overhead Pres             Γöé
+Γöé c8994021-544a-4be8-93c2-3b3f5caeff24 Γöé Seated Floor Crunches                                          Γöé
+Γöé ebdbe6bd-2fcf-49bf-a1c8-2f484e515907 Γöé Seated Flutter Kicks                                           Γöé
+Γöé 49f3ba8b-a364-454c-8116-b62518592fd1 Γöé Seated Hip Abductor Machine                                    Γöé
+Γöé a452a514-f1cc-4f21-9fee-ea96b1df25b9 Γöé Seated Machine Hip Adductor                                    Γöé
+Γöé 33fd3ae0-6d96-4465-9d89-c2e09ba61da6 Γöé Seated Military Press Barbel                                   Γöé
+Γöé 29f3c41b-f9b0-4f2f-9bc5-45ac447447ed Γöé Seated Normal Grip Row Machine                                 Γöé
+Γöé 418cc982-5ed0-471f-a95b-8d6272b13a7d Γöé Seated Shoulder Flexor Depressor Retractor Stretc              Γöé
+Γöé 8637ea7d-c33c-4b3c-859e-d00818fd59af Γöé Seated Shoulder Press Barbel                                   Γöé
+Γöé d6a7b94b-2852-4b6b-88ca-dcfecf1e6fed Γöé Seated Side Stretch                                            Γöé
+Γöé 64ceb969-6f93-47b7-86b5-55b20a8df7a3 Γöé Seated Single Leg Hamstring Stretch                            Γöé
+Γöé 5367fa3b-3044-4fb2-b321-0044828281bd Γöé Seated Straight Leg Calf Stretch                               Γöé
+Γöé 9e0c660c-6b34-4a25-bb34-40b813269ce3 Γöé Seated V Up                                                    Γöé
+Γöé 8e531a9b-ad4a-464a-836f-3036b4ad4540 Γöé Shadow Boxing                                                  Γöé
+Γöé d2758c93-252c-461a-aa99-ba4c929b5173 Γöé Shoulder Abduction                                             Γöé
+Γöé 53551864-cb2e-4111-b1f2-841f45c42582 Γöé Shoulder Circle                                                Γöé
+Γöé 09fca4ae-f17f-43c7-9110-d33a606b4b5c Γöé Shoulder Extension                                             Γöé
+Γöé 83cf52a6-3734-4040-88c4-b5c4edfd1d37 Γöé Side Lateral Raise Resistance Band                             Γöé
+Γöé 4d8bf421-8053-4404-bb37-f134af10658f Γöé Side Lunges Bodyweight                                         Γöé
+Γöé 357e3616-3b77-437a-a4db-0350d0a251b5 Γöé Side Lying Floor Stretch                                       Γöé
+Γöé 16c6fa2c-368d-4fb8-8ecd-f34d3669d5ec Γöé Side Lying Leg Lift Left                                       Γöé
+Γöé 368d06e1-338d-493d-8288-220a52f060cc Γöé Side Lying Leg Lift Right                                      Γöé
+Γöé 6b8e6a18-64c8-4a48-ac2a-eb47779b20f8 Γöé Side Push Up                                                   Γöé
+Γöé 27882d86-89f0-4949-b0c5-1ec66f81b171 Γöé Side To Side Punch                                             Γöé
+Γöé 5e51df90-d612-4bd4-b059-4d20e016ab81 Γöé Side To Side Punch                                             Γöé
+Γöé fffd5cc8-a6bd-44d1-9c3c-e6bef94d4cdf Γöé Side To Side Push Up                                           Γöé
+Γöé 216231a0-a314-4e8c-aabf-78a674b8f2c9 Γöé Side Wrist Pull Stretch                                        Γöé
+Γöé a7584317-a551-484a-916f-18c31de9293c Γöé Single Arm Bench Bent Over Row                                 Γöé
+Γöé 1417bd99-452a-4476-aaf8-bd7bd961ba3d Γöé Single Arm Overhead Extension Resistance Band                  Γöé
+Γöé 82391fc0-61ac-42df-8659-6c5b3be52308 Γöé Single Arm Preacher Hammer Curl                                Γöé
+Γöé 3c19b2e1-5936-4edb-865b-af9b2ab93230 Γöé Single Dumbbell Biceps Curls                                   Γöé
+Γöé 0ecffbd2-3e88-45fa-aa7c-ded3d18ed34e Γöé Single Kettlebell Deadlift                                     Γöé
+Γöé 4f67637a-03a8-42d9-8704-b530f62797af Γöé Situps                                                         Γöé
+Γöé 41065615-53b1-4ec8-99a4-e40e14e62106 Γöé Skipping                                                       Γöé
+Γöé b88ec1c0-031a-432b-b651-a631345dcabb Γöé Smith Machine Press Decline                                    Γöé
+Γöé 271f916d-d745-450a-844f-a5adfec1bfa1 Γöé Smith Machine Press Flat                                       Γöé
+Γöé cf20dbaa-26a6-41b6-b6d8-e153329edeee Γöé Smith Machine Press Incline                                    Γöé
+Γöé 555f5532-f87a-4e98-a9f8-4ab7fcc479d0 Γöé Smith Machine Shoulder Press                                   Γöé
+Γöé d05575a8-a406-41ac-9299-7b3a41018af6 Γöé Spider Curl Barbell                                            Γöé
+Γöé f9f814b3-9428-40b3-aa38-932546f193d2 Γöé Spider Curl Dumbbells Simultaneous                             Γöé
+Γöé 9890f7b9-987c-407b-a12b-1c19a904cad7 Γöé Spider Curl Ez Bar                                             Γöé
+Γöé 108537ee-81ee-4de7-a976-eb0e9fa55022 Γöé Standing Adductor Stretch                                      Γöé
+Γöé 761230f6-01ee-445b-803a-91c9b7163af1 Γöé Standing Arnold Press Dumbbel                                  Γöé
+Γöé db6a1bce-20d7-41a0-84a5-ff5507d2f9ab Γöé Standing Bow Hamstring Stretch                                 Γöé
+Γöé 55959d13-6492-4442-8098-25cea01d4633 Γöé Standing Cable Oblique Twist                                   Γöé
+Γöé 80a7598c-1b2c-4320-a3e1-b15d0c3d6585 Γöé Standing Dumbbell Alternate Shoulder Pres                      Γöé
+Γöé a28ec703-2217-4e24-943f-cf51992f4ac3 Γöé Standing Front Raise Dumbbel                                   Γöé
+Γöé ab697154-91af-42d1-99bb-20a4adb10882 Γöé Standing Gastrocnemius Stretch                                 Γöé
+Γöé 080677d1-2faf-43c3-9c37-acfde3c5bf45 Γöé Standing Hamstring Calf Stretch With Resistance Band           Γöé
+Γöé 415fbd0d-1d8a-4c1b-a876-85de58c9a5ff Γöé Standing Lat Cable Pull Over                                   Γöé
+Γöé 76caa850-c1f1-4e42-8589-c58d3202b303 Γöé Standing Lateral Stretch                                       Γöé
+Γöé 64a81b95-97ca-4a37-8bcf-d19a17af24c6 Γöé Standing Leg Elevated Hamstring Stretch                        Γöé
+Γöé 4a3d3207-ebe1-4852-ac59-a668c48ce95a Γöé Standing Oblique Crunch                                        Γöé
+Γöé 5a6af319-66b1-4a48-9be7-826ed1090df7 Γöé Standing One Arm Chest Stretch                                 Γöé
+Γöé 4ed40b83-4600-40e3-a701-f06f1e90e3cf Γöé Standing Overhand Shoulder Stretch                             Γöé
+Γöé 8e1da088-eda4-4c3e-8c01-b3d51e022ccc Γöé Standing Quadriceps Stretch                                    Γöé
+Γöé 5a31bce8-e22a-4a4c-92e3-0a6958a497c3 Γöé Standing Quadriceps Stretch Side Angle                         Γöé
+Γöé 1c6ed167-de24-4578-83df-4d92481ed464 Γöé Standing Reverse Shoulder Stretch                              Γöé
+Γöé 70bad15c-af1c-4e71-971f-84b4efea9a86 Γöé Standing Shoulder Press Barbell                                Γöé
+Γöé 9e03b7af-c7c5-40e9-a4f0-876034a2fbf4 Γöé Standing Shoulder Press Dumbbell                               Γöé
+Γöé b2430837-4512-4713-b6f8-cf947b38b1f3 Γöé Standing Side Leg Raises                                       Γöé
+Γöé f66d585a-e044-49c1-a84c-c9efc817ae92 Γöé Standing Side Slope Stretch                                    Γöé
+Γöé aa343c66-a077-4d37-8f8e-6246a1d58dae Γöé Standing Swimmer                                               Γöé
+Γöé 4dbbf9c0-ab29-4bb1-a1fc-562f92d8de55 Γöé Standing Toe Touch                                             Γöé
+Γöé c0a2d9bb-08ee-4e19-9422-d3532b18a67d Γöé Standing Y Raise                                               Γöé
+Γöé a5c132fc-ca27-4176-b3fe-a22896f2a7d9 Γöé Star Crunches                                                  Γöé
+Γöé 92641c5d-0c25-484c-8c55-8e6c5faffd5e Γöé Star Jump                                                      Γöé
+Γöé 33ab973b-69ec-4f24-a23b-f04c91b3253a Γöé Step Up On Chair Bodyweight                                    Γöé
+Γöé ff8b6c8f-9836-4aef-bbf9-eb1c27f022d3 Γöé Straight Bar Cable Pull Down                                   Γöé
+Γöé 10db563a-c97d-46d6-9bb6-e1210238e287 Γöé Sumo Squat In Between Legs Resistance Band                     Γöé
+Γöé a28dd97c-0700-4306-96e8-849d4ebe9215 Γöé Sumo Squat In Between Legs Resistance Band_1                   Γöé
+Γöé 3a19ca7e-7ff1-40d7-a907-185a4eb53f0c Γöé Sumo Squat Over Shoulder Resistance Band                       Γöé
+Γöé 433cb9b5-fe4d-4a10-92c7-ca87101fa674 Γöé Superman                                                       Γöé
+Γöé 3146ac2c-37ae-41a8-bff3-6a75938b0ea6 Γöé Superman Holds                                                 Γöé
+Γöé 0e6391e8-9537-4ff9-9615-c2a486000126 Γöé Superman Pulls                                                 Γöé
+Γöé 00c53431-87a6-4955-994f-f07d703fafca Γöé Superman Pulls Resistance Band                                 Γöé
+Γöé 1877bd58-be16-4e0f-adb0-a6c1f23a1622 Γöé Supine Push Up                                                 Γöé
+Γöé f86e203d-6554-41f9-a12f-39fe9bb33053 Γöé Svend Press Decline Bench                                      Γöé
+Γöé 45d3d5ef-c69c-48e8-8b92-fe7b3a611a12 Γöé Svend Press Flat Bench                                         Γöé
+Γöé c79e946e-f3d9-4065-926f-8eab9f9efadf Γöé Svend Press Incline Bench                                      Γöé
+Γöé 6fcbc886-0e7a-4993-9425-6a08624f9568 Γöé Trap Bar Deadlift                                              Γöé
+Γöé 1e8fb6df-e307-4e9d-b859-f23877f5c43f Γöé Trap Bar Shrug                                                 Γöé
+Γöé e6bcbc68-02f5-40a7-8a54-1c25887b701b Γöé Tricep Cable Kickback On Crossover Machine                     Γöé
+Γöé 93933de9-78eb-49ac-98c2-f096953181b5 Γöé Tricep Extension Machine                                       Γöé
+Γöé 5865adc7-b14c-4b9c-b0ca-c287c0cccc5c Γöé Tricep Pushdown                                                Γöé
+Γöé e6e8a409-f38c-4a86-b1ef-b2871a6d2fe2 Γöé Tricep Rope Extension On Crossover Machine                     Γöé
+Γöé f7dee51a-73a0-45c5-8e16-a7ade5e18a75 Γöé Triceps Light Stretch                                          Γöé
+Γöé a90c82ff-b268-4dce-8fa6-68d4293de529 Γöé Upper Back Stretch                                             Γöé
+Γöé 1ecb903f-3141-4540-9515-5f52b014c3c1 Γöé Upright Row Barbell                                            Γöé
+Γöé e13eb5c5-515a-48fe-a16c-3fe7e9a7e9a6 Γöé Upright Row Cable Resistance Band                              Γöé
+Γöé 0c935521-6750-433c-9300-168390efff25 Γöé Upright Row Dumbbel                                            Γöé
+Γöé e6a106f0-bc74-4bed-9c45-201f255095d7 Γöé Upright Row Ez Bar                                             Γöé
+Γöé 475153bc-93bd-4f2d-8925-2e12e1d279f9 Γöé Upward Rotation Extend Arm                                     Γöé
+Γöé cab57913-cf36-4e49-825e-68db79843d06 Γöé V Crunches                                                     Γöé
+Γöé 149b6323-da58-4c69-9af7-7b69bf31f17e Γöé V Up                                                           Γöé
+Γöé 5438e8a7-f161-4a59-a86e-3474f541c063 Γöé Walkout                                                        Γöé
+Γöé a95f55fc-138a-414a-ab6c-8838bf1e9fab Γöé Wall Sit Bodyweight                                            Γöé
+Γöé aaa13f17-8ab8-4a0f-813d-4ac0ef48fff7 Γöé Wall Squat Bodyweight                                          Γöé
+Γöé 8e52540a-c6f4-4422-ad8a-fafb5f7b1c69 Γöé Wall Squat With Pause Bodyweight                               Γöé
+Γöé 439d1ee2-e9f2-4c5f-acda-8b6555700da1 Γöé Weighted Standing Shoulder Press With Plate                    Γöé
+Γöé ea15c17c-45d3-4ffb-a0fe-2b6327af9ccc Γöé Wide Push Ups Bodyweight                                       Γöé
+Γöé a28f4103-5c5d-4f1d-aab5-3fd857d21bb0 Γöé Wind Wipers                                                    Γöé
+Γöé 68a93842-739c-4f76-bd09-ca833e2072d9 Γöé Wrist Curl Barbell                                             Γöé
+Γöé 706930fb-eddb-4e00-bf59-90f4f599e930 Γöé Wrist Curl Dumbbell                                            Γöé
+Γöé c613ff62-4261-4ead-9787-4c465a81744b Γöé Wrist Extension Barbell                                        Γöé
+Γöé cb782942-cf09-4b13-bf8d-2715a573b86b Γöé Wrist Extension Barbell                                        Γöé
+Γöé e04a2598-d135-4c7d-a22b-dfc1408e4aa0 Γöé Wrist Extension Dumbbell                                       Γöé
+Γöé c3614787-5d1f-430f-973f-431a1915aa05 Γöé Zotman Curls Dumbbell Simultaneous                             Γöé
+Γöé 681717fc-6fd0-4966-b912-d92d8f393080 Γöé Zotman Curls Resistance Band Simultaneous                      Γöé
+ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ

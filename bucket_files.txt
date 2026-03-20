@@ -1,0 +1,416 @@
+﻿node.exe : Initialising login role...
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Initialising login role...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+Γöé                                    name                                    Γöé
+Γö£ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöñ
+Γöé Abdominals/abdominal crunches (2).mp4                                      Γöé
+Γöé Abdominals/air bike crunch (2).mp4                                         Γöé
+Γöé Abdominals/Alternate leg pull (2).mp4                                      Γöé
+Γöé Abdominals/alternating toe tap.mp4                                         Γöé
+Γöé Abdominals/Assisted sit ups (2).mp4                                        Γöé
+Γöé Abdominals/Barbell rollout (2).mp4                                         Γöé
+Γöé Abdominals/Bench Dip Hold (2).mp4                                          Γöé
+Γöé Abdominals/bench knee tucks.mp4                                            Γöé
+Γöé Abdominals/Bicycle air legs (2).mp4                                        Γöé
+Γöé Abdominals/bicycles crunches.mp4                                           Γöé
+Γöé Abdominals/Body Saw Plank (2).mp4                                          Γöé
+Γöé Abdominals/Cable Twist (2).mp4                                             Γöé
+Γöé Abdominals/Crab Pose (2).mp4                                               Γöé
+Γöé Abdominals/Crunch Floor (2).mp4                                            Γöé
+Γöé Abdominals/Dumbbell V-up (2).mp4                                           Γöé
+Γöé Abdominals/flutter kicks.mp4                                               Γöé
+Γöé Abdominals/High plank (2).mp4                                              Γöé
+Γöé Abdominals/hollow hold.mp4                                                 Γöé
+Γöé Abdominals/jack knives.mp4                                                 Γöé
+Γöé Abdominals/leg lift circles.mp4                                            Γöé
+Γöé Abdominals/long arm crunches.mp4                                           Γöé
+Γöé Abdominals/lying leg lift.mp4                                              Γöé
+Γöé Abdominals/lying leg raise (2).mp4                                         Γöé
+Γöé Abdominals/middle crunches.mp4                                             Γöé
+Γöé Abdominals/plank jack.mp4                                                  Γöé
+Γöé Abdominals/Plank Knee Tucks.mp4                                            Γöé
+Γöé Abdominals/plank on elbows (2).mp4                                         Γöé
+Γöé Abdominals/plank reach through.mp4                                         Γöé
+Γöé Abdominals/reverse crunch.mp4                                              Γöé
+Γöé Abdominals/russian twist.mp4                                               Γöé
+Γöé Abdominals/seated v up.mp4                                                 Γöé
+Γöé Abdominals/side plank (2).mp4                                              Γöé
+Γöé Abdominals/side to side punch.mp4                                          Γöé
+Γöé Abdominals/Situps (2).mp4                                                  Γöé
+Γöé Abdominals/spider plank.mp4                                                Γöé
+Γöé Abdominals/star crunches (2).mp4                                           Γöé
+Γöé Abdominals/wind wipers.mp4                                                 Γöé
+Γöé Back/Bench Pull-ups (2).mp4                                                Γöé
+Γöé Back/Landmine row (2).mp4                                                  Γöé
+Γöé Back/superman holds (2).mp4                                                Γöé
+Γöé Back/superman.mp4                                                          Γöé
+Γöé Back/Supine Push up.mp4                                                    Γöé
+Γöé Back/trap bar deadlift (2).mp4                                             Γöé
+Γöé Biceps/alternate incline dumbbell curl (2).mp4                             Γöé
+Γöé Biceps/Band Close-Grip Biceps Curl (2).mp4                                 Γöé
+Γöé Biceps/barbell bicep curl close grip (2).mp4                               Γöé
+Γöé Biceps/barbell bicep curl normal grip (2).mp4                              Γöé
+Γöé Biceps/barbell bicep curl wide grip (2).mp4                                Γöé
+Γöé Biceps/barbell biceps curl (2).mp4                                         Γöé
+Γöé Biceps/barbell drag biceps curl (2).mp4                                    Γöé
+Γöé Biceps/barbell drag curl.mp4                                               Γöé
+Γöé Biceps/barbell lap curl.mp4                                                Γöé
+Γöé Biceps/Barbell preacher curl (2).mp4                                       Γöé
+Γöé Biceps/Barbell reverse biceps curl (2).mp4                                 Γöé
+Γöé Biceps/Barbell reverse spider curl (2).mp4                                 Γöé
+Γöé Biceps/Barbell single arm biceps curl (2).mp4                              Γöé
+Γöé Biceps/Barbell standing close grip curl (2).mp4                            Γöé
+Γöé Biceps/barbell wide grip biceps curl (2).mp4                               Γöé
+Γöé Biceps/biceps curl cable wide grip.mp4                                     Γöé
+Γöé Biceps/biceps curl cable.mp4                                               Γöé
+Γöé Biceps/Biceps Curl Front Step (2).mp4                                      Γöé
+Γöé Biceps/biceps curl resistance band.mp4                                     Γöé
+Γöé Biceps/Biceps Leg Concentration Curl (2).mp4                               Γöé
+Γöé Biceps/Cable Biceps Curl (EZ-bar) (2).mp4                                  Γöé
+Γöé Biceps/Cable Close Grip Curl (2).mp4                                       Γöé
+Γöé Biceps/Cable One Arm Curl (2).mp4                                          Γöé
+Γöé Biceps/Cable Overhead Curl (2).mp4                                         Γöé
+Γöé Biceps/Cable Preacher Curl (2).mp4                                         Γöé
+Γöé Biceps/cable reverse curl (2).mp4                                          Γöé
+Γöé Biceps/concentration curls dumbbell.mp4                                    Γöé
+Γöé Biceps/Doorway Biceps Curl (2).mp4                                         Γöé
+Γöé Biceps/drag curl dumbbell (2).mp4                                          Γöé
+Γöé Biceps/drag curl resistance band.mp4                                       Γöé
+Γöé Biceps/Dumbbell Alternate Biceps Curl (2).mp4                              Γöé
+Γöé Biceps/dumbbell curls (2).mp4                                              Γöé
+Γöé Biceps/dumbbell curls supination grip (2).mp4                              Γöé
+Γöé Biceps/Dumbbell Hammer Curl (2).mp4                                        Γöé
+Γöé Biceps/Dumbbell Hammer Srtict Curl (2).mp4                                 Γöé
+Γöé Biceps/Dumbbell High Curl (2).mp4                                          Γöé
+Γöé Biceps/Dumbbell Lying Supine Curl (2).mp4                                  Γöé
+Γöé Biceps/Dumbbell One Arm Hammer Preacher Curl (2).mp4                       Γöé
+Γöé Biceps/Dumbbell Preacher Curl (2).mp4                                      Γöé
+Γöé Biceps/Dumbbell Prone Incline Curl (2).mp4                                 Γöé
+Γöé Biceps/Dumbbell Reverse Spider Curl (2).mp4                                Γöé
+Γöé Biceps/Dumbbell Seated Curl (2).mp4                                        Γöé
+Γöé Biceps/Dumbbell Seated Hammer Curl (2).mp4                                 Γöé
+Γöé Biceps/Dumbbell Standing One Arm Curl (over incline bench) (2).mp4         Γöé
+Γöé Biceps/Dumbbell Strict Curl (2).mp4                                        Γöé
+Γöé Biceps/Dumbbell Waiter Biceps Curl (2).mp4                                 Γöé
+Γöé Biceps/Dumbbell Zottman Curl (2).mp4                                       Γöé
+Γöé Biceps/Ez bar biceps curl close grip.mp4                                   Γöé
+Γöé Biceps/Ez bar biceps curl normal grip.mp4                                  Γöé
+Γöé Biceps/Ez bar biceps curl wide grip.mp4                                    Γöé
+Γöé Biceps/Ez bar cable curl wide grip.mp4                                     Γöé
+Γöé Biceps/EZ Barbell Close grip Curl (2).mp4                                  Γöé
+Γöé Biceps/EZ Barbell Curl (2).mp4                                             Γöé
+Γöé Biceps/incline bench hammer curls (2).mp4                                  Γöé
+Γöé Biceps/low resistance band lying bicep curl (2).mp4                        Γöé
+Γöé Biceps/low resistance band lying bicep curl half rep (2).mp4               Γöé
+Γöé Biceps/preacher curl barbell.mp4                                           Γöé
+Γöé Biceps/preacher curl dumbbells simultaneous.mp4                            Γöé
+Γöé Biceps/preacher curl ez bar (2).mp4                                        Γöé
+Γöé Biceps/preacher curl ez bar close grip (2).mp4                             Γöé
+Γöé Biceps/preacher curl ez bar wide grip (2).mp4                              Γöé
+Γöé Biceps/preacher curl single arm dumbbell (2).mp4                           Γöé
+Γöé Biceps/reverse curl barbell.mp4                                            Γöé
+Γöé Biceps/spider curl barbell.mp4                                             Γöé
+Γöé Biceps/spider curl dumbbells simultaneous (2).mp4                          Γöé
+Γöé Biceps/spider curl ez bar.mp4                                              Γöé
+Γöé Cardio-Functional/Air punches March (2).mp4                                Γöé
+Γöé Cardio-Functional/alternate punching (2).mp4                               Γöé
+Γöé Cardio-Functional/Alternating hamstring curl with punch (2).mp4            Γöé
+Γöé Cardio-Functional/Alternating leg downward dog (2).mp4                     Γöé
+Γöé Cardio-Functional/Ankle circles (2).mp4                                    Γöé
+Γöé Cardio-Functional/ankle dorsal flexion (2).mp4                             Γöé
+Γöé Cardio-Functional/ankle plantar flexion (2).mp4                            Γöé
+Γöé Cardio-Functional/Arm crossover (2).mp4                                    Γöé
+Γöé Cardio-Functional/Arm crossover chest out (2).mp4                          Γöé
+Γöé Cardio-Functional/Arm double crossover (2).mp4                             Γöé
+Γöé Cardio-Functional/arm pulses cross.mp4                                     Γöé
+Γöé Cardio-Functional/arm pulses palms downwards.mp4                           Γöé
+Γöé Cardio-Functional/arm pulses palms upwards.mp4                             Γöé
+Γöé Cardio-Functional/arm pulses.mp4                                           Γöé
+Γöé Cardio-Functional/Arms up and down (2).mp4                                 Γöé
+Γöé Cardio-Functional/Back lever (2).mp4                                       Γöé
+Γöé Cardio-Functional/Balance board lateral squat (2).mp4                      Γöé
+Γöé Cardio-Functional/Basic Toe Touch (2).mp4                                  Γöé
+Γöé Cardio-Functional/Basketball Shot Jump (2).mp4                             Γöé
+Γöé Cardio-Functional/Bent Over Twist (2).mp4                                  Γöé
+Γöé Cardio-Functional/Bicycle Recline Walk (2).mp4                             Γöé
+Γöé Cardio-Functional/Body Slide (2).mp4                                       Γöé
+Γöé Cardio-Functional/Body Throw (2).mp4                                       Γöé
+Γöé Cardio-Functional/Bodyweight Front Slam (2).mp4                            Γöé
+Γöé Cardio-Functional/Bodyweight keeling to hand tap (2).mp4                   Γöé
+Γöé Cardio-Functional/Bodyweight Knee Thrust (2).mp4                           Γöé
+Γöé Cardio-Functional/Bodyweight kneeling to hand tap (2).mp4                  Γöé
+Γöé Cardio-Functional/Bodyweight Standing Triangle Fly (2).mp4                 Γöé
+Γöé Cardio-Functional/Bodyweight Windmill (2).mp4                              Γöé
+Γöé Cardio-Functional/Bodyweight Windmill Cut (2).mp4                          Γöé
+Γöé Cardio-Functional/Bouncing Circle Draw (2).mp4                             Γöé
+Γöé Cardio-Functional/Bouncing Inner Thigh Tap (2).mp4                         Γöé
+Γöé Cardio-Functional/boxing jab (2).mp4                                       Γöé
+Γöé Cardio-Functional/Boxing Left Hook (2).mp4                                 Γöé
+Γöé Cardio-Functional/Boxing left uppercut (2).mp4                             Γöé
+Γöé Cardio-Functional/Boxing right cross (2).mp4                               Γöé
+Γöé Cardio-Functional/Boxing right hook (2).mp4                                Γöé
+Γöé Cardio-Functional/Boxing Right Uppercut (2).mp4                            Γöé
+Γöé Cardio-Functional/Briskly Walking (2).mp4                                  Γöé
+Γöé Cardio-Functional/Briskly Walking (360 degrees) (2).mp4                    Γöé
+Γöé Cardio-Functional/Burpee (2).mp4                                           Γöé
+Γöé Cardio-Functional/Burpee(1).mp4                                            Γöé
+Γöé Cardio-Functional/Butt Kick with Row (2).mp4                               Γöé
+Γöé Cardio-Functional/Butt Kicks (2).mp4                                       Γöé
+Γöé Cardio-Functional/Butt kicks (3).mp4                                       Γöé
+Γöé Cardio-Functional/Butt kicks slow.mp4                                      Γöé
+Γöé Cardio-Functional/Cable twisting overhead press (2).mp4                    Γöé
+Γöé Cardio-Functional/Cardio Lunge (2).mp4                                     Γöé
+Γöé Cardio-Functional/Celebratory Hip Thrust (2).mp4                           Γöé
+Γöé Cardio-Functional/Chest Fly Side Step (2).mp4                              Γöé
+Γöé Cardio-Functional/Chest raise and rotate (2).mp4                           Γöé
+Γöé Cardio-Functional/Circle Elbow Arm (2).mp4                                 Γöé
+Γöé Cardio-Functional/Clap Jack (2).mp4                                        Γöé
+Γöé Cardio-Functional/Control Balance (2).mp4                                  Γöé
+Γöé Cardio-Functional/Corner Touch (2).mp4                                     Γöé
+Γöé Cardio-Functional/Criss Cross Arms Lift (2).mp4                            Γöé
+Γöé Cardio-Functional/Criss Cross Elbow To Knee (2).mp4                        Γöé
+Γöé Cardio-Functional/criss cross jack (2).mp4                                 Γöé
+Γöé Cardio-Functional/criss cross jump (2).mp4                                 Γöé
+Γöé Cardio-Functional/decline shoulder tap (2).mp4                             Γöé
+Γöé Cardio-Functional/Diagonal Opens (2).mp4                                   Γöé
+Γöé Cardio-Functional/Diagonal Punch (2).mp4                                   Γöé
+Γöé Cardio-Functional/Double Knee Drive (2).mp4                                Γöé
+Γöé Cardio-Functional/Double Punch Front Leg Lift (2).mp4                      Γöé
+Γöé Cardio-Functional/Downward Dog Sprint (2).mp4                              Γöé
+Γöé Cardio-Functional/Dumbbell Curl Press (2).mp4                              Γöé
+Γöé Cardio-Functional/Dumbbell Iron Cross (2).mp4                              Γöé
+Γöé Cardio-Functional/Dumbbell Low Windmill (2).mp4                            Γöé
+Γöé Cardio-Functional/Dumbbell Pullover Hip Extension on Exercise Ball (2).mp4 Γöé
+Γöé Cardio-Functional/Dumbbell Single Arm Overhead Carry (2).mp4               Γöé
+Γöé Cardio-Functional/Dumbell Burpee (2).mp4                                   Γöé
+Γöé Cardio-Functional/Dynamic Leg Swing (2).mp4                                Γöé
+Γöé Cardio-Functional/Elbow-Extension (2).mp4                                  Γöé
+Γöé Cardio-Functional/Extended Side Angle (2).mp4                              Γöé
+Γöé Cardio-Functional/Fast feet.mp4                                            Γöé
+Γöé Cardio-Functional/Half burpees.mp4                                         Γöé
+Γöé Cardio-Functional/high knees (2).mp4                                       Γöé
+Γöé Cardio-Functional/jumping jack.mp4                                         Γöé
+Γöé Cardio-Functional/Kettlebell Single Arm Clean and Press (2).mp4            Γöé
+Γöé Cardio-Functional/Kettlebell strict press (2).mp4                          Γöé
+Γöé Cardio-Functional/Kettlebell Sumo High Pull (2).mp4                        Γöé
+Γöé Cardio-Functional/Kettlebell Swing (2).mp4                                 Γöé
+Γöé Cardio-Functional/Kettlebell Swing (Version 2) (2).mp4                     Γöé
+Γöé Cardio-Functional/Kettlebell Thruster (2).mp4                              Γöé
+Γöé Cardio-Functional/MAJOR GROUPS Muscle body male (2).mp4                    Γöé
+Γöé Cardio-Functional/Pike Push.mp4                                            Γöé
+Γöé Cardio-Functional/plank lunges.mp4                                         Γöé
+Γöé Cardio-Functional/plank shoulder taps.mp4                                  Γöé
+Γöé Cardio-Functional/Shadow Boxing.mp4                                        Γöé
+Γöé Cardio-Functional/side to side punch(1).mp4                                Γöé
+Γöé Cardio-Functional/skipping.mp4                                             Γöé
+Γöé Cardio-Functional/standing toe touch.mp4                                   Γöé
+Γöé Cardio-Functional/star jump (2).mp4                                        Γöé
+Γöé Chest/Archer push up (2).mp4                                               Γöé
+Γöé Chest/Assisted weighted push up (2).mp4                                    Γöé
+Γöé Chest/Barbell bench press (2).mp4                                          Γöé
+Γöé Chest/barbell bench press (3).mp4                                          Γöé
+Γöé Chest/barbell bench press decline.mp4                                      Γöé
+Γöé Chest/barbell bench press incline.mp4                                      Γöé
+Γöé Chest/Barbell floor chest press (2).mp4                                    Γöé
+Γöé Chest/Barbell incline bench press (2).mp4                                  Γöé
+Γöé Chest/Barbell JM bench press (2).mp4                                       Γöé
+Γöé Chest/Barbell pullover to press (2).mp4                                    Γöé
+Γöé Chest/Barbell Wide Bench Press (2).mp4                                     Γöé
+Γöé Chest/Bodyweight Kneeling Push-Up Row (2).mp4                              Γöé
+Γöé Chest/Bodyweight Standing Fly (2).mp4                                      Γöé
+Γöé Chest/Bodyweight Svend Press (2).mp4                                       Γöé
+Γöé Chest/Cable Bench Fly Press (2).mp4                                        Γöé
+Γöé Chest/Cable Bench Press (2).mp4                                            Γöé
+Γöé Chest/cable fly machine mid.mp4                                            Γöé
+Γöé Chest/Cable low fly (2).mp4                                                Γöé
+Γöé Chest/cable lying fly (2).mp4                                              Γöé
+Γöé Chest/cable machine high to low.mp4                                        Γöé
+Γöé Chest/cable machine low to high.mp4                                        Γöé
+Γöé Chest/Cable Middle Fly (2).mp4                                             Γöé
+Γöé Chest/chest dip (2).mp4                                                    Γöé
+Γöé Chest/chest dip machine.mp4                                                Γöé
+Γöé Chest/Chest Dip on Bench (2).mp4                                           Γöé
+Γöé Chest/chest dip weighted slow.mp4                                          Γöé
+Γöé Chest/chest dip weighted.mp4                                               Γöé
+Γöé Chest/child pose up (2).mp4                                                Γöé
+Γöé Chest/clap push ups (2).mp4                                                Γöé
+Γöé Chest/Clock push ups (2).mp4                                               Γöé
+Γöé Chest/Close-Grip Push-up (2).mp4                                           Γöé
+Γöé Chest/Cobra Full Push up (2).mp4                                           Γöé
+Γöé Chest/Decline kneeling push up (2).mp4                                     Γöé
+Γöé Chest/decline push up (2).mp4                                              Γöé
+Γöé Chest/Decline Push Up against Wall (2).mp4                                 Γöé
+Γöé Chest/Deep Push-Up (2).mp4                                                 Γöé
+Γöé Chest/Dumbbell Bench Press (2).mp4                                         Γöé
+Γöé Chest/dumbbell chest press decline (2).mp4                                 Γöé
+Γöé Chest/dumbbell chest press flat.mp4                                        Γöé
+Γöé Chest/dumbbell chest press incline bench.mp4                               Γöé
+Γöé Chest/dumbbell chest pull over (2).mp4                                     Γöé
+Γöé Chest/dumbbell decline fly (2).mp4                                         Γöé
+Γöé Chest/Dumbbell Decline Twist Fly (2).mp4                                   Γöé
+Γöé Chest/Dumbbell floor  Fly (2).mp4                                          Γöé
+Γöé Chest/dumbbell fly flat bench (2).mp4                                      Γöé
+Γöé Chest/dumbbell fly flat bench slow (2).mp4                                 Γöé
+Γöé Chest/dumbbell fly incline bench (2).mp4                                   Γöé
+Γöé Chest/Dumbbell Incline Bench Press (2).mp4                                 Γöé
+Γöé Chest/Dumbbell Incline Fly (2).mp4                                         Γöé
+Γöé Chest/Dumbbell Incline Twisted Fly (2).mp4                                 Γöé
+Γöé Chest/Dumbbell One Arm Floor Fly (2).mp4                                   Γöé
+Γöé Chest/Dumbbell One Arm Floor Press (2).mp4                                 Γöé
+Γöé Chest/Dumbbell Svend Press (2).mp4                                         Γöé
+Γöé Chest/Dumbbell Tate Press (2).mp4                                          Γöé
+Γöé Chest/Elevated Push-Up (2).mp4                                             Γöé
+Γöé Chest/Explosive push ups (2).mp4                                           Γöé
+Γöé Chest/flat bench cable fly (2).mp4                                         Γöé
+Γöé Chest/Full planche push up (2).mp4                                         Γöé
+Γöé Chest/incline bench cable fly.mp4                                          Γöé
+Γöé Chest/landmine chest  press.mp4                                            Γöé
+Γöé Chest/lying pull over with resistance band cable.mp4                       Γöé
+Γöé Chest/machine chest press decline.mp4                                      Γöé
+Γöé Chest/machine chest press flat.mp4                                         Γöé
+Γöé Chest/machine chest press incline.mp4                                      Γöé
+Γöé Chest/machine fly.mp4                                                      Γöé
+Γöé Chest/Modified Hindu Push up (2).mp4                                       Γöé
+Γöé Chest/Normal Push-up (2).mp4                                               Γöé
+Γöé Chest/peck deck fly machine.mp4                                            Γöé
+Γöé Chest/push up and rotation.mp4                                             Γöé
+Γöé Chest/Push up plus (2).mp4                                                 Γöé
+Γöé Chest/push ups bodyweight (2).mp4                                          Γöé
+Γöé Chest/Side push up (2).mp4                                                 Γöé
+Γöé Chest/Side to side push up (2).mp4                                         Γöé
+Γöé Chest/smith machine press decline.mp4                                      Γöé
+Γöé Chest/smith machine press flat.mp4                                         Γöé
+Γöé Chest/smith machine press incline.mp4                                      Γöé
+Γöé Chest/svend press  flat bench.mp4                                          Γöé
+Γöé Chest/svend press decline bench.mp4                                        Γöé
+Γöé Chest/svend press incline bench.mp4                                        Γöé
+Γöé Chest/wide push ups bodyweight.mp4                                         Γöé
+Γöé Forearms/Barbell standing back wrist curl (2).mp4                          Γöé
+Γöé Forearms/barbell wrist curl on knees (2).mp4                               Γöé
+Γöé Forearms/barbell wrist curl wide legs (2).mp4                              Γöé
+Γöé Forearms/Barbell wrist extension on knees (2).mp4                          Γöé
+Γöé Forearms/Cable Wrist Curl (2).mp4                                          Γöé
+Γöé Forearms/Dumbbell Lying Pronation Rotation on Floor (2).mp4                Γöé
+Γöé Forearms/Dumbbell One arm Revers Wrist Curl (2).mp4                        Γöé
+Γöé Forearms/Dumbbell One Arm Seated Neutral Wrist Curl (2).mp4                Γöé
+Γöé Forearms/Dumbbell One arm Wrist Curl (2).mp4                               Γöé
+Γöé Forearms/Dumbbell Over Bench Reverse Wrist Curl (2).mp4                    Γöé
+Γöé Forearms/Dumbbell Over Bench Wrist Curl (2).mp4                            Γöé
+Γöé Forearms/Dumbbell Reverse Wrist Curl (2).mp4                               Γöé
+Γöé Forearms/Dumbbell Seated Neutral Wrist Curl (2).mp4                        Γöé
+Γöé Forearms/Dumbbell Standing Wrist Curl (2).mp4                              Γöé
+Γöé Forearms/EZ Bar Seated Wrist Curl (2).mp4                                  Γöé
+Γöé Forearms/wrist curl barbell.mp4                                            Γöé
+Γöé Forearms/wrist curl dumbbell (2).mp4                                       Γöé
+Γöé Forearms/Wrist extension barbell (2).mp4                                   Γöé
+Γöé Forearms/wrist extension barbell (3).mp4                                   Γöé
+Γöé Forearms/wrist extension dumbbell (2).mp4                                  Γöé
+Γöé Powerlifting/Barbell clean and jerk split squat (2).mp4                    Γöé
+Γöé Powerlifting/Barbell clean and press (2).mp4                               Γöé
+Γöé Powerlifting/Barbell clean grip front squat (2).mp4                        Γöé
+Γöé Powerlifting/Barbell clean pull (2).mp4                                    Γöé
+Γöé Powerlifting/Barbell full clean (2).mp4                                    Γöé
+Γöé Powerlifting/Barbell full squat (2).mp4                                    Γöé
+Γöé Powerlifting/Barbell muscle clean (2).mp4                                  Γöé
+Γöé Powerlifting/Barbell power clean (2).mp4                                   Γöé
+Γöé Powerlifting/Barbell power clean from blocks (2).mp4                       Γöé
+Γöé Powerlifting/Barbell power jerk (2).mp4                                    Γöé
+Γöé Powerlifting/Barbell power snatch (2).mp4                                  Γöé
+Γöé Powerlifting/Barbell rack pull (2).mp4                                     Γöé
+Γöé Powerlifting/Barbell snatch (2).mp4                                        Γöé
+Γöé Powerlifting/Barbell snatch balance (2).mp4                                Γöé
+Γöé Powerlifting/Barbell snatch from blocks (2).mp4                            Γöé
+Γöé Powerlifting/Barbell snatch pull (2).mp4                                   Γöé
+Γöé Powerlifting/Barbell split clean (2).mp4                                   Γöé
+Γöé Powerlifting/Barbell split jerk (2).mp4                                    Γöé
+Γöé Powerlifting/Barbell Thruster (2).mp4                                      Γöé
+Γöé Powerlifting/cluster (2).mp4                                               Γöé
+Γöé Powerlifting/Dumbbell Hang Power Clean (2).mp4                             Γöé
+Γöé Powerlifting/Dumbbell One Arm Snatch (2).mp4                               Γöé
+Γöé Stretching/back pec stretch (2).mp4                                        Γöé
+Γöé Stretching/calf push stretch with hands against wall (2).mp4               Γöé
+Γöé Stretching/Cat Stretch (2).mp4                                             Γöé
+Γöé Stretching/cocoons (2).mp4                                                 Γöé
+Γöé Stretching/dead hang stretch (2).mp4                                       Γöé
+Γöé Stretching/exercise ball seated quad stretch (2).mp4                       Γöé
+Γöé Stretching/Extension And Inclination Neck Stretch (2).mp4                  Γöé
+Γöé Stretching/runner stretch (2).mp4                                          Γöé
+Γöé Triceps/Barbell close grip press (2).mp4                                   Γöé
+Γöé Triceps/Barbell lying close grip press (2).mp4                             Γöé
+Γöé Triceps/Barbell lying triceps extension (2).mp4                            Γöé
+Γöé Triceps/Barbell lying triceps skull crushers (2).mp4                       Γöé
+Γöé Triceps/barbell seated overhead triceps press (2).mp4                      Γöé
+Γöé Triceps/Barbell standing overhead triceps extension (2).mp4                Γöé
+Γöé Triceps/Bench Dip (knees bent) (2).mp4                                     Γöé
+Γöé Triceps/Bench dip on floor (2).mp4                                         Γöé
+Γöé Triceps/bench triceps dip leg curls.mp4                                    Γöé
+Γöé Triceps/bench triceps dip straight legs.mp4                                Γöé
+Γöé Triceps/Body-Up (2).mp4                                                    Γöé
+Γöé Triceps/Bodyweight kneeling triceps extension (2).mp4                      Γöé
+Γöé Triceps/Bodyweight Overhead Triceps Extension (2).mp4                      Γöé
+Γöé Triceps/bodyweight triceps extension (2).mp4                               Γöé
+Γöé Triceps/Cable Alternate Triceps Extension (2).mp4                          Γöé
+Γöé Triceps/cable lying triceps extension (2).mp4                              Γöé
+Γöé Triceps/cable lying triceps extension (LOW) (2).mp4                        Γöé
+Γöé Triceps/Cable Neutral Grip Kickback (2).mp4                                Γöé
+Γöé Triceps/cable overhead extension rope.mp4                                  Γöé
+Γöé Triceps/Cable Pushdown (2).mp4                                             Γöé
+Γöé Triceps/Cable Rear Drive (2).mp4                                           Γöé
+Γöé Triceps/cable reverse grip pushdown (2).mp4                                Γöé
+Γöé Triceps/cable reverse grip triceps push down straight bar (2).mp4          Γöé
+Γöé Triceps/Cable Reverse Grip Triceps Pushdown (EZ-bar) (2).mp4               Γöé
+Γöé Triceps/cable reverse grip triceps pushdown back side pov (2).mp4          Γöé
+Γöé Triceps/cable triceps overhead extension(ez bar) (2).mp4                   Γöé
+Γöé Triceps/cable triceps push down elbow out(v bar).mp4                       Γöé
+Γöé Triceps/cable triceps push down ez bar close grip.mp4                      Γöé
+Γöé Triceps/cable triceps push down ez bar wide grip.mp4                       Γöé
+Γöé Triceps/cable triceps push down ez bar.mp4                                 Γöé
+Γöé Triceps/cable triceps push down straight bar.mp4                           Γöé
+Γöé Triceps/cable triceps push down v bar.mp4                                  Γöé
+Γöé Triceps/chair triceps dips.mp4                                             Γöé
+Γöé Triceps/Close grip barbell bench press (2).mp4                             Γöé
+Γöé Triceps/close grip barbell bench press (3).mp4                             Γöé
+Γöé Triceps/decline chair push up diamond.mp4                                  Γöé
+Γöé Triceps/Decline Diamond Pike Push-up (2).mp4                               Γöé
+Γöé Triceps/diamond push up.mp4                                                Γöé
+Γöé Triceps/Diamond Push-up (2).mp4                                            Γöé
+Γöé Triceps/Diamond Push-up (on knees) (2).mp4                                 Γöé
+Γöé Triceps/Dip Leg Raise on couch (2).mp4                                     Γöé
+Γöé Triceps/Dip on Floor with Chair (2).mp4                                    Γöé
+Γöé Triceps/Dips between Chairs (2).mp4                                        Γöé
+Γöé Triceps/Dumbbell Decline triceps pull-over extension (2).mp4               Γöé
+Γöé Triceps/Dumbbell Incline Triceps Extension (2).mp4                         Γöé
+Γöé Triceps/Dumbbell Incline Two Arm Extension (2).mp4                         Γöé
+Γöé Triceps/Dumbbell Kickback (2).mp4                                          Γöé
+Γöé Triceps/Dumbbell Lying One Arm Supinated Triceps Extension (2).mp4         Γöé
+Γöé Triceps/Dumbbell Lying Triceps Extension (2).mp4                           Γöé
+Γöé Triceps/Dumbbell Lying Triceps Extension on Floor (2).mp4                  Γöé
+Γöé Triceps/Dumbbell One Arm Kickback (2).mp4                                  Γöé
+Γöé Triceps/Dumbbell One Arm Triceps Extension (on bench) (2).mp4              Γöé
+Γöé Triceps/dumbbell overhead extension seated (2).mp4                         Γöé
+Γöé Triceps/Dumbbell overhead extension standing (2).mp4                       Γöé
+Γöé Triceps/Dumbbell Pronate-grip Triceps Extension (2).mp4                    Γöé
+Γöé Triceps/Dumbbell Seated Bench Extension (2).mp4                            Γöé
+Γöé Triceps/Dumbbell Seated Kickback (2).mp4                                   Γöé
+Γöé Triceps/Dumbbell Standing Both Arms Kickback (2).mp4                       Γöé
+Γöé Triceps/Dumbbell Standing One Arm Extension (2).mp4                        Γöé
+Γöé Triceps/Dumbbell Standing Triceps Extension (2).mp4                        Γöé
+Γöé Triceps/Dumbbell triceps kick back single arm (2).mp4                      Γöé
+Γöé Triceps/dumbells triceps kick back both arms (2).mp4                       Γöé
+Γöé Triceps/ez bar overhead extensions standing.mp4                            Γöé
+Γöé Triceps/incline  diamond push up On Bench (2).mp4                          Γöé
+Γöé Triceps/incline push ups on chair (2).mp4                                  Γöé
+Γöé Triceps/Overhand tricep stretching single arm (2).mp4                      Γöé
+Γöé Triceps/overhead extension resistance band both arms.mp4                   Γöé
+Γöé Triceps/Pike push up (2).mp4                                               Γöé
+Γöé Triceps/single arm overhead extension resistance band.mp4                  Γöé
+Γöé Triceps/tricep cable kickback on crossover machine (2).mp4                 Γöé
+Γöé Triceps/tricep extension machine.mp4                                       Γöé
+Γöé Triceps/tricep rope extension on crossover machine (2).mp4                 Γöé
+Γöé Triceps/triceps dip machine (2).mp4                                        Γöé
+ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
