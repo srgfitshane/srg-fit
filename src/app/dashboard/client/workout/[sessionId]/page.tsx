@@ -65,7 +65,7 @@ export default function ActiveWorkoutPage() {
 
   async function loadSession() {
     await supabase.from('workout_sessions').update({ status:'in_progress', started_at: new Date().toISOString() })
-      .eq('id', sessionId).eq('status','assigned')
+      .eq('id', sessionId).eq('status','assigned').not('program_id', 'is', null)
 
     const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
     const { data: exs } = await supabase.from('session_exercises').select('*').eq('session_id', sessionId).order('order_index')
@@ -189,6 +189,17 @@ export default function ActiveWorkoutPage() {
 
   if (loading) return (
     <div style={{minHeight:'100vh',background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',color:t.textMuted,fontFamily:"'DM Sans',sans-serif"}}>Loading workout...</div>
+  )
+
+  if (!loading && exercises.length === 0) return (
+    <div style={{minHeight:'100vh',background:t.bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32,textAlign:'center',fontFamily:"'DM Sans',sans-serif",color:t.text}}>
+      <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
+      <div style={{fontSize:18,fontWeight:800,marginBottom:8,color:t.orange}}>No exercises in this workout</div>
+      <div style={{fontSize:13,color:t.textMuted,marginBottom:32,maxWidth:280,lineHeight:1.6}}>This session has no exercises assigned yet. Your coach needs to add exercises to this program first.</div>
+      <button onClick={cancelWorkout} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+        ← Back to Dashboard
+      </button>
+    </div>
   )
 
   if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase}/>

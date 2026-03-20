@@ -160,10 +160,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setWorkoutLogs(wlData || [])
 
         // Today's workout session — only show if scheduled for today or already in progress
+        // Require program_id to filter out orphaned sessions with no exercises
         const { data: nextSess } = await supabase
           .from('workout_sessions')
           .select('id, title, scheduled_date, status')
           .eq('client_id', clientData.id)
+          .not('program_id', 'is', null)
           .or(`scheduled_date.eq.${todayStr},status.eq.in_progress`)
           .in('status', ['assigned', 'in_progress'])
           .order('scheduled_date', { ascending: true })
