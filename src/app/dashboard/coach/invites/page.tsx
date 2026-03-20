@@ -59,6 +59,8 @@ export default function InvitesPage() {
     load()
   }, [])
 
+  const [sendResult, setSendResult] = useState<{url?:string, note?:string} | null>(null)
+
   const sendInvite = async () => {
     if (!form.email || !coachId) return
     setSending(true)
@@ -68,10 +70,13 @@ export default function InvitesPage() {
     if (form.onboarding_form_id) payload.onboarding_form_id = form.onboarding_form_id
     const { data, error } = await supabase.from('client_invites').insert(payload).select().single()
     if (!error && data) {
-      await supabase.functions.invoke('send-invite-email', { body: { invite_id: data.id } })
+      const { data: fnResult } = await supabase.functions.invoke('send-invite-email', { body: { invite_id: data.id } })
       setInvites(p => [data, ...p])
       setLastInvite(data)
-      // Pre-select the form they chose, or the default
+      // Capture result to show if email was sent or link needed
+      if (fnResult?.note || fnResult?.invite_url) {
+        setSendResult({ url: fnResult.invite_url, note: fnResult.note })
+      }
       const chosenForm = form.onboarding_form_id || forms.find(f=>f.is_default)?.id || ''
       setNextFormId(chosenForm)
       setShowModal(false)
@@ -333,6 +338,22 @@ export default function InvitesPage() {
                 </div>
               </div>
 
+              {/* Show direct link if email may not have gone out */}
+              {sendResult?.url && (
+                <div style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:12, padding:'12px 14px', marginBottom:16 }}>
+                  <div style={{ fontSize:12, fontWeight:800, color:t.orange, marginBottom:6 }}>
+                    ⚠️ {sendResult.note || 'Email may not have sent — share this link directly:'}
+                  </div>
+                  <div style={{ fontSize:11, color:t.text, wordBreak:'break-all', background:t.surfaceHigh, borderRadius:8, padding:'8px 10px', marginBottom:8, fontFamily:'monospace' }}>
+                    {sendResult.url}
+                  </div>
+                  <button onClick={()=>navigator.clipboard.writeText(sendResult.url!)}
+                    style={{ background:t.orange, border:'none', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    📋 Copy Link
+                  </button>
+                </div>
+              )}
+
               <div style={{ background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:16, marginBottom:16 }}>
                 <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Attach a Form</div>
                 <div style={{ fontSize:13, color:t.textDim, marginBottom:10, lineHeight:1.5 }}>
@@ -375,7 +396,7 @@ export default function InvitesPage() {
                 </button>
               </div>
 
-              <button onClick={()=>{ setShowNext(false); setAssignDone(false); setNextFormId(''); setNextNote('') }}
+              <button onClick={()=>{ setShowNext(false); setAssignDone(false); setNextFormId(''); setNextNote(''); setSendResult(null) }}
                 style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:11, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Done
               </button>

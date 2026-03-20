@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (resendKey && setPasswordLink) {
       try {
         const firstName = fullName.split(' ')[0]
-        await fetch('https://api.resend.com/emails', {
+        const resendRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -104,6 +104,11 @@ export async function POST(request: NextRequest) {
             `
           }),
         })
+        const resendResult = await resendRes.json()
+        console.log('Resend response:', resendRes.status, JSON.stringify(resendResult))
+        if (!resendRes.ok) {
+          console.error('Resend error:', resendResult)
+        }
       } catch (emailErr) {
         // Email failure is non-fatal — user was created, just log it
         console.error('Resend email failed:', emailErr)
@@ -114,8 +119,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Invite sent to ${fullName}! They'll get an email to set up their account.`,
+      message: `Account created for ${fullName}! Email invite sent — if they don't see it, share this link directly: ${setPasswordLink}`,
       userId: newUser.user.id,
+      invite_link: setPasswordLink,
     })
 
   } catch (err: any) {
