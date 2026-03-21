@@ -157,12 +157,19 @@ function MessagesInner() {
         .msg-input::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}
         .msg-bubble{max-width:72%;word-break:break-word;line-height:1.55;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        .msg-sidebar{width:280px;flex-shrink:0;}
+        .msg-thread{flex:1;min-width:0;}
+        @media(max-width:640px){
+          .msg-sidebar{width:100%;border-right:none!important;}
+          .msg-sidebar-hidden{display:none!important;}
+          .msg-thread-hidden{display:none!important;}
+        }
       `}</style>
 
       <div style={{ display:'flex', height:'100vh', background:t.bg, fontFamily:"'DM Sans',sans-serif", color:t.text, overflow:'hidden' }}>
 
         {/* ── LEFT SIDEBAR: Client list ────────────────────────────────── */}
-        <div style={{ width:280, borderRight:'1px solid '+t.border, display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div className={`msg-sidebar${activeClient ? ' msg-sidebar-hidden' : ''}`} style={{ borderRight:'1px solid '+t.border, display:'flex', flexDirection:'column' }}>
 
           {/* Sidebar header */}
           <div style={{ padding:'16px 18px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', gap:10, height:60 }}>
@@ -191,7 +198,6 @@ function MessagesInner() {
                     transition:'all .12s' }}
                   onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background=t.surfaceUp }}
                   onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background='transparent' }}>
-                  {/* Avatar */}
                   <div style={{ width:36, height:36, borderRadius:'50%', background:t.surfaceHigh, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:t.teal, flexShrink:0, overflow:'hidden' }}>
                     {c.profile?.avatar_url
                       ? <img src={c.profile.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
@@ -213,22 +219,23 @@ function MessagesInner() {
 
         {/* ── RIGHT PANE: Thread ───────────────────────────────────────── */}
         {activeClient ? (
-          <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+          <div className="msg-thread" style={{ display:'flex', flexDirection:'column' }}>
 
             {/* Thread header */}
-            <div style={{ height:60, borderBottom:'1px solid '+t.border, padding:'0 24px', display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
-              <div style={{ width:32, height:32, borderRadius:'50%', background:t.surfaceHigh, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800, color:t.teal, overflow:'hidden' }}>
+            <div style={{ height:56, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+              {/* Back button — always visible, critical on mobile */}
+              <button onClick={()=>setActiveId(null)}
+                style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20, lineHeight:1, flexShrink:0, padding:'4px' }}>←</button>
+              <div style={{ width:30, height:30, borderRadius:'50%', background:t.surfaceHigh, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:t.teal, overflow:'hidden', flexShrink:0 }}>
                 {activeClient.profile?.avatar_url
                   ? <img src={activeClient.profile.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
                   : (activeClient.profile?.full_name?.charAt(0) || '?')}
               </div>
-              <div style={{ fontWeight:800, fontSize:14 }}>{activeClient.profile?.full_name}</div>
-              <div style={{ marginLeft:'auto' }}>
-                <button onClick={()=>router.push('/dashboard/coach/clients/'+activeClient.id)}
-                  style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  View Profile →
-                </button>
-              </div>
+              <div style={{ fontWeight:800, fontSize:14, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{activeClient.profile?.full_name}</div>
+              <button onClick={()=>router.push('/dashboard/coach/clients/'+activeClient.id)}
+                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                Profile →
+              </button>
             </div>
 
             {/* Rich thread */}
@@ -244,7 +251,7 @@ function MessagesInner() {
             )}
           </div>
         ) : (
-          <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>
+          <div className="msg-thread msg-thread-hidden" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>
             <div style={{ fontSize:48 }}>💬</div>
             <div style={{ fontSize:15, fontWeight:700 }}>Select a client to start messaging</div>
             <div style={{ fontSize:13, color:t.textMuted }}>Messages are private between you and each client.</div>

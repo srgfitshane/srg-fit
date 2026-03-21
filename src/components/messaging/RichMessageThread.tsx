@@ -325,16 +325,24 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         @keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         .rmt-scroll::-webkit-scrollbar{width:4px}
         .rmt-scroll::-webkit-scrollbar-thumb{background:${c.border};border-radius:4px}
         .rmt-gif:hover{opacity:.85;transform:scale(1.02);cursor:pointer}
         .rmt-reaction-pill:hover{opacity:.8}
+        .rmt-input-area{display:flex;flex-direction:column;gap:6px;}
+        .rmt-toolbar{display:flex;gap:4px;align-items:center;}
+        .rmt-input-row{display:flex;gap:8px;align-items:flex-end;}
+        .rmt-gif-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+        @media(max-width:400px){
+          .rmt-gif-grid{grid-template-columns:repeat(3,1fr);}
+        }
       `}</style>
 
       <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }} onClick={()=>{ if(reactTarget) setReactTarget(null) }}>
 
         {/* ── Thread ── */}
-        <div className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           {thread.length === 0 && (
             <div style={{ textAlign:'center', marginTop:48, color:c.textMuted, fontSize:13 }}>No messages yet — say something! 👋</div>
           )}
@@ -469,48 +477,43 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
                 style={{ ...btnBase, background:c.surfaceHigh, color:c.textMuted, border:'1px solid '+c.border }}>Discard</button>
             </div>
           ) : (
-            <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
-
-              {/* Toolbar */}
-              <div style={{ display:'flex', gap:4, alignItems:'center', flexShrink:0 }}>
-                {/* Audio */}
+            <div className="rmt-input-area">
+              {/* Toolbar row — full width above input */}
+              <div className="rmt-toolbar">
                 <button title="Voice message" onClick={()=>{ setMode('audio'); startAudio() }}
-                  style={{ ...btnBase, padding:'8px', background: mode==='audio'?c.tealDim:'transparent', color:mode==='audio'?c.teal:c.textMuted, border:'1px solid '+(mode==='audio'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background: mode==='audio'?c.tealDim:'transparent', color:mode==='audio'?c.teal:c.textMuted, border:'1px solid '+(mode==='audio'?c.teal+'40':'transparent') }}>
                   🎙️
                 </button>
-                {/* Video */}
                 <button title="Video message" onClick={()=>{ setMode('video'); startVideo() }}
-                  style={{ ...btnBase, padding:'8px', background: mode==='video'?c.tealDim:'transparent', color:mode==='video'?c.teal:c.textMuted, border:'1px solid '+(mode==='video'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background: mode==='video'?c.tealDim:'transparent', color:mode==='video'?c.teal:c.textMuted, border:'1px solid '+(mode==='video'?c.teal+'40':'transparent') }}>
                   📹
                 </button>
-                {/* Image/file upload */}
                 <button title="Send image or file" onClick={()=>fileInputRef.current?.click()}
-                  style={{ ...btnBase, padding:'8px', background:'transparent', color:c.textMuted, border:'1px solid transparent' }}>
+                  style={{ ...btnBase, padding:'7px 10px', background:'transparent', color:c.textMuted, border:'1px solid transparent' }}>
                   📎
                 </button>
-                {/* GIF */}
                 {tenorKey && (
                   <button title="Send GIF or meme" onClick={()=>setMode(mode==='gif'?'text':'gif')}
-                    style={{ ...btnBase, padding:'6px 10px', background: mode==='gif'?c.orange+'22':'transparent', color:mode==='gif'?c.orange:c.textMuted, border:'1px solid '+(mode==='gif'?c.orange+'40':'transparent'), fontSize:11, fontWeight:900 }}>
+                    style={{ ...btnBase, padding:'5px 10px', background: mode==='gif'?c.orange+'22':'transparent', color:mode==='gif'?c.orange:c.textMuted, border:'1px solid '+(mode==='gif'?c.orange+'40':'transparent'), fontSize:11, fontWeight:900 }}>
                     GIF
                   </button>
                 )}
               </div>
 
-              {/* Text input */}
-              <textarea ref={inputRef} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={handleKey}
-                placeholder={`Message ${otherName.split(' ')[0]}...`} rows={1}
-                style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:12, padding:'10px 14px', fontSize:13, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto' }}
-                onInput={e=>{ const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px' }}
-              />
-
-              {/* Send */}
-              <button onClick={sendText} disabled={!draft.trim()||sending}
-                style={{ background:c.teal, border:'none', borderRadius:10, width:40, height:40, display:'flex', alignItems:'center', justifyContent:'center', cursor:!draft.trim()||sending?'not-allowed':'pointer', opacity:!draft.trim()||sending?.4:1, flexShrink:0 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-              </button>
+              {/* Input + send row — full width */}
+              <div className="rmt-input-row">
+                <textarea ref={inputRef} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={handleKey}
+                  placeholder={`Message ${otherName.split(' ')[0]}...`} rows={1}
+                  style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:12, padding:'10px 14px', fontSize:14, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto' }}
+                  onInput={e=>{ const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px' }}
+                />
+                <button onClick={sendText} disabled={!draft.trim()||sending}
+                  style={{ background:c.teal, border:'none', borderRadius:10, width:44, height:44, display:'flex', alignItems:'center', justifyContent:'center', cursor:!draft.trim()||sending?'not-allowed':'pointer', opacity:!draft.trim()||sending?.4:1, flexShrink:0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
 

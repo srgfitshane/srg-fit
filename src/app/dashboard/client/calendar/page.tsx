@@ -180,8 +180,21 @@ export default function ClientCalendarPage() {
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};}
-        .cal-layout{display:grid;grid-template-columns:1fr 240px;gap:20px;}
-        @media(max-width:650px){.cal-layout{grid-template-columns:1fr;}.cal-sidebar{display:none;}}
+        .cal-layout{display:grid;grid-template-columns:1fr 220px;gap:16px;}
+        .cal-cell{min-height:72px;}
+        @media(max-width:720px){
+          .cal-layout{grid-template-columns:1fr;}
+          .cal-sidebar{display:none;}
+          .cal-cell{min-height:52px;}
+        }
+        @media(max-width:480px){
+          .cal-cell{min-height:44px;padding:4px!important;}
+          .cal-cell-date{font-size:12px!important;}
+        }
+        @media(max-width:380px){
+          .cal-cell{min-height:38px;padding:3px!important;}
+          .cal-cell-date{font-size:11px!important;}
+        }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
@@ -194,21 +207,18 @@ export default function ClientCalendarPage() {
           <div style={{ fontSize:11, color:t.textMuted }}>{items.length} events</div>
         </div>
 
-        <div style={{ maxWidth:860, margin:'0 auto', padding:'16px 14px' }}>
+        <div style={{ maxWidth:860, margin:'0 auto', padding:'12px 8px' }}>
 
           {/* Legend */}
-          <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:16 }}>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:12 }}>
             {[
-              { color:'#f5a623', label:'Upcoming workout' },
+              { color:'#f5a623', label:'Workout' },
               { color:'#00c9b1', label:'In progress' },
-              { color:'#22c55e', label:'Completed' },
-              { color:'#8b5cf6', label:'Coach event' },
-              { color:'#a78bfa', label:'Journal entry', icon:'✍️' },
+              { color:'#22c55e', label:'Done' },
+              { color:'#8b5cf6', label:'Event' },
             ].map(l => (
-              <div key={l.label} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:t.textMuted }}>
-                {l.icon
-                  ? <span style={{ fontSize:10 }}>{l.icon}</span>
-                  : <div style={{ width:8, height:8, borderRadius:'50%', background:l.color, flexShrink:0 }}/>}
+              <div key={l.label} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, color:t.textMuted }}>
+                <div style={{ width:7, height:7, borderRadius:'50%', background:l.color, flexShrink:0 }}/>
                 {l.label}
               </div>
             ))}
@@ -233,8 +243,8 @@ export default function ClientCalendarPage() {
             <div>
               {/* Day headers */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
-                {(mobile ? SHORT_DAYS : DAYS).map(d => (
-                  <div key={d} style={{ textAlign:'center', fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', padding:'3px 0', letterSpacing:'0.05em' }}>{d}</div>
+                {SHORT_DAYS.map((d,i) => (
+                  <div key={i} style={{ textAlign:'center', fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', padding:'4px 0', letterSpacing:'0.04em' }}>{d}</div>
                 ))}
               </div>
 
@@ -247,45 +257,40 @@ export default function ClientCalendarPage() {
                   const hasJournal = d ? journalDates.has(dateStr) : false
                   return (
                     <div key={i}
-                      onClick={() => { if(d && dayItems.length) setSelected(dayItems[0]) }}
+                      onClick={() => { if(d && (dayItems.length || hasJournal)) setSelected(dayItems[0] || null) }}
+                      className="cal-cell"
                       style={{
-                        minHeight: mobile ? 52 : 72,
                         background: isToday ? t.surfaceHigh : t.surface,
                         border: '1px solid '+(isToday ? t.teal+'50' : t.border),
                         borderRadius: 8,
-                        padding: '4px 5px',
-                        opacity: d ? 1 : 0.25,
+                        padding: '5px 6px',
+                        opacity: d ? 1 : 0.2,
                         cursor: d && (dayItems.length || hasJournal) ? 'pointer' : 'default',
                         position: 'relative' as const,
+                        overflow: 'hidden',
                       }}>
                       {d && (
                         <>
-                          <div style={{ fontSize: mobile ? 10 : 11, fontWeight: isToday ? 900 : 600, color: isToday ? t.teal : t.textDim, marginBottom:3 }}>
+                          <div className="cal-cell-date" style={{ fontSize:12, fontWeight: isToday ? 900 : 600, color: isToday ? t.teal : t.textDim, marginBottom:2, lineHeight:1 }}>
                             {d.getDate()}
                           </div>
-                          {/* Dot indicators on mobile */}
-                          {mobile && (dayItems.length > 0 || hasJournal) && (
-                            <div style={{ display:'flex', gap:2, flexWrap:'wrap', alignItems:'center' }}>
+                          {/* Dot indicators — compact on mobile */}
+                          {(dayItems.length > 0 || hasJournal) && (
+                            <div style={{ display:'flex', gap:2, flexWrap:'wrap' }}>
                               {dayItems.slice(0,3).map(e => (
-                                <div key={e.id} style={{ width:6, height:6, borderRadius:'50%', background:e.color, flexShrink:0 }}/>
+                                <div key={e.id} style={{ width:5, height:5, borderRadius:'50%', background:e.color, flexShrink:0 }}/>
                               ))}
-                              {hasJournal && <span style={{ fontSize:8, lineHeight:1 }}>✍️</span>}
-                              {dayItems.length > 3 && <div style={{ fontSize:8, color:t.textMuted }}>+{dayItems.length-3}</div>}
+                              {hasJournal && <span style={{ fontSize:7, lineHeight:1 }}>✍️</span>}
+                              {dayItems.length > 3 && <div style={{ fontSize:8, color:t.textMuted, fontWeight:700 }}>+{dayItems.length-3}</div>}
                             </div>
                           )}
-                          {/* Full chips on desktop */}
-                          {!mobile && dayItems.slice(0,2).map(e => (
+                          {/* Chips only on wider desktop (>720px sidebar visible) */}
+                          {!mobile && dayItems.slice(0,1).map(e => (
                             <div key={e.id} onClick={ev=>{ev.stopPropagation();setSelected(e)}}
-                              style={{ fontSize:9, fontWeight:700, background:e.color+'22', color:e.color, borderRadius:4, padding:'1px 4px', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}>
+                              style={{ fontSize:9, fontWeight:700, background:e.color+'22', color:e.color, borderRadius:4, padding:'1px 4px', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}>
                               {e.icon} {e.title}
                             </div>
                           ))}
-                          {!mobile && hasJournal && (
-                            <div style={{ fontSize:9, fontWeight:700, color:'#a78bfa', marginTop:1 }}>✍️ Journal</div>
-                          )}
-                          {!mobile && dayItems.length > 2 && (
-                            <div style={{ fontSize:8, color:t.textMuted, fontWeight:600 }}>+{dayItems.length-2} more</div>
-                          )}
                         </>
                       )}
                     </div>
