@@ -69,6 +69,8 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
   const [gifs,         setGifs]         = useState<any[]>([])
   const [gifLoading,   setGifLoading]   = useState(false)
   const [reactTarget,  setReactTarget]  = useState<string|null>(null)
+  const [reactPos,     setReactPos]     = useState<{x:number,y:number}>({x:0,y:0})
+  const longPressRef = useRef<ReturnType<typeof setTimeout>|null>(null)
   const [previewFile,  setPreviewFile]  = useState<File|null>(null)
   const [uploading,    setUploading]    = useState(false)
 
@@ -270,6 +272,26 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
     loadThread()
   }
 
+  // ── Long-press reactions (SMS-style) ──────────────────────────────────────
+  const handlePressStart = (msgId: string, e: React.TouchEvent | React.MouseEvent) => {
+    const touch = 'touches' in e ? e.touches[0] : e as React.MouseEvent
+    const x = touch.clientX
+    const y = touch.clientY
+    longPressRef.current = setTimeout(() => {
+      setReactTarget(msgId)
+      setReactPos({ x, y })
+      // Haptic feedback on mobile
+      if ('vibrate' in navigator) navigator.vibrate(40)
+    }, 500)
+  }
+
+  const handlePressEnd = () => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current)
+      longPressRef.current = null
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   const fmtTime = (s: number) => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
   const fmtMsgTime = (ts: string) => new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
@@ -332,6 +354,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         @keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes scaleIn{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:scale(1)}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         .rmt-scroll::-webkit-scrollbar{width:4px}
         .rmt-scroll::-webkit-scrollbar-thumb{background:${c.border};border-radius:4px}
@@ -341,12 +364,43 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
         .rmt-toolbar{display:flex;gap:4px;align-items:center;}
         .rmt-input-row{display:flex;gap:8px;align-items:flex-end;}
         .rmt-gif-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-        @media(max-width:400px){
-          .rmt-gif-grid{grid-template-columns:repeat(3,1fr);}
-        }
+        .rmt-picker{animation:scaleIn .15s ease;transform-origin:bottom center;}
+        .rmt-bubble{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+        @media(max-width:400px){.rmt-gif-grid{grid-template-columns:repeat(3,1fr);}}
       `}</style>
 
-      <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }} onClick={()=>setReactTarget(null)}>
+      <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }}
+        onClick={()=>setReactTarget(null)}
+        onTouchStart={()=>{ if(reactTarget) setReactTarget(null) }}>
+
+        {/* ── Global reaction picker overlay ── */}
+        {reactTarget && (
+          <>
+            {/* Backdrop */}
+            <div style={{ position:'fixed', inset:0, zIndex:100 }} onClick={()=>setReactTarget(null)} />
+            {/* Picker — positioned near the long-pressed message */}
+            <div className="rmt-picker" style={{
+              position:'fixed',
+              left: Math.min(Math.max(reactPos.x - 140, 8), window.innerWidth - 300),
+              top: Math.max(reactPos.y - 70, 60),
+              background:c.surfaceHigh,
+              border:'1px solid '+c.border,
+              borderRadius:32,
+              padding:'8px 12px',
+              display:'flex',
+              gap:4,
+              zIndex:101,
+              boxShadow:'0 8px 32px rgba(0,0,0,.7)',
+            }} onClick={e=>e.stopPropagation()}>
+              {QUICK_REACTIONS.map(emoji => (
+                <button key={emoji} onClick={()=>toggleReaction(reactTarget, emoji)}
+                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:24, padding:'4px 5px', borderRadius:8, lineHeight:1 }}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* ── Thread ── */}
         <div className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -362,29 +416,24 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
               <div key={msg.id} style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation:'fadeUp .15s ease' }}>
                 <div style={{ position:'relative', maxWidth: isMedia ? '80%' : '74%', width: isMedia ? '80%' : 'auto' }}>
 
-                  {/* Reaction picker — shown when reactTarget matches, tap anywhere else to close */}
-                  {reactTarget === msg.id && (
-                    <div style={{ position:'absolute', [isMe?'right':'left']:0, top:-48, background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:24, padding:'6px 10px', display:'flex', gap:4, zIndex:10, whiteSpace:'nowrap', boxShadow:'0 4px 20px rgba(0,0,0,.6)' }}
-                      onClick={e=>e.stopPropagation()}>
-                      {QUICK_REACTIONS.map(emoji => (
-                        <button key={emoji} onClick={()=>toggleReaction(msg.id, emoji)}
-                          style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, padding:'2px 3px', borderRadius:6 }}>
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Bubble — tap to open reaction picker */}
+                  {/* Bubble — long-press to react, normal tap for media */}
                   <div
-                    onClick={()=>setReactTarget(prev => prev === msg.id ? null : msg.id)}
+                    className="rmt-bubble"
+                    onTouchStart={e=>handlePressStart(msg.id, e)}
+                    onTouchEnd={handlePressEnd}
+                    onTouchMove={handlePressEnd}
+                    onMouseDown={e=>handlePressStart(msg.id, e)}
+                    onMouseUp={handlePressEnd}
+                    onMouseLeave={handlePressEnd}
+                    onContextMenu={e=>{ e.preventDefault(); setReactTarget(msg.id); setReactPos({x:e.clientX,y:e.clientY}) }}
                     style={{
                       background: isMe ? c.teal : c.surfaceHigh,
                       color: isMe ? '#000' : c.text,
                       borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                       padding: isMedia ? '4px' : '10px 14px',
-                      cursor:'pointer',
+                      cursor: isMedia ? 'default' : 'default',
                       overflow:'hidden',
+                      WebkitTouchCallout:'none',
                     }}>
                     <BubbleContent msg={msg} />
                     <div style={{ fontSize:10, marginTop: isMedia?4:3, opacity:0.55, textAlign: isMe?'right':'left', padding: isMedia?'0 6px 4px':0 }}>
@@ -400,7 +449,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
                         <button key={emoji} className="rmt-reaction-pill"
                           onClick={()=>toggleReaction(msg.id, emoji)}
                           style={{ ...btnBase, padding:'3px 8px', fontSize:13, background: mine ? c.tealDim : c.surfaceHigh, border:'1px solid '+(mine?c.teal+'40':c.border), color: mine?c.teal:c.textDim }}>
-                          {emoji} {count > 1 && count}
+                          {emoji}{count > 1 ? ` ${count}` : ''}
                         </button>
                       ))}
                     </div>
