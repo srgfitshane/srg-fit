@@ -93,7 +93,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [nextSession,  setNextSession]  = useState<any>(null)
   const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
-  const [activeNav,    setActiveNav]    = useState('today')
+  const [activeNav,    setActiveNav]    = useState(() => {
+    // Allow deep-linking via ?tab=billing etc from profile page
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('tab')
+      if (p) return p
+    }
+    return 'today'
+  })
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
@@ -883,6 +890,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           </>
         )}
 
+        {/* ── BILLING TAB ── */}
+        {activeNav === 'billing' && clientRecord && (
+          <BillingTab clientRecord={clientRecord} supabase={supabase} />
+        )}
+
         {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
@@ -942,18 +954,20 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
 
   async function openPortal() {
     setPortalLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/stripe-portal`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`
-      },
-      body: JSON.stringify({ return_url: window.location.href })
-    })
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
-    else alert('Could not open billing portal: ' + (data.error || 'Unknown error'))
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not logged in')
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id }),
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+      else throw new Error(data.error || 'Could not open billing portal')
+    } catch (err: any) {
+      alert(err.message)
+    }
     setPortalLoading(false)
   }
 

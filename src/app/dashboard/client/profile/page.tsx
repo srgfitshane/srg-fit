@@ -552,7 +552,18 @@ function ProfilePageInner() {
               </button>
 
               {/* Manage Subscription */}
-              <button onClick={()=>router.push('/dashboard/client?tab=billing')}
+              <button onClick={async () => {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) return
+                const res = await fetch('/api/stripe/portal', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_id: user.id }),
+                })
+                const data = await res.json()
+                if (data.url) window.location.href = data.url
+                else alert('Could not open billing portal: ' + (data.error || 'Unknown error'))
+              }}
                 style={{ display:'flex', alignItems:'center', gap:14, background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%' }}>
                 <div style={{ width:40, height:40, borderRadius:11, background:t.orangeDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>💳</div>
                 <div style={{ flex:1 }}>
