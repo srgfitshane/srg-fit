@@ -282,31 +282,38 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
   const BubbleContent = ({ msg }: { msg: Message }) => {
     const isMe = msg.sender_id === myId
     if (msg.message_type === 'gif' && msg.gif_url) {
-      return <img src={msg.gif_url} alt={msg.body || 'GIF'} style={{ maxWidth:260, borderRadius:10, display:'block' }} />
+      return <img src={msg.gif_url} alt={msg.body || 'GIF'} style={{ maxWidth:'100%', width:'100%', borderRadius:10, display:'block' }} />
     }
     if (msg.message_type === 'image' && msg.media_url) {
-      return <img src={msg.media_url} alt="image" style={{ maxWidth:260, borderRadius:10, display:'block', cursor:'pointer' }} onClick={()=>window.open(msg.media_url!,'_blank')} />
+      return (
+        <img src={msg.media_url} alt="image"
+          style={{ maxWidth:'100%', width:'100%', borderRadius:10, display:'block', cursor:'pointer' }}
+          onClick={()=>window.open(msg.media_url!,'_blank')} />
+      )
     }
     if (msg.message_type === 'audio' && msg.media_url) {
       return (
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0' }}>
           <span style={{ fontSize:18 }}>🎙️</span>
-          <audio controls src={msg.media_url} style={{ height:32, maxWidth:200 }} />
+          <audio controls src={msg.media_url} style={{ height:36, flex:1, minWidth:0, maxWidth:'100%' }} />
         </div>
       )
     }
     if (msg.message_type === 'video' && msg.media_url) {
-      return <video src={msg.media_url} controls style={{ maxWidth:260, borderRadius:10, display:'block' }} />
+      return (
+        <video src={msg.media_url} controls
+          style={{ maxWidth:'100%', width:'100%', borderRadius:10, display:'block', maxHeight:280 }} />
+      )
     }
-    if ((msg.message_type === 'file' || msg.message_type === 'image') && msg.media_url) {
+    if ((msg.message_type === 'file') && msg.media_url) {
       return (
         <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
-          style={{ color: isMe ? '#000' : c.teal, fontWeight:700, fontSize:13 }}>
+          style={{ color: isMe ? '#000' : c.teal, fontWeight:700, fontSize:13, wordBreak:'break-all' }}>
           📎 {msg.media_url.split('/').pop()}
         </a>
       )
     }
-    return <span style={{ fontSize:13, lineHeight:1.55, wordBreak:'break-word' }}>{msg.body}</span>
+    return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word' }}>{msg.body}</span>
   }
 
   // Group reactions by emoji for display
@@ -339,7 +346,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
         }
       `}</style>
 
-      <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }} onClick={()=>{ if(reactTarget) setReactTarget(null) }}>
+      <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }} onClick={()=>setReactTarget(null)}>
 
         {/* ── Thread ── */}
         <div className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -350,37 +357,37 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
           {thread.map((msg) => {
             const isMe = msg.sender_id === myId
             const grouped = groupReactions(msg.reactions)
+            const isMedia = ['image','video','gif'].includes(msg.message_type)
             return (
               <div key={msg.id} style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation:'fadeUp .15s ease' }}>
-                <div style={{ position:'relative', maxWidth:'74%' }}
-                  onMouseEnter={()=>setReactTarget(msg.id)}
-                  onMouseLeave={()=>{ /* keep open on click */ }}>
+                <div style={{ position:'relative', maxWidth: isMedia ? '80%' : '74%', width: isMedia ? '80%' : 'auto' }}>
 
-                  {/* Reaction picker on hover */}
+                  {/* Reaction picker — shown when reactTarget matches, tap anywhere else to close */}
                   {reactTarget === msg.id && (
-                    <div style={{ position:'absolute', [isMe?'right':'left']:0, top:-44, background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:24, padding:'5px 10px', display:'flex', gap:4, zIndex:10, whiteSpace:'nowrap', boxShadow:'0 4px 20px rgba(0,0,0,.5)' }}
+                    <div style={{ position:'absolute', [isMe?'right':'left']:0, top:-48, background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:24, padding:'6px 10px', display:'flex', gap:4, zIndex:10, whiteSpace:'nowrap', boxShadow:'0 4px 20px rgba(0,0,0,.6)' }}
                       onClick={e=>e.stopPropagation()}>
                       {QUICK_REACTIONS.map(emoji => (
                         <button key={emoji} onClick={()=>toggleReaction(msg.id, emoji)}
-                          style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, padding:'2px 3px', borderRadius:6, transition:'transform .1s' }}
-                          onMouseEnter={e=>e.currentTarget.style.transform='scale(1.3)'}
-                          onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
+                          style={{ background:'none', border:'none', cursor:'pointer', fontSize:20, padding:'2px 3px', borderRadius:6 }}>
                           {emoji}
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {/* Bubble */}
-                  <div style={{
-                    background: isMe ? c.teal : c.surfaceHigh,
-                    color: isMe ? '#000' : c.text,
-                    borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    padding: msg.message_type === 'gif' ? '4px' : '10px 14px',
-                    cursor:'default',
-                  }}>
+                  {/* Bubble — tap to open reaction picker */}
+                  <div
+                    onClick={()=>setReactTarget(prev => prev === msg.id ? null : msg.id)}
+                    style={{
+                      background: isMe ? c.teal : c.surfaceHigh,
+                      color: isMe ? '#000' : c.text,
+                      borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                      padding: isMedia ? '4px' : '10px 14px',
+                      cursor:'pointer',
+                      overflow:'hidden',
+                    }}>
                     <BubbleContent msg={msg} />
-                    <div style={{ fontSize:10, marginTop: msg.message_type==='gif'?4:3, opacity:0.55, textAlign: isMe?'right':'left', padding: msg.message_type==='gif'?'0 6px 4px':0 }}>
+                    <div style={{ fontSize:10, marginTop: isMedia?4:3, opacity:0.55, textAlign: isMe?'right':'left', padding: isMedia?'0 6px 4px':0 }}>
                       {fmtMsgTime(msg.created_at)}
                       {isMe && <span style={{ marginLeft:4 }}>{msg.read ? ' ✓✓' : ' ✓'}</span>}
                     </div>
@@ -392,7 +399,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
                       {grouped.map(([emoji, {count, mine}]) => (
                         <button key={emoji} className="rmt-reaction-pill"
                           onClick={()=>toggleReaction(msg.id, emoji)}
-                          style={{ ...btnBase, padding:'2px 8px', fontSize:12, background: mine ? c.tealDim : c.surfaceHigh, border:'1px solid '+(mine?c.teal+'40':c.border), color: mine?c.teal:c.textDim }}>
+                          style={{ ...btnBase, padding:'3px 8px', fontSize:13, background: mine ? c.tealDim : c.surfaceHigh, border:'1px solid '+(mine?c.teal+'40':c.border), color: mine?c.teal:c.textDim }}>
                           {emoji} {count > 1 && count}
                         </button>
                       ))}

@@ -212,20 +212,34 @@ export default function CoachCalendar() {
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
-        .cal-grid{display:grid;grid-template-columns:1fr 280px;gap:0;max-width:1200px;margin:0 auto;padding:24px;}
-        @media(max-width:750px){.cal-grid{grid-template-columns:1fr;}.cal-sidebar{display:none;}}
+        .cal-grid{display:grid;grid-template-columns:1fr 260px;gap:0;max-width:1200px;margin:0 auto;padding:16px 12px;}
+        .cal-cell{min-height:80px;}
+        @media(max-width:750px){
+          .cal-grid{grid-template-columns:1fr;padding:12px 10px;}
+          .cal-sidebar{display:none;}
+          .cal-cell{min-height:52px;}
+        }
+        @media(max-width:480px){
+          .cal-cell{min-height:44px;padding:4px 5px!important;}
+          .cal-cell-date{font-size:11px!important;}
+          .cal-chip{display:none!important;}
+          .cal-topbar-title{display:none;}
+        }
+        @media(max-width:380px){
+          .cal-cell{min-height:38px;padding:3px!important;}
+        }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 24px', display:'flex', alignItems:'center', height:60, gap:12 }}>
-          <button onClick={()=>router.push('/dashboard/coach')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
-          <div style={{ width:1, height:28, background:t.border }} />
-          <div style={{ fontSize:14, fontWeight:700 }}>📅 Calendar</div>
+        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', height:56, gap:10 }}>
+          <button onClick={()=>router.push('/dashboard/coach')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20, lineHeight:1, padding:'4px' }}>←</button>
+          <div style={{ width:1, height:26, background:t.border }}/>
+          <div style={{ fontSize:14, fontWeight:700 }} className="cal-topbar-title">📅 Calendar</div>
           <div style={{ flex:1 }} />
           <button onClick={()=>setModal({ newDate: today.toISOString().split('T')[0] })}
-            style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            + New Event
+            style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'8px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+            + Event
           </button>
         </div>
 
@@ -234,20 +248,20 @@ export default function CoachCalendar() {
           {/* Calendar grid */}
           <div style={{ paddingRight:24 }}>
             {/* Month nav */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
               <button onClick={()=>{ const d=new Date(viewYear,viewMonth-1,1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }}
-                style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', color:t.text, cursor:'pointer', fontSize:16, fontFamily:"'DM Sans',sans-serif" }}>‹</button>
-              <div style={{ fontSize:18, fontWeight:900, minWidth:200, textAlign:'center' }}>{MONTHS[viewMonth]} {viewYear}</div>
+                style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 12px', color:t.text, cursor:'pointer', fontSize:16, fontFamily:"'DM Sans',sans-serif" }}>‹</button>
+              <div style={{ fontSize:16, fontWeight:900, flex:1, textAlign:'center' }}>{MONTHS[viewMonth]} {viewYear}</div>
               <button onClick={()=>{ const d=new Date(viewYear,viewMonth+1,1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }}
-                style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', color:t.text, cursor:'pointer', fontSize:16, fontFamily:"'DM Sans',sans-serif" }}>›</button>
+                style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 12px', color:t.text, cursor:'pointer', fontSize:16, fontFamily:"'DM Sans',sans-serif" }}>›</button>
               <button onClick={()=>{ setViewMonth(today.getMonth()); setViewYear(today.getFullYear()) }}
-                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Today</button>
+                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Today</button>
             </div>
 
             {/* Day headers */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:8 }}>
-              {DAYS.map(d => (
-                <div key={d} style={{ textAlign:'center', fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', padding:'4px 0' }}>{d}</div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
+              {['S','M','T','W','T','F','S'].map((d,i) => (
+                <div key={i} style={{ textAlign:'center', fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', padding:'4px 0' }}>{d}</div>
               ))}
             </div>
 
@@ -259,24 +273,88 @@ export default function CoachCalendar() {
                 const dateStr = d ? d.toISOString().split('T')[0] : ''
                 return (
                   <div key={i} onClick={()=>{ if(d) setModal({ newDate: dateStr }) }}
-                    style={{ minHeight:90, background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'40':t.border), borderRadius:10, padding:'6px 8px', cursor:d?'pointer':'default', opacity:d?1:0.3, transition:'background 0.1s' }}>
+                    className="cal-cell"
+                    style={{ background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'40':t.border), borderRadius:8, padding:'5px 6px', cursor:d?'pointer':'default', opacity:d?1:0.3, transition:'background 0.1s', overflow:'hidden' }}>
                     {d && (
                       <>
-                        <div style={{ fontSize:12, fontWeight:isToday?900:600, color:isToday?t.teal:t.textDim, marginBottom:4 }}>{d.getDate()}</div>
-                        {dayEvts.slice(0,3).map(e => (
-                          <div key={e.id} onClick={ev=>{ ev.stopPropagation(); setSelected(e) }}
-                            style={{ fontSize:10, fontWeight:700, background:(e.color||t.teal)+'22', color:e.color||t.teal, borderRadius:4, padding:'2px 5px', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}>
+                        <div className="cal-cell-date" style={{ fontSize:12, fontWeight:isToday?900:600, color:isToday?t.teal:t.textDim, marginBottom:3, lineHeight:1 }}>{d.getDate()}</div>
+                        {/* Dots always visible */}
+                        {dayEvts.length > 0 && (
+                          <div style={{ display:'flex', gap:2, flexWrap:'wrap', marginBottom:2 }}>
+                            {dayEvts.slice(0,3).map(e => (
+                              <div key={e.id} style={{ width:5, height:5, borderRadius:'50%', background:e.color||t.teal, flexShrink:0 }}/>
+                            ))}
+                            {dayEvts.length > 3 && <div style={{ fontSize:8, color:t.textMuted, fontWeight:700 }}>+{dayEvts.length-3}</div>}
+                          </div>
+                        )}
+                        {/* Chips only on larger screens */}
+                        {dayEvts.slice(0,2).map(e => (
+                          <div key={e.id} className="cal-chip" onClick={ev=>{ ev.stopPropagation(); setSelected(e) }}
+                            style={{ fontSize:9, fontWeight:700, background:(e.color||t.teal)+'22', color:e.color||t.teal, borderRadius:4, padding:'2px 4px', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}>
                             {TYPE_META[e.event_type]?.icon} {e.title}
                           </div>
                         ))}
-                        {dayEvts.length > 3 && (
-                          <div style={{ fontSize:9, color:t.textMuted, fontWeight:600 }}>+{dayEvts.length-3} more</div>
-                        )}
                       </>
                     )}
                   </div>
                 )
               })}
+            </div>
+
+            {/* Mobile: selected event inline */}
+            {selected && (
+              <div style={{ background:t.surface, border:'1px solid '+(selected.color||t.teal)+'50', borderRadius:14, padding:16, marginTop:14 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:selected.color||t.teal, textTransform:'uppercase', marginBottom:4 }}>
+                      {TYPE_META[selected.event_type]?.icon} {TYPE_META[selected.event_type]?.label}
+                    </div>
+                    <div style={{ fontSize:15, fontWeight:800 }}>{selected.title}</div>
+                  </div>
+                  <button onClick={()=>setSelected(null)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16 }}>✕</button>
+                </div>
+                <div style={{ fontSize:12, color:t.textDim, marginBottom:6 }}>
+                  📅 {new Date(selected.start_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })} · {formatTime(selected.start_at)}
+                  {selected.end_at && ` → ${formatTime(selected.end_at)}`}
+                </div>
+                {selected.client_id && <div style={{ fontSize:12, color:t.textDim, marginBottom:6 }}>👤 {clientName(selected.client_id)}</div>}
+                {selected.description && <div style={{ fontSize:12, color:t.textMuted, borderTop:'1px solid '+t.border, paddingTop:8, marginTop:8 }}>{selected.description}</div>}
+                <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                  <button onClick={()=>{ setModal({ event: selected }); setSelected(null) }}
+                    style={{ flex:1, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Edit →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile: upcoming list */}
+            <div style={{ marginTop:16 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Upcoming</div>
+              {upcomingEvents.length === 0
+                ? <div style={{ color:t.textMuted, fontSize:12, textAlign:'center', padding:20 }}>No upcoming events</div>
+                : upcomingEvents.map(e => (
+                  <div key={e.id} onClick={()=>setSelected(e)}
+                    style={{ display:'flex', gap:10, padding:'10px 12px', background:t.surface, border:'1px solid '+t.border, borderRadius:12, marginBottom:8, cursor:'pointer', alignItems:'flex-start' }}>
+                    <div style={{ width:3, minHeight:36, borderRadius:2, background:e.color||t.teal, flexShrink:0, marginTop:2 }}/>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.title}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>
+                        {new Date(e.start_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })} · {formatTime(e.start_at)}
+                        {e.client_id && ` · ${clientName(e.client_id)}`}
+                      </div>
+                    </div>
+                    <button onClick={ev=>{ ev.stopPropagation(); setModal({ newDate: e.start_at.split('T')[0] }) }}
+                      style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                      + Event
+                    </button>
+                  </div>
+                ))
+              }
+              <button onClick={()=>setModal({ newDate: today.toISOString().split('T')[0] })}
+                style={{ width:'100%', marginTop:4, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:10, padding:'11px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                + New Event
+              </button>
             </div>
           </div>
 
