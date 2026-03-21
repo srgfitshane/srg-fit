@@ -1073,22 +1073,19 @@ export default function ClientDetail() {
         {/* ── DAILY PULSE TAB ── */}
         {activeTab === 'pulse' && (
           <div>
-            <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Daily Pulse</div>
-            <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Mood, stress, energy, sleep, steps and water logged daily. Last 30 days.</div>
+            <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Daily Morning Pulse</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Sleep quality, energy, mood and journal entries logged daily. Last 30 days.</div>
             {dailyPulse.length === 0 ? (
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
-                No daily check-in data yet — client logs this from their Home tab.
+                No morning pulse data yet — client logs this from their Home tab each day.
               </div>
             ) : (<>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(155px,1fr))', gap:12, marginBottom:20 }}>
+              {/* Summary stat tiles */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:12, marginBottom:20 }}>
                 {([
-                  { key:'mood_score',   label:'Mood',   color:t.pink,    unit:'' },
-                  { key:'stress_score', label:'Stress', color:t.red,     unit:'' },
-                  { key:'energy_score', label:'Energy', color:t.yellow,  unit:'' },
-                  { key:'sleep_hours',  label:'Sleep',  color:t.purple,  unit:'h' },
-                  { key:'steps',        label:'Steps',  color:t.teal,    unit:'' },
-                  { key:'water_oz',     label:'Water',  color:'#38bdf8', unit:'oz' },
-                ] as { key:string, label:string, color:string, unit:string }[]).map(({ key, label, color, unit }) => {
+                  { key:'sleep_quality', label:'Sleep',  color:t.purple,  unit:'★', max:5 },
+                  { key:'energy_score',  label:'Energy', color:t.yellow,  unit:'⚡', max:5 },
+                ] as { key:string, label:string, color:string, unit:string, max:number }[]).map(({ key, label, color, unit, max }) => {
                   const vals = dailyPulse.map((d:any) => d[key]).filter((v:any) => v != null)
                   if (!vals.length) return null
                   const latest = vals[0]
@@ -1097,62 +1094,81 @@ export default function ClientDetail() {
                   return (
                     <div key={key} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 16px' }}>
                       <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>{label}</div>
-                      <div style={{ fontSize:22, fontWeight:900, color, marginBottom:2 }}>{latest}{unit}</div>
+                      <div style={{ display:'flex', gap:2, marginBottom:4 }}>
+                        {Array.from({length:max}).map((_,i) => (
+                          <span key={i} style={{ fontSize:16, opacity: i < latest ? 1 : 0.2 }}>{unit}</span>
+                        ))}
+                      </div>
                       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <div style={{ fontSize:11, color:t.textMuted }}>avg {avg}{unit}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>avg {avg}/{max}</div>
                         {trend !== 0 && <div style={{ fontSize:11, fontWeight:700, color:trend>0?t.green:t.red }}>{trend>0?'+':''}{trend}</div>}
                       </div>
                     </div>
                   )
                 })}
+                {/* Mood distribution */}
+                {(() => {
+                  const moods = dailyPulse.map((d:any) => d.mood_emoji).filter(Boolean)
+                  if (!moods.length) return null
+                  const counts: Record<string,number> = {}
+                  moods.forEach((m:string) => counts[m] = (counts[m]||0)+1)
+                  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]
+                  return (
+                    <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 16px' }}>
+                      <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Mood (most common)</div>
+                      <div style={{ fontSize:32, marginBottom:4 }}>{top[0]}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>{top[1]}x this month</div>
+                    </div>
+                  )
+                })()}
+                {/* Journal entries this month */}
+                {(() => {
+                  const withJournal = dailyPulse.filter((d:any) => d.body && !d.is_private)
+                  return (
+                    <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 16px' }}>
+                      <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Shared Journal</div>
+                      <div style={{ fontSize:22, fontWeight:900, color:t.teal, marginBottom:2 }}>{withJournal.length}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>entries shared</div>
+                    </div>
+                  )
+                })()}
               </div>
+
+              {/* Charts */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:16 }}>
-                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Mood / Stress / Energy</div>
+                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Sleep & Energy Trend</div>
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={[...dailyPulse].reverse()} margin={{ top:5, right:10, left:0, bottom:5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
                     <XAxis dataKey="checkin_date" tick={{ fill:t.textMuted, fontSize:10 }} tickFormatter={(v:string)=>new Date(v+'T00:00:00').toLocaleDateString([],{month:'short',day:'numeric'})} axisLine={false} tickLine={false} />
-                    <YAxis domain={[1,10]} tick={{ fill:t.textMuted, fontSize:10 }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0,5]} ticks={[1,2,3,4,5]} tick={{ fill:t.textMuted, fontSize:10 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text, fontSize:12 }} />
                     <Legend wrapperStyle={{ paddingTop:10, color:t.textMuted, fontSize:12 }} />
-                    <Line type="monotone" dataKey="mood_score"   name="Mood"   stroke={t.pink}   strokeWidth={2} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="stress_score" name="Stress" stroke={t.red}    strokeWidth={2} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="energy_score" name="Energy" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="sleep_quality" name="Sleep ★" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="energy_score"  name="Energy ⚡" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:16 }}>
-                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Sleep / Water</div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <LineChart data={[...dailyPulse].reverse()} margin={{ top:5, right:10, left:0, bottom:5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
-                    <XAxis dataKey="checkin_date" tick={{ fill:t.textMuted, fontSize:10 }} tickFormatter={(v:string)=>new Date(v+'T00:00:00').toLocaleDateString([],{month:'short',day:'numeric'})} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill:t.textMuted, fontSize:10 }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text, fontSize:12 }} />
-                    <Legend wrapperStyle={{ paddingTop:10, color:t.textMuted, fontSize:12 }} />
-                    <Line type="monotone" dataKey="sleep_hours" name="Sleep hrs" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="water_oz"    name="Water oz"  stroke="#38bdf8"  strokeWidth={2} dot={false} connectNulls />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+
+              {/* Raw log table */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Raw Data</div>
+                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Daily Log</div>
                 <div style={{ overflowX:'auto' as const }}>
                   <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
                     <thead><tr style={{ borderBottom:'1px solid '+t.border }}>
-                      {['Date','Mood','Stress','Energy','Sleep','Steps','Water'].map(h=>(
+                      {['Date','Sleep','Energy','Mood','Journal'].map(h=>(
                         <th key={h} style={{ padding:'6px 10px', color:t.textMuted, fontWeight:700, textAlign:'left' as const }}>{h}</th>
                       ))}
                     </tr></thead>
                     <tbody>{dailyPulse.map((d:any)=>(
                       <tr key={d.id} style={{ borderBottom:'1px solid '+t.border+'44' }}>
                         <td style={{ padding:'8px 10px', color:t.teal, fontWeight:600 }}>{new Date(d.checkin_date+'T00:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</td>
-                        <td style={{ padding:'8px 10px', color:d.mood_score>=7?t.green:d.mood_score<=4?t.red:t.text }}>{d.mood_score??'--'}</td>
-                        <td style={{ padding:'8px 10px', color:d.stress_score>=7?t.red:d.stress_score<=4?t.green:t.text }}>{d.stress_score??'--'}</td>
-                        <td style={{ padding:'8px 10px', color:d.energy_score>=7?t.green:d.energy_score<=4?t.red:t.text }}>{d.energy_score??'--'}</td>
-                        <td style={{ padding:'8px 10px', color:t.purple }}>{d.sleep_hours!=null?d.sleep_hours+'h':'--'}</td>
-                        <td style={{ padding:'8px 10px', color:t.teal }}>{d.steps!=null?d.steps.toLocaleString():'--'}</td>
-                        <td style={{ padding:'8px 10px', color:'#38bdf8' }}>{d.water_oz!=null?d.water_oz+'oz':'--'}</td>
+                        <td style={{ padding:'8px 10px', color:t.purple }}>{d.sleep_quality ? '★'.repeat(d.sleep_quality)+'☆'.repeat(5-d.sleep_quality) : '—'}</td>
+                        <td style={{ padding:'8px 10px', color:t.yellow }}>{d.energy_score ? '⚡'.repeat(d.energy_score) : '—'}</td>
+                        <td style={{ padding:'8px 10px', fontSize:18 }}>{d.mood_emoji ?? '—'}</td>
+                        <td style={{ padding:'8px 10px', color:t.textDim, maxWidth:300, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
+                          {d.is_private ? <span style={{ color:t.textMuted, fontStyle:'italic' }}>🔒 Private</span> : d.body ? d.body : '—'}
+                        </td>
                       </tr>
                     ))}</tbody>
                   </table>

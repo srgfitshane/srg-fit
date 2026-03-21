@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import RichMessageThread from '@/components/messaging/RichMessageThread'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import NutritionTab from './nutrition-tab'
+import MorningPulse from '@/components/client/MorningPulse'
 
 const TENOR_KEY = process.env.NEXT_PUBLIC_TENOR_KEY || ''
 
@@ -106,10 +107,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
   // Habit daily refresh tracking
   const [habitLoadDate, setHabitLoadDate] = useState('')
-  // Mental health check-in
-  const [mentalCheckin,    setMentalCheckin]    = useState({ stress:5, mood:5, energy:5 })
-  const [mentalSubmitted,  setMentalSubmitted]  = useState(false)
-  const [mentalCollapsed,  setMentalCollapsed]  = useState(false)
+  // Morning Pulse check-in
+  const [pulseData, setPulseData] = useState<any>(null)
   // Journal
   const [journalText,      setJournalText]      = useState('')
   const [journalPrivate,   setJournalPrivate]   = useState(true)
@@ -189,21 +188,20 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           .limit(3)
         setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type || a.form?.form_type === 'check_in'))
 
-        // Load today's mental check-in if already submitted
+        // Load today's morning pulse if already submitted
         const { data: todayCheckin } = await supabase
           .from('daily_checkins')
           .select('*')
           .eq('client_id', clientData.id)
           .eq('checkin_date', todayStr)
           .single()
-        if (todayCheckin) {
-          setMentalCheckin({
-            stress: todayCheckin.stress_score || 5,
-            mood:   todayCheckin.mood_score   || 5,
-            energy: todayCheckin.energy_score || 5,
-          })
-          setMentalSubmitted(true)
-          setMentalCollapsed(true)
+        setPulseData(todayCheckin || null)
+
+        // If pulse has a journal entry, pre-fill the journal
+        if (todayCheckin?.body) {
+          setJournalText(todayCheckin.body)
+          setJournalPrivate(todayCheckin.is_private ?? true)
+          setJournalDate(todayStr)
         }
 
         // Load today's journal entry if already written
@@ -332,19 +330,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const dismissMilestone = async (id: string) => {
     await supabase.from('milestones').update({ seen: true }).eq('id', id)
     setMilestones(prev => prev.filter(m => m.id !== id))
-  }
-
-  const saveMentalCheckin = async () => {
-    if (!clientRecord) return
-    await supabase.from('daily_checkins').upsert({
-      client_id: clientRecord.id,
-      checkin_date: today,
-      stress_score: mentalCheckin.stress,
-      mood_score:   mentalCheckin.mood,
-      energy_score: mentalCheckin.energy,
-    }, { onConflict: 'client_id,checkin_date' })
-    setMentalSubmitted(true)
-    setTimeout(() => setMentalCollapsed(true), 800)
   }
 
   const saveJournal = async () => {
@@ -494,51 +479,25 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ── 3. MENTAL HEALTH CHECK-IN ── */}
-          <div className="fade" style={{ background:t.surface, border:'1px solid '+(mentalSubmitted?t.green+'40':t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }}>
-            <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }}/>
-            <div style={{ padding:'14px 16px' }}>
-              <button onClick={()=>setMentalCollapsed(c=>!c)} style={{ width:'100%', background:'none', border:'none', padding:0, cursor:'pointer', display:'flex', alignItems:'center', gap:10, fontFamily:"'DM Sans',sans-serif" }}>
-                <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🧠</div>
-                <div style={{ flex:1, textAlign:'left' as const }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:t.text }}>How are you feeling?</div>
-                  <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
-                    {mentalSubmitted ? '✓ Logged today' : 'Stress · Mood · Energy'}
-                  </div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: mentalCollapsed?'rotate(-90deg)':'rotate(0deg)', transition:'transform 0.2s' }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-
-              {!mentalCollapsed && (
-                <div style={{ marginTop:14 }}>
-                  {([
-                    { key:'stress', label:'😤 Stress', low:'Chill', high:'Maxed', color:t.red },
-                    { key:'mood',   label:'😊 Mood',   low:'Low',   high:'Great', color:t.pink },
-                    { key:'energy', label:'⚡ Energy',  low:'Drained',high:'Energized', color:t.yellow },
-                  ] as const).map(({ key, label, low, high, color }) => (
-                    <div key={key} style={{ marginBottom:14 }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:t.textDim }}>{label}</div>
-                        <div style={{ fontSize:14, fontWeight:900, color }}>{mentalCheckin[key]}</div>
-                      </div>
-                      <input type="range" min={1} max={10} value={mentalCheckin[key]}
-                        onChange={e=>setMentalCheckin(p=>({...p,[key]:+e.target.value}))}
-                        style={{ width:'100%', accentColor:color, cursor:'pointer' }}/>
-                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginTop:2 }}>
-                        <span>1 — {low}</span><span>10 — {high}</span>
-                      </div>
-                    </div>
-                  ))}
-                  <button onClick={saveMentalCheckin}
-                    style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {mentalSubmitted ? '✓ Saved!' : 'Save Check-in'}
-                  </button>
-                </div>
-              )}
+          {/* ── 3. MORNING PULSE ── */}
+          {clientRecord && (
+            <div className="fade">
+              <MorningPulse
+                clientId={clientRecord.id}
+                today={today}
+                supabase={supabase}
+                existing={pulseData}
+                onSaved={() => {
+                  // Reload pulse data after save
+                  supabase.from('daily_checkins').select('*')
+                    .eq('client_id', clientRecord.id)
+                    .eq('checkin_date', today)
+                    .single()
+                    .then(({ data }) => setPulseData(data))
+                }}
+              />
             </div>
-          </div>
+          )}
 
           {/* ── 4. TODAY'S WORKOUT ── */}
           <div style={{ background:t.surface, border:'1px solid '+(nextSession ? t.border : t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
