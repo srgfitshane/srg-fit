@@ -157,7 +157,7 @@ export default function CoachDashboard() {
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-        .coach-main{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;}
+        .coach-main{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
         .coach-topbar-label{display:block;}
         @media(max-width:900px){
@@ -167,31 +167,36 @@ export default function CoachDashboard() {
           .coach-stats{grid-template-columns:repeat(2,1fr);}
           .coach-topbar-name{display:none;}
           .coach-topbar-label{display:none;}
-          .client-actions{flex-wrap:wrap;}
           .coach-pad{padding:14px!important;}
         }
-        @media(max-width:500px){
-          .client-actions button span:not(:first-child){display:none;}
+        @media(max-width:600px){
+          .client-row{flex-wrap:wrap;gap:10px;}
+          .client-actions{width:100%;justify-content:flex-end;}
+          .client-since{display:none;}
+        }
+        @media(max-width:420px){
+          .coach-stats{grid-template-columns:repeat(2,1fr);gap:8px;}
+          .client-actions button .btn-label{display:none;}
         }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', height:56, gap:8, overflowX:'hidden' }}>
-          <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
-          <div style={{ width:1, height:28, background:t.border, margin:'0 16px' }} />
-          <div style={{ fontSize:14, fontWeight:700 }} className="coach-topbar-label">Coach Dashboard</div>
+          <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', flexShrink:0 }}>SRG FIT</div>
+          <div style={{ width:1, height:28, background:t.border, margin:'0 8px', flexShrink:0 }} />
+          <div style={{ fontSize:14, fontWeight:700, flexShrink:0 }} className="coach-topbar-label">Coach</div>
           <div style={{ flex:1 }} />
-          <div style={{ fontSize:13, color:t.textMuted, marginRight:16 }} className="coach-topbar-name">{profile?.full_name}</div>
+          <div style={{ fontSize:13, color:t.textMuted, marginRight:8 }} className="coach-topbar-name">{profile?.full_name}</div>
           {profile?.id && <NotificationBell userId={profile.id} accentColor={t.teal} />}
           <button onClick={()=>setShowInsights(true)} title="AI Coaching Insights"
-            style={{ position:'relative', background:aiInsights.length>0?t.purpleDim:'none', border:'1px solid '+(aiInsights.length>0?t.purple+'40':t.border), borderRadius:8, padding:'6px 12px', fontSize:16, cursor:'pointer', marginRight:8, display:'flex', alignItems:'center' }}>
+            style={{ position:'relative', background:aiInsights.length>0?t.purpleDim:'none', border:'1px solid '+(aiInsights.length>0?t.purple+'40':t.border), borderRadius:8, padding:'6px 10px', fontSize:16, cursor:'pointer', marginRight:4, display:'flex', alignItems:'center', flexShrink:0 }}>
             🧠
             {aiInsights.length > 0 && (
               <span style={{ position:'absolute', top:-4, right:-4, background:t.orange, borderRadius:'50%', width:16, height:16, fontSize:9, fontWeight:900, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>{aiInsights.length}</span>
             )}
           </button>
-          <button onClick={handleSignOut} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Sign Out</button>
+          <button onClick={handleSignOut} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>Out</button>
         </div>
 
         <div style={{ padding:28, maxWidth:1200, margin:'0 auto' }} className="coach-pad">
@@ -271,6 +276,7 @@ export default function CoachDashboard() {
                     return (
                       <div key={client.id}
                         style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 20px', borderBottom: i < filteredClients.length-1 ? '1px solid '+t.border : 'none', transition:'background 0.15s' }}
+                        className="client-row"
                         onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceUp)}
                         onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
                         <div onClick={()=>router.push('/dashboard/coach/clients/'+client.id)} style={{ width:42, height:42, borderRadius:13, background:'linear-gradient(135deg,'+color+','+color+'88)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:'#000', flexShrink:0, cursor:'pointer' }}>
@@ -280,30 +286,30 @@ export default function CoachDashboard() {
                           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2, flexWrap:'wrap' }}>
                             <span style={{ fontSize:14, fontWeight:700 }}>{client.profile?.full_name || 'Unknown'}</span>
                             {client.paused   && <span style={{ fontSize:10, fontWeight:800, color:t.orange, background:t.orangeDim, borderRadius:6, padding:'2px 7px' }}>⏸ PAUSED</span>}
-                            {client.flagged  && <span style={{ fontSize:10, fontWeight:800, color:t.red, background:t.redDim, borderRadius:6, padding:'2px 7px' }}>🚩 FLAGGED</span>}
-                            {!client.onboarding_completed && <span style={{ fontSize:10, fontWeight:800, color:t.purple, background:t.purpleDim, borderRadius:6, padding:'2px 7px' }}>📋 ONBOARDING</span>}
+                            {client.flagged  && <span style={{ fontSize:10, fontWeight:800, color:t.red, background:t.redDim, borderRadius:6, padding:'2px 7px' }}>🚩</span>}
+                            {!client.onboarding_completed && <span style={{ fontSize:10, fontWeight:800, color:t.purple, background:t.purpleDim, borderRadius:6, padding:'2px 7px' }}>📋</span>}
                           </div>
-                          <div style={{ fontSize:12, color:t.textMuted }}>{client.profile?.email}</div>
+                          <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{client.profile?.email}</div>
                         </div>
-                        <div style={{ fontSize:11, color:t.textMuted, flexShrink:0 }}>
-                          Since {new Date(client.start_date).toLocaleDateString([], { month:'short', year:'numeric' })}
+                        <div style={{ fontSize:11, color:t.textMuted, flexShrink:0 }} className="client-since">
+                          {new Date(client.start_date).toLocaleDateString([], { month:'short', year:'numeric' })}
                         </div>
                         <div className="client-actions" onClick={e=>e.stopPropagation()}>
                           {client.paused ? (
                             <button onClick={()=>{ setLifecycleClient(client); setLifecycleAction('resume') }}
-                              style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.green+'40', background:t.greenDim, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>▶ Resume</button>
+                              style={{ padding:'6px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.green+'40', background:t.greenDim, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>▶ <span className="btn-label">Resume</span></button>
                           ) : (
                             <button onClick={()=>{ setLifecycleClient(client); setLifecycleAction('pause') }}
-                              style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.orange+'40', background:t.orangeDim, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>⏸ Pause</button>
+                              style={{ padding:'6px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.orange+'40', background:t.orangeDim, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>⏸ <span className="btn-label">Pause</span></button>
                           )}
                           <button onClick={()=>{ setLifecycleClient(client); setLifecycleAction('archive') }}
-                            style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.border, background:t.surfaceHigh, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>📦</button>
+                            style={{ padding:'6px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.border, background:t.surfaceHigh, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>📦</button>
                           <button onClick={()=>{ setLifecycleClient(client); setLifecycleAction('delete') }}
-                            style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.red+'40', background:t.redDim, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕</button>
+                            style={{ padding:'6px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.red+'40', background:t.redDim, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕</button>
                           <button onClick={()=>router.push('/dashboard/coach/clients/'+client.id)}
-                            style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>View →</button>
+                            style={{ padding:'6px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>View →</button>
                           <button onClick={()=>router.push('/dashboard/preview/'+client.id)}
-                            style={{ padding:'5px 9px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.purple+'40', background:t.purpleDim, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>👁️</button>
+                            style={{ padding:'6px 10px', borderRadius:7, fontSize:11, fontWeight:700, border:'1px solid '+t.purple+'40', background:t.purpleDim, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>👁️</button>
                         </div>
                       </div>
                     )

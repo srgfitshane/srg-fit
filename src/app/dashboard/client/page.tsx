@@ -454,7 +454,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         </div>
 
         {/* Main content — padded for bottom nav */}
-        <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 96px' }}>
+        <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 100px' }}>
 
           {/* Click-outside dismiss for + menu */}
           {plusOpen && <div onClick={()=>setPlusOpen(false)} style={{ position:'fixed', inset:0, zIndex:19 }} />}
@@ -782,7 +782,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         {/* ── Floating + button — hidden on message thread ── */}
         {!(activeNav === 'messages' && messagesView === 'coach') && (
-        <div style={{ position:'fixed', bottom:72, right:'max(16px, calc(50vw - 240px + 16px))', zIndex:30 }}>
+        <div style={{ position:'fixed', bottom:72, right:'max(16px, calc((100vw - 480px) / 2 + 16px))', zIndex:30 }}>
           {/* Action menu */}
           {plusOpen && (
             <div className="plus-action" style={{ position:'absolute', bottom:60, right:0, display:'flex', flexDirection:'column', gap:10, alignItems:'flex-end', pointerEvents:'all' }}>
@@ -904,11 +904,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               if(n.id !== 'messages') setMessagesView('hub')
               setActiveNav(n.id) 
             }}
-              style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, cursor:'pointer', padding:'8px 0', position:'relative' }}>
+              style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', padding:'6px 0', position:'relative', minWidth:0 }}>
               {activeNav === n.id && (
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
               )}
               <NavIcon id={n.id} active={activeNav === n.id} />
+              <span style={{ fontSize:9, fontWeight:activeNav===n.id?800:600, color:activeNav===n.id?t.teal:t.textMuted, letterSpacing:'0.02em' }}>{n.label}</span>
             </button>
           ))}
         </div>
