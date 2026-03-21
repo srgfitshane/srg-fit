@@ -274,15 +274,15 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
 
   // ── Long-press reactions (SMS-style) ──────────────────────────────────────
   const handlePressStart = (msgId: string, e: React.TouchEvent | React.MouseEvent) => {
+    if (reactTarget) { setReactTarget(null); return }
     const touch = 'touches' in e ? e.touches[0] : e as React.MouseEvent
     const x = touch.clientX
     const y = touch.clientY
     longPressRef.current = setTimeout(() => {
       setReactTarget(msgId)
       setReactPos({ x, y })
-      // Haptic feedback on mobile
       if ('vibrate' in navigator) navigator.vibrate(40)
-    }, 500)
+    }, 480)
   }
 
   const handlePressEnd = () => {
@@ -370,15 +370,16 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
       `}</style>
 
       <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }}
-        onClick={()=>setReactTarget(null)}
-        onTouchStart={()=>{ if(reactTarget) setReactTarget(null) }}>
+        onClick={()=>setReactTarget(null)}>
 
         {/* ── Global reaction picker overlay ── */}
         {reactTarget && (
           <>
             {/* Backdrop */}
-            <div style={{ position:'fixed', inset:0, zIndex:100 }} onClick={()=>setReactTarget(null)} />
-            {/* Picker — positioned near the long-pressed message */}
+            <div style={{ position:'fixed', inset:0, zIndex:100 }}
+              onClick={()=>setReactTarget(null)}
+              onTouchEnd={()=>setReactTarget(null)} />
+            {/* Picker */}
             <div className="rmt-picker" style={{
               position:'fixed',
               left: Math.min(Math.max(reactPos.x - 140, 8), window.innerWidth - 300),
@@ -391,10 +392,12 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
               gap:4,
               zIndex:101,
               boxShadow:'0 8px 32px rgba(0,0,0,.7)',
-            }} onClick={e=>e.stopPropagation()}>
+            }} onClick={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
               {QUICK_REACTIONS.map(emoji => (
-                <button key={emoji} onClick={()=>toggleReaction(reactTarget, emoji)}
-                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:24, padding:'4px 5px', borderRadius:8, lineHeight:1 }}>
+                <button key={emoji}
+                  onTouchEnd={e=>{ e.preventDefault(); e.stopPropagation(); toggleReaction(reactTarget, emoji) }}
+                  onClick={e=>{ e.stopPropagation(); toggleReaction(reactTarget, emoji) }}
+                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:26, padding:'6px 5px', borderRadius:8, lineHeight:1, WebkitTapHighlightColor:'transparent' }}>
                   {emoji}
                 </button>
               ))}
