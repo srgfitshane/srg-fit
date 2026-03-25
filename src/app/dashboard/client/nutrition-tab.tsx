@@ -202,8 +202,32 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   }
   function pickUSDAFood(food: any) {
     const nutrients = food.foodNutrients || []
-    const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? Math.round(n.value*10)/10 : null }
-    setPendingFood({ food_name: cleanFoodName(food.description), calories: get('energy'), protein_g: get('protein'), carbs_g: get('carbohydrate'), fat_g: get('total lipid'), serving_size: food.servingSize ? food.servingSize+(food.servingSizeUnit||'g') : '100g' })
+    // USDA always returns values per 100g — get raw per-100g values first
+    const get100g = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? n.value : null }
+    const cal100  = get100g('energy')
+    const pro100  = get100g('protein')
+    const carb100 = get100g('carbohydrate')
+    const fat100  = get100g('total lipid')
+
+    // If the food has a real serving size (branded/labeled foods), scale down to it
+    const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
+                   : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495
+                   : null
+    const scale = servingG ? servingG / 100 : 1
+    const round1 = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
+
+    const servingLabel = servingG
+      ? `${food.servingSize}${food.servingSizeUnit || 'g'}${Math.round(servingG) !== food.servingSize ? ` (${Math.round(servingG)}g)` : ''}`
+      : '100g'
+
+    setPendingFood({
+      food_name:  cleanFoodName(food.description),
+      calories:   round1(cal100),
+      protein_g:  round1(pro100),
+      carbs_g:    round1(carb100),
+      fat_g:      round1(fat100),
+      serving_size: servingLabel,
+    })
   }
 
   // ── Barcode scanner (Quagga via CDN) ──────────────────────────────────────
@@ -366,7 +390,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                     {isGeneric && <span style={{ fontSize:9, fontWeight:700, color:t.teal, background:t.tealDim, borderRadius:4, padding:'1px 5px', flexShrink:0 }}>GENERIC</span>}
                   </div>
                   <div style={{ fontSize:11, color:t.textMuted }}>
-                    {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · per 100g
+                    {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : 'per 100g'}
                   </div>
                 </button>
               )
