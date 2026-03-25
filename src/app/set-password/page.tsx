@@ -19,7 +19,7 @@ export default function SetPasswordPage() {
 }
 
 function SetPasswordInner() {
-  const [initialHash] = useState(typeof window !== 'undefined' ? window.location.hash : 'SSR')
+  const [initialHash, setInitialHash] = useState('SSR')
   const [password,  setPassword]  = useState('')
   const [confirm,   setConfirm]   = useState('')
   const [loading,   setLoading]   = useState(false)
@@ -32,6 +32,7 @@ function SetPasswordInner() {
 
   useEffect(() => {
     const checkSession = async () => {
+      setInitialHash(window.location.hash || 'EMPTY')
       // 0. Manual Hash Enforcement (Bulletproof Implicit Flow)
       if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
