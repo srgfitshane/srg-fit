@@ -74,208 +74,280 @@ function VideoPlayer({ url, label }: { url: string; label: string }) {
 }
 
 // ── VideoReviewer ──────────────────────────────────────────────────────────
-// MediaRecorder-based component: record live or upload file, preview, confirm
+// Loom-style: screen + camera PiP on desktop, camera-only on mobile
 type VideoReviewerProps = {
-  onReady: (blob: Blob) => void   // called with final blob when coach confirms
-  onClear: () => void              // called when coach discards
+  onReady: (blob: Blob) => void
+  onClear: () => void
   uploading: boolean
-  doneUrl: string                  // non-empty = already uploaded, show player
+  doneUrl: string
 }
 
 function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerProps) {
-  type Phase = 'idle' | 'requesting' | 'ready' | 'recording' | 'preview'
-  const [phase, setPhase]           = useState<Phase>('idle')
-  const [elapsed, setElapsed]       = useState(0)
-  const [previewUrl, setPreviewUrl] = useState('')
+  type Phase = 'idle' | 'requesting' | 'recording' | 'preview'
+  const [phase, setPhase]             = useState<Phase>('idle')
+  const [elapsed, setElapsed]         = useState(0)
+  const [previewUrl, setPreviewUrl]   = useState('')
   const [previewBlob, setPreviewBlob] = useState<Blob|null>(null)
-  const [camError, setCamError]     = useState('')
-  const streamRef    = useRef<MediaStream|null>(null)
-  const recorderRef  = useRef<MediaRecorder|null>(null)
-  const chunksRef    = useRef<Blob[]>([])
-  const liveVideoRef = useRef<HTMLVideoElement|null>(null)
-  const timerRef     = useRef<any>(null)
+  const [error, setError]             = useState('')
+  const [hasDisplayMedia]             = useState(() => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia)
 
-  // Cleanup on unmount
-  useEffect(() => () => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
+  const screenStreamRef = useRef<MediaStream|null>(null)
+  const camStreamRef    = useRef<MediaStream|null>(null)
+  const recorderRef     = useRef<MediaRecorder|null>(null)
+  const chunksRef       = useRef<Blob[]>([])
+  const canvasRef       = useRef<HTMLCanvasElement|null>(null)
+  const screenVidRef    = useRef<HTMLVideoElement|null>(null)  // hidden, feeds canvas
+  const camVidRef       = useRef<HTMLVideoElement|null>(null)  // hidden, feeds canvas pip
+  const previewVidRef   = useRef<HTMLVideoElement|null>(null)  // live canvas preview shown to user
+  const rafRef          = useRef<number>(0)
+  const timerRef        = useRef<any>(null)
+
+  useEffect(() => () => { stopAll() }, [])
+
+  function stopAll() {
+    cancelAnimationFrame(rafRef.current)
     clearInterval(timerRef.current)
+    recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop()
+    screenStreamRef.current?.getTracks().forEach(t => t.stop())
+    camStreamRef.current?.getTracks().forEach(t => t.stop())
     if (previewUrl) URL.revokeObjectURL(previewUrl)
-  }, [])
+  }
 
-  async function startCamera() {
-    setPhase('requesting')
-    setCamError('')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user' }, audio: true })
-      streamRef.current = stream
-      setPhase('ready')
-      // Attach stream to video element after render
-      requestAnimationFrame(() => {
-        if (liveVideoRef.current) {
-          liveVideoRef.current.srcObject = stream
-          liveVideoRef.current.play().catch(()=>{})
+  // Draw screen + pip camera onto canvas each animation frame
+  function startCompositing() {
+    const canvas = canvasRef.current
+    const sv = screenVidRef.current
+    const cv = camVidRef.current
+    if (!canvas || !sv) return
+    const ctx = canvas.getContext('2d')!
+
+    function draw() {
+      if (!canvas || !sv) return
+      if (sv.readyState >= 2) {
+        canvas.width  = sv.videoWidth  || 1280
+        canvas.height = sv.videoHeight || 720
+        ctx.drawImage(sv as CanvasImageSource, 0, 0, canvas.width, canvas.height)
+        if (cv && cv.readyState >= 2) {
+          const pip = Math.round(canvas.height * 0.22)
+          const x = canvas.width  - pip - 16
+          const y = canvas.height - pip - 16
+          ctx.save()
+          ctx.beginPath()
+          ctx.arc(x + pip/2, y + pip/2, pip/2, 0, Math.PI*2)
+          ctx.clip()
+          ctx.translate(x + pip, y)
+          ctx.scale(-1, 1)
+          ctx.drawImage(cv as CanvasImageSource, 0, 0, pip, pip)
+          ctx.restore()
+          ctx.beginPath()
+          ctx.arc(x + pip/2, y + pip/2, pip/2, 0, Math.PI*2)
+          ctx.strokeStyle = t.teal
+          ctx.lineWidth = 3
+          ctx.stroke()
         }
+      }
+      rafRef.current = requestAnimationFrame(draw)
+    }
+    draw()
+
+    if (previewVidRef.current && canvas) {
+      const canvasStream = canvas.captureStream(30)
+      previewVidRef.current.srcObject = canvasStream
+      previewVidRef.current.play().catch(()=>{})
+    }
+  }
+
+  async function startScreenAndCam() {
+    setError(''); setPhase('requesting')
+    try {
+      const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      const cam    = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user' }, audio: !screen.getAudioTracks().length })
+      screenStreamRef.current = screen
+      camStreamRef.current    = cam
+
+      // Wire hidden video elements
+      await new Promise<void>(res => {
+        const sv = document.createElement('video')
+        sv.srcObject = screen; sv.muted = true; sv.playsInline = true
+        sv.onloadedmetadata = () => { sv.play(); res() }
+        screenVidRef.current = sv
       })
-    } catch (e: any) {
-      setCamError(e?.message || 'Camera access denied')
+      const cv = document.createElement('video')
+      cv.srcObject = cam; cv.muted = true; cv.playsInline = true
+      cv.play().catch(()=>{})
+      camVidRef.current = cv
+
+      setPhase('recording')
+      // Give React a tick to render the preview element
+      requestAnimationFrame(() => { startCompositing(); beginRecording(screen, cam) })
+    } catch(e: any) {
+      setError(e?.message?.includes('Permission denied') ? 'Screen share cancelled or denied.' : (e?.message || 'Could not start recording'))
       setPhase('idle')
     }
   }
 
-  function startRecording() {
-    if (!streamRef.current) return
+  async function startCamOnly() {
+    setError(''); setPhase('requesting')
+    try {
+      const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user' }, audio: true })
+      camStreamRef.current = cam
+      const cv = document.createElement('video')
+      cv.srcObject = cam; cv.muted = true; cv.playsInline = true; cv.play().catch(()=>{})
+      camVidRef.current = cv
+
+      // For cam-only, use a simple canvas that mirrors the camera
+      const canvas = canvasRef.current!
+      const ctx = canvas.getContext('2d')!
+      function draw() {
+        if (cv.readyState >= 2) {
+          canvas.width  = cv.videoWidth  || 640
+          canvas.height = cv.videoHeight || 480
+          ctx.save()
+          ctx.translate(canvas.width, 0); ctx.scale(-1, 1)
+          ctx.drawImage(cv, 0, 0, canvas.width, canvas.height)
+          ctx.restore()
+        }
+        rafRef.current = requestAnimationFrame(draw)
+      }
+      draw()
+      if (previewVidRef.current) {
+        previewVidRef.current.srcObject = canvas.captureStream(30)
+        previewVidRef.current.play().catch(()=>{})
+      }
+
+      setPhase('recording')
+      requestAnimationFrame(() => beginRecording(null, cam))
+    } catch(e: any) {
+      setError(e?.message || 'Camera access denied')
+      setPhase('idle')
+    }
+  }
+
+  function beginRecording(screen: MediaStream|null, cam: MediaStream) {
+    const canvas = canvasRef.current!
+    const canvasStream = canvas.captureStream(30)
+    // Merge audio from screen + cam
+    const audioTracks = [
+      ...(screen?.getAudioTracks() || []),
+      ...cam.getAudioTracks(),
+    ]
+    audioTracks.forEach(track => canvasStream.addTrack(track))
+
     chunksRef.current = []
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : MediaRecorder.isTypeSupported('video/webm')
-      ? 'video/webm'
-      : ''
-    const rec = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined)
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : ''
+    const rec = new MediaRecorder(canvasStream, mimeType ? { mimeType } : undefined)
     rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
     rec.onstop = () => {
+      cancelAnimationFrame(rafRef.current)
       const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
-      const url  = URL.createObjectURL(blob)
-      setPreviewUrl(url)
+      setPreviewUrl(URL.createObjectURL(blob))
       setPreviewBlob(blob)
-      streamRef.current?.getTracks().forEach(t => t.stop())
-      streamRef.current = null
       clearInterval(timerRef.current)
       setPhase('preview')
     }
     recorderRef.current = rec
     rec.start(250)
     setElapsed(0)
-    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
-    setPhase('recording')
+    timerRef.current = setInterval(() => setElapsed(s => s+1), 1000)
+
+    // Auto-stop if screen share ends (user clicks browser "Stop sharing")
+    screen?.getVideoTracks()[0]?.addEventListener('ended', () => stopRecording())
   }
 
   function stopRecording() {
     recorderRef.current?.stop()
     clearInterval(timerRef.current)
+    screenStreamRef.current?.getTracks().forEach(t => t.stop())
+    camStreamRef.current?.getTracks().forEach(t => t.stop())
   }
 
   function discard() {
+    stopAll()
     if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl('') }
-    setPreviewBlob(null)
-    setElapsed(0)
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    setPhase('idle')
-    onClear()
-  }
-
-  function confirmUpload() {
-    if (previewBlob) onReady(previewBlob)
+    setPreviewBlob(null); setElapsed(0)
+    screenStreamRef.current = null; camStreamRef.current = null
+    setPhase('idle'); onClear()
   }
 
   const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
 
-  // Already uploaded — just show playback + replace option
+  // ── Render states ──
+
   if (doneUrl) return (
     <div>
-      <video src={doneUrl} controls playsInline
-        style={{ width:'100%', borderRadius:8, maxHeight:240, background:'#000', display:'block', marginBottom:8 }}/>
+      <video src={doneUrl} controls playsInline style={{ width:'100%', borderRadius:8, maxHeight:260, background:'#000', display:'block', marginBottom:8 }}/>
       <div style={{ display:'flex', alignItems:'center', gap:10 }}>
         <span style={{ fontSize:12, color:t.green, fontWeight:700, flex:1 }}>✓ Review video ready</span>
-        <button onClick={discard}
-          style={{ fontSize:11, color:t.textMuted, background:'none', border:`1px solid ${t.border}`, borderRadius:6, padding:'4px 10px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          Re-record
-        </button>
+        <button onClick={discard} style={{ fontSize:11, color:t.textMuted, background:'none', border:`1px solid ${t.border}`, borderRadius:6, padding:'4px 10px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Re-record</button>
       </div>
     </div>
   )
 
-  // Uploading state
   if (uploading) return (
-    <div style={{ textAlign:'center', padding:'24px 0', color:t.teal, fontSize:13, fontWeight:700 }}>
-      ⏳ Uploading video...
-    </div>
+    <div style={{ textAlign:'center', padding:'24px 0', color:t.teal, fontSize:13, fontWeight:700 }}>⏳ Uploading video...</div>
   )
 
-  // Preview — watch before confirming
   if (phase === 'preview') return (
     <div>
-      <video src={previewUrl} controls playsInline
-        style={{ width:'100%', borderRadius:8, maxHeight:240, background:'#000', display:'block', marginBottom:10 }}/>
+      <video src={previewUrl} controls playsInline style={{ width:'100%', borderRadius:8, maxHeight:260, background:'#000', display:'block', marginBottom:10 }}/>
       <div style={{ display:'flex', gap:8 }}>
-        <button onClick={discard}
-          style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          ✕ Re-record
-        </button>
-        <button onClick={confirmUpload}
-          style={{ flex:2, background:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          ✓ Use This Video
-        </button>
+        <button onClick={discard} style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕ Re-record</button>
+        <button onClick={()=>{ if(previewBlob) onReady(previewBlob) }} style={{ flex:2, background:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✓ Use This Video</button>
       </div>
     </div>
   )
 
-  // Recording in progress
+  if (phase === 'requesting') return (
+    <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>Setting up recording...</div>
+  )
+
   if (phase === 'recording') return (
     <div>
+      {/* Hidden canvas composites screen+cam; preview video shows the result */}
+      <canvas ref={canvasRef} style={{ display:'none' }}/>
       <div style={{ position:'relative', borderRadius:10, overflow:'hidden', background:'#000', marginBottom:10 }}>
-        <video ref={liveVideoRef} autoPlay playsInline muted
-          style={{ width:'100%', maxHeight:240, display:'block', transform:'scaleX(-1)' }}/>
+        <video ref={previewVidRef} autoPlay playsInline muted style={{ width:'100%', maxHeight:260, display:'block' }}/>
         <div style={{ position:'absolute', top:10, left:12, display:'flex', alignItems:'center', gap:8 }}>
           <div style={{ width:10, height:10, borderRadius:'50%', background:t.red, animation:'pulse 1s ease-in-out infinite' }}/>
           <span style={{ fontSize:13, fontWeight:800, color:'#fff', textShadow:'0 1px 4px rgba(0,0,0,0.8)' }}>{fmtTime(elapsed)}</span>
         </div>
       </div>
-      <button onClick={stopRecording}
-        style={{ width:'100%', background:t.red, border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+      <button onClick={stopRecording} style={{ width:'100%', background:t.red, border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
         ⏹ Stop Recording
       </button>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
     </div>
   )
 
-  // Camera open, ready to record
-  if (phase === 'ready') return (
-    <div>
-      <div style={{ position:'relative', borderRadius:10, overflow:'hidden', background:'#000', marginBottom:10 }}>
-        <video ref={liveVideoRef} autoPlay playsInline muted
-          style={{ width:'100%', maxHeight:240, display:'block', transform:'scaleX(-1)' }}/>
-        <div style={{ position:'absolute', bottom:10, left:0, right:0, textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.6)' }}>
-          Camera ready
-        </div>
-      </div>
-      <div style={{ display:'flex', gap:8 }}>
-        <button onClick={discard}
-          style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          Cancel
-        </button>
-        <button onClick={startRecording}
-          style={{ flex:2, background:t.red, border:'none', borderRadius:9, padding:'10px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          ⏺ Start Recording
-        </button>
-      </div>
-    </div>
-  )
-
-  // Requesting camera permission
-  if (phase === 'requesting') return (
-    <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>
-      Requesting camera access...
-    </div>
-  )
-
-  // Idle — choose record or upload
+  // Idle — choose mode
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-      <button onClick={startCamera}
-        style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 10px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-        <span style={{ fontSize:28 }}>🎥</span>
-        <span style={{ fontSize:12, fontWeight:700, color:t.text }}>Record Now</span>
-        <span style={{ fontSize:10, color:t.textMuted }}>Live camera</span>
-      </button>
-      <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 10px', cursor:'pointer', textAlign:'center' as const }}>
-        <span style={{ fontSize:28 }}>📁</span>
-        <span style={{ fontSize:12, fontWeight:700, color:t.text }}>Upload File</span>
-        <span style={{ fontSize:10, color:t.textMuted }}>From Loom or files</span>
-        <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{ display:'none' }}
-          onChange={e=>{ const f=e.target.files?.[0]; if(f) onReady(f) }}/>
-      </label>
-      {camError && <div style={{ gridColumn:'1/-1', fontSize:11, color:t.red, textAlign:'center' as const }}>{camError}</div>}
+    <div>
+      <canvas ref={canvasRef} style={{ display:'none' }}/>
+      <div style={{ display:'grid', gridTemplateColumns: hasDisplayMedia ? '1fr 1fr 1fr' : '1fr 1fr', gap:8, marginBottom: error ? 8 : 0 }}>
+        {hasDisplayMedia && (
+          <button onClick={startScreenAndCam}
+            style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`2px solid ${t.teal}40`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            <span style={{ fontSize:24 }}>🖥️</span>
+            <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Screen + Cam</span>
+            <span style={{ fontSize:10, color:t.textMuted, textAlign:'center' as const }}>Loom-style</span>
+          </button>
+        )}
+        <button onClick={startCamOnly}
+          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          <span style={{ fontSize:24 }}>🎥</span>
+          <span style={{ fontSize:11, fontWeight:700, color:t.text }}>Camera Only</span>
+          <span style={{ fontSize:10, color:t.textMuted }}>Face cam</span>
+        </button>
+        <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 8px', cursor:'pointer', textAlign:'center' as const }}>
+          <span style={{ fontSize:24 }}>📁</span>
+          <span style={{ fontSize:11, fontWeight:700, color:t.text }}>Upload File</span>
+          <span style={{ fontSize:10, color:t.textMuted }}>Loom export etc.</span>
+          <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{ display:'none' }}
+            onChange={e=>{ const f=e.target.files?.[0]; if(f) onReady(f) }}/>
+        </label>
+      </div>
+      {error && <div style={{ fontSize:11, color:t.red, textAlign:'center' as const, marginTop:4 }}>{error}</div>}
     </div>
   )
 }
