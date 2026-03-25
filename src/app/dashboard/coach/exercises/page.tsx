@@ -375,28 +375,38 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
         <div style={{background:'#000',aspectRatio:'16/9',position:'relative',cursor:'pointer',minHeight:140}} onClick={()=>setPlaying(p=>!p)}>
           {ex.video_url && playing ? (
             <video src={ex.video_url} autoPlay controls style={{width:'100%',height:'100%',objectFit:'contain'}}/>
+          ) : ex.video_url ? (
+            /* First-frame poster — video loads metadata only, shows frame at 0.1s */
+            <>
+              <video
+                src={ex.video_url}
+                preload="metadata"
+                muted
+                playsInline
+                onLoadedMetadata={e => { (e.target as HTMLVideoElement).currentTime = 0.1 }}
+                style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
+              />
+              {/* Play button overlay */}
+              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.25)'}}>
+                <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,0.55)',border:'2px solid rgba(255,255,255,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>▶</div>
+              </div>
+              {/* Replace button */}
+              <div style={{position:'absolute',top:6,right:6}}>
+                <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
+                  <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{setPlaying(false);if(e.target.files?.[0])onUpload(e.target.files[0]);(e.target as HTMLInputElement).value=''}}/>
+                  <span style={{background:'rgba(0,0,0,.6)',border:'1px solid rgba(255,255,255,.15)',borderRadius:6,padding:'3px 8px',fontSize:10,color:'rgba(255,255,255,.7)',cursor:'pointer'}}>
+                    {isUploading?'⏳':'↑ Replace'}
+                  </span>
+                </label>
+              </div>
+            </>
           ) : (
             <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:8}}>
-              {ex.video_url
-                ? <div style={{width:44,height:44,borderRadius:'50%',background:t.teal+'22',border:'2px solid '+t.teal+'60',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>▶</div>
-                : <>
-                    <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                      <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{if(e.target.files?.[0])onUpload(e.target.files[0]);(e.target as HTMLInputElement).value=''}}/>
-                      <div style={{background:t.surfaceHigh,border:'1px dashed '+t.border,borderRadius:10,padding:'10px 18px',fontSize:12,color:t.textMuted,cursor:'pointer',textAlign:'center' as const}}>
-                        {isUploading?'Uploading...':'📹 Upload video'}
-                      </div>
-                    </label>
-                  </>
-              }
-            </div>
-          )}
-          {ex.video_url && !playing && (
-            <div style={{position:'absolute',top:6,right:6}}>
               <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{setPlaying(false);if(e.target.files?.[0])onUpload(e.target.files[0]);(e.target as HTMLInputElement).value=''}}/>
-                <span style={{background:'rgba(0,0,0,.6)',border:'1px solid rgba(255,255,255,.15)',borderRadius:6,padding:'3px 8px',fontSize:10,color:'rgba(255,255,255,.7)',cursor:'pointer'}}>
-                  {isUploading?'⏳':' ↑ Replace'}
-                </span>
+                <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{if(e.target.files?.[0])onUpload(e.target.files[0]);(e.target as HTMLInputElement).value=''}}/>
+                <div style={{background:t.surfaceHigh,border:'1px dashed '+t.border,borderRadius:10,padding:'10px 18px',fontSize:12,color:t.textMuted,cursor:'pointer',textAlign:'center' as const}}>
+                  {isUploading?'Uploading...':'📹 Upload video'}
+                </div>
               </label>
             </div>
           )}
