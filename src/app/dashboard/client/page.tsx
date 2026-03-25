@@ -1075,6 +1075,30 @@ function ProfileNudge({ clientId, onOpen }: { clientId: string|null, onOpen: ()=
 }
 
 
+// ── CoachReviewVideo — inline player for client side ─────────────────────
+function CoachReviewVideo({ url }: { url: string }) {
+  const [open, setOpen] = useState(false)
+  const tc = { teal:'#00c9b1', tealDim:'#00c9b115', border:'#252538', text:'#eeeef8', textMuted:'#5a5a78' }
+  return (
+    <div>
+      {!open ? (
+        <button onClick={()=>setOpen(true)}
+          style={{ display:'inline-flex', alignItems:'center', gap:6, background:tc.tealDim, border:`1px solid ${tc.teal}40`, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:tc.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          ▶ Watch Coach Review
+        </button>
+      ) : (
+        <div style={{ background:'#000', borderRadius:10, overflow:'hidden', position:'relative' }}>
+          <video src={url} controls autoPlay playsInline style={{ width:'100%', maxHeight:280, display:'block' }}/>
+          <button onClick={()=>setOpen(false)}
+            style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', border:'none', borderRadius:6, padding:'4px 8px', fontSize:11, color:'#fff', cursor:'pointer' }}>
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── TrainingTab ───────────────────────────────────────────────────────────
 function TrainingTab({ clientRecord, supabase, router, t }: any) {
   const [program, setProgram] = useState<any>(null)
@@ -1090,7 +1114,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
           .eq('client_id', clientRecord.id).eq('is_template', false)
           .order('created_at', { ascending: false }).limit(1).single(),
         supabase.from('workout_sessions')
-          .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach')
+          .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach, coach_review_notes, coach_review_video_url, coach_reviewed_at')
           .eq('client_id', clientRecord.id)
           .order('scheduled_date', { ascending: true })
           .limit(50),
@@ -1154,17 +1178,30 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
           </p>
           <div style={{ display:'grid', gap:8 }}>
             {completed.map(s => (
-              <div key={s.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
-                <span style={{ fontSize:18 }}>✅</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:14 }}>{s.title}</div>
-                  <div style={{ fontSize:11, color:t.textDim }}>{s.completed_at ? new Date(s.completed_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : s.scheduled_date}</div>
+              <div key={s.id} style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? t.teal+'40' : t.border}`, borderRadius:12, padding:'12px 16px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: (s.coach_review_notes || s.coach_review_video_url) ? 10 : 0 }}>
+                  <span style={{ fontSize:18 }}>✅</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600, fontSize:14 }}>{s.title}</div>
+                    <div style={{ fontSize:11, color:t.textDim }}>{s.completed_at ? new Date(s.completed_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : s.scheduled_date}</div>
+                  </div>
+                  <div style={{ textAlign:'right' as const }}>
+                    {s.duration_seconds ? <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{Math.floor(s.duration_seconds/60)}m</div> : null}
+                    {s.session_rpe && <div style={{ fontSize:11, color:t.textMuted }}>RPE {s.session_rpe}</div>}
+                    {s.coach_reviewed_at && <div style={{ fontSize:10, fontWeight:800, color:t.teal }}>💬 Reviewed</div>}
+                  </div>
                 </div>
-                <div style={{ textAlign:'right' as const }}>
-                  {fmtDur(s.duration_seconds) && <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{fmtDur(s.duration_seconds)}</div>}
-                  {s.session_rpe && <div style={{ fontSize:11, color:t.textMuted }}>RPE {s.session_rpe}</div>}
-                  {s.mood && <div style={{ fontSize:14 }}>{{ great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }[s.mood as 'great'|'good'|'okay'|'tired'|'awful']}</div>}
-                </div>
+                {/* Coach review notes */}
+                {s.coach_review_notes && (
+                  <div style={{ background:'#0a1a1a', border:`1px solid ${t.teal}30`, borderRadius:9, padding:'8px 12px', marginBottom: s.coach_review_video_url ? 8 : 0 }}>
+                    <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:3 }}>Coach Review</div>
+                    <div style={{ fontSize:12, color:t.text, lineHeight:1.6 }}>{s.coach_review_notes}</div>
+                  </div>
+                )}
+                {/* Coach review video */}
+                {s.coach_review_video_url && (
+                  <CoachReviewVideo url={s.coach_review_video_url} />
+                )}
               </div>
             ))}
           </div>
