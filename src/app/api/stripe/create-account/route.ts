@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Send password setup email ---
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const siteUrl = req.nextUrl.origin
     if (!existingAuthUser) {
       // New user — send invite email (sets password for first time)
       await supabase.auth.admin.inviteUserByEmail(email, {

@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
     const { priceId } = await req.json()
     if (!priceId) return NextResponse.json({ error: 'Missing priceId' }, { status: 400 })
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const siteUrl = req.nextUrl.origin
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
