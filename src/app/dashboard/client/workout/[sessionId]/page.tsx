@@ -207,13 +207,15 @@ export default function ActiveWorkoutPage() {
     setVideoUploading(prev => ({ ...prev, [exId]: true }))
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setVideoUploading(prev => ({ ...prev, [exId]: false })); return }
-    const ext = file.name.split('.').pop()
+    const ext = file.name.split('.').pop() || 'mp4'
     const path = `${user.id}/${sessionId}/${exId}_${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('form_checks').upload(path, file)
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('form_checks').getPublicUrl(path)
+    const { error } = await supabase.storage.from('form-checks').upload(path, file)
+    if (error) {
+      console.error('Form check upload error:', error.message)
+      alert(`Upload failed: ${error.message}`)
+    } else {
+      const { data: urlData } = supabase.storage.from('form-checks').getPublicUrl(path)
       setVideoUploads(prev => ({ ...prev, [exId]: urlData.publicUrl }))
-      // Save url to session_exercise row
       await supabase.from('session_exercises').update({ client_video_url: urlData.publicUrl }).eq('id', exId)
     }
     setVideoUploading(prev => ({ ...prev, [exId]: false }))
