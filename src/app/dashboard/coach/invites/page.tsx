@@ -72,8 +72,7 @@ export default function InvitesPage() {
       })
       const result = await res.json()
       if (!res.ok) { alert(result.error || 'Failed to send invite'); setSending(false); return }
-      // Show the invite link in case email didn't land
-      if (result.invite_link) setSendResult({ url: result.invite_link })
+      // inviteUserByEmail sends via Supabase SMTP — no manual link needed
       // Reload invites list to reflect new entry
       const { data: inv } = await supabase.from('client_invites').select('*').eq('coach_id', coachId).order('created_at', { ascending: false })
       setInvites(inv || [])
