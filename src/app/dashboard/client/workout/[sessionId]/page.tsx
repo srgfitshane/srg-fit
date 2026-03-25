@@ -231,8 +231,8 @@ export default function ActiveWorkoutPage() {
   async function finishWorkout() {
     setSaving(true)
     const now = new Date()
-    const reviewDue = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24hr SLA
-    await supabase.from('workout_sessions').update({
+    const reviewDue = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    const { error } = await supabase.from('workout_sessions').update({
       status: 'completed',
       completed_at: now.toISOString(),
       review_due_at: reviewDue.toISOString(),
@@ -243,20 +243,27 @@ export default function ActiveWorkoutPage() {
       notes_client: finishForm.notes_client || null
     }).eq('id', sessionId)
 
-    // Notify coach
+    if (error) {
+      console.error('finishWorkout error:', error)
+      setSaving(false)
+      return
+    }
+
+    // Fire-and-forget push notification — never block completion on this
     if (session?.coach_id) {
-      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           user_id: session.coach_id,
           notification_type: 'checkin_submitted',
           title: `Workout completed: ${session.title}`,
           body: `Session logged in ${Math.floor(elapsedSeconds/60)} min${finishForm.session_rpe ? ` · RPE ${finishForm.session_rpe}` : ''}`,
-          link_url: `/dashboard/coach/workouts/${sessionId}`,
+          link_url: `/dashboard/coach/reviews`,
           data: { session_id: sessionId }
         })
-      })
+      }).catch(() => {}) // intentionally swallowed — never block on this
     }
+
     setSaving(false)
     setPhase('complete')
   }
@@ -474,22 +481,6 @@ export default function ActiveWorkoutPage() {
                   </div>
                 )}
 
-                {/* Form check video upload */}
-                <div style={{display:'flex',alignItems:'center',gap:10,marginTop:10}}>
-                  <label style={{display:'flex',alignItems:'center',gap:7,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:'1px solid '+(videoUploads[ex.id]?t.green+'50':t.border),borderRadius:10,padding:'8px 14px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,transition:'all 0.2s'}}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-                    </svg>
-                    {videoUploading[ex.id] ? 'Uploading...' : videoUploads[ex.id] ? '✓ Form check uploaded' : 'Upload form check'}
-                    <input type="file" accept="video/*" capture="environment" style={{display:'none'}}
-                      disabled={videoUploading[ex.id]}
-                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
-                  </label>
-                  {videoUploads[ex.id] && (
-                    <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
-                      style={{fontSize:11,color:t.teal,textDecoration:'none',fontWeight:600}}>View ↗</a>
-                  )}
-                </div>
               </div>
 
               <div style={{display:'grid',gap:10,marginBottom:12}}>
@@ -567,6 +558,37 @@ export default function ActiveWorkoutPage() {
                 style={{width:'100%',background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'10px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
                 + Add Set
               </button>
+
+              {/* Form check video — below sets, library + camera both available */}
+              <div style={{marginTop:12,padding:'12px 14px',background:t.surface,border:`1px solid ${t.border}`,borderRadius:12}}>
+                <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:8}}>📹 Form Check</div>
+                <div style={{display:'flex',gap:8}}>
+                  {/* Camera */}
+                  <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:9,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:t.textDim,textAlign:'center' as const}}>
+                    📷 Camera
+                    <input type="file" accept="video/*" capture="environment" style={{display:'none'}}
+                      disabled={videoUploading[ex.id]}
+                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
+                  </label>
+                  {/* Library */}
+                  <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:9,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:t.textDim,textAlign:'center' as const}}>
+                    🎞️ Library
+                    <input type="file" accept="video/*" style={{display:'none'}}
+                      disabled={videoUploading[ex.id]}
+                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
+                  </label>
+                </div>
+                {videoUploading[ex.id] && (
+                  <div style={{marginTop:8,fontSize:12,color:t.teal,fontWeight:700}}>Uploading...</div>
+                )}
+                {videoUploads[ex.id] && (
+                  <div style={{marginTop:8,display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:12,color:t.green,fontWeight:700}}>✓ Form check uploaded</span>
+                    <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
+                      style={{fontSize:11,color:t.teal,textDecoration:'none',fontWeight:600,marginLeft:'auto'}}>View ↗</a>
+                  </div>
+                )}
+              </div>
 
               {activeExIdx < exercises.length - 1 && (
                 <button onClick={()=>setActiveExIdx(activeExIdx+1)}
