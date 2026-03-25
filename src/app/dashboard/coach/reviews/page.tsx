@@ -73,6 +73,213 @@ function VideoPlayer({ url, label }: { url: string; label: string }) {
   )
 }
 
+// ── VideoReviewer ──────────────────────────────────────────────────────────
+// MediaRecorder-based component: record live or upload file, preview, confirm
+type VideoReviewerProps = {
+  onReady: (blob: Blob) => void   // called with final blob when coach confirms
+  onClear: () => void              // called when coach discards
+  uploading: boolean
+  doneUrl: string                  // non-empty = already uploaded, show player
+}
+
+function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerProps) {
+  type Phase = 'idle' | 'requesting' | 'ready' | 'recording' | 'preview'
+  const [phase, setPhase]           = useState<Phase>('idle')
+  const [elapsed, setElapsed]       = useState(0)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [previewBlob, setPreviewBlob] = useState<Blob|null>(null)
+  const [camError, setCamError]     = useState('')
+  const streamRef    = useRef<MediaStream|null>(null)
+  const recorderRef  = useRef<MediaRecorder|null>(null)
+  const chunksRef    = useRef<Blob[]>([])
+  const liveVideoRef = useRef<HTMLVideoElement|null>(null)
+  const timerRef     = useRef<any>(null)
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    clearInterval(timerRef.current)
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+  }, [])
+
+  async function startCamera() {
+    setPhase('requesting')
+    setCamError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user' }, audio: true })
+      streamRef.current = stream
+      setPhase('ready')
+      // Attach stream to video element after render
+      requestAnimationFrame(() => {
+        if (liveVideoRef.current) {
+          liveVideoRef.current.srcObject = stream
+          liveVideoRef.current.play().catch(()=>{})
+        }
+      })
+    } catch (e: any) {
+      setCamError(e?.message || 'Camera access denied')
+      setPhase('idle')
+    }
+  }
+
+  function startRecording() {
+    if (!streamRef.current) return
+    chunksRef.current = []
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
+      : ''
+    const rec = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined)
+    rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+    rec.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
+      const url  = URL.createObjectURL(blob)
+      setPreviewUrl(url)
+      setPreviewBlob(blob)
+      streamRef.current?.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+      clearInterval(timerRef.current)
+      setPhase('preview')
+    }
+    recorderRef.current = rec
+    rec.start(250)
+    setElapsed(0)
+    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
+    setPhase('recording')
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop()
+    clearInterval(timerRef.current)
+  }
+
+  function discard() {
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl('') }
+    setPreviewBlob(null)
+    setElapsed(0)
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    setPhase('idle')
+    onClear()
+  }
+
+  function confirmUpload() {
+    if (previewBlob) onReady(previewBlob)
+  }
+
+  const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
+
+  // Already uploaded — just show playback + replace option
+  if (doneUrl) return (
+    <div>
+      <video src={doneUrl} controls playsInline
+        style={{ width:'100%', borderRadius:8, maxHeight:240, background:'#000', display:'block', marginBottom:8 }}/>
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <span style={{ fontSize:12, color:t.green, fontWeight:700, flex:1 }}>✓ Review video ready</span>
+        <button onClick={discard}
+          style={{ fontSize:11, color:t.textMuted, background:'none', border:`1px solid ${t.border}`, borderRadius:6, padding:'4px 10px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          Re-record
+        </button>
+      </div>
+    </div>
+  )
+
+  // Uploading state
+  if (uploading) return (
+    <div style={{ textAlign:'center', padding:'24px 0', color:t.teal, fontSize:13, fontWeight:700 }}>
+      ⏳ Uploading video...
+    </div>
+  )
+
+  // Preview — watch before confirming
+  if (phase === 'preview') return (
+    <div>
+      <video src={previewUrl} controls playsInline
+        style={{ width:'100%', borderRadius:8, maxHeight:240, background:'#000', display:'block', marginBottom:10 }}/>
+      <div style={{ display:'flex', gap:8 }}>
+        <button onClick={discard}
+          style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          ✕ Re-record
+        </button>
+        <button onClick={confirmUpload}
+          style={{ flex:2, background:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          ✓ Use This Video
+        </button>
+      </div>
+    </div>
+  )
+
+  // Recording in progress
+  if (phase === 'recording') return (
+    <div>
+      <div style={{ position:'relative', borderRadius:10, overflow:'hidden', background:'#000', marginBottom:10 }}>
+        <video ref={liveVideoRef} autoPlay playsInline muted
+          style={{ width:'100%', maxHeight:240, display:'block', transform:'scaleX(-1)' }}/>
+        <div style={{ position:'absolute', top:10, left:12, display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ width:10, height:10, borderRadius:'50%', background:t.red, animation:'pulse 1s ease-in-out infinite' }}/>
+          <span style={{ fontSize:13, fontWeight:800, color:'#fff', textShadow:'0 1px 4px rgba(0,0,0,0.8)' }}>{fmtTime(elapsed)}</span>
+        </div>
+      </div>
+      <button onClick={stopRecording}
+        style={{ width:'100%', background:t.red, border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+        ⏹ Stop Recording
+      </button>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+    </div>
+  )
+
+  // Camera open, ready to record
+  if (phase === 'ready') return (
+    <div>
+      <div style={{ position:'relative', borderRadius:10, overflow:'hidden', background:'#000', marginBottom:10 }}>
+        <video ref={liveVideoRef} autoPlay playsInline muted
+          style={{ width:'100%', maxHeight:240, display:'block', transform:'scaleX(-1)' }}/>
+        <div style={{ position:'absolute', bottom:10, left:0, right:0, textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.6)' }}>
+          Camera ready
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:8 }}>
+        <button onClick={discard}
+          style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          Cancel
+        </button>
+        <button onClick={startRecording}
+          style={{ flex:2, background:t.red, border:'none', borderRadius:9, padding:'10px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          ⏺ Start Recording
+        </button>
+      </div>
+    </div>
+  )
+
+  // Requesting camera permission
+  if (phase === 'requesting') return (
+    <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>
+      Requesting camera access...
+    </div>
+  )
+
+  // Idle — choose record or upload
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+      <button onClick={startCamera}
+        style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 10px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+        <span style={{ fontSize:28 }}>🎥</span>
+        <span style={{ fontSize:12, fontWeight:700, color:t.text }}>Record Now</span>
+        <span style={{ fontSize:10, color:t.textMuted }}>Live camera</span>
+      </button>
+      <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 10px', cursor:'pointer', textAlign:'center' as const }}>
+        <span style={{ fontSize:28 }}>📁</span>
+        <span style={{ fontSize:12, fontWeight:700, color:t.text }}>Upload File</span>
+        <span style={{ fontSize:10, color:t.textMuted }}>From Loom or files</span>
+        <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{ display:'none' }}
+          onChange={e=>{ const f=e.target.files?.[0]; if(f) onReady(f) }}/>
+      </label>
+      {camError && <div style={{ gridColumn:'1/-1', fontSize:11, color:t.red, textAlign:'center' as const }}>{camError}</div>}
+    </div>
+  )
+}
+
 export default function ReviewsPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -125,13 +332,13 @@ export default function ReviewsPage() {
 
   useEffect(() => { loadReviews() }, [loadReviews])
 
-  async function uploadReviewVideo(file: File, sessionId: string) {
+  async function uploadReviewVideo(blobOrFile: Blob | File, sessionId: string) {
     setUploadingVideo(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setUploadingVideo(false); return }
-    const ext = file.name.split('.').pop() || 'mp4'
+    const ext = blobOrFile instanceof File ? (blobOrFile.name.split('.').pop() || 'webm') : 'webm'
     const path = `${user.id}/${sessionId}/review_${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('workout-reviews').upload(path, file)
+    const { error } = await supabase.storage.from('workout-reviews').upload(path, blobOrFile)
     if (!error) {
       const { data: urlData } = supabase.storage.from('workout-reviews').getPublicUrl(path)
       setReviewVideoUrl(urlData.publicUrl)
@@ -252,34 +459,12 @@ export default function ReviewsPage() {
             {/* Video review section */}
             <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
               <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>📹 Review Video</div>
-
-              {reviewVideoUrl ? (
-                /* Video uploaded — show player + option to replace */
-                <div>
-                  <video src={reviewVideoUrl} controls playsInline style={{ width:'100%', borderRadius:8, maxHeight:240, background:'#000', display:'block', marginBottom:8 }}/>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <span style={{ fontSize:12, color:t.green, fontWeight:700, flex:1 }}>✓ Review video ready</span>
-                    <label style={{ fontSize:11, color:t.textMuted, cursor:'pointer', fontWeight:600 }}>
-                      Replace
-                      <input type="file" accept="video/*" style={{ display:'none' }}
-                        onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadReviewVideo(f, selected.id) }}/>
-                    </label>
-                  </div>
-                </div>
-              ) : uploadingVideo ? (
-                <div style={{ textAlign:'center', padding:'20px 0', color:t.teal, fontSize:13, fontWeight:700 }}>Uploading video...</div>
-              ) : (
-                /* Upload options */
-                <label style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'16px', cursor:'pointer', width:'100%' }}>
-                  <span style={{ fontSize:24 }}>📹</span>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>Choose Video</div>
-                    <div style={{ fontSize:11, color:t.textMuted }}>Record with camera or pick from files</div>
-                  </div>
-                  <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{ display:'none' }}
-                    onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadReviewVideo(f, selected.id) }}/>
-                </label>
-              )}
+              <VideoReviewer
+                onReady={blob => uploadReviewVideo(blob, selected.id)}
+                onClear={() => setReviewVideoUrl('')}
+                uploading={uploadingVideo}
+                doneUrl={reviewVideoUrl}
+              />
             </div>
 
             {/* Written notes */}
