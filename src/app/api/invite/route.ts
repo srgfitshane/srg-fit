@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     // ── Resend path: re-invite an existing user ──────────────────────────────
     if (resend) {
       await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${siteUrl}/set-password`,
+        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
       })
       return NextResponse.json({ success: true })
     }
@@ -37,11 +37,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A user with that email already exists' }, { status: 400 })
     }
 
-    // inviteUserByEmail creates the user AND sends the invite email via Supabase SMTP
     const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
       {
-        redirectTo: `${siteUrl}/set-password`,
+        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
         data: { full_name: fullName || email, role: 'client' },
       }
     )
