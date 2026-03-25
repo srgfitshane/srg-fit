@@ -93,6 +93,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [workoutLogs,  setWorkoutLogs]  = useState<any[]>([])
   const [nextSession,  setNextSession]  = useState<any>(null)
   const [pendingReviews, setPendingReviews] = useState<any[]>([])
+  const [expandedReview, setExpandedReview] = useState<string|null>(null)
   const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState(() => {
@@ -520,33 +521,68 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {/* ── COACH REVIEWS NOTIFICATION ── */}
           {pendingReviews.length > 0 && (
             <div className="fade" style={{ marginBottom:14 }}>
-              {pendingReviews.map(r => (
-                <div key={r.id}
-                  onClick={async () => {
-                    // Mark as seen
-                    await supabase.from('workout_sessions')
-                      .update({ coach_review_seen_at: new Date().toISOString() })
-                      .eq('id', r.id)
-                    setPendingReviews(prev => prev.filter(x => x.id !== r.id))
-                    router.push(`/dashboard/client/workout/${r.id}`)
-                  }}
-                  style={{ background:`linear-gradient(135deg,${t.teal}18,${t.teal}08)`, border:`2px solid ${t.teal}50`, borderRadius:16, padding:'14px 16px', marginBottom:8, cursor:'pointer', position:'relative' as const, overflow:'hidden' }}>
-                  {/* Pulsing dot */}
-                  <div style={{ position:'absolute', top:14, right:14, width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${t.teal}30` }}/>
-                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{ width:40, height:40, borderRadius:12, background:t.tealDim, border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
-                      💬
-                    </div>
-                    <div style={{ flex:1, paddingRight:16 }}>
-                      <div style={{ fontSize:13, fontWeight:800, color:t.teal, marginBottom:2 }}>Coach review ready</div>
-                      <div style={{ fontSize:12, color:t.text, fontWeight:700, marginBottom:2 }}>{r.title}</div>
-                      <div style={{ fontSize:11, color:t.textMuted }}>
-                        {r.coach_review_video_url && r.coach_review_notes ? 'Video + written notes' : r.coach_review_video_url ? 'Video review' : 'Written feedback'} · Tap to view
+              {pendingReviews.map(r => {
+                const isOpen = expandedReview === r.id
+                return (
+                  <div key={r.id} style={{ background:`linear-gradient(135deg,${t.teal}18,${t.teal}08)`, border:`2px solid ${t.teal}50`, borderRadius:16, marginBottom:8, overflow:'hidden' }}>
+                    {/* Header row — always visible, tap to expand */}
+                    <div onClick={async () => {
+                        if (!isOpen) {
+                          // Mark seen on first open
+                          await supabase.from('workout_sessions')
+                            .update({ coach_review_seen_at: new Date().toISOString() })
+                            .eq('id', r.id)
+                          setPendingReviews(prev => prev.map(x => x.id === r.id ? { ...x, _seen: true } : x))
+                        }
+                        setExpandedReview(isOpen ? null : r.id)
+                      }}
+                      style={{ padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
+                      {/* Pulsing dot — only when not yet seen */}
+                      {!r._seen && !isOpen && (
+                        <div style={{ width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${t.teal}30`, flexShrink:0 }}/>
+                      )}
+                      <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                        💬
                       </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>Coach left you feedback</div>
+                        <div style={{ fontSize:12, color:t.text, fontWeight:700 }}>{r.title}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>
+                          {r.coach_review_video_url && r.coach_review_notes ? 'Video + written notes' : r.coach_review_video_url ? 'Video review' : 'Written feedback'}
+                          {' · '}{isOpen ? 'tap to close' : 'tap to view'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize:16, color:t.textMuted, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s' }}>▾</div>
                     </div>
+
+                    {/* Expanded review content */}
+                    {isOpen && (
+                      <div style={{ borderTop:`1px solid ${t.teal}30`, padding:'14px 16px' }}>
+                        {r.coach_review_notes && (
+                          <div style={{ background:'#0a1a1a', border:`1px solid ${t.teal}30`, borderRadius:10, padding:'10px 14px', marginBottom: r.coach_review_video_url ? 12 : 0 }}>
+                            <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Written notes</div>
+                            <div style={{ fontSize:13, color:t.text, lineHeight:1.6 }}>{r.coach_review_notes}</div>
+                          </div>
+                        )}
+                        {r.coach_review_video_url && (
+                          <CoachReviewVideo url={r.coach_review_video_url} />
+                        )}
+                        <button
+                          onClick={async () => {
+                            await supabase.from('workout_sessions')
+                              .update({ coach_review_seen_at: new Date().toISOString() })
+                              .eq('id', r.id)
+                            setPendingReviews(prev => prev.filter(x => x.id !== r.id))
+                            setExpandedReview(null)
+                          }}
+                          style={{ width:'100%', marginTop:12, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          ✓ Got it — dismiss
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
