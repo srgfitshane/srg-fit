@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, fullName, coachId } = await request.json()
+    const { email, fullName, coachId, resend } = await request.json()
 
-    if (!email || !fullName || !coachId) {
+    if (!email || !coachId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -15,23 +15,36 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // ── Resend path: just regenerate the invite link, no new user ──
+    if (resend) {
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srg-fit.vercel.app'
+      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'invite',
+        email,
+        options: { redirectTo: `${siteUrl}/set-password` },
+      })
+      return NextResponse.json({
+        success: true,
+        invite_link: linkData?.properties?.action_link || null,
+      })
+    }
+
     // Check if user already exists
-    const { data: existingProfiles } = await supabaseAdmin
+    const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('email', email)
       .single()
 
-    if (existingProfiles) {
+    if (existingProfile) {
       return NextResponse.json({ error: 'A user with that email already exists' }, { status: 400 })
     }
 
-    // Create the auth user
+    // Create the auth user (unconfirmed — invite email will confirm them)
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: Math.random().toString(36).slice(2) + 'Aa1!',
       user_metadata: { full_name: fullName, role: 'client' },
-      email_confirm: true,
+      email_confirm: false,
     })
 
     if (createError || !newUser.user) {
@@ -46,82 +59,26 @@ export async function POST(request: NextRequest) {
       active: true,
     })
 
-    // Get coach name (non-fatal if not found)
-    let coachName = 'Your Coach'
-    try {
-      const { data: coachProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('full_name')
-        .eq('id', coachId)
-        .single()
-      if (coachProfile?.full_name) coachName = coachProfile.full_name
-    } catch (_) {}
-
-    // Generate password-set link
-    const siteUrl = 'https://srg-fit.vercel.app'
-    const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
+    // Generate invite link — Supabase sends this automatically via SMTP
+    // The invite type fires SIGNED_IN on the set-password page
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srg-fit.vercel.app'
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'invite',
       email,
-      options: { redirectTo: `${siteUrl}/set-password` }
+      options: { redirectTo: `${siteUrl}/set-password` },
     })
-    const setPasswordLink = linkData?.properties?.action_link
 
-    // Send via Resend (non-blocking — don't crash if email fails)
-    const resendKey = process.env.RESEND_API_KEY
-    if (resendKey && setPasswordLink) {
-      try {
-        const firstName = fullName.split(' ')[0]
-        const resendRes = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${resendKey}`,
-          },
-          body: JSON.stringify({
-            from: 'SRG Fit <noreply@srg.fitness>',
-            to: [email],
-            subject: `${coachName} invited you to SRG Fit`,
-            html: `
-              <div style="font-family: Arial, sans-serif; background: #080810; color: #eeeef8; padding: 40px 20px; max-width: 520px; margin: 0 auto;">
-                <div style="text-align: center; margin-bottom: 28px;">
-                  <div style="font-size: 28px; font-weight: 900; color: #00c9b1;">SRG FIT</div>
-                  <div style="font-size: 12px; color: #8888a8;">Strength &middot; Nutrition &middot; Mental Health</div>
-                </div>
-                <div style="background: #0f0f1a; border: 1px solid #252538; border-radius: 16px; padding: 28px; text-align: center;">
-                  <div style="font-size: 40px; margin-bottom: 16px;">&#128075;</div>
-                  <h2 style="font-size: 20px; font-weight: 900; margin-bottom: 8px; color: #eeeef8;">Hey ${firstName}!</h2>
-                  <p style="font-size: 14px; color: #8888a8; line-height: 1.7; margin-bottom: 28px;">
-                    <strong style="color: #00c9b1;">${coachName}</strong> has invited you to join SRG Fit &mdash;
-                    your personal coaching platform for strength, nutrition, and mental health.
-                  </p>
-                  <a href="${setPasswordLink}" style="display: inline-block; background: #00c9b1; border-radius: 12px; padding: 14px 36px; font-size: 15px; font-weight: 900; color: #000; text-decoration: none;">
-                    Set Up Your Account &rarr;
-                  </a>
-                  <p style="font-size: 11px; color: #5a5a78; margin-top: 20px;">This link expires in 24 hours.</p>
-                </div>
-                <p style="text-align: center; font-size: 11px; color: #5a5a78; margin-top: 20px;">If you didn't expect this, you can safely ignore this email.</p>
-              </div>
-            `
-          }),
-        })
-        const resendResult = await resendRes.json()
-        console.log('Resend response:', resendRes.status, JSON.stringify(resendResult))
-        if (!resendRes.ok) {
-          console.error('Resend error:', resendResult)
-        }
-      } catch (emailErr) {
-        // Email failure is non-fatal — user was created, just log it
-        console.error('Resend email failed:', emailErr)
-      }
-    } else {
-      console.log('No RESEND_API_KEY or no password link — skipping email. Link:', setPasswordLink)
+    if (linkError) {
+      console.error('generateLink error:', linkError)
     }
+
+    const inviteLink = linkData?.properties?.action_link || null
 
     return NextResponse.json({
       success: true,
-      message: `Account created for ${fullName}! Email invite sent — if they don't see it, share this link directly: ${setPasswordLink}`,
+      message: `Account created for ${fullName}! Invite email sent via Supabase.`,
       userId: newUser.user.id,
-      invite_link: setPasswordLink,
+      invite_link: inviteLink,
     })
 
   } catch (err: any) {

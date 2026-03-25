@@ -104,8 +104,19 @@ export default function InvitesPage() {
   }
 
   const resendInvite = async (id: string) => {
-    await supabase.from('client_invites').update({ status: 'pending', expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString() }).eq('id', id)
-    await supabase.functions.invoke('send-invite-email', { body: { invite_id: id } })
+    // Get the email for this invite, then re-generate the invite link via Supabase SMTP
+    const inv = invites.find(i => i.id === id)
+    if (!inv) return
+    await supabase.from('client_invites').update({
+      status: 'pending',
+      expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString()
+    }).eq('id', id)
+    // Re-use the invite API route with resend=true to trigger a new Supabase invite email
+    await fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inv.email, resend: true, coachId }),
+    })
     setInvites(p => p.map(i => i.id === id ? { ...i, status: 'pending' } : i))
   }
 
