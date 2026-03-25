@@ -19,14 +19,10 @@ export async function POST(request: NextRequest) {
 
     // ── Resend path: re-invite an existing user ──────────────────────────────
     if (resend) {
-      // Re-inviting an existing user generates a recovery link instead of a broken invite token
-      const { data: linkData, error: resendErr } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'recovery',
-        email,
-        options: { redirectTo: `${siteUrl}/set-password` },
-      })
+      // Re-inviting an existing user generates a recovery link/OTP email
+      const { error: resendErr } = await supabaseAdmin.auth.resetPasswordForEmail(email)
       if (resendErr) throw resendErr
-      return NextResponse.json({ success: true, action_link: linkData.properties.action_link })
+      return NextResponse.json({ success: true })
     }
 
     // ── New invite path ───────────────────────────────────────────────────────
@@ -41,18 +37,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A user with that email already exists' }, { status: 400 })
     }
 
-    const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'invite',
+    const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
-      options: {
-        redirectTo: `${siteUrl}/set-password`,
+      {
         data: { full_name: fullName || email, role: 'client' },
       }
-    })
+    )
 
     if (inviteError || !invited.user) {
       return NextResponse.json(
-        { error: inviteError?.message || 'Failed to generate secure invite link' },
+        { error: inviteError?.message || 'Failed to send invite' },
         { status: 500 }
       )
     }
@@ -67,8 +61,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Secure invite link generated for ${email}.`,
-      action_link: invited.properties.action_link,
+      message: `Invite securely dispatched to ${email}.`,
       userId: invited.user.id,
     })
 

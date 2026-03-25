@@ -5,8 +5,8 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 const t = {
-  bg:'#080810', surface:'#0f0f1a', border:'#252538',
-  teal:'#00c9b1', tealDim:'#00c9b115', red:'#ef4444', redDim:'#ef444415',
+  bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', border:'#252538',
+  teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', red:'#ef4444', redDim:'#ef444415',
   text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
 }
 
@@ -22,6 +22,8 @@ function SetPasswordInner() {
   const [initialHash, setInitialHash] = useState('SSR')
   const [password,  setPassword]  = useState('')
   const [confirm,   setConfirm]   = useState('')
+  const [otpEmail,  setOtpEmail]  = useState('')
+  const [otpCode,   setOtpCode]   = useState('')
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState('')
   const [done,      setDone]      = useState(false)
@@ -77,6 +79,19 @@ function SetPasswordInner() {
     })
     return () => subscription.unsubscribe()
   }, [searchParams])
+
+  const handleVerifyOtp = async () => {
+    setError('')
+    setLoading(true)
+    const { data, error: otpError } = await supabase.auth.verifyOtp({ email: otpEmail, token: otpCode, type: 'invite' })
+    if (otpError) {
+      setError(`Verification failed: ${otpError.message}`)
+      setLoading(false)
+      return
+    }
+    if (data.session) setSessionOk(true)
+    setLoading(false)
+  }
 
   const handleSubmit = async () => {
     setError('')
@@ -178,10 +193,59 @@ function SetPasswordInner() {
                 )}
 
                 {!sessionOk && (
-                  <div style={{ background:'#f5a62315', border:'1px solid #f5a62340', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#f5a623', marginBottom:16 }}>
-                    ⚠️ Waiting for your invite link to be verified... If this persists, try clicking the link in your email again.
-                    <br/><br/>
-                    <span style={{ fontSize:10, color:t.textMuted }}>DIAGNOSTIC HASH: {initialHash || 'EMPTY'}</span>
+                  <div style={{ background:t.surfaceUp, border:`1px solid ${t.border}`, borderRadius:16, padding:'24px' }}>
+                    <div style={{ fontSize:15, fontWeight:800, marginBottom:8 }}>Check your email</div>
+                    <div style={{ fontSize:13, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>
+                      Enter your email and the 6-digit invite code we sent you.
+                    </div>
+                    
+                    <div style={{ marginBottom:14 }}>
+                      <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={otpEmail}
+                        onChange={e => setOtpEmail(e.target.value)}
+                        placeholder="you@email.com"
+                        style={inp}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom:20 }}>
+                      <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
+                        6-Digit Code
+                      </label>
+                      <input
+                        type="text"
+                        value={otpCode}
+                        onChange={e => setOtpCode(e.target.value)}
+                        placeholder="123456"
+                        maxLength={6}
+                        style={{ ...inp, letterSpacing: '0.2em', fontSize:20, fontWeight:'bold', textAlign:'center' as const }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleVerifyOtp}
+                      disabled={loading || !otpEmail || otpCode.length !== 6}
+                      style={{
+                        width: '100%',
+                        padding: '13px',
+                        borderRadius: 12,
+                        border: 'none',
+                        background: loading || !otpEmail || otpCode.length !== 6
+                          ? '#1d1d2e'
+                          : `linear-gradient(135deg,${t.orange},${t.orange}cc)`,
+                        color: loading || !otpEmail || otpCode.length !== 6 ? t.textMuted : '#000',
+                        fontSize: 14,
+                        fontWeight: 800,
+                        cursor: loading || !otpEmail || otpCode.length !== 6 ? 'not-allowed' : 'pointer',
+                        fontFamily: "'DM Sans',sans-serif",
+                        transition: 'all 0.2s',
+                      }}>
+                      {loading ? 'Verifying...' : 'Verify Code →'}
+                    </button>
                   </div>
                 )}
 
