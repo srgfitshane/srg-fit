@@ -19,9 +19,12 @@ export async function POST(request: NextRequest) {
 
     // ── Resend path: re-invite an existing user ──────────────────────────────
     if (resend) {
-      await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+      // Re-inviting an existing user via Supabase generates an instantly expired token.
+      // We must send them a password reset email instead, which functions identically for setting their password.
+      const { error: resendErr } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+        redirectTo: `${siteUrl}/set-password`,
       })
+      if (resendErr) throw resendErr
       return NextResponse.json({ success: true })
     }
 
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
     const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
       {
-        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+        redirectTo: `${siteUrl}/set-password`,
         data: { full_name: fullName || email, role: 'client' },
       }
     )

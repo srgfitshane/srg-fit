@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     if (!existingAuthUser) {
       // New user — send invite email (sets password for first time)
       await supabase.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+        redirectTo: `${siteUrl}/set-password`,
         data: { full_name: fullName },
       })
     } else {
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       await supabase.auth.admin.generateLink({
         type: 'recovery',
         email,
-        options: { redirectTo: `${siteUrl}/auth/callback?next=/set-password` },
+        options: { redirectTo: `${siteUrl}/set-password` },
       })
     }
 
