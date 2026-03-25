@@ -42,7 +42,11 @@ function SetPasswordInner() {
             setSessionOk(true)
             window.location.hash = '' // Clean URL
             return
+          } else {
+            setError(`Auth Error: ${setErr.message}`)
           }
+        } else {
+           setError(`Missing tokens in URL string.`)
         }
       }
 
