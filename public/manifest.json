@@ -2,10 +2,10 @@
   "name": "SRG Fit",
   "short_name": "SRG Fit",
   "description": "Remote strength & nutrition coaching",
-  "start_url": "/dashboard",
+  "start_url": "/dashboard/client",
   "display": "standalone",
   "background_color": "#080810",
-  "theme_color": "#080810",
+  "theme_color": "#00C9B1",
   "orientation": "portrait-primary",
   "icons": [
     {

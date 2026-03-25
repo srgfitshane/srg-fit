@@ -1,0 +1,18 @@
+[93m[4mUnused files[24m[39m (8)
+scripts/match-exercise-videos.mjs                         
+src/lib/notify.ts                                         
+src/lib/supabase-server.ts                                
+src/types/index.ts                                        
+supabase/functions/generate-ai-insight/index.ts           
+supabase/functions/send-weekly-checkins/index.ts          
+src/app/dashboard/client/billing-tab.tsx                  
+src/app/dashboard/coach/clients/[id]/_programtab_append.ts
+[93m[4mUnused dependencies[24m[39m (6)
+@hookform/resolvers            package.json:12:6
+@supabase/auth-helpers-nextjs  package.json:13:6
+lucide-react                   package.json:16:6
+react-hook-form                package.json:20:6
+zod                            package.json:23:6
+zustand                        package.json:24:6
+[93m[4mUnlisted dependencies[24m[39m (1)
+postcss  postcss.config.mjs
