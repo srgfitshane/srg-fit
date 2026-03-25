@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', border:'#252538',
@@ -11,6 +11,14 @@ const t = {
 }
 
 export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={<div style={{ background:t.bg, minHeight:'100vh' }} />}>
+      <SetPasswordInner />
+    </Suspense>
+  )
+}
+
+function SetPasswordInner() {
   const [password,  setPassword]  = useState('')
   const [confirm,   setConfirm]   = useState('')
   const [loading,   setLoading]   = useState(false)
@@ -18,17 +26,27 @@ export default function SetPasswordPage() {
   const [done,      setDone]      = useState(false)
   const [sessionOk, setSessionOk] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   useEffect(() => {
-    // Supabase auth handles the recovery token from the URL hash automatically
+    const code = searchParams.get('code')
+    if (code) {
+      // PKCE Flow: exchange the URL ?code for a session
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (!error && data.session) setSessionOk(true)
+        else if (error) setError(error.message)
+      })
+    }
+    
+    // Auth State Fallback
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
         if (session) setSessionOk(true)
       }
     })
     return () => subscription.unsubscribe()
-  }, [])
+  }, [searchParams])
 
   const handleSubmit = async () => {
     setError('')
