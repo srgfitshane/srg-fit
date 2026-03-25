@@ -30,18 +30,27 @@ function SetPasswordInner() {
   const supabase = createClient()
 
   useEffect(() => {
-    const code = searchParams.get('code')
-    if (code) {
-      // PKCE Flow: exchange the URL ?code for a session
-      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
-        if (!error && data.session) setSessionOk(true)
-        else if (error) setError(error.message)
-      })
+    const checkSession = async () => {
+      // 1. Manually check if session already exists (solves race conditions)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        setSessionOk(true)
+        return
+      }
+
+      // 2. PKCE code exchange fallback
+      const code = searchParams.get('code')
+      if (code) {
+        const { data, error: codeErr } = await supabase.auth.exchangeCodeForSession(code)
+        if (!codeErr && data.session) setSessionOk(true)
+        else if (codeErr) setError(codeErr.message)
+      }
     }
+    checkSession()
     
-    // Auth State Fallback
+    // 3. Auth State listener for Implicit Hash Fragments
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         if (session) setSessionOk(true)
       }
     })
