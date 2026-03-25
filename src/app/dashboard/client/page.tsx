@@ -92,6 +92,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [recentPRs,    setRecentPRs]    = useState<any[]>([])
   const [workoutLogs,  setWorkoutLogs]  = useState<any[]>([])
   const [nextSession,  setNextSession]  = useState<any>(null)
+  const [pendingReviews, setPendingReviews] = useState<any[]>([])
   const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState(() => {
@@ -186,7 +187,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         const isToday = nextSess?.scheduled_date === todayStr || nextSess?.status === 'in_progress'
         setNextSession(nextSess ? { ...nextSess, isToday } : null)
 
-        // Pending check-in form assignments
+        // Unseen coach reviews — sessions with a review the client hasn't seen yet
+        const { data: reviewData } = await supabase
+          .from('workout_sessions')
+          .select('id, title, coach_review_notes, coach_review_video_url, coach_reviewed_at')
+          .eq('client_id', clientData.id)
+          .eq('status', 'completed')
+          .not('coach_reviewed_at', 'is', null)
+          .is('coach_review_seen_at', null)
+          .order('coach_reviewed_at', { ascending: false })
+          .limit(5)
+        setPendingReviews(reviewData || [])
         const { data: pendingCI } = await supabase
           .from('client_form_assignments')
           .select('id, note, form:onboarding_forms(title, form_type, is_checkin_type)')
@@ -503,6 +514,39 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     .then(({ data }) => setPulseData(data))
                 }}
               />
+            </div>
+          )}
+
+          {/* ── COACH REVIEWS NOTIFICATION ── */}
+          {pendingReviews.length > 0 && (
+            <div className="fade" style={{ marginBottom:14 }}>
+              {pendingReviews.map(r => (
+                <div key={r.id}
+                  onClick={async () => {
+                    // Mark as seen
+                    await supabase.from('workout_sessions')
+                      .update({ coach_review_seen_at: new Date().toISOString() })
+                      .eq('id', r.id)
+                    setPendingReviews(prev => prev.filter(x => x.id !== r.id))
+                    router.push(`/dashboard/client/workout/${r.id}`)
+                  }}
+                  style={{ background:`linear-gradient(135deg,${t.teal}18,${t.teal}08)`, border:`2px solid ${t.teal}50`, borderRadius:16, padding:'14px 16px', marginBottom:8, cursor:'pointer', position:'relative' as const, overflow:'hidden' }}>
+                  {/* Pulsing dot */}
+                  <div style={{ position:'absolute', top:14, right:14, width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${t.teal}30` }}/>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:40, height:40, borderRadius:12, background:t.tealDim, border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                      💬
+                    </div>
+                    <div style={{ flex:1, paddingRight:16 }}>
+                      <div style={{ fontSize:13, fontWeight:800, color:t.teal, marginBottom:2 }}>Coach review ready</div>
+                      <div style={{ fontSize:12, color:t.text, fontWeight:700, marginBottom:2 }}>{r.title}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>
+                        {r.coach_review_video_url && r.coach_review_notes ? 'Video + written notes' : r.coach_review_video_url ? 'Video review' : 'Written feedback'} · Tap to view
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
