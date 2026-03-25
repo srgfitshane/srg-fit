@@ -26,6 +26,7 @@ const CLIENT_COLORS = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 
 // Always-visible nav — things you touch every session
 const NAV_ESSENTIALS = [
+  { label:'Reviews',    icon:'⏰', path:'/dashboard/coach/reviews'  },
   { label:'Messages',   icon:'💬', path:'/dashboard/coach/messages'  },
   { label:'Community',  icon:'🏘️', path:'/dashboard/coach/community' },
   { label:'Programs',   icon:'📋', path:'/dashboard/coach/programs'  },
@@ -62,6 +63,7 @@ export default function CoachDashboard() {
   const [lifecycleLoading, setLifecycleLoading] = useState(false)
   const [clientFilter, setClientFilter] = useState<'active'|'paused'>('active')
   const [navExpanded, setNavExpanded] = useState(false)
+  const [pendingReviews, setPendingReviews] = useState(0)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -79,6 +81,15 @@ export default function CoachDashboard() {
       setClients(clientList || [])
       const insights = await getUnreadInsights(user.id)
       setAiInsights(insights)
+      // Pending workout reviews
+      const { count } = await supabase
+        .from('workout_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', user.id)
+        .eq('status', 'completed')
+        .is('coach_reviewed_at', null)
+        .not('review_due_at', 'is', null)
+      setPendingReviews(count || 0)
       setLoading(false)
     }
     load()
@@ -206,6 +217,21 @@ export default function CoachDashboard() {
             <div style={{ fontSize:26, fontWeight:900, marginBottom:4 }}>{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</div>
             <div style={{ fontSize:13, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
+
+          {/* Pending reviews banner */}
+          {pendingReviews > 0 && (
+            <button onClick={()=>router.push('/dashboard/coach/reviews')}
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:14, background:'linear-gradient(135deg,#1a0a0a,#1a0808)', border:`1px solid ${t.red}50`, borderRadius:14, padding:'14px 18px', cursor:'pointer', marginBottom:24, fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>⏰</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:800, color:t.red, marginBottom:2 }}>
+                  {pendingReviews} workout{pendingReviews !== 1 ? 's' : ''} pending review
+                </div>
+                <div style={{ fontSize:12, color:t.textMuted }}>24-hour SLA — tap to review</div>
+              </div>
+              <div style={{ fontSize:20, color:t.red }}>›</div>
+            </button>
+          )}
 
           {/* Stats */}
           <div className="coach-stats" style={{ marginBottom:28 }}>

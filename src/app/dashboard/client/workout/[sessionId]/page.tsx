@@ -230,9 +230,12 @@ export default function ActiveWorkoutPage() {
 
   async function finishWorkout() {
     setSaving(true)
+    const now = new Date()
+    const reviewDue = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24hr SLA
     await supabase.from('workout_sessions').update({
       status: 'completed',
-      completed_at: new Date().toISOString(),
+      completed_at: now.toISOString(),
+      review_due_at: reviewDue.toISOString(),
       duration_seconds: elapsedSeconds,
       session_rpe: parseInt(finishForm.session_rpe) || null,
       energy_level: parseInt(finishForm.energy_level),
