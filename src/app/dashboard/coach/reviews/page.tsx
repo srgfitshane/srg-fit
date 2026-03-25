@@ -270,22 +270,15 @@ export default function ReviewsPage() {
                 <div style={{ textAlign:'center', padding:'20px 0', color:t.teal, fontSize:13, fontWeight:700 }}>Uploading video...</div>
               ) : (
                 /* Upload options */
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 10px', cursor:'pointer', textAlign:'center' as const }}>
-                    <span style={{ fontSize:24 }}>📷</span>
-                    <span style={{ fontSize:12, fontWeight:700, color:t.textDim }}>Record Now</span>
-                    <span style={{ fontSize:10, color:t.textMuted }}>Use camera</span>
-                    <input type="file" accept="video/*" capture="user" style={{ display:'none' }}
-                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadReviewVideo(f, selected.id) }}/>
-                  </label>
-                  <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 10px', cursor:'pointer', textAlign:'center' as const }}>
-                    <span style={{ fontSize:24 }}>📁</span>
-                    <span style={{ fontSize:12, fontWeight:700, color:t.textDim }}>Upload File</span>
-                    <span style={{ fontSize:10, color:t.textMuted }}>From library</span>
-                    <input type="file" accept="video/*" style={{ display:'none' }}
-                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadReviewVideo(f, selected.id) }}/>
-                  </label>
-                </div>
+                <label style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'16px', cursor:'pointer', width:'100%' }}>
+                  <span style={{ fontSize:24 }}>📹</span>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>Choose Video</div>
+                    <div style={{ fontSize:11, color:t.textMuted }}>Record with camera or pick from files</div>
+                  </div>
+                  <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{ display:'none' }}
+                    onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadReviewVideo(f, selected.id) }}/>
+                </label>
               )}
             </div>
 

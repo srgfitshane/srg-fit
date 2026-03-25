@@ -563,31 +563,20 @@ export default function ActiveWorkoutPage() {
               <div style={{marginTop:12,padding:'12px 14px',background:t.surface,border:`1px solid ${t.border}`,borderRadius:12}}>
                 <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:8}}>📹 Form Check</div>
                 <div style={{display:'flex',gap:8}}>
-                  {/* Camera */}
-                  <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:9,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:t.textDim,textAlign:'center' as const}}>
-                    📷 Camera
-                    <input type="file" accept="video/*" capture="environment" style={{display:'none'}}
+                  {/* Single button — opens native file picker on all platforms, user chooses camera or library */}
+                  <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:`1px solid ${videoUploads[ex.id]?t.green+'50':t.border}`,borderRadius:9,padding:'10px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,textAlign:'center' as const}}>
+                    {videoUploading[ex.id] ? '⏳ Uploading...' : videoUploads[ex.id] ? '✓ Uploaded' : '📹 Add Video'}
+                    <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
                       disabled={videoUploading[ex.id]}
                       onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
                   </label>
-                  {/* Library */}
-                  <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:9,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:t.textDim,textAlign:'center' as const}}>
-                    🎞️ Library
-                    <input type="file" accept="video/*" style={{display:'none'}}
-                      disabled={videoUploading[ex.id]}
-                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
-                  </label>
-                </div>
-                {videoUploading[ex.id] && (
-                  <div style={{marginTop:8,fontSize:12,color:t.teal,fontWeight:700}}>Uploading...</div>
-                )}
-                {videoUploads[ex.id] && (
-                  <div style={{marginTop:8,display:'flex',alignItems:'center',gap:8}}>
-                    <span style={{fontSize:12,color:t.green,fontWeight:700}}>✓ Form check uploaded</span>
+                  {videoUploads[ex.id] && (
                     <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
-                      style={{fontSize:11,color:t.teal,textDecoration:'none',fontWeight:600,marginLeft:'auto'}}>View ↗</a>
-                  </div>
-                )}
+                      style={{display:'flex',alignItems:'center',padding:'10px 14px',background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:9,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',flexShrink:0}}>
+                      View ↗
+                    </a>
+                  )}
+                </div>
               </div>
 
               {activeExIdx < exercises.length - 1 && (
