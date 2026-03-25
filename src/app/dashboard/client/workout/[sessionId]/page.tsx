@@ -43,6 +43,7 @@ export default function ActiveWorkoutPage() {
   const [finishForm, setFinishForm] = useState({ session_rpe:'', energy_level:'3', mood:'good', notes_client:'' })
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [isReopened, setIsReopened] = useState(false)
   // Preview toggle per exercise
   const [previewOpen, setPreviewOpen] = useState<Record<string,boolean>>({})
   // Skip state per exercise
@@ -71,10 +72,29 @@ export default function ActiveWorkoutPage() {
   }, [restActive, restTimer])
 
   async function loadSession() {
+    // Mark assigned → in_progress (first start)
     await supabase.from('workout_sessions').update({ status:'in_progress', started_at: new Date().toISOString() })
       .eq('id', sessionId).eq('status','assigned').not('program_id', 'is', null)
 
     const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
+
+    // If client tapped back into a completed session, flag it — don't auto-reopen yet
+    if (sess?.status === 'completed') {
+      setSession(sess)
+      const { data: exs } = await supabase
+        .from('session_exercises')
+        .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, thumbnail_url)')
+        .eq('session_id', sessionId).order('order_index')
+      const initSets: Record<string,SetData[]> = {}
+      for (const ex of exs || []) {
+        initSets[ex.id] = Array.from({length: ex.sets_prescribed || 3}, defaultSet)
+      }
+      setExercises(exs || [])
+      setSetData(initSets)
+      setIsReopened(true)
+      setLoading(false)
+      return
+    }
     // Join exercise detail for preview
     const { data: exs } = await supabase
       .from('session_exercises')
@@ -230,6 +250,14 @@ export default function ActiveWorkoutPage() {
     router.push('/dashboard/client')
   }
 
+  async function reopenWorkout() {
+    await supabase.from('workout_sessions').update({
+      status: 'in_progress',
+      completed_at: null,
+    }).eq('id', sessionId)
+    setIsReopened(false)
+  }
+
   async function finishWorkout() {
     setSaving(true)
     const now = new Date()
@@ -291,6 +319,29 @@ export default function ActiveWorkoutPage() {
   )
 
   if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase}/>
+
+  // ── Re-opened completed workout ──────────────────────────────────────────
+  if (isReopened) return (
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32,textAlign:'center'}}>
+        <div style={{fontSize:48,marginBottom:16}}>✏️</div>
+        <div style={{fontSize:20,fontWeight:900,marginBottom:8}}>{session?.title}</div>
+        <div style={{fontSize:13,color:t.textMuted,marginBottom:32,lineHeight:1.6,maxWidth:280}}>
+          This workout is already marked complete. Want to go back in and update something?
+        </div>
+        <button onClick={reopenWorkout}
+          style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
+          ✏️ Re-open Workout
+        </button>
+        <button onClick={()=>router.push('/dashboard/client')}
+          style={{width:'100%',background:'none',border:`1px solid ${t.border}`,borderRadius:13,padding:'12px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+          ← Back to Dashboard
+        </button>
+      </div>
+    </>
+  )
 
   return (
     <>

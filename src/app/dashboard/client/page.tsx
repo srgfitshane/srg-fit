@@ -1178,7 +1178,9 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
           </p>
           <div style={{ display:'grid', gap:8 }}>
             {completed.map(s => (
-              <div key={s.id} style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? t.teal+'40' : t.border}`, borderRadius:12, padding:'12px 16px' }}>
+              <div key={s.id}
+                onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
+                style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? t.teal+'40' : t.border}`, borderRadius:12, padding:'12px 16px', cursor:'pointer' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: (s.coach_review_notes || s.coach_review_video_url) ? 10 : 0 }}>
                   <span style={{ fontSize:18 }}>✅</span>
                   <div style={{ flex:1 }}>
