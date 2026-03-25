@@ -13,7 +13,7 @@ const PLANS = [
   {
     id: 'monthly',
     label: 'Monthly',
-    price: '$199',
+    price: '$200',
     interval: '/month',
     badge: null,
     priceId: 'price_REPLACE_WITH_MONTHLY_PRICE_ID',
@@ -22,7 +22,7 @@ const PLANS = [
   {
     id: 'weekly',
     label: 'Weekly',
-    price: '$54',
+    price: '$50',
     interval: '/week',
     badge: 'Most Flexible',
     priceId: 'price_REPLACE_WITH_WEEKLY_PRICE_ID',
