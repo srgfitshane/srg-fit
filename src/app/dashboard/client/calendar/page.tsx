@@ -69,6 +69,7 @@ export default function ClientCalendarPage() {
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [viewYear,  setViewYear]  = useState(today.getFullYear())
   const [selected,  setSelected]  = useState<CalItem|null>(null)
+  const [selectedDate, setSelectedDate] = useState<string|null>(null)
   const [mobile,    setMobile]    = useState(false)
 
   useEffect(() => {
@@ -257,7 +258,16 @@ export default function ClientCalendarPage() {
                   const hasJournal = d ? journalDates.has(dateStr) : false
                   return (
                     <div key={i}
-                      onClick={() => { if(d && (dayItems.length || hasJournal)) setSelected(dayItems[0] || null) }}
+                      onClick={() => {
+                        if (!d) return
+                        if (mobile) {
+                          const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+                          setSelectedDate(prev => prev === ds ? null : ds)
+                          setSelected(dayItems[0] || null)
+                        } else {
+                          if (dayItems.length) setSelected(dayItems[0])
+                        }
+                      }}
                       className="cal-cell"
                       style={{
                         background: isToday ? t.surfaceHigh : t.surface,
@@ -298,65 +308,65 @@ export default function ClientCalendarPage() {
                 })}
               </div>
 
-              {/* Mobile: selected event detail inline */}
-              {mobile && selected && (
-                <div style={{ background:t.surface, border:'1px solid '+(selected.color+'50'), borderRadius:14, padding:16, marginTop:14 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                    <div>
-                      <div style={{ fontSize:11, fontWeight:700, color:selected.color, textTransform:'uppercase', marginBottom:4 }}>
-                        {selected.icon} {selected.label}
-                      </div>
-                      <div style={{ fontSize:15, fontWeight:800 }}>{selected.title}</div>
+              {/* Mobile: tapped day panel — shows all events for that day */}
+              {mobile && selectedDate && (() => {
+                const dayEvts = items.filter(e => e.date === selectedDate)
+                const hasJ = journalDates.has(selectedDate)
+                const displayDate = new Date(selectedDate + 'T00:00:00').toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })
+                return (
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:16, marginTop:14 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                      <div style={{ fontSize:13, fontWeight:800 }}>{displayDate}</div>
+                      <button onClick={()=>setSelectedDate(null)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, lineHeight:1 }}>✕</button>
                     </div>
-                    <button onClick={()=>setSelected(null)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16 }}>✕</button>
-                  </div>
-                  <div style={{ fontSize:12, color:t.textDim, marginBottom:6 }}>📅 {fmtDate(selected.date)}</div>
-                  {selected.start_at && (
-                    <div style={{ fontSize:12, color:t.textDim, marginBottom:6 }}>
-                      🕐 {fmtTime(selected.start_at)}{selected.end_at && ` → ${fmtTime(selected.end_at)}`}
-                    </div>
-                  )}
-                  {selected.type==='workout' && selected.status==='completed' && (
-                    <div style={{ display:'flex', gap:10, marginBottom:6, flexWrap:'wrap' }}>
-                      {selected.session_rpe && <span style={{ fontSize:11, color:t.orange }}>RPE {selected.session_rpe}</span>}
-                      {selected.mood && <span style={{ fontSize:14 }}>{MOOD_ICONS[selected.mood]||''}</span>}
-                      {selected.duration_seconds && <span style={{ fontSize:11, color:t.teal }}>⏱ {fmtDur(selected.duration_seconds)}</span>}
-                    </div>
-                  )}
-                  {selected.description && (
-                    <div style={{ fontSize:12, color:t.textMuted, borderTop:'1px solid '+t.border, paddingTop:8, marginTop:8, lineHeight:1.5 }}>{selected.description}</div>
-                  )}
-                  {selected.type==='workout' && selected.source_id && selected.status!=='completed' && (
-                    <button onClick={()=>router.push('/dashboard/client/workout/'+selected.source_id)}
-                      style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                      {selected.status==='in_progress' ? '▶ Continue Workout' : '💪 Start Workout'}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Mobile: upcoming list */}
-              {mobile && (
-                <div style={{ marginTop:16 }}>
-                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Upcoming</div>
-                  {upcomingItems.length===0 ? (
-                    <div style={{ color:t.textMuted, fontSize:12, textAlign:'center', padding:20 }}>Nothing coming up</div>
-                  ) : upcomingItems.map(e => (
-                    <div key={e.id} onClick={()=>setSelected(e)}
-                      style={{ display:'flex', gap:10, padding:'10px 12px', background:t.surface, border:'1px solid '+t.border, borderRadius:12, marginBottom:8, cursor:'pointer', alignItems:'flex-start' }}>
-                      <div style={{ width:3, minHeight:36, borderRadius:2, background:e.color, flexShrink:0, marginTop:2 }}/>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:13, fontWeight:700 }}>{e.title}</div>
-                        <div style={{ fontSize:11, color:t.textMuted }}>
-                          {new Date(e.date+'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}
-                          {e.start_at ? ' · '+fmtTime(e.start_at) : ''}
+                    {dayEvts.length === 0 && !hasJ && (
+                      <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'12px 0' }}>Nothing scheduled</div>
+                    )}
+                    {dayEvts.map(e => (
+                      <div key={e.id} style={{ background:t.surfaceHigh, border:'1px solid '+e.color+'30', borderRadius:11, padding:'12px 14px', marginBottom:8 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: (e.description || e.session_rpe || e.start_at) ? 8 : 0 }}>
+                          <span style={{ fontSize:16 }}>{e.icon}</span>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:800 }}>{e.title}</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:e.color }}>{e.label}</div>
+                          </div>
+                          {e.start_at && <div style={{ fontSize:11, color:t.textMuted }}>{fmtTime(e.start_at)}{e.end_at ? ` – ${fmtTime(e.end_at)}` : ''}</div>}
                         </div>
+                        {e.type==='workout' && e.status==='completed' && (e.session_rpe || e.mood || e.duration_seconds) && (
+                          <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const, marginBottom:6 }}>
+                            {e.session_rpe && <span style={{ fontSize:11, color:t.orange }}>RPE {e.session_rpe}</span>}
+                            {e.mood && <span style={{ fontSize:13 }}>{MOOD_ICONS[e.mood]||''}</span>}
+                            {e.duration_seconds && <span style={{ fontSize:11, color:t.teal }}>⏱ {fmtDur(e.duration_seconds)}</span>}
+                          </div>
+                        )}
+                        {e.description && (
+                          <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5, marginBottom: e.type==='workout'&&e.source_id&&e.status!=='completed' ? 8 : 0 }}>
+                            {e.description}
+                          </div>
+                        )}
+                        {e.type==='workout' && e.source_id && e.status!=='completed' && (
+                          <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
+                            style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                            {e.status==='in_progress' ? '▶ Continue Workout' : '💪 Start Workout'}
+                          </button>
+                        )}
+                        {e.type==='workout' && e.source_id && e.status==='completed' && (
+                          <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
+                            style={{ width:'100%', background:t.green+'18', border:'1px solid '+t.green+'40', borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
+                            ✏️ Re-open Workout
+                          </button>
+                        )}
                       </div>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:20, background:e.color+'18', color:e.color }}>{e.label}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                    {hasJ && (
+                      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:11 }}>
+                        <span style={{ fontSize:16 }}>✍️</span>
+                        <div style={{ fontSize:13, fontWeight:700 }}>Journal entry</div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Sidebar — desktop only */}
