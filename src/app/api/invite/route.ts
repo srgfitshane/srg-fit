@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srg-fit.vercel.app'
+    const siteUrl = request.nextUrl.origin
 
     // ── Resend path: re-invite an existing user ──────────────────────────────
     if (resend) {

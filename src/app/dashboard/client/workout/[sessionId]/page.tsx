@@ -44,6 +44,7 @@ export default function ActiveWorkoutPage() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isReopened, setIsReopened] = useState(false)
+  const [clientGender, setClientGender] = useState<string|null>(null)
   // Preview toggle per exercise
   const [previewOpen, setPreviewOpen] = useState<Record<string,boolean>>({})
   // Skip state per exercise
@@ -78,12 +79,18 @@ export default function ActiveWorkoutPage() {
 
     const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
 
+    // Fetch client gender to serve correct demo video
+    if (sess?.client_id) {
+      const { data: clientRow } = await supabase.from('clients').select('gender').eq('id', sess.client_id).single()
+      if (clientRow?.gender) setClientGender(clientRow.gender)
+    }
+
     // If client tapped back into a completed session, flag it — don't auto-reopen yet
     if (sess?.status === 'completed') {
       setSession(sess)
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, thumbnail_url)')
+        .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
         .eq('session_id', sessionId).order('order_index')
 
       // Fetch already-logged sets so re-open shows real data
@@ -120,7 +127,7 @@ export default function ActiveWorkoutPage() {
     // Join exercise detail for preview
     const { data: exs } = await supabase
       .from('session_exercises')
-      .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, thumbnail_url)')
+      .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
       .eq('session_id', sessionId)
       .order('order_index')
 
@@ -561,20 +568,21 @@ export default function ActiveWorkoutPage() {
                       </div>
                     )}
 
-                    {/* Video embed — inline iframe, no account picker */}
-                    {ex.exercise?.video_url && (
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Demo Video</div>
-                        <div style={{position:'relative',width:'100%',paddingTop:'56.25%',borderRadius:10,overflow:'hidden',background:'#000'}}>
-                          <iframe
-                            src={ex.exercise.video_url.replace('/view','/preview').replace('/edit','/preview')}
-                            style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',border:'none'}}
-                            allow="autoplay"
-                            allowFullScreen
-                          />
+                    {/* Video embed — shows female version for female-identified clients if available */}
+                    {(ex.exercise?.video_url || ex.exercise?.video_url_female) && (() => {
+                      const isFemale = clientGender === 'female'
+                      const demoUrl = (isFemale && ex.exercise?.video_url_female)
+                        ? ex.exercise.video_url_female
+                        : ex.exercise?.video_url
+                      return demoUrl ? (
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Demo Video</div>
+                          <video src={demoUrl} controls playsInline preload="metadata"
+                            onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
+                            style={{width:'100%',borderRadius:10,maxHeight:240,background:'#000',display:'block'}}/>
                         </div>
-                      </div>
-                    )}
+                      ) : null
+                    })()}
 
                     {/* No data fallback */}
                     {!ex.exercise?.description && !ex.exercise?.cues && !ex.exercise?.muscles?.length && !ex.exercise?.video_url && (

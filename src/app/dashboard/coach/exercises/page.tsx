@@ -54,16 +54,17 @@ export default function ExerciseLibrary() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     const { data } = await supabase.from('exercises').select(
-      'id,name,muscles,secondary_muscles,equipment,difficulty,movement_pattern,tags,description,cues,video_url,thumbnail_url,coach_id'
+      'id,name,muscles,secondary_muscles,equipment,difficulty,movement_pattern,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
     ).order('name')
     setExercises(data || [])
     setLoading(false)
   }
 
-  const uploadVideo = async (exerciseId: string, file: File): Promise<string|null> => {
+  const uploadVideo = async (exerciseId: string, file: File, field: 'video_url'|'video_url_female' = 'video_url'): Promise<string|null> => {
     setUploading(exerciseId)
     const ext = file.name.split('.').pop()
-    const path = `${exerciseId}/demo.${ext}`
+    const suffix = field === 'video_url_female' ? 'demo_f' : 'demo'
+    const path = `${exerciseId}/${suffix}.${ext}`
     const { error } = await supabase.storage.from('exercise-videos')
       .upload(path, file, { upsert: true, contentType: file.type })
     if (error) { setUploading(null); console.error(error); return null }
@@ -106,11 +107,11 @@ export default function ExerciseLibrary() {
     setEditingId(null); setSaving(false)
   }
 
-  const quickUpload = async (id: string, file: File) => {
-    const url = await uploadVideo(id, file)
+  const quickUpload = async (id: string, file: File, field: 'video_url'|'video_url_female' = 'video_url') => {
+    const url = await uploadVideo(id, file, field)
     if (url) {
-      await supabase.from('exercises').update({ video_url: url }).eq('id', id)
-      setExercises(p => p.map(e => e.id === id ? { ...e, video_url: url } : e))
+      await supabase.from('exercises').update({ [field]: url }).eq('id', id)
+      setExercises(p => p.map(e => e.id === id ? { ...e, [field]: url } : e))
     }
   }
 
@@ -212,7 +213,8 @@ export default function ExerciseLibrary() {
                   isUploading={uploading===ex.id}
                   onEdit={()=>setEditingId(editingId===ex.id?null:ex.id)}
                   onSave={(changes:any)=>saveEdit(ex.id,changes)}
-                  onUpload={(f:File)=>quickUpload(ex.id,f)}
+                  onUpload={(f:File)=>quickUpload(ex.id,f,'video_url')}
+                  onUploadFemale={(f:File)=>quickUpload(ex.id,f,'video_url_female')}
                   onDelete={()=>deleteExercise(ex.id)}
                   saving={saving} t={t}/>
               ))}
@@ -313,9 +315,10 @@ export default function ExerciseLibrary() {
 }
 
 // ── ExerciseCard ──────────────────────────────────────────────────────────
-function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, onDelete, saving, t }: any) {
+function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, onUploadFemale, onDelete, saving, t }: any) {
   const [draft, setDraft] = useState<any>(null)
   const [playing, setPlaying] = useState(false)
+  const [videoGender, setVideoGender] = useState<'male'|'female'>('male')
 
   const openEdit = () => {
     setDraft({
@@ -371,47 +374,80 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       <div style={{height:3,background:isEditing?t.teal:ex.video_url&&hasDetail&&ex.cues?t.green:`linear-gradient(90deg,${ex.video_url?t.green:t.red}40,${hasDetail?t.green:t.orange}40,${ex.cues?t.green:t.purple}40)`}}/>
 
       {/* Video area */}
-      {!isEditing && (
-        <div style={{background:'#000',aspectRatio:'16/9',position:'relative',cursor:'pointer',minHeight:140}} onClick={()=>setPlaying(p=>!p)}>
-          {ex.video_url && playing ? (
-            <video src={ex.video_url} autoPlay controls style={{width:'100%',height:'100%',objectFit:'contain'}}/>
-          ) : ex.video_url ? (
-            /* First-frame poster — video loads metadata only, shows frame at 0.1s */
-            <>
-              <video
-                src={ex.video_url}
-                preload="metadata"
-                muted
-                playsInline
-                onLoadedMetadata={e => { (e.target as HTMLVideoElement).currentTime = 0.1 }}
-                style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
-              />
-              {/* Play button overlay */}
-              <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.25)'}}>
-                <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,0.55)',border:'2px solid rgba(255,255,255,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>▶</div>
+      {!isEditing && (() => {
+        const activeUrl = videoGender === 'female' && ex.video_url_female ? ex.video_url_female : ex.video_url
+        const hasFemale = !!ex.video_url_female
+        const hasMale   = !!ex.video_url
+        return (
+          <div style={{background:'#000',aspectRatio:'16/9',position:'relative',minHeight:140}}>
+            {/* Gender toggle — top-left */}
+            {(hasMale || hasFemale) && (
+              <div style={{position:'absolute',top:6,left:6,zIndex:2,display:'flex',gap:4}}>
+                <button onClick={e=>{e.stopPropagation();setVideoGender('male');setPlaying(false)}}
+                  style={{background:videoGender==='male'?'rgba(0,201,177,0.85)':'rgba(0,0,0,0.55)',border:'none',borderRadius:5,padding:'3px 8px',fontSize:10,fontWeight:700,color:videoGender==='male'?'#000':'rgba(255,255,255,0.6)',cursor:'pointer'}}>
+                  ♂ Male
+                </button>
+                <button onClick={e=>{e.stopPropagation();setVideoGender('female');setPlaying(false)}}
+                  style={{background:videoGender==='female'?'rgba(244,114,182,0.85)':'rgba(0,0,0,0.55)',border:'none',borderRadius:5,padding:'3px 8px',fontSize:10,fontWeight:700,color:videoGender==='female'?'#000':'rgba(255,255,255,0.6)',cursor:'pointer'}}>
+                  ♀ Female
+                </button>
               </div>
-              {/* Replace button */}
-              <div style={{position:'absolute',top:6,right:6}}>
+            )}
+
+            {/* Video or placeholder */}
+            {activeUrl ? (
+              <div style={{width:'100%',height:'100%',cursor:'pointer'}} onClick={()=>setPlaying(p=>!p)}>
+                {playing ? (
+                  <video src={activeUrl} autoPlay controls style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                ) : (
+                  <>
+                    <video src={activeUrl} preload="metadata" muted playsInline
+                      onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
+                      style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.25)'}}>
+                      <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,0.55)',border:'2px solid rgba(255,255,255,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>▶</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              /* No video for this gender — show upload prompt */
+              <div style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8}}>
                 <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                  <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{setPlaying(false);if(e.target.files?.[0])onUpload(e.target.files[0]);(e.target as HTMLInputElement).value=''}}/>
-                  <span style={{background:'rgba(0,0,0,.6)',border:'1px solid rgba(255,255,255,.15)',borderRadius:6,padding:'3px 8px',fontSize:10,color:'rgba(255,255,255,.7)',cursor:'pointer'}}>
+                  <input type="file" accept="video/*" style={{display:'none'}}
+                    onChange={e=>{ const f=e.target.files?.[0]; if(f) videoGender==='female'?onUploadFemale(f):onUpload(f); (e.target as HTMLInputElement).value='' }}/>
+                  <div style={{background:'#1d1d2e',border:'1px dashed #252538',borderRadius:10,padding:'10px 18px',fontSize:12,color:'#5a5a78',cursor:'pointer',textAlign:'center' as const}}>
+                    {isUploading?'Uploading...': videoGender==='female'?'📹 Upload female video':'📹 Upload video'}
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Replace + add other gender — top-right */}
+            <div style={{position:'absolute',top:6,right:6,zIndex:2,display:'flex',flexDirection:'column',gap:4,alignItems:'flex-end'}}>
+              {activeUrl && !playing && (
+                <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
+                  <input type="file" accept="video/*" style={{display:'none'}}
+                    onChange={e=>{ setPlaying(false); const f=e.target.files?.[0]; if(f) videoGender==='female'?onUploadFemale(f):onUpload(f); (e.target as HTMLInputElement).value='' }}/>
+                  <span style={{background:'rgba(0,0,0,.6)',border:'1px solid rgba(255,255,255,.15)',borderRadius:6,padding:'3px 8px',fontSize:10,color:'rgba(255,255,255,.7)',cursor:'pointer',display:'block'}}>
                     {isUploading?'⏳':'↑ Replace'}
                   </span>
                 </label>
-              </div>
-            </>
-          ) : (
-            <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:8}}>
-              <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{if(e.target.files?.[0])onUpload(e.target.files[0]);(e.target as HTMLInputElement).value=''}}/>
-                <div style={{background:t.surfaceHigh,border:'1px dashed '+t.border,borderRadius:10,padding:'10px 18px',fontSize:12,color:t.textMuted,cursor:'pointer',textAlign:'center' as const}}>
-                  {isUploading?'Uploading...':'📹 Upload video'}
-                </div>
-              </label>
+              )}
+              {/* Quick-add the missing gender's video */}
+              {hasMale && !hasFemale && videoGender==='male' && (
+                <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
+                  <input type="file" accept="video/*" style={{display:'none'}}
+                    onChange={e=>{ const f=e.target.files?.[0]; if(f) onUploadFemale(f); (e.target as HTMLInputElement).value='' }}/>
+                  <span style={{background:'rgba(244,114,182,0.7)',border:'none',borderRadius:6,padding:'3px 8px',fontSize:10,color:'#000',fontWeight:700,cursor:'pointer',display:'block'}}>
+                    + ♀ Add female
+                  </span>
+                </label>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )
+      })()}
 
       <div style={{padding:'12px 14px'}}>
         {!isEditing ? (
