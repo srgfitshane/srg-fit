@@ -72,7 +72,9 @@ export default function InvitesPage() {
       })
       const result = await res.json()
       if (!res.ok) { alert(result.error || 'Failed to send invite'); setSending(false); return }
-      // inviteUserByEmail sends via Supabase SMTP — no manual link needed
+      // Set the generated secure link in the UI so the coach can text it
+      setSendResult({ url: result.action_link, note: 'Text this secure setup link directly to your client!' })
+
       // Reload invites list to reflect new entry
       const { data: inv } = await supabase.from('client_invites').select('*').eq('coach_id', coachId).order('created_at', { ascending: false })
       setInvites(inv || [])
@@ -110,12 +112,18 @@ export default function InvitesPage() {
       status: 'pending',
       expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString()
     }).eq('id', id)
-    // Re-use the invite API route with resend=true to trigger a new Supabase invite email
-    await fetch('/api/invite', {
+    // Re-use the invite API route with resend=true to generate a new secure link
+    const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: inv.email, resend: true, coachId }),
     })
+    const result = await res.json()
+    if (res.ok && result.action_link) {
+      setLastInvite(inv)
+      setSendResult({ url: result.action_link, note: 'Text this brand new secure link directly to your client!' })
+      setShowNext(true)
+    }
     setInvites(p => p.map(i => i.id === id ? { ...i, status: 'pending' } : i))
   }
 
