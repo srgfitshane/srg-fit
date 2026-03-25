@@ -19,6 +19,7 @@ export default function SetPasswordPage() {
 }
 
 function SetPasswordInner() {
+  const [initialHash] = useState(typeof window !== 'undefined' ? window.location.hash : 'SSR')
   const [password,  setPassword]  = useState('')
   const [confirm,   setConfirm]   = useState('')
   const [loading,   setLoading]   = useState(false)
@@ -178,6 +179,8 @@ function SetPasswordInner() {
                 {!sessionOk && (
                   <div style={{ background:'#f5a62315', border:'1px solid #f5a62340', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#f5a623', marginBottom:16 }}>
                     ⚠️ Waiting for your invite link to be verified... If this persists, try clicking the link in your email again.
+                    <br/><br/>
+                    <span style={{ fontSize:10, color:t.textMuted }}>DIAGNOSTIC HASH: {initialHash || 'EMPTY'}</span>
                   </div>
                 )}
 
