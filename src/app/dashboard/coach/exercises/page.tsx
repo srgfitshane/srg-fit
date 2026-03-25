@@ -282,6 +282,14 @@ export default function ExerciseLibrary() {
               </div>
 
               <div>
+                <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:6}}>Secondary Muscles</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+                  {MUSCLES.map(m=><button key={m} onClick={()=>setNewEx(p=>({...p,secondary_muscles:p.secondary_muscles.includes(m)?p.secondary_muscles.filter(x=>x!==m):[...p.secondary_muscles,m]}))}
+                    style={{padding:'4px 10px',borderRadius:6,border:'1px solid '+(newEx.secondary_muscles.includes(m)?t.border:t.border),background:newEx.secondary_muscles.includes(m)?t.surfaceHigh:'transparent',fontSize:11,color:newEx.secondary_muscles.includes(m)?t.textDim:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>{m}</button>)}
+                </div>
+              </div>
+
+              <div>
                 <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:5}}>Description</div>
                 <textarea value={newEx.description} onChange={e=>setNewEx(p=>({...p,description:e.target.value}))} rows={2} placeholder="Brief description of the exercise..." style={{...inp(),resize:'none' as any,lineHeight:1.6}}/>
               </div>
