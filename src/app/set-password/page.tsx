@@ -31,6 +31,21 @@ function SetPasswordInner() {
 
   useEffect(() => {
     const checkSession = async () => {
+      // 0. Manual Hash Enforcement (Bulletproof Implicit Flow)
+      if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const access_token = hashParams.get('access_token')
+        const refresh_token = hashParams.get('refresh_token')
+        if (access_token && refresh_token) {
+          const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
+          if (!setErr) {
+            setSessionOk(true)
+            window.location.hash = '' // Clean URL
+            return
+          }
+        }
+      }
+
       // 1. Manually check if session already exists (solves race conditions)
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
