@@ -120,7 +120,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const router       = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const today    = new Date().toISOString().split('T')[0]
+  // Use local date, not UTC — prevents "rest day" when DB is UTC-ahead of client's timezone
+  const today = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  })()
 
   useEffect(() => {
     const loadClientData = async (clientData: any, todayStr: string) => {
@@ -165,19 +169,22 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           .limit(5)
         setWorkoutLogs(wlData || [])
 
-        // Today's workout session — only show if scheduled for today or already in progress
-        // Require program_id to filter out orphaned sessions with no exercises
+        // Today's workout session — show today's session, or any in_progress,
+        // or fall back to the next upcoming session so Rest Day is only true rest days
         const { data: nextSess } = await supabase
           .from('workout_sessions')
           .select('id, title, scheduled_date, status')
           .eq('client_id', clientData.id)
           .not('program_id', 'is', null)
-          .or(`scheduled_date.eq.${todayStr},status.eq.in_progress`)
           .in('status', ['assigned', 'in_progress'])
+          .or(`scheduled_date.eq.${todayStr},status.eq.in_progress,scheduled_date.gte.${todayStr}`)
+          .order('status', { ascending: false })  // in_progress first
           .order('scheduled_date', { ascending: true })
           .limit(1)
           .single()
-        setNextSession(nextSess || null)
+        // Only show on Today if it's actually today or in_progress — otherwise show as "upcoming"
+        const isToday = nextSess?.scheduled_date === todayStr || nextSess?.status === 'in_progress'
+        setNextSession(nextSess ? { ...nextSess, isToday } : null)
 
         // Pending check-in form assignments
         const { data: pendingCI } = await supabase
@@ -510,13 +517,18 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:800 }}>{nextSession.title}</div>
                       <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
-                        {nextSession.scheduled_date ? `Scheduled ${nextSession.scheduled_date}` : 'Ready when you are'}
+                        {nextSession.status === 'in_progress'
+                          ? 'In progress — resume where you left off'
+                          : nextSession.isToday
+                          ? "Today's workout"
+                          : `Up next · ${new Date(nextSession.scheduled_date + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}`
+                        }
                       </div>
                     </div>
                   </div>
                   <button onClick={()=>router.push(`/dashboard/client/workout/${nextSession.id}`)}
                     style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    Start Workout 💪
+                    {nextSession.status === 'in_progress' ? 'Resume Workout 🔄' : nextSession.isToday ? 'Start Workout 💪' : 'Start Early 💪'}
                   </button>
                 </>
               ) : (
