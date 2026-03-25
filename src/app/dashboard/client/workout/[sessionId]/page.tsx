@@ -85,9 +85,31 @@ export default function ActiveWorkoutPage() {
         .from('session_exercises')
         .select('*, exercise:exercises(description, cues, muscles, secondary_muscles, equipment, video_url, thumbnail_url)')
         .eq('session_id', sessionId).order('order_index')
+
+      // Fetch already-logged sets so re-open shows real data
+      const { data: loggedSets } = await supabase
+        .from('exercise_sets')
+        .select('session_exercise_id, set_number, reps_completed, weight_value, weight_unit, rpe, notes, is_warmup')
+        .eq('session_id', sessionId).order('set_number')
+      const loggedByEx: Record<string, any[]> = {}
+      for (const s of loggedSets || []) {
+        if (!loggedByEx[s.session_exercise_id]) loggedByEx[s.session_exercise_id] = []
+        loggedByEx[s.session_exercise_id].push(s)
+      }
       const initSets: Record<string,SetData[]> = {}
       for (const ex of exs || []) {
-        initSets[ex.id] = Array.from({length: ex.sets_prescribed || 3}, defaultSet)
+        const already = loggedByEx[ex.id] || []
+        const rows: SetData[] = already.map((s: any) => ({
+          reps_completed: s.reps_completed != null ? String(s.reps_completed) : '',
+          weight_value:   s.weight_value   != null ? String(s.weight_value)   : '',
+          weight_unit:    (s.weight_unit || 'lbs') as 'lbs'|'kg'|'bw',
+          rpe:            s.rpe            != null ? String(s.rpe)            : '',
+          notes:          s.notes || '',
+          is_warmup:      s.is_warmup || false,
+          logged:         true,
+        }))
+        while (rows.length < (ex.sets_prescribed || 3)) rows.push(defaultSet())
+        initSets[ex.id] = rows
       }
       setExercises(exs || [])
       setSetData(initSets)
@@ -102,10 +124,37 @@ export default function ActiveWorkoutPage() {
       .eq('session_id', sessionId)
       .order('order_index')
 
+    // Fetch already-logged sets for THIS session so resuming shows real data
+    const { data: loggedSets } = await supabase
+      .from('exercise_sets')
+      .select('session_exercise_id, set_number, reps_completed, weight_value, weight_unit, rpe, notes, is_warmup')
+      .eq('session_id', sessionId)
+      .order('set_number')
+
+    // Index by session_exercise_id for fast lookup
+    const loggedByEx: Record<string, any[]> = {}
+    for (const s of loggedSets || []) {
+      if (!loggedByEx[s.session_exercise_id]) loggedByEx[s.session_exercise_id] = []
+      loggedByEx[s.session_exercise_id].push(s)
+    }
+
     const initSets: Record<string,SetData[]> = {}
     for (const ex of exs || []) {
-      const count = ex.sets_prescribed || 3
-      initSets[ex.id] = Array.from({length: count}, defaultSet)
+      const already = loggedByEx[ex.id] || []
+      const prescribed = ex.sets_prescribed || 3
+      // Build set rows: fill logged ones first, then pad with blank rows up to prescribed count
+      const rows: SetData[] = already.map((s: any) => ({
+        reps_completed: s.reps_completed != null ? String(s.reps_completed) : '',
+        weight_value:   s.weight_value   != null ? String(s.weight_value)   : '',
+        weight_unit:    (s.weight_unit || 'lbs') as 'lbs'|'kg'|'bw',
+        rpe:            s.rpe            != null ? String(s.rpe)            : '',
+        notes:          s.notes || '',
+        is_warmup:      s.is_warmup || false,
+        logged:         true,   // already in DB — show as logged
+      }))
+      // Pad up to prescribed count with blank sets if needed
+      while (rows.length < prescribed) rows.push(defaultSet())
+      initSets[ex.id] = rows
     }
 
     // Fetch previous session sets for same exercises
