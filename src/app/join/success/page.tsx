@@ -58,7 +58,7 @@ function SuccessInner() {
           </div>
 
           <div style={{ fontSize:12, color:t.textDim }}>
-            Questions? Email <a href="mailto:shane@srgfit.app" style={{ color:t.teal, textDecoration:'none' }}>shane@srgfit.app</a>
+            Questions? Email <a href="mailto:shane@srgfit.training" style={{ color:t.teal, textDecoration:'none' }}>shane@srgfit.training</a>
           </div>
           <div style={{ marginTop:24, fontSize:11, color:t.textDim }}>Be Kind to Yourself & Stay Awesome 💪</div>
         </div>

@@ -156,7 +156,7 @@ export default function JoinPage() {
           <div style={{ marginTop:28, background:t.tealDim, border:`1px solid ${t.teal}30`, borderRadius:14, padding:'16px 18px', textAlign:'center' }}>
             <div style={{ fontSize:13, fontWeight:800, color:t.teal, marginBottom:5 }}>Questions before you join?</div>
             <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6 }}>
-              Reach out at <a href="mailto:shane@srgfit.app" style={{ color:t.teal, textDecoration:'none' }}>shane@srgfit.app</a> — I personally respond to every message.
+              Reach out at <a href="mailto:shane@srgfit.training" style={{ color:t.teal, textDecoration:'none' }}>shane@srgfit.training</a> — I personally respond to every message.
             </div>
           </div>
           <div style={{ textAlign:'center', marginTop:28, fontSize:11, color:t.textDim }}>Be Kind to Yourself & Stay Awesome 💪</div>
