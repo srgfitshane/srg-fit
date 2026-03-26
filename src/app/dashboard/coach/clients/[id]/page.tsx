@@ -92,6 +92,7 @@ export default function ClientDetail() {
         .single()
       setClient(clientData)
       if (clientData?.coach_notes) setCoachNotes(clientData.coach_notes)
+      if (clientData?.gender) setClientGender(clientData.gender)
 
       // Load forms for assign form feature
       const { data: formData } = await supabase
@@ -192,6 +193,8 @@ export default function ClientDetail() {
 
   const [coachNotes, setCoachNotes] = useState('')
   const [notesSaved, setNotesSaved] = useState(false)
+  const [clientGender, setClientGender] = useState('')
+  const [genderSaved, setGenderSaved] = useState(false)
   const [forms,        setForms]        = useState<any[]>([])
   const [showAssignForm, setShowAssignForm] = useState(false)
   const [assignFormId,   setAssignFormId]   = useState('')
@@ -463,7 +466,32 @@ export default function ClientDetail() {
               {/* Coach notes */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Coach Notes</div>
-                <textarea placeholder="Private notes about this client..." rows={6}
+
+                {/* Gender */}
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Demo Video Gender</div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <select value={clientGender} onChange={e => { setClientGender(e.target.value); setGenderSaved(false) }}
+                      style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:clientGender ? t.text : t.textMuted, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as any, outline:'none' }}>
+                      <option value="">Not set (defaults to male)</option>
+                      <option value="male">♂ Male</option>
+                      <option value="female">♀ Female</option>
+                      <option value="non-binary">Non-binary</option>
+                      <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                    <button onClick={async () => {
+                      await supabase.from('clients').update({ gender: clientGender || null }).eq('id', clientId)
+                      setGenderSaved(true)
+                      setTimeout(() => setGenderSaved(false), 2000)
+                    }}
+                      style={{ background: genderSaved ? t.green : t.tealDim, border:'1px solid '+(genderSaved ? t.green : t.teal)+'40', borderRadius:9, padding:'9px 16px', fontSize:12, fontWeight:700, color: genderSaved ? '#000' : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, transition:'background .3s' }}>
+                      {genderSaved ? '✓ Saved!' : 'Save'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:5 }}>Controls which demo video this client sees during workouts</div>
+                </div>
+
+                <textarea placeholder="Private notes about this client..." rows={5}
                   value={coachNotes}
                   onChange={e=>{ setCoachNotes(e.target.value); setNotesSaved(false) }}
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.6 }} />
