@@ -34,7 +34,7 @@ const NAV = [
   { id:'metrics',   icon:'metrics',   label:'Metrics'   },
 ]
 
-// SVG icons ΓÇö cleaner than emoji for bottom nav
+// SVG icons — cleaner than emoji for bottom nav
 const NavIcon = ({ id, active }: { id: string, active: boolean }) => {
   const c = active ? '#00c9b1' : '#5a5a78'
   const s = { width:22, height:22 } as const
@@ -122,7 +122,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const router       = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  // Use local date, not UTC ΓÇö prevents "rest day" when DB is UTC-ahead of client's timezone
+  // Use local date, not UTC — prevents "rest day" when DB is UTC-ahead of client's timezone
   const today = (() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -171,7 +171,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           .limit(5)
         setWorkoutLogs(wlData || [])
 
-        // Today's workout session ΓÇö show today's session, or any in_progress,
+        // Today's workout session — show today's session, or any in_progress,
         // or fall back to the next upcoming session so Rest Day is only true rest days
         const { data: nextSess } = await supabase
           .from('workout_sessions')
@@ -184,11 +184,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           .order('scheduled_date', { ascending: true })
           .limit(1)
           .single()
-        // Only show on Today if it's actually today or in_progress ΓÇö otherwise show as "upcoming"
+        // Only show on Today if it's actually today or in_progress — otherwise show as "upcoming"
         const isToday = nextSess?.scheduled_date === todayStr || nextSess?.status === 'in_progress'
         setNextSession(nextSess ? { ...nextSess, isToday } : null)
 
-        // Unseen coach reviews ΓÇö sessions with a review the client hasn't seen yet
+        // Unseen coach reviews — sessions with a review the client hasn't seen yet
         const { data: reviewData } = await supabase
           .from('workout_sessions')
           .select('id, title, coach_review_notes, coach_review_video_url, coach_reviewed_at')
@@ -248,7 +248,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     } // end loadClientData
 
     const load = async () => {
-      // ΓöÇΓöÇ Coach preview mode: load by client record ID directly ΓöÇΓöÇ
+      // ── Coach preview mode: load by client record ID directly ──
       if (overrideClientId) {
         const { data: clientData } = await supabase
           .from('clients').select('*').eq('id', overrideClientId).single()
@@ -265,7 +265,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         return
       }
 
-      // ΓöÇΓöÇ Normal client mode ΓöÇΓöÇ
+      // ── Normal client mode ──
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
@@ -296,7 +296,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     const tab = searchParams.get('tab')
     if (tab) setActiveNav(tab)
 
-    // Midnight refresh ΓÇö re-run when the date rolls over so Today tab stays fresh
+    // Midnight refresh — re-run when the date rolls over so Today tab stays fresh
     const now = new Date()
     const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime()
     const midnightTimer = setTimeout(() => { load() }, msUntilMidnight)
@@ -424,15 +424,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         {overrideClientId && (
           <div style={{ background:`linear-gradient(135deg,${t.orange}ee,${t.orange}bb)`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <span style={{ fontSize:18 }}>≡ƒÄ╜</span>
+              <span style={{ fontSize:18 }}>🎽</span>
               <div>
                 <div style={{ fontSize:12, fontWeight:800, color:'#000', lineHeight:1.3 }}>Logging for {profile?.full_name}</div>
-                <div style={{ fontSize:10, color:'rgba(0,0,0,0.6)', fontWeight:600 }}>Coach mode ΓÇö fully interactive</div>
+                <div style={{ fontSize:10, color:'rgba(0,0,0,0.6)', fontWeight:600 }}>Coach mode — fully interactive</div>
               </div>
             </div>
             <button onClick={() => router.back()}
               style={{ background:'rgba(0,0,0,0.15)', border:'1px solid rgba(0,0,0,0.2)', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              ΓåÉ Back
+              ← Back
             </button>
           </div>
         )}
@@ -457,48 +457,48 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           </button>
         </div>
 
-        {/* Main content ΓÇö padded for bottom nav */}
+        {/* Main content — padded for bottom nav */}
         <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 100px' }}>
 
           {/* Click-outside dismiss for + menu */}
           {plusOpen && <div onClick={()=>setPlusOpen(false)} style={{ position:'fixed', inset:0, zIndex:19 }} />}
 
-          {/* ΓöÇΓöÇ TODAY TAB ΓöÇΓöÇ */}
+          {/* ── TODAY TAB ── */}
           {activeNav === 'today' && <>
 
-          {/* ΓöÇΓöÇ 1. GREETING ΓöÇΓöÇ */}
+          {/* ── 1. GREETING ── */}
           <div style={{ marginBottom:20 }} className="fade">
             <div style={{ fontSize:23, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', lineHeight:1.2, marginBottom:3 }}>
-              {${getGreeting()}, ${profile?.full_name?.split(' ')[0]} 👋 ≡ƒæï
+              {getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋
             </div>
             <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
 
-          {/* ΓöÇΓöÇ 2. RECENT WINS PLAQUE ΓöÇΓöÇ */}
+          {/* ── 2. RECENT WINS PLAQUE ── */}
           {(milestones.length > 0 || recentPRs.length > 0) && (
             <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+t.yellow+'35', borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>≡ƒÅå</div>
-              <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>≡ƒÅå Recent Wins</div>
+              <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>🏆</div>
+              <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>🏆 Recent Wins</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {recentPRs.map((pr:any) => (
                   <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ width:6, height:6, borderRadius:'50%', background:t.yellow, flexShrink:0 }}/>
-                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR ΓÇö {pr.exercise?.name}</div>
-                    <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs ≡ƒÆ¬</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR — {pr.exercise?.name}</div>
+                    <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs 💪</div>
                   </div>
                 ))}
                 {milestones.map((m:any) => (
                   <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ width:6, height:6, borderRadius:'50%', background:t.orange, flexShrink:0 }}/>
                     <div style={{ fontSize:13, color:t.text, flex:1, lineHeight:1.4 }}>{m.message}</div>
-                    <button onClick={()=>dismissMilestone(m.id)} style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>Γ£ò</button>
+                    <button onClick={()=>dismissMilestone(m.id)} style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>✕</button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ΓöÇΓöÇ 3. MORNING PULSE ΓöÇΓöÇ */}
+          {/* ── 3. MORNING PULSE ── */}
           {clientRecord && (
             <div className="fade">
               <MorningPulse
@@ -518,14 +518,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ΓöÇΓöÇ COACH REVIEWS NOTIFICATION ΓöÇΓöÇ */}
+          {/* ── COACH REVIEWS NOTIFICATION ── */}
           {pendingReviews.length > 0 && (
             <div className="fade" style={{ marginBottom:14 }}>
               {pendingReviews.map(r => {
                 const isOpen = expandedReview === r.id
                 return (
                   <div key={r.id} style={{ background:`linear-gradient(135deg,${t.teal}18,${t.teal}08)`, border:`2px solid ${t.teal}50`, borderRadius:16, marginBottom:8, overflow:'hidden' }}>
-                    {/* Header row ΓÇö always visible, tap to expand */}
+                    {/* Header row — always visible, tap to expand */}
                     <div onClick={async () => {
                         if (!isOpen) {
                           // Mark seen on first open
@@ -537,22 +537,22 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         setExpandedReview(isOpen ? null : r.id)
                       }}
                       style={{ padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
-                      {/* Pulsing dot ΓÇö only when not yet seen */}
+                      {/* Pulsing dot — only when not yet seen */}
                       {!r._seen && !isOpen && (
                         <div style={{ width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${t.teal}30`, flexShrink:0 }}/>
                       )}
                       <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
-                        ≡ƒÆ¼
+                        💬
                       </div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>Coach left you feedback</div>
                         <div style={{ fontSize:12, color:t.text, fontWeight:700 }}>{r.title}</div>
                         <div style={{ fontSize:11, color:t.textMuted }}>
                           {r.coach_review_video_url && r.coach_review_notes ? 'Video + written notes' : r.coach_review_video_url ? 'Video review' : 'Written feedback'}
-                          {' ┬╖ '}{isOpen ? 'tap to close' : 'tap to view'}
+                          {' · '}{isOpen ? 'tap to close' : 'tap to view'}
                         </div>
                       </div>
-                      <div style={{ fontSize:16, color:t.textMuted, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s' }}>Γû╛</div>
+                      <div style={{ fontSize:16, color:t.textMuted, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s' }}>▾</div>
                     </div>
 
                     {/* Expanded review content */}
@@ -576,7 +576,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                             setExpandedReview(null)
                           }}
                           style={{ width:'100%', marginTop:12, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                          Γ£ô Got it ΓÇö dismiss
+                          ✓ Got it — dismiss
                         </button>
                       </div>
                     )}
@@ -586,44 +586,44 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ΓöÇΓöÇ 4. TODAY'S WORKOUT ΓöÇΓöÇ */}
+          {/* ── 4. TODAY'S WORKOUT ── */}
           <div style={{ background:t.surface, border:'1px solid '+(nextSession ? t.border : t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
             <div style={{ height:3, background: nextSession ? 'linear-gradient(90deg,'+t.teal+','+t.orange+')' : 'linear-gradient(90deg,'+t.purple+','+t.teal+')' }}/>
             <div style={{ padding:'14px 16px' }}>
               {nextSession ? (
                 <>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                    <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>≡ƒÆ¬</div>
+                    <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:800 }}>{nextSession.title}</div>
                       <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
                         {nextSession.status === 'in_progress'
-                          ? 'In progress ΓÇö resume where you left off'
+                          ? 'In progress — resume where you left off'
                           : nextSession.isToday
                           ? "Today's workout"
-                          : `Up next ┬╖ ${new Date(nextSession.scheduled_date + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}`
+                          : `Up next · ${new Date(nextSession.scheduled_date + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}`
                         }
                       </div>
                     </div>
                   </div>
                   <button onClick={()=>router.push(`/dashboard/client/workout/${nextSession.id}`)}
                     style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {nextSession.status === 'in_progress' ? 'Resume Workout ≡ƒöä' : nextSession.isToday ? 'Start Workout ≡ƒÆ¬' : 'Start Early ≡ƒÆ¬'}
+                    {nextSession.status === 'in_progress' ? 'Resume Workout 🔄' : nextSession.isToday ? 'Start Workout 💪' : 'Start Early 💪'}
                   </button>
                 </>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>≡ƒ¢Å∩╕Å</div>
+                  <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>🛏️</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:14, fontWeight:800 }}>Rest Day!</div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Recovery is part of the program ΓÇö enjoy it ≡ƒÆ£</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Recovery is part of the program — enjoy it 💜</div>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ΓöÇΓöÇ 5. TASKS / HABITS ΓöÇΓöÇ */}
+          {/* ── 5. TASKS / HABITS ── */}
           {habits.length > 0 && (
             <div style={{ marginBottom:14 }} className="fade">
               <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
@@ -638,11 +638,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div key={h.id} onClick={()=>logHabit(h.id, val?0:1)}
                       style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
                       <div style={{ width:32, height:32, borderRadius:9, background:done?'linear-gradient(135deg,'+color+','+color+'aa)':t.surfaceHigh, border:'1px solid '+(done?color+'60':t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?13:16, flexShrink:0, transition:'all 0.2s ease' }}>
-                        {done ? 'Γ£ô' : h.icon||'Γ£à'}
+                        {done ? '✓' : h.icon||'✅'}
                       </div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:700, color:done?color:t.text }}>{h.label}</div>
-                        <div style={{ fontSize:11, color:t.textMuted }}>{done?'Done! ≡ƒÄë':'Tap to complete'}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>{done?'Done! 🎉':'Tap to complete'}</div>
                       </div>
                     </div>
                   )
@@ -651,7 +651,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft:String(val||'') })}
                       style={{ padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <span style={{ fontSize:18 }}>{h.icon||'≡ƒôè'}</span>
+                        <span style={{ fontSize:18 }}>{h.icon||'📊'}</span>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:13, fontWeight:700, color:done?color:t.text }}>{h.label}</div>
                           <div style={{ fontSize:11, color:t.textMuted }}>Target: {h.target}{h.unit}</div>
@@ -671,12 +671,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ΓöÇΓöÇ 6. JOURNAL ΓöÇΓöÇ */}
+          {/* ── 6. JOURNAL ── */}
           <div className="fade" style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
             <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
             <div style={{ padding:'14px 16px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>Γ£ì∩╕Å</div>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>✍️</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:800 }}>How did today go?</div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Your daily journal</div>
@@ -691,7 +691,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <textarea
                 value={journalText}
                 onChange={e=>setJournalText(e.target.value)}
-                placeholder="Write anything ΓÇö wins, struggles, how you're really feeling. No judgment here."
+                placeholder="Write anything — wins, struggles, how you're really feeling. No judgment here."
                 rows={4}
                 style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' }}
               />
@@ -709,7 +709,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </button>
                 <button onClick={saveJournal} disabled={journalSaving||!journalText.trim()}
                   style={{ background:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':t.surfaceHigh, border:'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
-                  {journalSaved ? 'Γ£ô Saved!' : journalSaving ? 'Saving...' : 'Save'}
+                  {journalSaved ? '✓ Saved!' : journalSaving ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </div>
@@ -718,7 +718,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {/* Empty state */}
           {habits.length === 0 && !nextSession && (
             <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+t.teal+'25', borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
-              <div style={{ fontSize:32, marginBottom:10 }}>≡ƒÜÇ</div>
+              <div style={{ fontSize:32, marginBottom:10 }}>🚀</div>
               <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>You're all set!</div>
               <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Shane is setting up your program. Check back soon and let's get to work.</div>
             </div>
@@ -726,17 +726,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           </> /* end today content */}
 
-          {/* ΓöÇΓöÇ TRAINING TAB ΓöÇΓöÇ */}
+          {/* ── TRAINING TAB ── */}
           {activeNav === 'training' && (
             <TrainingTab clientRecord={clientRecord} supabase={supabase} router={router} t={t} />
           )}
 
-          {/* ΓöÇΓöÇ NUTRITION TAB ΓöÇΓöÇ */}
+          {/* ── NUTRITION TAB ── */}
           {activeNav === 'nutrition' && (
             <NutritionTab clientRecord={clientRecord} supabase={supabase} t={t} />
           )}
 
-          {/* ΓöÇΓöÇ MESSAGES TAB ΓöÇΓöÇ */}
+          {/* ── MESSAGES TAB ── */}
           {activeNav === 'messages' && messagesView === 'hub' && (
             <div style={{ paddingBottom:32 }}>
               <div style={{ fontSize:22, fontWeight:900, marginBottom:6, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
@@ -756,7 +756,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>Message Coach Shane</div>
-                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Direct line to your coach ΓÇö questions, check-ins, anything</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Direct line to your coach — questions, check-ins, anything</div>
                   </div>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6"/>
@@ -786,7 +786,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ΓöÇΓöÇ MESSAGES: Coach thread ΓöÇΓöÇ */}
+          {/* ── MESSAGES: Coach thread ── */}
           {activeNav === 'messages' && messagesView === 'coach' && (
             <div style={{ height:'calc(100vh - 52px - 60px)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
               {/* Back button */}
@@ -817,21 +817,21 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ΓöÇΓöÇ Billing Tab ΓöÇΓöÇ */}
+          {/* ── Billing Tab ── */}
           {activeNav === 'billing' && (
             <BillingTab clientRecord={clientRecord} supabase={supabase} />
           )}
 
-          {/* Tagline ΓÇö shown on nutrition, metrics, and other content tabs */}
+          {/* Tagline — shown on nutrition, metrics, and other content tabs */}
           {activeNav !== 'today' && activeNav !== 'messages' && activeNav !== 'billing' && (
           <div style={{ textAlign:'center', padding:'8px 0 24px', fontSize:12, color:t.textMuted, fontStyle:'italic' }}>
-            Be Kind to Yourself & Stay Awesome ≡ƒÆ¬
+            Be Kind to Yourself & Stay Awesome 💪
           </div>
           )}
 
         </div>
 
-        {/* ΓöÇΓöÇ Floating + button ΓÇö hidden on message thread ΓöÇΓöÇ */}
+        {/* ── Floating + button — hidden on message thread ── */}
         {!(activeNav === 'messages' && messagesView === 'coach') && (
         <div style={{ position:'fixed', bottom:72, right:'max(16px, calc((100vw - 480px) / 2 + 16px))', zIndex:30 }}>
           {/* Action menu */}
@@ -863,7 +863,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         </div>
         )}
 
-        {/* ΓöÇΓöÇ Past Journal Entries Sheet ΓöÇΓöÇ */}
+        {/* ── Past Journal Entries Sheet ── */}
         {pastEntriesOpen && (
           <>
             <div onClick={()=>setPastEntriesOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40, backdropFilter:'blur(4px)' }}/>
@@ -871,8 +871,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <div style={{ padding:'14px 18px 10px', flexShrink:0 }}>
                 <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 16px' }}/>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                  <div style={{ fontSize:15, fontWeight:800 }}>Γ£ì∩╕Å Past Journal Entries</div>
-                  <button onClick={()=>setPastEntriesOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, lineHeight:1 }}>Γ£ò</button>
+                  <div style={{ fontSize:15, fontWeight:800 }}>✍️ Past Journal Entries</div>
+                  <button onClick={()=>setPastEntriesOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, lineHeight:1 }}>✕</button>
                 </div>
               </div>
               <div style={{ overflowY:'auto', padding:'0 18px 32px', flex:1 }}>
@@ -905,7 +905,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           </>
         )}
 
-        {/* ΓöÇΓöÇ Log Habit Popup ΓöÇΓöÇ */}
+        {/* ── Log Habit Popup ── */}
         {logPopup && (
           <>
             <div onClick={()=>setLogPopup(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40, backdropFilter:'blur(4px)' }} />
@@ -913,7 +913,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               {/* Handle bar */}
               <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }} />
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
-                <span style={{ fontSize:24 }}>{logPopup.habit.icon||'≡ƒôè'}</span>
+                <span style={{ fontSize:24 }}>{logPopup.habit.icon||'📊'}</span>
                 <div>
                   <div style={{ fontSize:16, fontWeight:800 }}>{logPopup.habit.label}</div>
                   <div style={{ fontSize:12, color:t.textMuted }}>Target: {logPopup.habit.target}{logPopup.habit.unit}</div>
@@ -935,18 +935,18 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <button
                 onClick={()=>{ logHabit(logPopup.habit.id, +logPopup.draft||0); setLogPopup(null) }}
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                Save Γ£ô
+                Save ✓
               </button>
             </div>
           </>
         )}
 
-        {/* ΓöÇΓöÇ BILLING TAB ΓöÇΓöÇ */}
+        {/* ── BILLING TAB ── */}
         {activeNav === 'billing' && clientRecord && (
           <BillingTab clientRecord={clientRecord} supabase={supabase} />
         )}
 
-        {/* ΓöÇΓöÇ Bottom Nav ΓöÇΓöÇ */}
+        {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
             <button key={n.id} onClick={()=>{ 
@@ -971,9 +971,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 }
 
 
-// ΓöÇΓöÇ BillingTab ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-
-
+// ── BillingTab ────────────────────────────────────────────────────────────
 // ── BillingTab ─────────────────────────────────────────────────────────────
 const CANCEL_REASONS = [
   { id: 'cost',      label: 'Too expensive'              },
@@ -985,14 +983,14 @@ const CANCEL_REASONS = [
 ]
 
 function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: any }) {
-  const [sub,           setSub]           = useState<any>(null)
-  const [loading,       setLoading]       = useState(true)
+  const [sub, setSub] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [portalLoading, setPortalLoading] = useState(false)
-  const [showCancel,    setShowCancel]    = useState(false)
-  const [cancelStep,    setCancelStep]    = useState<'survey'|'confirm'|'done'>('survey')
-  const [cancelReason,  setCancelReason]  = useState('')
+  const [showCancel, setShowCancel] = useState(false)
+  const [cancelStep, setCancelStep] = useState<'survey'|'confirm'|'done'>('survey')
+  const [cancelReason, setCancelReason] = useState('')
   const [cancelDetails, setCancelDetails] = useState('')
-  const [canceling,     setCanceling]     = useState(false)
+  const [canceling, setCanceling] = useState(false)
   const tc = {
     surface:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
     teal:'#00c9b1', tealDim:'#00c9b115',
@@ -1047,7 +1045,7 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
     canceled:'Canceled', unpaid:'Unpaid', paused:'Paused', none:'No subscription',
   }
   const status = clientRecord?.subscription_status || 'none'
-  const fmtDate = (d:string|null) => d ? new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'
+  const fmtDate = (d:string|null) => d ? new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '\u2014'
   const isActive = ['active','trialing'].includes(status)
   const isCanceling = sub?.cancel_at_period_end
 
@@ -1057,7 +1055,6 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
     <div style={{paddingBottom:32,fontFamily:"'DM Sans',sans-serif"}}>
       <h2 style={{fontSize:18,fontWeight:800,marginBottom:20,color:tc.text}}>Billing & Subscription</h2>
 
-      {/* Status card */}
       <div style={{background:tc.surface,border:`1px solid ${tc.border}`,borderRadius:14,padding:20,marginBottom:14}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:sub?16:0}}>
           <div>
@@ -1090,7 +1087,6 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
         )}
       </div>
 
-      {/* Actions */}
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         <button onClick={openPortal} disabled={portalLoading}
           style={{width:'100%',padding:13,borderRadius:12,border:`1px solid ${tc.border}`,background:tc.surface,color:tc.text,fontSize:14,fontWeight:700,cursor:portalLoading?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
@@ -1112,19 +1108,16 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
           </button>
         )}
       </div>
-
       <p style={{fontSize:11,color:tc.textMuted,textAlign:'center',marginTop:20,lineHeight:1.6}}>
         Questions? Email <a href="mailto:shane@srgfit.training" style={{color:tc.teal,textDecoration:'none'}}>shane@srgfit.training</a>
       </p>
 
-      {/* Cancel modal */}
       {showCancel && (
         <>
           <div onClick={()=>{if(cancelStep!=='done')setShowCancel(false)}}
             style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
           <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:tc.surface,borderTop:`1px solid ${tc.border}`,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 48px'}}>
             <div style={{width:36,height:4,borderRadius:2,background:tc.border,margin:'0 auto 20px'}}/>
-
             {cancelStep==='survey' && <>
               <div style={{fontSize:17,fontWeight:800,marginBottom:6,color:tc.text}}>Before you go...</div>
               <div style={{fontSize:13,color:tc.textMuted,marginBottom:20,lineHeight:1.6}}>No pressure at all. Would you mind sharing why? It helps me improve for everyone.</div>
@@ -1148,7 +1141,6 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
                   style={{flex:1,padding:12,borderRadius:11,border:'none',background:cancelReason?tc.danger:'#333',color:'#fff',fontSize:13,fontWeight:700,cursor:cancelReason?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif",opacity:cancelReason?1:0.5}}>Continue</button>
               </div>
             </>}
-
             {cancelStep==='confirm' && <>
               <div style={{fontSize:17,fontWeight:800,marginBottom:6,color:tc.text}}>Confirm cancellation</div>
               <div style={{fontSize:13,color:tc.textMuted,marginBottom:20,lineHeight:1.6}}>Your access continues until the end of your current billing period. You can rejoin anytime.</div>
@@ -1166,10 +1158,9 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
                 </button>
               </div>
             </>}
-
             {cancelStep==='done' && (
               <div style={{textAlign:'center',padding:'16px 0'}}>
-                <div style={{fontSize:40,marginBottom:12}}>💙</div>
+                <div style={{fontSize:40,marginBottom:12}}>{'\U0001F499'}</div>
                 <div style={{fontSize:17,fontWeight:800,marginBottom:8,color:tc.text}}>Thank you for the feedback</div>
                 <div style={{fontSize:13,color:tc.textMuted,lineHeight:1.7,marginBottom:24}}>
                   Your subscription has been canceled. You still have access until the end of your billing period. If you ever want to come back, the door is always open.
@@ -1186,6 +1177,8 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
     </div>
   )
 }
+
+
 function CoachReviewVideo({ url }: { url: string }) {
   const [open, setOpen] = useState(false)
   const tc = { teal:'#00c9b1', tealDim:'#00c9b115', border:'#252538', text:'#eeeef8', textMuted:'#5a5a78' }
@@ -1194,14 +1187,14 @@ function CoachReviewVideo({ url }: { url: string }) {
       {!open ? (
         <button onClick={()=>setOpen(true)}
           style={{ display:'inline-flex', alignItems:'center', gap:6, background:tc.tealDim, border:`1px solid ${tc.teal}40`, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:tc.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-          Γû╢ Watch Coach Review
+          ▶ Watch Coach Review
         </button>
       ) : (
         <div style={{ background:'#000', borderRadius:10, overflow:'hidden', position:'relative' }}>
           <video src={url} controls autoPlay playsInline style={{ width:'100%', maxHeight:280, display:'block' }}/>
           <button onClick={()=>setOpen(false)}
             style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', border:'none', borderRadius:6, padding:'4px 8px', fontSize:11, color:'#fff', cursor:'pointer' }}>
-            Γ£ò
+            ✕
           </button>
         </div>
       )}
@@ -1209,7 +1202,7 @@ function CoachReviewVideo({ url }: { url: string }) {
   )
 }
 
-// ΓöÇΓöÇ TrainingTab ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── TrainingTab ───────────────────────────────────────────────────────────
 function TrainingTab({ clientRecord, supabase, router, t }: any) {
   const [program, setProgram] = useState<any>(null)
   const [sessions, setSessions] = useState<any[]>([])
@@ -1247,7 +1240,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
       {/* Back to program */}
       <button onClick={() => setView('program')}
         style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:6, marginBottom:18, padding:0 }}>
-        ΓåÉ {program?.name || 'Program'}
+        ← {program?.name || 'Program'}
       </button>
 
       {/* Upcoming sessions */}
@@ -1257,21 +1250,21 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
         </p>
         {upcoming.length === 0 ? (
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'28px 20px', textAlign:'center' }}>
-            <div style={{ fontSize:28, marginBottom:8 }}>Γ£à</div>
+            <div style={{ fontSize:28, marginBottom:8 }}>✅</div>
             <p style={{ fontSize:13, color:t.textDim, fontWeight:600 }}>All caught up!</p>
           </div>
         ) : upcoming.map(s => (
           <div key={s.id} onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
             style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', marginBottom:10, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:44, height:44, borderRadius:12, background:s.status==='in_progress'?t.tealDim:t.orangeDim, border:'1px solid '+(s.status==='in_progress'?t.teal:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
-              {s.status === 'in_progress' ? 'Γû╢∩╕Å' : '≡ƒÆ¬'}
+              {s.status === 'in_progress' ? '▶️' : '💪'}
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:700, fontSize:15 }}>{s.title}</div>
               <div style={{ fontSize:12, color:t.textDim, marginTop:2 }}>
-                {s.scheduled_date}{s.day_label ? ` ┬╖ ${s.day_label}` : ''}
+                {s.scheduled_date}{s.day_label ? ` · ${s.day_label}` : ''}
               </div>
-              {s.notes_coach && <div style={{ fontSize:11, color:t.orange, marginTop:4 }}>≡ƒôî {s.notes_coach.slice(0,60)}{s.notes_coach.length>60?'...':''}</div>}
+              {s.notes_coach && <div style={{ fontSize:11, color:t.orange, marginTop:4 }}>📌 {s.notes_coach.slice(0,60)}{s.notes_coach.length>60?'...':''}</div>}
             </div>
             <span style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:20, background:s.status==='in_progress'?t.tealDim:t.orangeDim, color:s.status==='in_progress'?t.teal:t.orange, border:`1px solid ${s.status==='in_progress'?t.teal:t.orange}30` }}>
               {s.status === 'in_progress' ? 'Resume' : 'Start'}
@@ -1292,7 +1285,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
                 onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
                 style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? t.teal+'40' : t.border}`, borderRadius:12, padding:'12px 16px', cursor:'pointer' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: (s.coach_review_notes || s.coach_review_video_url) ? 10 : 0 }}>
-                  <span style={{ fontSize:18 }}>Γ£à</span>
+                  <span style={{ fontSize:18 }}>✅</span>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:600, fontSize:14 }}>{s.title}</div>
                     <div style={{ fontSize:11, color:t.textDim }}>{s.completed_at ? new Date(s.completed_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : s.scheduled_date}</div>
@@ -1300,7 +1293,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
                   <div style={{ textAlign:'right' as const }}>
                     {s.duration_seconds ? <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{Math.floor(s.duration_seconds/60)}m</div> : null}
                     {s.session_rpe && <div style={{ fontSize:11, color:t.textMuted }}>RPE {s.session_rpe}</div>}
-                    {s.coach_reviewed_at && <div style={{ fontSize:10, fontWeight:800, color:t.teal }}>≡ƒÆ¼ Reviewed</div>}
+                    {s.coach_reviewed_at && <div style={{ fontSize:10, fontWeight:800, color:t.teal }}>💬 Reviewed</div>}
                   </div>
                 </div>
                 {/* Coach review notes */}
@@ -1327,7 +1320,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
     <div style={{ paddingBottom:32 }}>
       {!program ? (
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'40px 20px', textAlign:'center' }}>
-          <div style={{ fontSize:40, marginBottom:12 }}>≡ƒÆ¬</div>
+          <div style={{ fontSize:40, marginBottom:12 }}>💪</div>
           <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>No program assigned yet</div>
           <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Your coach is building your program. Check back soon!</div>
         </div>
@@ -1338,7 +1331,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
             <div style={{ height:4, background:`linear-gradient(90deg,${t.teal},${t.orange})` }} />
             <div style={{ padding:'20px 20px 16px' }}>
               <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:16 }}>
-                <div style={{ width:48, height:48, borderRadius:14, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>≡ƒÆ¬</div>
+                <div style={{ width:48, height:48, borderRadius:14, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>💪</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>{program.name}</div>
                   {program.description && <div style={{ fontSize:13, color:t.textDim, lineHeight:1.6 }}>{program.description}</div>}
@@ -1347,9 +1340,9 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
                 {[
-                  { label:'Duration', val: program.duration_weeks ? `${program.duration_weeks}w` : 'ΓÇö', color:t.teal },
-                  { label:'Difficulty', val: program.difficulty || 'ΓÇö', color:t.orange },
-                  { label:'Goal', val: program.goal || 'ΓÇö', color:t.green },
+                  { label:'Duration', val: program.duration_weeks ? `${program.duration_weeks}w` : '—', color:t.teal },
+                  { label:'Difficulty', val: program.difficulty || '—', color:t.orange },
+                  { label:'Goal', val: program.goal || '—', color:t.green },
                 ].map(s => (
                   <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'12px', textAlign:'center' as const }}>
                     <div style={{ fontSize:15, fontWeight:800, color:s.color, marginBottom:2 }}>{s.val}</div>
@@ -1364,7 +1357,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
                   <div style={{ fontSize:13, fontWeight:700 }}>
                     {upcoming.length > 0
                       ? `${upcoming.length} workout${upcoming.length!==1?'s':''} scheduled`
-                      : sessions.length > 0 ? 'All workouts completed! ≡ƒÄë' : 'No sessions yet'}
+                      : sessions.length > 0 ? 'All workouts completed! 🎉' : 'No sessions yet'}
                   </div>
                   {upcoming.length > 0 && (
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
@@ -1372,12 +1365,12 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
                     </div>
                   )}
                   {completed.length > 0 && (
-                    <div style={{ fontSize:11, color:t.green, marginTop:2 }}>Γ£à {completed.length} completed</div>
+                    <div style={{ fontSize:11, color:t.green, marginTop:2 }}>✅ {completed.length} completed</div>
                   )}
                 </div>
                 <button onClick={() => setView('workouts')}
                   style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'10px 18px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
-                  View All ΓåÆ
+                  View All →
                 </button>
               </div>
             </div>
@@ -1390,17 +1383,17 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
               <div style={{ height:3, background:`linear-gradient(90deg,${t.orange},${t.yellow})` }} />
               <div style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
                 <div style={{ width:44, height:44, borderRadius:12, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
-                  {upcoming[0].status === 'in_progress' ? 'Γû╢∩╕Å' : '≡ƒÆ¬'}
+                  {upcoming[0].status === 'in_progress' ? '▶️' : '💪'}
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:800 }}>
                     {upcoming[0].status === 'in_progress' ? 'Resume Workout' : 'Up Next'}
                   </div>
                   <div style={{ fontSize:13, color:t.text, marginTop:2 }}>{upcoming[0].title}</div>
-                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{upcoming[0].scheduled_date}{upcoming[0].day_label ? ` ┬╖ ${upcoming[0].day_label}` : ''}</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{upcoming[0].scheduled_date}{upcoming[0].day_label ? ` · ${upcoming[0].day_label}` : ''}</div>
                 </div>
                 <div style={{ background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#000', whiteSpace:'nowrap' as const }}>
-                  {upcoming[0].status === 'in_progress' ? 'Resume Γû╢' : 'Start ≡ƒÆ¬'}
+                  {upcoming[0].status === 'in_progress' ? 'Resume ▶' : 'Start 💪'}
                 </div>
               </div>
             </div>
@@ -1412,7 +1405,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
 }
 
 
-// ΓöÇΓöÇ WorkoutsTab ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── WorkoutsTab ───────────────────────────────────────────────────────────
 function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
   const [sessions, setSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1455,7 +1448,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
             </p>
             {upcoming.length === 0 ? (
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'28px 20px', textAlign:'center' }}>
-                <div style={{ fontSize:32, marginBottom:8 }}>≡ƒÆñ</div>
+                <div style={{ fontSize:32, marginBottom:8 }}>💤</div>
                 <p style={{ fontSize:13, color:t.textDim, fontWeight:600 }}>No workouts assigned yet</p>
                 <p style={{ fontSize:12, color:t.textMuted, marginTop:4 }}>Your coach will assign your next session here</p>
               </div>
@@ -1464,15 +1457,15 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
                 onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
                 style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', marginBottom:10, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
                 <div style={{ width:44, height:44, borderRadius:12, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
-                  {s.status === 'in_progress' ? 'Γû╢∩╕Å' : '≡ƒÆ¬'}
+                  {s.status === 'in_progress' ? '▶️' : '💪'}
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:700, fontSize:15 }}>{s.title}</div>
                   <div style={{ fontSize:12, color:t.textDim, marginTop:2 }}>
-                    {s.scheduled_date || 'No date'}{s.day_label ? ` ┬╖ ${s.day_label}` : ''}
+                    {s.scheduled_date || 'No date'}{s.day_label ? ` · ${s.day_label}` : ''}
                   </div>
                   {s.notes_coach && (
-                    <div style={{ fontSize:11, color:t.orange, marginTop:4 }}>≡ƒôî {s.notes_coach.slice(0,60)}{s.notes_coach.length>60?'...':''}</div>
+                    <div style={{ fontSize:11, color:t.orange, marginTop:4 }}>📌 {s.notes_coach.slice(0,60)}{s.notes_coach.length>60?'...':''}</div>
                   )}
                 </div>
                 <div>
@@ -1493,7 +1486,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
               <div style={{ display:'grid', gap:8 }}>
                 {completed.map(s => (
                   <div key={s.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
-                    <span style={{ fontSize:18 }}>Γ£à</span>
+                    <span style={{ fontSize:18 }}>✅</span>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, fontSize:14 }}>{s.title}</div>
                       <div style={{ fontSize:11, color:t.textDim }}>{s.completed_at ? new Date(s.completed_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : s.scheduled_date}</div>
@@ -1501,7 +1494,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
                     <div style={{ textAlign:'right' }}>
                       {fmtDur(s.duration_seconds) && <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{fmtDur(s.duration_seconds)}</div>}
                       {s.session_rpe && <div style={{ fontSize:11, color:t.textMuted }}>RPE {s.session_rpe}</div>}
-                      {s.mood && <div style={{ fontSize:14 }}>{{ great:'≡ƒÿä', good:'≡ƒÖé', okay:'≡ƒÿÉ', tired:'≡ƒÿ┤', awful:'≡ƒÿô' }[s.mood as 'great'|'good'|'okay'|'tired'|'awful']}</div>}
+                      {s.mood && <div style={{ fontSize:14 }}>{{ great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }[s.mood as 'great'|'good'|'okay'|'tired'|'awful']}</div>}
                     </div>
                   </div>
                 ))}
@@ -1514,7 +1507,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
   )
 }
 
-// ΓöÇΓöÇ ProgramsTab ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── ProgramsTab ───────────────────────────────────────────────────────────
 function ProgramsTab({ clientRecord, supabase, router, t }: any) {
   const [programs, setPrograms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1539,14 +1532,14 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
     <div style={{ paddingBottom:32 }}>
       {programs.length === 0 ? (
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'28px 20px', textAlign:'center' }}>
-          <div style={{ fontSize:32, marginBottom:8 }}>≡ƒôï</div>
+          <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
           <p style={{ fontSize:13, color:t.textDim, fontWeight:600 }}>No program assigned yet</p>
           <p style={{ fontSize:12, color:t.textMuted, marginTop:4 }}>Your coach will assign your program here</p>
         </div>
       ) : programs.map((p: any) => (
         <div key={p.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'18px 20px' }}>
           <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:12 }}>
-            <div style={{ fontSize:32 }}>≡ƒôï</div>
+            <div style={{ fontSize:32 }}>📋</div>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>{p.name}</div>
               {p.description && <div style={{ fontSize:13, color:t.textDim, lineHeight:1.5 }}>{p.description}</div>}
@@ -1554,9 +1547,9 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
             {[
-              { label:'Duration', value: p.duration_weeks ? `${p.duration_weeks} weeks` : 'ΓÇö' },
-              { label:'Frequency', value: p.days_per_week ? `${p.days_per_week}x/week` : 'ΓÇö' },
-              { label:'Level', value: p.level || 'ΓÇö', color: levelColor(p.level) },
+              { label:'Duration', value: p.duration_weeks ? `${p.duration_weeks} weeks` : '—' },
+              { label:'Frequency', value: p.days_per_week ? `${p.days_per_week}x/week` : '—' },
+              { label:'Level', value: p.level || '—', color: levelColor(p.level) },
             ].map(stat => (
               <div key={stat.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', textAlign:'center' }}>
                 <div style={{ fontSize:14, fontWeight:800, color:(stat as any).color || t.accent }}>{stat.value}</div>
@@ -1566,7 +1559,7 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
           </div>
           {p.goal && (
             <div style={{ marginTop:12, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px' }}>
-              <span style={{ fontSize:12, color:t.teal }}>≡ƒÄ» Goal: {p.goal}</span>
+              <span style={{ fontSize:12, color:t.teal }}>🎯 Goal: {p.goal}</span>
             </div>
           )}
         </div>
@@ -1575,7 +1568,7 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
   )
 }
 
-// ΓöÇΓöÇ ExercisesTab ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── ExercisesTab ──────────────────────────────────────────────────────────
 function ExercisesTab({ supabase, t }: any) {
   const [exercises, setExercises] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1631,9 +1624,9 @@ function ExercisesTab({ supabase, t }: any) {
               style={{ padding:'12px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:14 }}>{ex.name}</div>
-                {ex.muscle_group && <div style={{ fontSize:11, color:t.textMuted }}>{ex.muscle_group}{ex.exercise_type ? ` ┬╖ ${ex.exercise_type}` : ''}</div>}
+                {ex.muscle_group && <div style={{ fontSize:11, color:t.textMuted }}>{ex.muscle_group}{ex.exercise_type ? ` · ${ex.exercise_type}` : ''}</div>}
               </div>
-              <span style={{ fontSize:12, color:t.textDim }}>{expanded === ex.id ? 'Γû▓' : 'Γû╝'}</span>
+              <span style={{ fontSize:12, color:t.textDim }}>{expanded === ex.id ? '▲' : '▼'}</span>
             </div>
             {expanded === ex.id && (ex.description || ex.instructions || ex.video_url) && (
               <div style={{ padding:'0 16px 14px', borderTop:'1px solid '+t.border }}>
@@ -1642,7 +1635,7 @@ function ExercisesTab({ supabase, t }: any) {
                 {ex.video_url && (
                   <a href={ex.video_url} target="_blank" rel="noreferrer"
                     style={{ display:'inline-block', marginTop:10, fontSize:12, color:t.teal, fontWeight:700 }}>
-                    Γû╢ Watch Demo
+                    ▶ Watch Demo
                   </a>
                 )}
               </div>
@@ -1654,4 +1647,4 @@ function ExercisesTab({ supabase, t }: any) {
   )
 }
 
-// ΓöÇΓöÇ NutritionTab lives in ./nutrition-tab.tsx ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── NutritionTab lives in ./nutrition-tab.tsx ─────────────────────────────
