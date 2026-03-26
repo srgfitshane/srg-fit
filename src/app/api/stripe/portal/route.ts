@@ -13,21 +13,21 @@ export async function POST(req: NextRequest) {
     const { user_id } = await req.json()
     if (!user_id) return NextResponse.json({ error: 'Missing user_id' }, { status: 400 })
 
-    // Look up stripe_customer_id from profiles
-    const { data: profile, error } = await supabase
-      .from('profiles')
+    // stripe_customer_id lives on clients, not profiles
+    const { data: client, error } = await supabase
+      .from('clients')
       .select('stripe_customer_id')
-      .eq('id', user_id)
+      .eq('profile_id', user_id)
       .single()
 
-    if (error || !profile?.stripe_customer_id) {
+    if (error || !client?.stripe_customer_id) {
       return NextResponse.json({ error: 'No billing account found' }, { status: 404 })
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srgfit.app'
 
     const portalSession = await stripe.billingPortal.sessions.create({
-      customer: profile.stripe_customer_id,
+      customer: client.stripe_customer_id,
       return_url: `${siteUrl}/dashboard/client`,
     })
 
