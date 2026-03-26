@@ -76,6 +76,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   const stripeCustomerId = typeof session.customer === 'string' ? session.customer : session.customer?.id || ''
   const stripeSubId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id || ''
 
+  // Pull name from Stripe customer object so profile isn't "Unknown"
+  let customerName = session.customer_details?.name || ''
+  if (!customerName && stripeCustomerId) {
+    try {
+      const cus = await stripe.customers.retrieve(stripeCustomerId) as Stripe.Customer
+      customerName = cus.name || ''
+    } catch {}
+  }
+
   // 1. Check if user already exists
   const { data: existingProfile } = await supabase
     .from('profiles').select('id').eq('email', email).single()
@@ -85,7 +94,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   // 2. Create auth user if new
   if (!userId) {
     const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: { role: 'client' },
+      data: { role: 'client', full_name: customerName },
       redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
     })
     if (inviteErr || !invited.user) {
@@ -93,6 +102,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       return
     }
     userId = invited.user.id
+    // Write full_name to profile immediately
+    if (customerName) {
+      await supabase.from('profiles').update({ full_name: customerName }).eq('id', userId)
+    }
+  } else if (customerName) {
+    // Update existing profile if name was missing
+    await supabase.from('profiles').update({ full_name: customerName }).eq('id', userId).is('full_name', null)
   }
 
   // 3. Get or create client record

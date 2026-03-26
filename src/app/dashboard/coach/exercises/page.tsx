@@ -12,8 +12,14 @@ const t = {
 }
 
 const MUSCLES    = ['Chest','Back','Shoulders','Biceps','Triceps','Forearms','Quads','Hamstrings','Glutes','Calves','Core','Full Body','Cardio']
-const EQUIPMENT  = ['Barbell','Dumbbell','Cable','Machine','Bodyweight','Kettlebell','Resistance Band','EZ Bar','Trap Bar','Smith Machine','Other']
-const PATTERNS   = ['squat','hinge','push','pull','core','carry','isolation','general','olympic']
+const EQUIPMENT  = [
+  'Barbell','Dumbbell','Cable','Machine','Bodyweight','Kettlebell','Resistance Band',
+  'EZ Bar','Trap Bar','Smith Machine','Pull-up Bar','Bench','Stability Ball',
+  'Medicine Ball','Battle Ropes','TRX / Suspension','Foam Roller','Box / Step',
+  'Sled','Landmine','Ab Wheel','Dip Bars','Other'
+]
+const MODIFIERS  = ['Single Arm','Single Leg','Bilateral','Unilateral','Alternating','Eccentric','Isometric','Tempo']
+const PATTERNS   = ['squat','hinge','push','pull','core','carry','isolation','stretch','yoga','general','olympic']
 const DIFFICULTY = ['Beginner','Intermediate','Advanced']
 const TAGS       = ['Compound','Isolation','Push','Pull','Hinge','Squat','Carry','Olympic','Plyometric','Corrective']
 
@@ -26,7 +32,8 @@ const inp = (o?: object): React.CSSProperties => ({
 
 const blank = {
   name:'', muscles:[] as string[], secondary_muscles:[] as string[],
-  equipment:'Barbell', difficulty:'Intermediate', movement_pattern:'',
+  equipment_list:[] as string[], difficulty:'Intermediate', movement_pattern:'',
+  modifiers:[] as string[], is_timed:false, default_duration_seconds:30,
   tags:[] as string[], description:'', cues:'', video_url:'',
   _videoFile: null as File|null,
 }
@@ -54,7 +61,7 @@ export default function ExerciseLibrary() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     const { data } = await supabase.from('exercises').select(
-      'id,name,muscles,secondary_muscles,equipment,difficulty,movement_pattern,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
+      'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
     ).order('name')
     setExercises(data || [])
     setLoading(false)
@@ -79,8 +86,10 @@ export default function ExerciseLibrary() {
     const { data: { user } } = await supabase.auth.getUser()
     const payload: any = {
       name: newEx.name.trim(), muscles: newEx.muscles, secondary_muscles: newEx.secondary_muscles,
-      equipment: newEx.equipment, difficulty: newEx.difficulty,
+      equipment_list: newEx.equipment_list, difficulty: newEx.difficulty,
       movement_pattern: newEx.movement_pattern || null,
+      modifiers: newEx.modifiers, is_timed: newEx.is_timed,
+      default_duration_seconds: newEx.is_timed ? (newEx.default_duration_seconds || 30) : null,
       tags: newEx.tags, description: newEx.description || null,
       cues: newEx.cues || null, coach_id: user!.id,
       video_url: newEx.video_url || null,
@@ -258,21 +267,48 @@ export default function ExerciseLibrary() {
                 <input value={newEx.name} onChange={e=>setNewEx(p=>({...p,name:e.target.value}))} placeholder="e.g. Barbell Back Squat" style={inp()}/>
               </div>
 
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
-                <div>
-                  <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:5}}>Equipment</div>
-                  <select value={newEx.equipment} onChange={e=>setNewEx(p=>({...p,equipment:e.target.value}))} style={inp()}>{EQUIPMENT.map(o=><option key={o}>{o}</option>)}</select>
-                </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
                 <div>
                   <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:5}}>Pattern</div>
                   <select value={newEx.movement_pattern} onChange={e=>setNewEx(p=>({...p,movement_pattern:e.target.value}))} style={inp()}>
-                    <option value="">—</option>{PATTERNS.map(o=><option key={o} style={{textTransform:'capitalize'}}>{o}</option>)}
+                    <option value="">— none —</option>{PATTERNS.map(o=><option key={o} style={{textTransform:'capitalize'}}>{o}</option>)}
                   </select>
                 </div>
                 <div>
                   <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:5}}>Difficulty</div>
                   <select value={newEx.difficulty} onChange={e=>setNewEx(p=>({...p,difficulty:e.target.value}))} style={inp()}>{DIFFICULTY.map(o=><option key={o}>{o}</option>)}</select>
                 </div>
+              </div>
+
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:5}}>Equipment</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+                  {EQUIPMENT.map(eq=><button key={eq} onClick={()=>setNewEx(p=>({...p,equipment_list:p.equipment_list.includes(eq)?p.equipment_list.filter(x=>x!==eq):[...p.equipment_list,eq]}))}
+                    style={{padding:'4px 10px',borderRadius:6,border:'1px solid '+(newEx.equipment_list.includes(eq)?t.orange+'60':t.border),background:newEx.equipment_list.includes(eq)?t.orangeDim:'transparent',fontSize:11,fontWeight:700,color:newEx.equipment_list.includes(eq)?t.orange:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>{eq}</button>)}
+                </div>
+              </div>
+
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:t.purple,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:5}}>Modifiers</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+                  {MODIFIERS.map(m=><button key={m} onClick={()=>setNewEx(p=>({...p,modifiers:p.modifiers.includes(m)?p.modifiers.filter(x=>x!==m):[...p.modifiers,m]}))}
+                    style={{padding:'4px 10px',borderRadius:6,border:'1px solid '+(newEx.modifiers.includes(m)?t.purple+'60':t.border),background:newEx.modifiers.includes(m)?t.purpleDim:'transparent',fontSize:11,fontWeight:700,color:newEx.modifiers.includes(m)?t.purple:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>{m}</button>)}
+                </div>
+              </div>
+
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <button onClick={()=>setNewEx(p=>({...p,is_timed:!p.is_timed}))}
+                  style={{padding:'6px 16px',borderRadius:8,border:'1px solid '+(newEx.is_timed?t.teal+'60':t.border),background:newEx.is_timed?t.tealDim:'transparent',fontSize:11,fontWeight:700,color:newEx.is_timed?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  {newEx.is_timed ? 'Timed Exercise' : 'Rep-Based'}
+                </button>
+                {newEx.is_timed && (
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <div style={{fontSize:11,color:t.textMuted}}>Default</div>
+                    <input type="number" value={newEx.default_duration_seconds} onChange={e=>setNewEx(p=>({...p,default_duration_seconds:+e.target.value}))}
+                      style={{...inp(),width:70}} min={5} max={600} step={5}/>
+                    <div style={{fontSize:11,color:t.textMuted}}>sec</div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -325,9 +361,12 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       name: ex.name || '',
       muscles: [...(ex.muscles||[])],
       secondary_muscles: [...(ex.secondary_muscles||[])],
-      equipment: ex.equipment || 'Barbell',
+      equipment_list: [...(ex.equipment_list || (ex.equipment ? [ex.equipment] : []))],
       difficulty: ex.difficulty || 'Intermediate',
       movement_pattern: ex.movement_pattern || '',
+      modifiers: [...(ex.modifiers||[])],
+      is_timed: ex.is_timed || false,
+      default_duration_seconds: ex.default_duration_seconds || 30,
       tags: [...(ex.tags||[])],
       description: ex.description || '',
       cues: ex.cues || '',
@@ -345,9 +384,12 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       name: draft.name.trim(),
       muscles: draft.muscles,
       secondary_muscles: draft.secondary_muscles,
-      equipment: draft.equipment,
+      equipment_list: draft.equipment_list,
       difficulty: draft.difficulty,
       movement_pattern: draft.movement_pattern || null,
+      modifiers: draft.modifiers,
+      is_timed: draft.is_timed,
+      default_duration_seconds: draft.is_timed ? (draft.default_duration_seconds || 30) : null,
       tags: draft.tags,
       description: draft.description || null,
       cues: draft.cues || null,
@@ -495,22 +537,52 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
               <input value={draft.name} onChange={e=>setDraft((p:any)=>({...p,name:e.target.value}))} style={inp2()}/>
             </div>
 
-            {/* Equipment / Pattern / Difficulty */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-              <div>
-                <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Equipment</div>
-                <select value={draft.equipment} onChange={e=>setDraft((p:any)=>({...p,equipment:e.target.value}))} style={inp2()}>{EQUIPMENT.map(o=><option key={o}>{o}</option>)}</select>
+            {/* Equipment — multi-select chips */}
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>Equipment</div>
+              <div style={{display:'flex',flexWrap:'wrap' as const,gap:4}}>
+                {EQUIPMENT.map(eq=><button key={eq} onClick={()=>setDraft((p:any)=>({...p,equipment_list:p.equipment_list.includes(eq)?p.equipment_list.filter((x:string)=>x!==eq):[...p.equipment_list,eq]}))}
+                  style={{padding:'3px 8px',borderRadius:5,border:'1px solid '+(draft.equipment_list.includes(eq)?t.orange+'60':t.border),background:draft.equipment_list.includes(eq)?t.orangeDim:'transparent',fontSize:10,fontWeight:700,color:draft.equipment_list.includes(eq)?t.orange:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>{eq}</button>)}
               </div>
+            </div>
+
+            {/* Modifiers */}
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:t.purple,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>Modifiers</div>
+              <div style={{display:'flex',flexWrap:'wrap' as const,gap:4}}>
+                {MODIFIERS.map(m=><button key={m} onClick={()=>setDraft((p:any)=>({...p,modifiers:p.modifiers.includes(m)?p.modifiers.filter((x:string)=>x!==m):[...p.modifiers,m]}))}
+                  style={{padding:'3px 8px',borderRadius:5,border:'1px solid '+(draft.modifiers.includes(m)?t.purple+'60':t.border),background:draft.modifiers.includes(m)?t.purpleDim:'transparent',fontSize:10,fontWeight:700,color:draft.modifiers.includes(m)?t.purple:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>{m}</button>)}
+              </div>
+            </div>
+
+            {/* Pattern / Difficulty / Timed */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
               <div>
-                <div style={{fontSize:10,fontWeight:700,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Pattern ★</div>
+                <div style={{fontSize:10,fontWeight:700,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Pattern</div>
                 <select value={draft.movement_pattern} onChange={e=>setDraft((p:any)=>({...p,movement_pattern:e.target.value}))} style={inp2()}>
-                  <option value="">—</option>{PATTERNS.map(o=><option key={o} style={{textTransform:'capitalize'}}>{o}</option>)}
+                  <option value="">— none —</option>{PATTERNS.map(o=><option key={o} style={{textTransform:'capitalize'}}>{o}</option>)}
                 </select>
               </div>
               <div>
                 <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Difficulty</div>
                 <select value={draft.difficulty} onChange={e=>setDraft((p:any)=>({...p,difficulty:e.target.value}))} style={inp2()}>{DIFFICULTY.map(o=><option key={o}>{o}</option>)}</select>
               </div>
+            </div>
+
+            {/* Timed toggle */}
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <button onClick={()=>setDraft((p:any)=>({...p,is_timed:!p.is_timed}))}
+                style={{padding:'5px 14px',borderRadius:8,border:'1px solid '+(draft.is_timed?t.teal+'60':t.border),background:draft.is_timed?t.tealDim:'transparent',fontSize:11,fontWeight:700,color:draft.is_timed?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                {draft.is_timed ? '⏱ Timed' : '🔢 Rep-Based'}
+              </button>
+              {draft.is_timed && (
+                <div style={{display:'flex',alignItems:'center',gap:6,flex:1}}>
+                  <div style={{fontSize:10,fontWeight:700,color:t.textMuted,whiteSpace:'nowrap' as const}}>Default</div>
+                  <input type="number" value={draft.default_duration_seconds} onChange={e=>setDraft((p:any)=>({...p,default_duration_seconds:+e.target.value}))}
+                    style={{...inp2(),width:70}} min={5} max={600} step={5}/>
+                  <div style={{fontSize:10,color:t.textMuted}}>sec</div>
+                </div>
+              )}
             </div>
 
             {/* Primary Muscles */}

@@ -119,25 +119,27 @@ function ProfilePageInner() {
   const Label = ({ children }: { children: React.ReactNode }) => (
     <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>{children}</div>
   )
+  // ── These must be stable references (not re-created per render) to avoid focus loss ──
+  const inputStyle = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const, colorScheme:'dark' as const }
   const Input = ({ field, placeholder, type='text', ...rest }: any) => (
     <input
-      value={intake[field] || ''} onChange={e => set(field, e.target.value)}
+      value={intake[field] ?? ''} onChange={e => set(field, e.target.value)}
       placeholder={placeholder} type={type}
-      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' }}
+      style={inputStyle}
       {...rest}
     />
   )
   const TextArea = ({ field, placeholder, rows=3 }: any) => (
     <textarea
-      value={intake[field] || ''} onChange={e => set(field, e.target.value)}
+      value={intake[field] ?? ''} onChange={e => set(field, e.target.value)}
       placeholder={placeholder} rows={rows}
-      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box', lineHeight:1.5 }}
+      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box' as const, lineHeight:1.5, colorScheme:'dark' as const }}
     />
   )
   const Select = ({ field, options, placeholder }: { field:string, options:{val:string,label:string}[], placeholder?:string }) => (
     <select
       value={intake[field] || ''} onChange={e => set(field, e.target.value)}
-      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color: intake[field] ? t.text : t.textMuted, outline:'none', fontFamily:"'DM Sans',sans-serif", appearance:'none', boxSizing:'border-box' }}>
+      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color: intake[field] ? t.text : t.textMuted, outline:'none', fontFamily:"'DM Sans',sans-serif", appearance:'none', boxSizing:'border-box' as const, colorScheme:'dark' as const }}>
       <option value="">{placeholder || 'Select...'}</option>
       {options.map(o => <option key={o.val} value={o.val} style={{ background:t.surfaceHigh }}>{o.label}</option>)}
     </select>
@@ -266,7 +268,6 @@ function ProfilePageInner() {
                 </Field>
                 <Field label="Pronouns"><Input field="pronouns" placeholder="they/them, she/her, he/him..." /></Field>
               </FieldRow>
-              <Field label="Occupation"><Input field="occupation" placeholder="What do you do for work?" /></Field>
               <Field label="Timezone">
                 <Select field="timezone" options={[
                   {val:'America/New_York',label:'Eastern (ET)'},{val:'America/Chicago',label:'Central (CT)'},
@@ -276,16 +277,6 @@ function ProfilePageInner() {
                   {val:'Australia/Sydney',label:'Sydney'},{val:'Asia/Tokyo',label:'Tokyo'},
                 ]} placeholder="Select your timezone" />
               </Field>
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:14 }}>
-                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.08em' }}>Emergency Contact</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  <FieldRow>
-                    <Field label="Name"><Input field="emergency_name" placeholder="Full name" /></Field>
-                    <Field label="Relationship"><Input field="emergency_relation" placeholder="Mom, partner, friend..." /></Field>
-                  </FieldRow>
-                  <Field label="Phone"><Input field="emergency_phone" placeholder="(555) 555-5555" /></Field>
-                </div>
-              </div>
             </div>
           )}
 
