@@ -8,50 +8,51 @@ const t = {
   green:'#22c55e', red:'#ef4444',
 }
 
-// ── Drop your real Stripe price IDs here ──────────────────────────────────
 const PLANS = [
   {
     id: 'monthly',
     label: 'Monthly',
     price: '$200',
     interval: '/month',
-    badge: null,
-    priceId: 'price_REPLACE_WITH_MONTHLY_PRICE_ID',
-    description: 'Billed once a month. Cancel anytime.',
+    badge: 'Best Value',
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_MONTHLY || 'price_MONTHLY',
+    description: 'Billed monthly after trial. Cancel anytime.',
   },
   {
     id: 'weekly',
     label: 'Weekly',
     price: '$50',
     interval: '/week',
-    badge: 'Most Flexible',
-    priceId: 'price_REPLACE_WITH_WEEKLY_PRICE_ID',
-    description: 'Billed every week. No commitment.',
+    badge: null,
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_WEEKLY || 'price_WEEKLY',
+    description: 'Billed weekly after trial. No commitment.',
   },
 ]
 
 const FEATURES = [
-  { icon:'🎥', title:'Async Video Review', desc:'Every workout reviewed with personal video feedback within 24 hours — your coaching, not an AI.' },
-  { icon:'📋', title:'Custom Programming', desc:'Programs built specifically for you, adjusted every week based on how you\'re actually doing.' },
-  { icon:'📊', title:'Full Progress Tracking', desc:'Workouts, nutrition, sleep, mood — all in one place so nothing gets missed.' },
+  { icon:'🎥', title:'Async Video Review', desc:'Every workout reviewed with personal video feedback within 24 hours.' },
+  { icon:'📋', title:'Custom Programming', desc:'Programs built specifically for you, adjusted based on how you\'re actually doing.' },
+  { icon:'📊', title:'Full Progress Tracking', desc:'Workouts, nutrition, sleep, mood — all in one place.' },
   { icon:'💬', title:'Direct Access to Shane', desc:'Real messaging, real accountability. You get me, not a chatbot.' },
 ]
 
 export default function JoinPage() {
   const [selected, setSelected] = useState<string>('monthly')
+  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string|null>(null)
 
   const selectedPlan = PLANS.find(p => p.id === selected)!
 
   const handleJoin = async () => {
+    if (!email.trim() || !email.includes('@')) { setError('Please enter a valid email address'); return }
     setLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: selectedPlan.priceId }),
+        body: JSON.stringify({ priceId: selectedPlan.priceId, email: email.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Something went wrong')
@@ -71,47 +72,39 @@ export default function JoinPage() {
         {/* Hero */}
         <div style={{ maxWidth:600, margin:'0 auto', padding:'60px 24px 32px', textAlign:'center' }}>
           <div style={{ marginBottom:24 }}>
-            <div style={{ fontSize:34, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:4 }}>
-              SRG FIT
-            </div>
-            <div style={{ fontSize:11, color:t.textMuted, letterSpacing:'0.15em', textTransform:'uppercase' }}>
-              STRENGTH · COMPASSION · LEGENDARY SUPPORT
-            </div>
+            <div style={{ fontSize:34, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:4 }}>SRG FIT</div>
+            <div style={{ fontSize:11, color:t.textMuted, letterSpacing:'0.15em', textTransform:'uppercase' }}>STRENGTH · COMPASSION · LEGENDARY SUPPORT</div>
           </div>
           <div style={{ fontSize:30, fontWeight:900, lineHeight:1.2, marginBottom:12 }}>
-            Real Coaching.<br />
-            <span style={{ background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-              Not a Template.
-            </span>
+            Real Coaching.<br/>
+            <span style={{ background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Not a Template.</span>
           </div>
           <div style={{ fontSize:15, color:t.textMuted, lineHeight:1.7, maxWidth:460, margin:'0 auto' }}>
             1-on-1 online coaching built around you. Every workout reviewed personally by Coach Shane within 24 hours.
           </div>
         </div>
 
-        {/* Plan selector */}
+        {/* Plan + email form */}
         <div style={{ maxWidth:600, margin:'0 auto', padding:'0 24px' }}>
-          <div style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:14 }}>
-            Choose Your Plan
+
+          {/* Trial banner */}
+          <div style={{ background:`linear-gradient(135deg,${t.teal}18,${t.orange}10)`, border:`1px solid ${t.teal}40`, borderRadius:14, padding:'14px 18px', marginBottom:20, textAlign:'center' }}>
+            <div style={{ fontSize:18, fontWeight:900, color:t.teal, marginBottom:3 }}>🎉 7-Day Free Trial</div>
+            <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Start training today. Card collected upfront, nothing charged for 7 days. Cancel before the trial ends and you won't pay a thing.</div>
           </div>
+
+          {/* Plan selector */}
+          <div style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:14 }}>Choose Your Plan</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
             {PLANS.map(plan => {
               const active = selected === plan.id
               return (
                 <button key={plan.id} onClick={() => setSelected(plan.id)}
-                  style={{
-                    background: active ? t.tealDim : t.surface,
-                    border: `2px solid ${active ? t.teal : t.border}`,
-                    borderRadius:16, padding:'18px 16px', cursor:'pointer',
-                    fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const,
-                    position:'relative', transition:'all .15s',
-                  }}>
+                  style={{ background:active?t.tealDim:t.surface, border:`2px solid ${active?t.teal:t.border}`, borderRadius:16, padding:'18px 16px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, position:'relative', transition:'all .15s' }}>
                   {plan.badge && (
-                    <div style={{ position:'absolute', top:-10, right:12, background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, color:'#000', fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:20, letterSpacing:'0.05em' }}>
-                      {plan.badge}
-                    </div>
+                    <div style={{ position:'absolute', top:-10, right:12, background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, color:'#000', fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:20 }}>{plan.badge}</div>
                   )}
-                  <div style={{ fontSize:13, fontWeight:700, color: active ? t.teal : t.textMuted, marginBottom:6 }}>{plan.label}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:active?t.teal:t.textMuted, marginBottom:6 }}>{plan.label}</div>
                   <div style={{ display:'flex', alignItems:'baseline', gap:3 }}>
                     <span style={{ fontSize:28, fontWeight:900, color:t.text }}>{plan.price}</span>
                     <span style={{ fontSize:13, color:t.textMuted }}>{plan.interval}</span>
@@ -127,32 +120,30 @@ export default function JoinPage() {
             })}
           </div>
 
+          {/* Email */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Your Email</div>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
+              onKeyDown={e => e.key === 'Enter' && handleJoin()}
+              style={{ width:'100%', background:t.surfaceUp, border:`1px solid ${t.border}`, borderRadius:10, padding:'12px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as any, boxSizing:'border-box' as any }} />
+          </div>
+
           {/* CTA */}
-          <button onClick={handleJoin} disabled={loading}
-            style={{
-              width:'100%', padding:'16px', borderRadius:14, border:'none',
-              background: loading ? t.surfaceUp : `linear-gradient(135deg,${t.teal},${t.orange})`,
-              color: loading ? t.textMuted : '#000',
-              fontSize:16, fontWeight:900, cursor: loading ? 'not-allowed' : 'pointer',
-              fontFamily:"'DM Sans',sans-serif", transition:'all .2s', marginBottom:10,
-            }}>
-            {loading ? 'Redirecting to checkout...' : `Start ${selectedPlan.label} Coaching →`}
+          <button onClick={handleJoin} disabled={loading || !email.trim()}
+            style={{ width:'100%', padding:'16px', borderRadius:14, border:'none', background:loading||!email.trim()?t.surfaceUp:`linear-gradient(135deg,${t.teal},${t.orange})`, color:loading||!email.trim()?t.textMuted:'#000', fontSize:16, fontWeight:900, cursor:loading||!email.trim()?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all .2s', marginBottom:10 }}>
+            {loading ? 'Redirecting to checkout...' : 'Start Your Free 7-Day Trial →'}
           </button>
-          <div style={{ fontSize:12, color:t.textDim, textAlign:'center', marginBottom: error ? 12 : 0 }}>
-            🔒 Secure checkout powered by Stripe · Cancel anytime
+          <div style={{ fontSize:12, color:t.textDim, textAlign:'center', marginBottom:error?12:0 }}>
+            🔒 Secure checkout · Card required · Cancel anytime before day 7
           </div>
           {error && (
-            <div style={{ marginTop:10, fontSize:13, color:t.red, background:'#ef444415', border:'1px solid #ef444430', borderRadius:10, padding:'10px 14px' }}>
-              {error}
-            </div>
+            <div style={{ marginTop:10, fontSize:13, color:t.red, background:'#ef444415', border:'1px solid #ef444430', borderRadius:10, padding:'10px 14px' }}>{error}</div>
           )}
         </div>
 
         {/* Features */}
         <div style={{ maxWidth:600, margin:'32px auto 0', padding:'0 24px 80px' }}>
-          <div style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:16 }}>
-            What's Included
-          </div>
+          <div style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:16 }}>What's Included</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:10 }}>
             {FEATURES.map(f => (
               <div key={f.title} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'16px 18px' }}>
@@ -165,12 +156,10 @@ export default function JoinPage() {
           <div style={{ marginTop:28, background:t.tealDim, border:`1px solid ${t.teal}30`, borderRadius:14, padding:'16px 18px', textAlign:'center' }}>
             <div style={{ fontSize:13, fontWeight:800, color:t.teal, marginBottom:5 }}>Questions before you join?</div>
             <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6 }}>
-              Reach out at <a href="mailto:shane@srgfit.training" style={{ color:t.teal, textDecoration:'none' }}>shane@srgfit.training</a> — I personally respond to every message.
+              Reach out at <a href="mailto:shane@srgfit.app" style={{ color:t.teal, textDecoration:'none' }}>shane@srgfit.app</a> — I personally respond to every message.
             </div>
           </div>
-          <div style={{ textAlign:'center', marginTop:28, fontSize:11, color:t.textDim }}>
-            Be Kind to Yourself & Stay Awesome 💪
-          </div>
+          <div style={{ textAlign:'center', marginTop:28, fontSize:11, color:t.textDim }}>Be Kind to Yourself & Stay Awesome 💪</div>
         </div>
       </div>
     </>
