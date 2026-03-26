@@ -7,7 +7,9 @@ export async function GET(req: NextRequest) {
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as any })
     const session = await stripe.checkout.sessions.retrieve(id)
-    return NextResponse.json({ email: session.customer_email || session.customer_details?.email || null })
+    const email = session.customer_email || session.customer_details?.email || null
+    const name  = session.customer_details?.name || null
+    return NextResponse.json({ email, name })
   } catch {
     return NextResponse.json({ email: null })
   }

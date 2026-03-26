@@ -14,28 +14,31 @@ export default function JoinSuccess() {
 }
 
 function SuccessInner() {
-  const searchParams = useSearchParams()
-  const sessionId = searchParams.get('session_id')
-  const [email, setEmail] = useState<string|null>(null)
+  const searchParams  = useSearchParams()
+  const sessionId     = searchParams.get('session_id')
+  const [email, setEmail]   = useState<string|null>(null)
+  const [name,  setName]    = useState<string|null>(null)
 
   useEffect(() => {
-    // Optionally fetch session email to personalise the message
     if (!sessionId) return
     fetch(`/api/stripe/session?id=${sessionId}`)
       .then(r => r.json())
-      .then(d => { if (d.email) setEmail(d.email) })
+      .then(d => {
+        if (d.email) setEmail(d.email)
+        if (d.name)  setName(d.name)
+      })
       .catch(() => {})
   }, [sessionId])
 
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
       <div style={{ minHeight:'100vh', background:t.bg, fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
         <div style={{ maxWidth:480, width:'100%', textAlign:'center' }}>
           <div style={{ fontSize:64, marginBottom:20 }}>🎉</div>
-          <div style={{ fontSize:28, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:12, lineHeight:1.2 }}>
-            You're in!
+          <div style={{ fontSize:28, fontWeight:900, background:'linear-gradient(135deg,#00c9b1,#f5a623)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:12, lineHeight:1.2 }}>
+            {name ? `Welcome, ${name.split(' ')[0]}!` : "You're in!"}
           </div>
           <div style={{ fontSize:15, color:t.textMuted, lineHeight:1.7, marginBottom:32 }}>
             {email ? `We sent a setup link to ${email}.` : 'Check your email for a setup link.'}{' '}
@@ -47,11 +50,11 @@ function SuccessInner() {
             {[
               { step:'1', text:'Check your email and click the setup link' },
               { step:'2', text:'Create your password — takes 30 seconds' },
-              { step:'3', text:'Coach Shane will set up your program' },
+              { step:'3', text:'Coach Shane will reach out to set up your program' },
               { step:'4', text:'Your trial ends in 7 days — cancel anytime before then' },
             ].map(s => (
               <div key={s.step} style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:12 }}>
-                <div style={{ width:24, height:24, borderRadius:'50%', background:`linear-gradient(135deg,${t.teal},${t.orange})`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color:'#000', flexShrink:0 }}>{s.step}</div>
+                <div style={{ width:24, height:24, borderRadius:'50%', background:'linear-gradient(135deg,#00c9b1,#f5a623)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color:'#000', flexShrink:0 }}>{s.step}</div>
                 <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.5, paddingTop:3 }}>{s.text}</div>
               </div>
             ))}
