@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
       cancel_url: `${siteUrl}/join`,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
-      customer_creation: 'always',
     })
 
     return NextResponse.json({ url: session.url })
