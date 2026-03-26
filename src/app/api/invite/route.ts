@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, fullName, coachId, resend } = await request.json()
+    const { email, fullName, coachId } = await request.json()
 
     if (!email || !coachId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -15,17 +15,9 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const siteUrl = request.nextUrl.origin
+    // Use NEXT_PUBLIC_SITE_URL env var, fall back to request origin
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin
 
-    // ── Resend path: re-invite an existing user ──────────────────────────────
-    if (resend) {
-      // Re-inviting an existing user generates a recovery link/OTP email
-      const { error: resendErr } = await supabaseAdmin.auth.resetPasswordForEmail(email)
-      if (resendErr) throw resendErr
-      return NextResponse.json({ success: true })
-    }
-
-    // ── New invite path ───────────────────────────────────────────────────────
     // Check if user already exists
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
@@ -41,7 +33,7 @@ export async function POST(request: NextRequest) {
       email,
       {
         data: { full_name: fullName || email, role: 'client' },
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
+        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
       }
     )
 
@@ -62,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Invite securely dispatched to ${email}.`,
+      message: `Invite sent to ${email}.`,
       userId: invited.user.id,
     })
 
