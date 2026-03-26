@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       email,
       {
         data: { full_name: fullName || email, role: 'client' },
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
       }
     )
 

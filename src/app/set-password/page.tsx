@@ -35,46 +35,38 @@ function SetPasswordInner() {
   useEffect(() => {
     const checkSession = async () => {
       setInitialHash(window.location.hash || 'EMPTY')
-      // 0. Manual Hash Enforcement (Bulletproof Implicit Flow)
-      if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+
+      // 1. Hash fragment flow (desktop email clients)
+      if (window.location.hash.includes('access_token=')) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         const access_token = hashParams.get('access_token')
         const refresh_token = hashParams.get('refresh_token')
         if (access_token && refresh_token) {
           const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
-          if (!setErr) {
-            setSessionOk(true)
-            window.location.hash = '' // Clean URL
-            return
-          } else {
-            setError(`Auth Error: ${setErr.message}`)
-          }
-        } else {
-           setError(`Missing tokens in URL string.`)
+          if (!setErr) { setSessionOk(true); window.location.hash = ''; return }
         }
       }
 
-      // 1. Manually check if session already exists (solves race conditions)
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        setSessionOk(true)
-        return
-      }
-
-      // 2. PKCE code exchange fallback
+      // 2. PKCE code exchange (from /auth/callback redirect)
       const code = searchParams.get('code')
       if (code) {
         const { data, error: codeErr } = await supabase.auth.exchangeCodeForSession(code)
-        if (!codeErr && data.session) setSessionOk(true)
-        else if (codeErr) setError(codeErr.message)
+        if (!codeErr && data.session) { setSessionOk(true); return }
       }
+
+      // 3. Session already exists
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) { setSessionOk(true); return }
+
+      // 4. Pre-fill email from query param if provided (e.g. ?email=...)
+      const emailParam = searchParams.get('email')
+      if (emailParam) setOtpEmail(emailParam)
     }
     checkSession()
-    
-    // 3. Auth State listener for Implicit Hash Fragments
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        if (session) setSessionOk(true)
+      if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        setSessionOk(true)
       }
     })
     return () => subscription.unsubscribe()
@@ -152,38 +144,26 @@ function SetPasswordInner() {
                 <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>You're all set!</div>
                 <div style={{ fontSize:13, color:t.textMuted }}>Taking you to your dashboard...</div>
               </div>
-            ) : (
+            ) : !sessionOk ? (
+              /* ── Step 1: Verify identity via OTP ── */
               <>
-                <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>Set your password</div>
+                <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>Check your email</div>
                 <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.6 }}>
-                  Create a password to access your SRG Fit account.
+                  We sent a 6-digit code to your email. Enter it below to continue.
                 </div>
 
                 <div style={{ marginBottom:14 }}>
-                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Min. 8 characters"
-                    style={inp}
-                  />
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Email Address</label>
+                  <input type="email" value={otpEmail} onChange={e => setOtpEmail(e.target.value)}
+                    placeholder="you@email.com" style={inp} />
                 </div>
 
                 <div style={{ marginBottom:20 }}>
-                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
-                    Confirm Password
-                  </label>
-                  <input
-                    type="password"
-                    value={confirm}
-                    onChange={e => setConfirm(e.target.value)}
-                    placeholder="Re-enter password"
-                    style={inp}
-                    onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                  />
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>6-Digit Code</label>
+                  <input type="text" inputMode="numeric" value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g,''))}
+                    placeholder="123456" maxLength={6}
+                    onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                    style={{ ...inp, letterSpacing:'0.2em', fontSize:22, fontWeight:'bold', textAlign:'center' as const }} />
                 </div>
 
                 {error && (
@@ -192,81 +172,46 @@ function SetPasswordInner() {
                   </div>
                 )}
 
-                {!sessionOk && (
-                  <div style={{ background:t.surfaceUp, border:`1px solid ${t.border}`, borderRadius:16, padding:'24px' }}>
-                    <div style={{ fontSize:15, fontWeight:800, marginBottom:8 }}>Check your email</div>
-                    <div style={{ fontSize:13, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>
-                      Enter your email and the 6-digit invite code we sent you.
-                    </div>
-                    
-                    <div style={{ marginBottom:14 }}>
-                      <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={otpEmail}
-                        onChange={e => setOtpEmail(e.target.value)}
-                        placeholder="you@email.com"
-                        style={inp}
-                      />
-                    </div>
+                <button onClick={handleVerifyOtp} disabled={loading || !otpEmail || otpCode.length !== 6}
+                  style={{ width:'100%', padding:'13px', borderRadius:12, border:'none',
+                    background: loading || !otpEmail || otpCode.length !== 6 ? '#1d1d2e' : `linear-gradient(135deg,${t.orange},${t.orange}cc)`,
+                    color: loading || !otpEmail || otpCode.length !== 6 ? t.textMuted : '#000',
+                    fontSize:14, fontWeight:800, cursor: loading || !otpEmail || otpCode.length !== 6 ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {loading ? 'Verifying...' : 'Verify Code →'}
+                </button>
+              </>
+            ) : (
+              /* ── Step 2: Set password ── */
+              <>
+                <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>Create your password</div>
+                <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.6 }}>
+                  Almost there — set a password to access your SRG Fit account.
+                </div>
 
-                    <div style={{ marginBottom:20 }}>
-                      <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
-                        6-Digit Code
-                      </label>
-                      <input
-                        type="text"
-                        value={otpCode}
-                        onChange={e => setOtpCode(e.target.value)}
-                        placeholder="123456"
-                        maxLength={6}
-                        style={{ ...inp, letterSpacing: '0.2em', fontSize:20, fontWeight:'bold', textAlign:'center' as const }}
-                      />
-                    </div>
+                <div style={{ marginBottom:14 }}>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Password</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder="Min. 8 characters" style={inp} />
+                </div>
 
-                    <button
-                      onClick={handleVerifyOtp}
-                      disabled={loading || !otpEmail || otpCode.length !== 6}
-                      style={{
-                        width: '100%',
-                        padding: '13px',
-                        borderRadius: 12,
-                        border: 'none',
-                        background: loading || !otpEmail || otpCode.length !== 6
-                          ? '#1d1d2e'
-                          : `linear-gradient(135deg,${t.orange},${t.orange}cc)`,
-                        color: loading || !otpEmail || otpCode.length !== 6 ? t.textMuted : '#000',
-                        fontSize: 14,
-                        fontWeight: 800,
-                        cursor: loading || !otpEmail || otpCode.length !== 6 ? 'not-allowed' : 'pointer',
-                        fontFamily: "'DM Sans',sans-serif",
-                        transition: 'all 0.2s',
-                      }}>
-                      {loading ? 'Verifying...' : 'Verify Code →'}
-                    </button>
+                <div style={{ marginBottom:20 }}>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Confirm Password</label>
+                  <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+                    placeholder="Re-enter password" style={inp}
+                    onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+                </div>
+
+                {error && (
+                  <div style={{ background:t.redDim, border:`1px solid ${t.red}40`, borderRadius:10, padding:'10px 14px', fontSize:13, color:t.red, marginBottom:16 }}>
+                    {error}
                   </div>
                 )}
 
-                <button
-                  onClick={handleSubmit}
-                  disabled={loading || !password || !confirm}
-                  style={{
-                    width: '100%',
-                    padding: '13px',
-                    borderRadius: 12,
-                    border: 'none',
-                    background: loading || !password || !confirm
-                      ? '#1d1d2e'
-                      : 'linear-gradient(135deg,#00c9b1,#00c9b1cc)',
+                <button onClick={handleSubmit} disabled={loading || !password || !confirm}
+                  style={{ width:'100%', padding:'13px', borderRadius:12, border:'none',
+                    background: loading || !password || !confirm ? '#1d1d2e' : 'linear-gradient(135deg,#00c9b1,#00c9b1cc)',
                     color: loading || !password || !confirm ? t.textMuted : '#000',
-                    fontSize: 14,
-                    fontWeight: 800,
-                    cursor: loading || !password || !confirm ? 'not-allowed' : 'pointer',
-                    fontFamily: "'DM Sans',sans-serif",
-                    transition: 'all 0.2s',
-                  }}>
+                    fontSize:14, fontWeight:800, cursor: loading || !password || !confirm ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   {loading ? 'Setting password...' : 'Set Password & Continue →'}
                 </button>
               </>
