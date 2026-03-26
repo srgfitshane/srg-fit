@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense, createContext as _cc, useContext as _uc } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -37,6 +37,18 @@ export default function ClientProfilePage() {
     </Suspense>
   )
 }
+
+// ── Form context (stable component identity — fixes input focus loss) ──────
+type _PCtx = { intake:any; set:(f:string,v:any)=>void; toggleArray:(f:string,v:string)=>void; t:any }
+const _Ctx = _cc<_PCtx>({} as _PCtx)
+const Label = ({children}:{children:React.ReactNode}) => { const {t}=_uc(_Ctx); return <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:5}}>{children}</div> }
+const Input = ({field,placeholder,type='text',...rest}:any) => { const {intake,set,t}=_uc(_Ctx); return <input value={intake[field]??''} onChange={e=>set(field,e.target.value)} placeholder={placeholder} type={type} {...rest} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const,colorScheme:'dark' as any}} /> }
+const TextArea = ({field,placeholder,rows=3}:any) => { const {intake,set,t}=_uc(_Ctx); return <textarea value={intake[field]??''} onChange={e=>set(field,e.target.value)} placeholder={placeholder} rows={rows} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",resize:'vertical' as const,boxSizing:'border-box' as const,lineHeight:1.5,colorScheme:'dark' as any}} /> }
+const Select = ({field,options,placeholder}:{field:string,options:{val:string,label:string}[],placeholder?:string}) => { const {intake,set,t}=_uc(_Ctx); return <select value={intake[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:intake[field]?t.text:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif",appearance:'none' as any,boxSizing:'border-box' as const,colorScheme:'dark' as any}}><option value="">{placeholder||'Select...'}</option>{options.map((o:any)=><option key={o.val} value={o.val} style={{background:t.surfaceHigh}}>{o.label}</option>)}</select> }
+const ChipGroup = ({field,options}:{field:string,options:string[]}) => { const {intake,toggleArray,t}=_uc(_Ctx); return <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{options.map(o=>{const on=(intake[field]||[]).includes(o);return <button key={o} onClick={()=>toggleArray(field,o)} style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid '+(on?t.teal+'60':t.border),background:on?t.tealDim:'transparent',color:on?t.teal:t.textDim,fontFamily:"'DM Sans',sans-serif",transition:'all .1s'}}>{o}</button>})}</div> }
+const SliderField = ({field,min,max,label}:{field:string,min:number,max:number,label:string}) => { const {intake,set,t}=_uc(_Ctx); return <div><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em'}}>{label}</span><span style={{fontSize:13,fontWeight:800,color:t.teal}}>{intake[field]??'—'}</span></div><input type="range" min={min} max={max} value={intake[field]||min} onChange={e=>set(field,parseInt(e.target.value))} style={{width:'100%',accentColor:t.teal}}/><div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:t.textMuted,marginTop:2}}><span>{min}</span><span>{max}</span></div></div> }
+const FieldRow = ({children}:{children:React.ReactNode}) => <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{children}</div>
+const Field = ({label,children}:{label:string,children:React.ReactNode}) => <div><Label>{label}</Label>{children}</div>
 
 function ProfilePageInner() {
   const supabase = createClient()
@@ -116,69 +128,7 @@ function ProfilePageInner() {
   }
 
   // ── Reusable field components ─────────────────────────────────────────────
-  const Label = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>{children}</div>
-  )
-  // ── These must be stable references (not re-created per render) to avoid focus loss ──
-  const inputStyle = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const, colorScheme:'dark' as const }
-  const Input = ({ field, placeholder, type='text', ...rest }: any) => (
-    <input
-      value={intake[field] ?? ''} onChange={e => set(field, e.target.value)}
-      placeholder={placeholder} type={type}
-      style={inputStyle}
-      {...rest}
-    />
-  )
-  const TextArea = ({ field, placeholder, rows=3 }: any) => (
-    <textarea
-      value={intake[field] ?? ''} onChange={e => set(field, e.target.value)}
-      placeholder={placeholder} rows={rows}
-      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box' as const, lineHeight:1.5, colorScheme:'dark' as const }}
-    />
-  )
-  const Select = ({ field, options, placeholder }: { field:string, options:{val:string,label:string}[], placeholder?:string }) => (
-    <select
-      value={intake[field] || ''} onChange={e => set(field, e.target.value)}
-      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color: intake[field] ? t.text : t.textMuted, outline:'none', fontFamily:"'DM Sans',sans-serif", appearance:'none', boxSizing:'border-box' as const, colorScheme:'dark' as const }}>
-      <option value="">{placeholder || 'Select...'}</option>
-      {options.map(o => <option key={o.val} value={o.val} style={{ background:t.surfaceHigh }}>{o.label}</option>)}
-    </select>
-  )
-  const ChipGroup = ({ field, options }: { field:string, options:string[] }) => (
-    <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
-      {options.map(o => {
-        const arr: string[] = intake[field] || []
-        const on = arr.includes(o)
-        return (
-          <button key={o} onClick={() => toggleArray(field, o)}
-            style={{ padding:'5px 12px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid '+(on?t.teal+'60':t.border), background: on?t.tealDim:'transparent', color: on?t.teal:t.textDim, fontFamily:"'DM Sans',sans-serif", transition:'all .1s' }}>
-            {o}
-          </button>
-        )
-      })}
-    </div>
-  )
-  const SliderField = ({ field, min, max, label }: { field:string, min:number, max:number, label:string }) => (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-        <span style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{label}</span>
-        <span style={{ fontSize:13, fontWeight:800, color:t.teal }}>{intake[field] ?? '—'}</span>
-      </div>
-      <input type="range" min={min} max={max}
-        value={intake[field] || min}
-        onChange={e => set(field, parseInt(e.target.value))}
-        style={{ width:'100%', accentColor:t.teal }} />
-      <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginTop:2 }}>
-        <span>{min}</span><span>{max}</span>
-      </div>
-    </div>
-  )
-  const FieldRow = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>{children}</div>
-  )
-  const Field = ({ label, children }: { label:string, children:React.ReactNode }) => (
-    <div><Label>{label}</Label>{children}</div>
-  )
+  const _ctxVal = { intake, set, toggleArray, t }
 
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.textMuted }}>Loading...</div>
@@ -197,6 +147,7 @@ function ProfilePageInner() {
   }).length
 
   return (
+    <_Ctx.Provider value={_ctxVal}>
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
       <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}select option{background:${t.surfaceHigh};}`}</style>
@@ -584,5 +535,6 @@ function ProfilePageInner() {
       </div>
       <ClientBottomNav />
     </>
+    </_Ctx.Provider>
   )
 }

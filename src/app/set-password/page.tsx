@@ -103,7 +103,7 @@ function SetPasswordInner() {
       return
     }
     setDone(true)
-    setTimeout(() => router.push('/dashboard/client'), 2000)
+    setTimeout(() => router.push('/onboarding'), 2000)
   }
 
   const inp = {
@@ -141,8 +141,8 @@ function SetPasswordInner() {
             {done ? (
               <div style={{ textAlign:'center' }}>
                 <div style={{ fontSize:40, marginBottom:16 }}>🎉</div>
-                <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>You're all set!</div>
-                <div style={{ fontSize:13, color:t.textMuted }}>Taking you to your dashboard...</div>
+                <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Password set!</div>
+                <div style={{ fontSize:13, color:t.textMuted }}>Setting up your profile...</div>
               </div>
             ) : !sessionOk ? (
               /* ── Step 1: Verify identity via OTP ── */
