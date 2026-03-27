@@ -64,6 +64,8 @@ export default function CoachDashboard() {
   const [clientFilter, setClientFilter] = useState<'active'|'paused'>('active')
   const [navExpanded, setNavExpanded] = useState(false)
   const [pendingReviews, setPendingReviews] = useState(0)
+  const [checkInsDue,    setCheckInsDue]    = useState(0)
+  const [unreadMsgs,     setUnreadMsgs]     = useState(0)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -90,6 +92,28 @@ export default function CoachDashboard() {
         .is('coach_reviewed_at', null)
         .not('review_due_at', 'is', null)
       setPendingReviews(count || 0)
+
+      // Check-ins due: clients whose last check-in was > 7 days ago or never
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0]
+      const { count: ciDue } = await supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', user.id)
+        .neq('archived', true)
+        .eq('paused', false)
+        .or(`last_checkin_at.is.null,last_checkin_at.lte.${sevenDaysAgoStr}`)
+      setCheckInsDue(ciDue || 0)
+
+      // Unread messages from clients
+      const { count: msgCount } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('read', false)
+      setUnreadMsgs(msgCount || 0)
+
       setLoading(false)
     }
     load()
@@ -252,10 +276,10 @@ export default function CoachDashboard() {
           {/* Stats */}
           <div className="coach-stats" style={{ marginBottom:28 }}>
             {[
-              { label:'Active Clients', val:clients.length,                      color:t.teal,   icon:'👥' },
+              { label:'Active Clients', val:clients.filter((c:any)=>!c.paused).length,                      color:t.teal,   icon:'👥' },
               { label:'Flagged',        val:clients.filter(c=>c.flagged).length, color:t.red,    icon:'🚩' },
-              { label:'Check-ins Due',  val:'—',                                 color:t.orange, icon:'✅' },
-              { label:'Unread Msgs',    val:'—',                                 color:t.purple, icon:'💬' },
+              { label:'Check-ins Due',  val:checkInsDue,                                 color:t.orange, icon:'✅' },
+              { label:'Unread Msgs',    val:unreadMsgs,                                 color:t.purple, icon:'💬' },
             ].map(s => (
               <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'18px 20px' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>

@@ -415,6 +415,27 @@ export default function ActiveWorkoutPage() {
 
           const exerciseName = se.exercise_name || 'exercise'
           newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs!`)
+
+          // Check if this PR completes a strength goal
+          const { data: matchingGoals } = await supabase
+            .from('client_goals')
+            .select('id, title, target_value')
+            .eq('client_id', clientId)
+            .eq('status', 'active')
+            .eq('goal_type', 'strength')
+            .not('target_value', 'is', null)
+          if (matchingGoals?.length) {
+            for (const goal of matchingGoals) {
+              if (bestWeight >= Number(goal.target_value)) {
+                const now = new Date().toISOString()
+                await supabase.from('client_goals').update({
+                  status: 'completed', completed_at: now,
+                  current_value: bestWeight, updated_at: now
+                }).eq('id', goal.id)
+                newMilestones.push(`🎯 Goal achieved: ${goal.title}!`)
+              }
+            }
+          }
         }
       }
 
