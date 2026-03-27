@@ -107,6 +107,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
+  const [showCallRequest, setShowCallRequest] = useState(false)
+  const [callSlots, setCallSlots] = useState([{date:'',time:''},{date:'',time:''},{date:'',time:''}])
+  const [callNote, setCallNote] = useState('')
+  const [callSubmitting, setCallSubmitting] = useState(false)
+  const [callSubmitted, setCallSubmitted] = useState(false)
   // Habit daily refresh tracking
   const [habitLoadDate, setHabitLoadDate] = useState('')
   // Morning Pulse check-in
@@ -130,120 +135,74 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
   useEffect(() => {
     const loadClientData = async (clientData: any, todayStr: string) => {
-        const { data: habitData } = await supabase
-          .from('habits')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .eq('active', true)
+        // Fire all queries in parallel — was 11 sequential round trips, now 1 batch
+        const cid = clientData.id
+        const [
+          { data: habitData },
+          { data: habitLogData },
+          { data: milestoneData },
+          { data: prData },
+          { data: nextSess },
+          { data: reviewData },
+          { data: pendingCI },
+          { data: todayCheckin },
+          { data: todayJournal },
+          { data: pastData },
+        ] = await Promise.all([
+          supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
+          supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
+          supabase.from('milestones').select('*').eq('client_id', cid).eq('seen', false).order('created_at', { ascending: false }),
+          supabase.from('personal_records').select('*, exercise:exercises(name)').eq('client_id', cid).order('logged_date', { ascending: false }).limit(3),
+          supabase.from('workout_sessions')
+            .select('id, title, scheduled_date, status')
+            .eq('client_id', cid)
+            .not('program_id', 'is', null)
+            .in('status', ['assigned', 'in_progress'])
+            .or(`scheduled_date.eq.${todayStr},status.eq.in_progress,scheduled_date.gte.${todayStr}`)
+            .order('status', { ascending: false })
+            .order('scheduled_date', { ascending: true })
+            .limit(1)
+            .single(),
+          supabase.from('workout_sessions')
+            .select('id, title, coach_review_notes, coach_review_video_url, coach_reviewed_at')
+            .eq('client_id', cid).eq('status', 'completed')
+            .not('coach_reviewed_at', 'is', null)
+            .is('coach_review_seen_at', null)
+            .order('coach_reviewed_at', { ascending: false }).limit(5),
+          supabase.from('client_form_assignments')
+            .select('id, note, form:onboarding_forms(title, form_type, is_checkin_type)')
+            .eq('client_id', cid).eq('status', 'pending').limit(3),
+          supabase.from('daily_checkins').select('*').eq('client_id', cid).eq('checkin_date', todayStr).single(),
+          supabase.from('journal_entries').select('*').eq('client_id', cid).eq('entry_date', todayStr).single(),
+          supabase.from('journal_entries').select('*').eq('client_id', cid).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
+        ])
+
         setHabits(habitData || [])
 
-        const { data: habitLogData } = await supabase
-          .from('habit_logs')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .eq('logged_date', todayStr)
         const logMap: Record<string,number> = {}
         habitLogData?.forEach((l:any) => { logMap[l.habit_id] = l.value })
         setHabitLogs(logMap)
         setHabitLoadDate(today)
 
-        const { data: milestoneData } = await supabase
-          .from('milestones')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .eq('seen', false)
-          .order('created_at', { ascending: false })
         setMilestones(milestoneData || [])
-
-        const { data: prData } = await supabase
-          .from('personal_records')
-          .select('*, exercise:exercises(name)')
-          .eq('client_id', clientData.id)
-          .order('logged_date', { ascending: false })
-          .limit(3)
         setRecentPRs(prData || [])
 
-        const { data: wlData } = await supabase
-          .from('workout_logs')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .order('started_at', { ascending: false })
-          .limit(5)
-        setWorkoutLogs(wlData || [])
-
-        // Today's workout session — show today's session, or any in_progress,
-        // or fall back to the next upcoming session so Rest Day is only true rest days
-        const { data: nextSess } = await supabase
-          .from('workout_sessions')
-          .select('id, title, scheduled_date, status')
-          .eq('client_id', clientData.id)
-          .not('program_id', 'is', null)
-          .in('status', ['assigned', 'in_progress'])
-          .or(`scheduled_date.eq.${todayStr},status.eq.in_progress,scheduled_date.gte.${todayStr}`)
-          .order('status', { ascending: false })  // in_progress first
-          .order('scheduled_date', { ascending: true })
-          .limit(1)
-          .single()
-        // Only show on Today if it's actually today or in_progress — otherwise show as "upcoming"
         const isToday = nextSess?.scheduled_date === todayStr || nextSess?.status === 'in_progress'
         setNextSession(nextSess ? { ...nextSess, isToday } : null)
 
-        // Unseen coach reviews — sessions with a review the client hasn't seen yet
-        const { data: reviewData } = await supabase
-          .from('workout_sessions')
-          .select('id, title, coach_review_notes, coach_review_video_url, coach_reviewed_at')
-          .eq('client_id', clientData.id)
-          .eq('status', 'completed')
-          .not('coach_reviewed_at', 'is', null)
-          .is('coach_review_seen_at', null)
-          .order('coach_reviewed_at', { ascending: false })
-          .limit(5)
         setPendingReviews(reviewData || [])
-        const { data: pendingCI } = await supabase
-          .from('client_form_assignments')
-          .select('id, note, form:onboarding_forms(title, form_type, is_checkin_type)')
-          .eq('client_id', clientData.id)
-          .eq('status', 'pending')
-          .limit(3)
         setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type || a.form?.form_type === 'check_in'))
 
-        // Load today's morning pulse if already submitted
-        const { data: todayCheckin } = await supabase
-          .from('daily_checkins')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .eq('checkin_date', todayStr)
-          .single()
         setPulseData(todayCheckin || null)
 
-        // If pulse has a journal entry, pre-fill the journal
-        if (todayCheckin?.body) {
-          setJournalText(todayCheckin.body)
-          setJournalPrivate(todayCheckin.is_private ?? true)
+        // Journal: today's entry (pulse body or dedicated entry)
+        const journalEntry = todayJournal || (todayCheckin?.body ? todayCheckin : null)
+        if (journalEntry) {
+          setJournalText(journalEntry.body || '')
+          setJournalPrivate(journalEntry.is_private ?? true)
           setJournalDate(todayStr)
         }
 
-        // Load today's journal entry if already written
-        const { data: todayJournal } = await supabase
-          .from('journal_entries')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .eq('entry_date', todayStr)
-          .single()
-        if (todayJournal) {
-          setJournalText(todayJournal.body || '')
-          setJournalPrivate(todayJournal.is_private ?? true)
-          setJournalDate(todayStr)
-        }
-
-        // Load past journal entries (last 30, excluding today)
-        const { data: pastData } = await supabase
-          .from('journal_entries')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .neq('entry_date', todayStr)
-          .order('entry_date', { ascending: false })
-          .limit(30)
         setPastEntries(pastData || [])
     } // end loadClientData
 
@@ -783,6 +742,26 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   </svg>
                 </div>
               </button>
+
+              {/* Request a Call */}
+              <button onClick={()=>setShowCallRequest(true)}
+                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block', marginTop:14 }}>
+                <div style={{ height:3, background:'linear-gradient(90deg,'+t.orange+','+t.yellow+')' }}/>
+                <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.orange+'30,'+t.yellow+'18)', border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.1 19.79 19.79 0 01.1 .46 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.29 6.29"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>Request a Call</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Schedule a 30-minute Zoom with Coach Shane</div>
+                  </div>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </div>
+              </button>
             </div>
           )}
 
@@ -937,6 +916,85 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Save ✓
               </button>
+            </div>
+          </>
+        )}
+
+
+        {/* Call Request Modal */}
+        {showCallRequest && (
+          <>
+            <div onClick={()=>{if(!callSubmitting)setShowCallRequest(false)}}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 48px',maxHeight:'90vh',overflowY:'auto' as const}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 20px'}}/>
+
+              {callSubmitted ? (
+                <div style={{textAlign:'center',padding:'16px 0'}}>
+                  <div style={{fontSize:40,marginBottom:12}}>✓</div>
+                  <div style={{fontSize:17,fontWeight:800,marginBottom:8,color:t.text}}>Request sent!</div>
+                  <div style={{fontSize:13,color:t.textMuted,lineHeight:1.7,marginBottom:24}}>
+                    Shane will review your availability and confirm a time. You'll get a message with the Zoom link once it's set.
+                  </div>
+                  <button onClick={()=>{setShowCallRequest(false);setCallSubmitted(false);setCallSlots([{date:'',time:''},{date:'',time:''},{date:'',time:''}]);setCallNote('')}}
+                    style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{fontSize:17,fontWeight:800,marginBottom:4,color:t.text}}>Request a 30-min Call 📞</div>
+                  <div style={{fontSize:13,color:t.textMuted,marginBottom:20,lineHeight:1.6}}>
+                    Suggest 2–3 times that work for you. Shane will confirm one and send a Zoom link.
+                  </div>
+
+                  <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:16}}>
+                    {callSlots.map((slot,i)=>(
+                      <div key={i} style={{display:'flex',gap:8,alignItems:'center'}}>
+                        <div style={{fontSize:11,fontWeight:700,color:t.textMuted,width:16,flexShrink:0}}>{i+1}.</div>
+                        <input type="date" value={slot.date} onChange={e=>setCallSlots(s=>s.map((x,j)=>j===i?{...x,date:e.target.value}:x))}
+                          style={{flex:1,background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as any}}/>
+                        <input type="time" value={slot.time} onChange={e=>setCallSlots(s=>s.map((x,j)=>j===i?{...x,time:e.target.value}:x))}
+                          style={{width:110,background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as any}}/>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>What do you want to talk about? (optional)</div>
+                    <textarea value={callNote} onChange={e=>setCallNote(e.target.value)} rows={3}
+                      placeholder="Program questions, check-in, nutrition, anything on your mind..."
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 13px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",resize:'none' as any,outline:'none',lineHeight:1.6,boxSizing:'border-box' as any,colorScheme:'dark' as any}}/>
+                  </div>
+
+                  <div style={{display:'flex',gap:10}}>
+                    <button onClick={()=>setShowCallRequest(false)}
+                      style={{flex:1,padding:'12px',borderRadius:11,border:'1px solid '+t.border,background:'transparent',color:t.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                      Cancel
+                    </button>
+                    <button disabled={callSubmitting||!callSlots.some(s=>s.date&&s.time)}
+                      onClick={async()=>{
+                        const filledSlots = callSlots.filter(s=>s.date&&s.time)
+                        if(!filledSlots.length||!clientRecord) return
+                        setCallSubmitting(true)
+                        await supabase.from('call_requests').insert({
+                          client_id: clientRecord.id,
+                          coach_id: clientRecord.coach_id,
+                          proposed_times: filledSlots,
+                          client_note: callNote||null,
+                          status:'pending'
+                        })
+                        // Fire-and-forget push to coach
+                        fetch('/api/notifications/call-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId:clientRecord.id})}).catch(()=>{})
+                        setCallSubmitting(false)
+                        setCallSubmitted(true)
+                      }}
+                      style={{flex:2,padding:'12px',borderRadius:11,border:'none',background:callSlots.some(s=>s.date&&s.time)?`linear-gradient(135deg,${t.orange},${t.orange}cc)`:'#1d1d2e',color:callSlots.some(s=>s.date&&s.time)?'#000':t.textMuted,fontSize:13,fontWeight:800,cursor:callSlots.some(s=>s.date&&s.time)?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif"}}>
+                      {callSubmitting?'Sending...':'Send Request'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}

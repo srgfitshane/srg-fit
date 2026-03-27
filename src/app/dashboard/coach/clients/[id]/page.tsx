@@ -28,6 +28,7 @@ const TABS = [
   { id:'metrics',    label:'Metrics',    icon:'📈' },
   { id:'forms',      label:'Forms',      icon:'📝' },
   { id:'messages',   label:'Messages',   icon:'💬' },
+  { id:'intake',     label:'Intake',     icon:'📋' },
 ]
 
 
@@ -61,6 +62,10 @@ export default function ClientDetail() {
   const [responseText,        setResponseText]        = useState('')
   const [savingResponse,      setSavingResponse]      = useState(false)
   const [loading,  setLoading]  = useState(true)
+  const [intake,        setIntake]        = useState<any>(null)
+  const [callRequests,  setCallRequests]  = useState<any[]>([])
+  const [approvingCall, setApprovingCall] = useState<string|null>(null)
+  const [zoomLink,      setZoomLink]      = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
   const [showFlag, setShowFlag] = useState(false)
@@ -94,43 +99,37 @@ export default function ClientDetail() {
       if (clientData?.coach_notes) setCoachNotes(clientData.coach_notes)
       if (clientData?.gender) setClientGender(clientData.gender)
 
-      // Load forms for assign form feature
-      const { data: formData } = await supabase
-        .from('onboarding_forms')
-        .select('id,title,form_type,is_default,is_checkin_type')
-        .eq('coach_id', user.id)
+      // Fire all secondary queries in parallel
+      const [
+        { data: formData },
+        { data: checkinData },
+        { data: metricsData },
+        { data: workoutData },
+        { data: nutritionData },
+        { data: programData },
+        { data: pulseData },
+        { data: journalData },
+        { data: intakeData },
+        { data: schedData },
+        { data: assignData },
+      ] = await Promise.all([
+        supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
+        supabase.from('checkins').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(10),
+        supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(10),
+        supabase.from('workout_sessions').select('*').eq('client_id', clientId).order('scheduled_date', { ascending: false }).limit(20),
+        supabase.from('nutrition_plans').select('*').eq('client_id', clientId).eq('is_active', true).single(),
+        supabase.from('programs').select('*').eq('client_id', clientId).eq('is_template', false).order('created_at', { ascending: false }).limit(1).single(),
+        supabase.from('daily_checkins').select('*').eq('client_id', clientId).order('checkin_date', { ascending: false }).limit(30),
+        supabase.from('journal_entries').select('*').eq('client_id', clientId).eq('is_private', false).order('entry_date', { ascending: false }).limit(30),
+        supabase.from('client_intake_profiles').select('*').eq('client_id', clientId).single(),
+        supabase.from('check_in_schedules').select('*').eq('client_id', clientId).eq('coach_id', user.id).order('created_at', { ascending: false }).limit(1).single(),
+        supabase.from('client_form_assignments').select('*, form:onboarding_forms(title)').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).order('assigned_at', { ascending: false }).limit(20),
+      ])
+
       setForms(formData || [])
-
-      const { data: checkinData } = await supabase
-        .from('checkins')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('submitted_at', { ascending: false })
-        .limit(10)
       setCheckins(checkinData || [])
-
-      const { data: metricsData } = await supabase
-        .from('metrics')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('logged_date', { ascending: false })
-        .limit(10)
       setMetrics(metricsData || [])
-
-      const { data: workoutData } = await supabase
-        .from('workout_sessions')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('scheduled_date', { ascending: false })
-        .limit(20)
       setWorkouts(workoutData || [])
-
-      const { data: nutritionData } = await supabase
-        .from('nutrition_plans')
-        .select('*')
-        .eq('client_id', clientId)
-        .eq('is_active', true)
-        .single()
       setNutritionPlan(nutritionData || null)
       if (nutritionData) {
         setNutritionForm({
@@ -142,34 +141,10 @@ export default function ClientDetail() {
           notes:    nutritionData.notes || '',
         })
       }
-
-      const { data: programData } = await supabase
-        .from('programs')
-        .select('*')
-        .eq('client_id', clientId)
-        .eq('is_template', false)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
       setProgram(programData || null)
-
-      const { data: pulseData } = await supabase
-        .from('daily_checkins').select('*')
-        .eq('client_id', clientId)
-        .order('checkin_date', { ascending: false }).limit(30)
       setDailyPulse(pulseData || [])
-
-      const { data: journalData } = await supabase
-        .from('journal_entries').select('*')
-        .eq('client_id', clientId).eq('is_private', false)
-        .order('entry_date', { ascending: false }).limit(30)
       setJournalEntries(journalData || [])
-
-      // Check-in schedule + assignment history
-      const { data: schedData } = await supabase
-        .from('check_in_schedules').select('*')
-        .eq('client_id', clientId).eq('coach_id', user.id)
-        .order('created_at', { ascending: false }).limit(1).single()
+      setIntake(intakeData || null)
       setCheckinSchedule(schedData || null)
       if (schedData) {
         setScheduleForm({
@@ -179,12 +154,14 @@ export default function ClientDetail() {
           form_id:   schedData.form_id   ?? '',
         })
       }
-      const { data: assignData } = await supabase
-        .from('client_form_assignments').select('*, form:onboarding_forms(title)')
-        .eq('client_id', clientId)
-        .not('checkin_schedule_id', 'is', null)
-        .order('assigned_at', { ascending: false }).limit(20)
       setCheckinAssignments(assignData || [])
+
+      // Load pending call requests
+      const { data: callData } = await supabase
+        .from('call_requests').select('*')
+        .eq('client_id', clientId).eq('status','pending')
+        .order('created_at', { ascending: false })
+      setCallRequests(callData || [])
 
       setLoading(false)
     }
@@ -1035,7 +1012,77 @@ export default function ClientDetail() {
 
           {/* MESSAGES TAB */}
           {activeTab === 'messages' && client && (
+            <div>
+            {/* Pending Call Requests */}
+            {callRequests.length > 0 && (
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:13, fontWeight:800, color:'#f5a623', marginBottom:12 }}>
+                  📞 Pending Call Requests
+                </div>
+                {callRequests.map(req => (
+                  <div key={req.id} style={{ background:'#0f0f1a', border:'1px solid #f5a62330', borderRadius:14, padding:16, marginBottom:10 }}>
+                    <div style={{ fontSize:12, color:'#5a5a78', marginBottom:8 }}>
+                      Requested {new Date(req.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                    </div>
+                    <div style={{ fontSize:12, fontWeight:700, color:'#eeeef8', marginBottom:6 }}>Proposed times:</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:12 }}>
+                      {(req.proposed_times||[]).map((slot:any,i:number) => (
+                        <div key={i} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <div style={{ width:18, height:18, borderRadius:'50%', background:'#f5a62320', border:'1px solid #f5a62340', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:800, color:'#f5a623', flexShrink:0 }}>{i+1}</div>
+                          <div style={{ fontSize:13, color:'#eeeef8' }}>{slot.date} at {slot.time}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {req.client_note && (
+                      <div style={{ background:'#161624', borderRadius:9, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#8888a8', lineHeight:1.5 }}>
+                        &ldquo;{req.client_note}&rdquo;
+                      </div>
+                    )}
+                    {approvingCall === req.id ? (
+                      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.06em' }}>Zoom Link</div>
+                        <input type="text" value={zoomLink} onChange={e=>setZoomLink(e.target.value)}
+                          placeholder="https://zoom.us/j/..."
+                          style={{ width:'100%', background:'#161624', border:'1px solid #252538', borderRadius:9, padding:'9px 12px', fontSize:13, color:'#eeeef8', outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }}/>
+                        <div style={{ display:'flex', gap:8 }}>
+                          <button onClick={()=>{setApprovingCall(null);setZoomLink('')}}
+                            style={{ flex:1, padding:'9px', borderRadius:9, border:'1px solid #252538', background:'transparent', color:'#5a5a78', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                            Cancel
+                          </button>
+                          <button disabled={!zoomLink.trim()} onClick={async()=>{
+                            await supabase.from('call_requests').update({
+                              status:'approved', zoom_link: zoomLink.trim(), updated_at: new Date().toISOString()
+                            }).eq('id', req.id)
+                            setCallRequests(p=>p.filter(r=>r.id!==req.id))
+                            setApprovingCall(null); setZoomLink('')
+                          }}
+                            style={{ flex:2, padding:'9px', borderRadius:9, border:'none', background: zoomLink.trim()?'linear-gradient(135deg,#00c9b1,#00c9b1cc)':'#1d1d2e', color: zoomLink.trim()?'#000':'#5a5a78', fontSize:12, fontWeight:800, cursor: zoomLink.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
+                            ✓ Confirm &amp; Send Link
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button onClick={async()=>{
+                          await supabase.from('call_requests').update({status:'declined',updated_at:new Date().toISOString()}).eq('id',req.id)
+                          setCallRequests(p=>p.filter(r=>r.id!==req.id))
+                        }}
+                          style={{ flex:1, padding:'9px', borderRadius:9, border:'1px solid #ef444430', background:'#ef444415', color:'#ef4444', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          Decline
+                        </button>
+                        <button onClick={()=>setApprovingCall(req.id)}
+                          style={{ flex:2, padding:'9px', borderRadius:9, border:'none', background:'linear-gradient(135deg,#00c9b1,#00c9b1cc)', color:'#000', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          ✓ Approve + Add Link
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <MiniThread coachId={coachId!} client={client} />
+            </div>
           )}
 
         </div>
@@ -1078,6 +1125,90 @@ export default function ClientDetail() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+
+        {/* INTAKE TAB */}
+        {activeTab === 'intake' && (
+          <div style={{ paddingBottom:32 }}>
+            <div style={{ fontSize:20, fontWeight:900, marginBottom:4 }}>Intake Profile</div>
+            <div style={{ fontSize:13, color:'#5a5a78', marginBottom:24 }}>
+              {intake?.intake_completed_at
+                ? `Completed ${new Date(intake.intake_completed_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`
+                : 'Not yet completed'}
+            </div>
+
+            {!intake ? (
+              <div style={{ background:'#161624', border:'1px solid #252538', borderRadius:14, padding:32, textAlign:'center', color:'#5a5a78' }}>
+                Client has not completed intake yet.
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+                {/* Personal */}
+                <IntakeSection title="Personal Info" color="#00c9b1">
+                  <IntakeRow label="Date of Birth"    value={intake.date_of_birth} />
+                  <IntakeRow label="Phone"            value={intake.phone} />
+                  <IntakeRow label="Gender"           value={intake.gender} />
+                  <IntakeRow label="Pronouns"         value={intake.pronouns} />
+                  <IntakeRow label="Timezone"         value={intake.timezone} />
+                </IntakeSection>
+
+                {/* Stats */}
+                <IntakeSection title="Starting Stats" color="#f5a623">
+                  <IntakeRow label="Height"          value={intake.height_inches ? `${intake.height_inches}"` : null} />
+                  <IntakeRow label="Starting Weight" value={intake.starting_weight_lbs ? `${intake.starting_weight_lbs} lbs` : null} />
+                  <IntakeRow label="Current Weight"  value={intake.current_weight_lbs ? `${intake.current_weight_lbs} lbs` : null} />
+                  <IntakeRow label="Goal Weight"     value={intake.goal_weight_lbs ? `${intake.goal_weight_lbs} lbs` : null} />
+                  <IntakeRow label="Body Fat %"      value={intake.body_fat_pct ? `${intake.body_fat_pct}%` : null} />
+                </IntakeSection>
+
+                {/* Training */}
+                <IntakeSection title="Training Background" color="#8b5cf6">
+                  <IntakeRow label="Experience"       value={intake.training_experience} />
+                  <IntakeRow label="Days/Week"        value={intake.training_frequency ? `${intake.training_frequency} days` : null} />
+                  <IntakeRow label="Preferred Days"   value={intake.preferred_days?.join(', ')} />
+                  <IntakeRow label="Equipment"        value={intake.equipment_access?.join(', ')} />
+                  <IntakeRow label="Cardio"           value={intake.cardio_preference} />
+                  <IntakeRow label="Injuries"         value={intake.injuries_limitations} long />
+                  <IntakeRow label="Past Injuries"    value={intake.past_injuries} long />
+                </IntakeSection>
+
+                {/* Goals */}
+                <IntakeSection title="Goals" color="#f5a623">
+                  <IntakeRow label="Primary Goal"     value={intake.primary_goal} />
+                  <IntakeRow label="Secondary Goal"   value={intake.secondary_goal} />
+                  <IntakeRow label="Target Date"      value={intake.goal_target_date} />
+                  <IntakeRow label="Motivation"       value={intake.motivation_why} long />
+                  <IntakeRow label="Biggest Obstacle" value={intake.biggest_obstacle} long />
+                </IntakeSection>
+
+                {/* Lifestyle */}
+                <IntakeSection title="Lifestyle" color="#00c9b1">
+                  <IntakeRow label="Activity Level"   value={intake.activity_level} />
+                  <IntakeRow label="Avg Sleep"        value={intake.avg_sleep_hours ? `${intake.avg_sleep_hours} hrs` : null} />
+                  <IntakeRow label="Stress Level"     value={intake.stress_level ? `${intake.stress_level} / 10` : null} />
+                  <IntakeRow label="Alcohol"          value={intake.alcohol_frequency} />
+                </IntakeSection>
+
+                {/* Nutrition */}
+                <IntakeSection title="Nutrition" color="#22c55e">
+                  <IntakeRow label="Dietary Approach"  value={intake.dietary_approach} />
+                  <IntakeRow label="Allergies"         value={intake.allergies_restrictions} />
+                  <IntakeRow label="Foods Disliked"    value={intake.foods_disliked} />
+                  <IntakeRow label="Supplements"       value={intake.supplement_use} />
+                </IntakeSection>
+
+                {/* Health */}
+                <IntakeSection title="Health" color="#ef4444">
+                  <IntakeRow label="Medical Conditions" value={intake.medical_conditions} long />
+                  <IntakeRow label="Medications"        value={intake.current_medications} long />
+                  <IntakeRow label="Surgeries"          value={intake.recent_surgeries} />
+                </IntakeSection>
+
+              </div>
+            )}
           </div>
         )}
 
@@ -2216,6 +2347,26 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
           <div style={{ textAlign:'center' as const, padding:'20px 0', color:t.textMuted, fontSize:13 }}>No workout sessions yet</div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Intake display helpers ──────────────────────────────────────────────────
+function IntakeSection({ title, color, children }: { title:string, color:string, children:React.ReactNode }) {
+  return (
+    <div style={{ background:'#0f0f1a', border:`1px solid ${color}25`, borderRadius:14, overflow:'hidden' }}>
+      <div style={{ background:`${color}15`, padding:'10px 16px', fontSize:11, fontWeight:800, color, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>{title}</div>
+      <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:8 }}>{children}</div>
+    </div>
+  )
+}
+function IntakeRow({ label, value, long=false }: { label:string, value:any, long?:boolean }) {
+  if (value === null || value === undefined || value === '') return null
+  const display = Array.isArray(value) ? value.join(', ') : String(value)
+  return (
+    <div style={{ display: long ? 'block' : 'flex', gap:8, alignItems:'baseline' }}>
+      <div style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase' as const, letterSpacing:'0.05em', minWidth:140, flexShrink:0, marginBottom: long ? 3 : 0 }}>{label}</div>
+      <div style={{ fontSize:13, color:'#eeeef8', lineHeight:1.6 }}>{display}</div>
     </div>
   )
 }
