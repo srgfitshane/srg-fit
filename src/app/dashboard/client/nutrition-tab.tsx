@@ -160,16 +160,44 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     try {
       const res  = await fetch(`${FS_API}?q=${encodeURIComponent(q)}`)
       const data = await res.json()
-      const raw  = data?.foods?.food
-      const foods = Array.isArray(raw) ? raw : raw ? [raw] : []
-      setSearchResults(foods.slice(0, 10))
+
+      // FatSecret configured and returned results
+      if (data?.foods?.food) {
+        const raw   = data.foods.food
+        const foods = Array.isArray(raw) ? raw : [raw]
+        setSearchResults(foods.slice(0, 10))
+        setSearching(false)
+        return
+      }
+
+      // FatSecret not configured or returned error — fall back to USDA
+      const usda = await fetch(
+        `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'}&query=${encodeURIComponent(q)}&pageSize=12&dataType=Branded,Foundation,SR%20Legacy`
+      )
+      const usdaData = await usda.json()
+      setSearchResults((usdaData.foods || []).slice(0, 10))
     } catch { setSearchResults([]) }
     setSearching(false)
   }
 
+  // USDA fallback picker (per-100g values, scale to serving if available)
+  function pickUSDAFood(food: any) {
+    const nutrients = food.foodNutrients || []
+    const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? n.value : null }
+    const cal100 = get('energy'); const pro100 = get('protein')
+    const carb100 = get('carbohydrate'); const fat100 = get('total lipid')
+    const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
+                   : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495 : null
+    const scale = servingG ? servingG / 100 : 1
+    const round1 = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
+    const servingLabel = servingG ? `${food.servingSize}${food.servingSizeUnit||'g'}` : '100g'
+    const name = food.description || ''
+    const cleaned = name === name.toUpperCase() ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
+    setPendingFood({ food_name: cleaned, calories: round1(cal100), protein_g: round1(pro100), carbs_g: round1(carb100), fat_g: round1(fat100), serving_size: servingLabel })
+  }
+
   // FatSecret food picker - servings already per-serving, no math needed
-  function pickFSFood(food: any) {
-    // Get the first/best serving from FatSecret
+  function pickFSFood(food: any) {    // Get the first/best serving from FatSecret
     const servings = food.servings?.serving
     const serving  = Array.isArray(servings) ? servings[0] : servings
     const round1   = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
@@ -364,22 +392,38 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             <input value={searchQ} onChange={e=>handleSearchInput(e.target.value)} placeholder="e.g. chicken breast, greek yogurt..." autoFocus style={{ ...inp, marginBottom:10 }}/>
             {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching FatSecret database...</div>}
             {searchResults.map((food:any) => {
-              const { cal, pro, servingLabel } = parseFSDescription(food.food_description || '')
-              return (
-                <button key={food.food_id} onClick={async () => {
-                  // Fetch full food detail to get accurate serving data
-                  try {
-                    const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
-                    const data = await res.json()
-                    pickFSFood(data?.food || food)
-                  } catch { pickFSFood(food) }
-                }} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
-                  <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.food_name}</div>
-                  <div style={{ fontSize:11, color:t.textMuted }}>
-                    {cal != null ? Math.round(cal)+' kcal' : '—'} · {pro != null ? pro+'g protein' : '—'} · per {servingLabel}
-                  </div>
-                </button>
-              )
+              // Handle both FatSecret and USDA formats
+              const isFS = !!food.food_id
+              if (isFS) {
+                const { cal, pro, servingLabel } = parseFSDescription(food.food_description || '')
+                return (
+                  <button key={food.food_id} onClick={async () => {
+                    try {
+                      const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
+                      const data = await res.json()
+                      pickFSFood(data?.food || food)
+                    } catch { pickFSFood(food) }
+                  }} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                    <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.food_name}</div>
+                    <div style={{ fontSize:11, color:t.textMuted }}>
+                      {cal != null ? Math.round(cal)+' kcal' : '—'} · {pro != null ? pro+'g protein' : '—'} · per {servingLabel}
+                    </div>
+                  </button>
+                )
+              } else {
+                // USDA fallback format
+                const n = food.foodNutrients || []
+                const cal = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value
+                const pro = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
+                return (
+                  <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                    <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.description}</div>
+                    <div style={{ fontSize:11, color:t.textMuted }}>
+                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : 'per 100g'}
+                    </div>
+                  </button>
+                )
+              }
             })}
             {!searching && searchQ.length>1 && searchResults.length===0 && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'8px 0' }}>No results — try Quick Add to enter manually</div>}
           </div>

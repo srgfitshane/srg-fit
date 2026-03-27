@@ -130,6 +130,30 @@ export default function ExerciseLibrary() {
     setExercises(p => p.filter(e => e.id !== id))
   }
 
+  const duplicateExercise = async (ex: any) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: duped } = await supabase.from('exercises').insert({
+      name: ex.name + ' (copy)',
+      muscles: ex.muscles || [],
+      secondary_muscles: ex.secondary_muscles || [],
+      equipment_list: ex.equipment_list || [],
+      difficulty: ex.difficulty,
+      movement_pattern: ex.movement_pattern || null,
+      modifiers: ex.modifiers || [],
+      is_timed: ex.is_timed || false,
+      default_duration_seconds: ex.default_duration_seconds || null,
+      tags: ex.tags || [],
+      description: ex.description || null,
+      cues: ex.cues || null,
+      coach_id: user!.id,
+      // Don't copy video — force intentional upload for variants
+    }).select().single()
+    if (duped) {
+      setExercises(p => [duped, ...p])
+      setEditingId(duped.id) // open immediately for editing
+    }
+  }
+
   const filtered = exercises.filter(e => {
     const q = search.toLowerCase()
     if (q && !e.name.toLowerCase().includes(q) && !(e.muscles||[]).join(' ').toLowerCase().includes(q)) return false
@@ -225,6 +249,7 @@ export default function ExerciseLibrary() {
                   onUpload={(f:File)=>quickUpload(ex.id,f,'video_url')}
                   onUploadFemale={(f:File)=>quickUpload(ex.id,f,'video_url_female')}
                   onDelete={()=>deleteExercise(ex.id)}
+                  onDuplicate={()=>duplicateExercise(ex)}
                   saving={saving} t={t}/>
               ))}
             </div>
@@ -351,7 +376,7 @@ export default function ExerciseLibrary() {
 }
 
 // ── ExerciseCard ──────────────────────────────────────────────────────────
-function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, onUploadFemale, onDelete, saving, t }: any) {
+function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, onUploadFemale, onDelete, onDuplicate, saving, t }: any) {
   const [draft, setDraft] = useState<any>(null)
   const [playing, setPlaying] = useState(false)
   const [videoGender, setVideoGender] = useState<'male'|'female'>('male')
@@ -506,6 +531,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
               </div>
               <div style={{display:'flex',gap:5,flexShrink:0}}>
                 <button onClick={openEdit} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:7,padding:'4px 10px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Edit</button>
+                <button onClick={onDuplicate} title="Duplicate" style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:7,padding:'4px 8px',fontSize:11,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>⧉</button>
                 <button onClick={onDelete} style={{background:t.redDim,border:'1px solid '+t.red+'40',borderRadius:7,padding:'4px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>🗑</button>
               </div>
             </div>
