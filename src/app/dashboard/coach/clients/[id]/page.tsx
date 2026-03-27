@@ -278,11 +278,28 @@ export default function ClientDetail() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{'*{box-sizing:border-box;margin:0;padding:0;}body{background:'+t.bg+';}'}</style>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{background:${t.bg};}
+        .tab-content{padding:28px;max-width:1200px;margin:0 auto;}
+        .overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+        .client-topbar{padding:0 28px;}
+        @media(max-width:768px){
+          .tab-content{padding:14px 12px;}
+          .overview-grid{grid-template-columns:1fr!important;}
+          .client-topbar{padding:0 14px;}
+          .tab-bar{padding:0 10px!important;}
+          .tab-item{padding:12px 12px!important;font-size:12px!important;}
+          .sticky-bar{padding:10px 12px!important;}
+        }
+        @media(max-width:500px){
+          .tab-item span:first-child{display:none;}
+        }
+      `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
+        <div className="client-topbar" style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
           <button onClick={()=>router.push('/dashboard/coach')}
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:6 }}>
             ← Back
@@ -349,10 +366,10 @@ export default function ClientDetail() {
 
         {/* Tabs */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border }}>
-          <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', padding:'0 28px', overflowX:'auto' }}>
+          <div className="tab-bar" style={{ maxWidth:1200, margin:'0 auto', display:'flex', padding:'0 28px', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
             {TABS.map(tab => (
               <div key={tab.id} onClick={()=>setActiveTab(tab.id)}
-                style={{ display:'flex', alignItems:'center', gap:6, padding:'14px 18px', cursor:'pointer', borderBottom:'2px solid '+(activeTab===tab.id ? t.teal : 'transparent'), fontSize:13, fontWeight:activeTab===tab.id ? 700 : 500, color:activeTab===tab.id ? t.teal : t.textDim, transition:'all 0.15s ease', whiteSpace:'nowrap', flexShrink:0 }}>
+                className="tab-item" style={{ display:'flex', alignItems:'center', gap:6, padding:'14px 18px', cursor:'pointer', borderBottom:'2px solid '+(activeTab===tab.id ? t.teal : 'transparent'), fontSize:13, fontWeight:activeTab===tab.id ? 700 : 500, color:activeTab===tab.id ? t.teal : t.textDim, transition:'all 0.15s ease', whiteSpace:'nowrap', flexShrink:0 }}>
                 <span>{tab.icon}</span>{tab.label}
               </div>
             ))}
@@ -361,11 +378,11 @@ export default function ClientDetail() {
 
 
         {/* Tab content */}
-        <div className="tab-content">
+        <div className="tab-content" style={{ paddingBottom:80 }}>
 
           {/* OVERVIEW */}
           {activeTab === 'overview' && (
-            <div className="overview-grid">
+            <div className="overview-grid" style={{ display:"grid" }}>
 
               {/* Latest check-in */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
@@ -1211,7 +1228,7 @@ export default function ClientDetail() {
           )}
 
         {/* Sticky save & back bar */}
-        <div className="sticky-bar" style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)' }}>
+        <div className="sticky-bar" style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)', gap:10, flexWrap:'wrap' as const }}>
           <div style={{ fontSize:12, color:t.textMuted }}>
             Viewing {client?.profile?.full_name}'s profile
           </div>

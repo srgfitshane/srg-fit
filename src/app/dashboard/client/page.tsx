@@ -368,13 +368,24 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{background:${t.bg};}
+        body{background:${t.bg};overflow-x:hidden;}
         ::-webkit-scrollbar{width:4px;}
         ::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
         @keyframes scaleIn{from{opacity:0;transform:scale(0.85);}to{opacity:1;transform:scale(1);}}
         .fade{animation:fadeUp 0.3s ease forwards;}
         .plus-action{animation:scaleIn 0.15s ease forwards;}
+        /* Mobile tap target improvements */
+        button{-webkit-tap-highlight-color:transparent;}
+        input,textarea,select{font-size:16px!important;} /* Prevent iOS zoom on focus */
+        /* Bottom nav tap targets */
+        .nav-btn{min-height:56px!important;padding:8px 0!important;}
+        /* Card overflow protection */
+        .card-text{word-break:break-word;overflow-wrap:break-word;}
+        /* Smooth scroll on iOS */
+        .scroll-view{-webkit-overflow-scrolling:touch;}
+        /* Prevent text selection on tap */
+        .no-select{-webkit-user-select:none;user-select:none;}
       `}</style>
 
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', flexDirection:'column', maxWidth:480, margin:'0 auto', position:'relative' }}>
@@ -417,7 +428,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         </div>
 
         {/* Main content — padded for bottom nav */}
-        <div style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 100px' }}>
+        <div className="scroll-view" style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 100px', WebkitOverflowScrolling:'touch' }}>
 
           {/* Click-outside dismiss for + menu */}
           {plusOpen && <div onClick={()=>setPlusOpen(false)} style={{ position:'fixed', inset:0, zIndex:19 }} />}
@@ -428,7 +439,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {/* ── 1. GREETING ── */}
           <div style={{ marginBottom:20 }} className="fade">
             <div style={{ fontSize:23, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', lineHeight:1.2, marginBottom:3 }}>
-              {getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋
+              <span className="card-text">{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</span>
             </div>
             <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
@@ -812,7 +823,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         {/* ── Floating + button — hidden on message thread ── */}
         {!(activeNav === 'messages' && messagesView === 'coach') && (
-        <div style={{ position:'fixed', bottom:72, right:'max(16px, calc((100vw - 480px) / 2 + 16px))', zIndex:30 }}>
+        <div style={{ position:'fixed', bottom:'calc(72px + env(safe-area-inset-bottom))', right:'max(16px, calc((100vw - 480px) / 2 + 16px))', zIndex:30 }}>
           {/* Action menu */}
           {plusOpen && (
             <div className="plus-action" style={{ position:'absolute', bottom:60, right:0, display:'flex', flexDirection:'column', gap:10, alignItems:'flex-end', pointerEvents:'all' }}>
@@ -1005,7 +1016,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         )}
 
         {/* ── Bottom Nav ── */}
-        <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'center', height:60, zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
+        <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'stretch', height:'calc(60px + env(safe-area-inset-bottom))', zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
             <button key={n.id} onClick={()=>{ 
               if(n.id === 'metrics'){ router.push('/dashboard/client/progress'); return }
@@ -1013,7 +1024,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               if(n.id !== 'messages') setMessagesView('hub')
               setActiveNav(n.id) 
             }}
-              style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', padding:'6px 0', position:'relative', minWidth:0 }}>
+              className="nav-btn no-select" style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', padding:'6px 0', position:'relative', minWidth:0 }}>
               {activeNav === n.id && (
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
               )}

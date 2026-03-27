@@ -166,28 +166,38 @@ export default function CoachDashboard() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{background:${t.bg};}
+        body{background:${t.bg};overflow-x:hidden;}
+        button{-webkit-tap-highlight-color:transparent;}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
         .coach-main{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
         .coach-topbar-label{display:block;}
-        @media(max-width:900px){
+        .nav-grid-essential{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+        .nav-grid-expanded{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+        @media(max-width:1100px){
           .coach-main{grid-template-columns:1fr;}
+          .nav-grid-essential{grid-template-columns:repeat(5,1fr);}
+        }
+        @media(max-width:900px){
+          .coach-stats{grid-template-columns:repeat(2,1fr);}
+          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
+          .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
         }
         @media(max-width:700px){
-          .coach-stats{grid-template-columns:repeat(2,1fr);}
           .coach-topbar-name{display:none;}
           .coach-topbar-label{display:none;}
           .coach-pad{padding:14px!important;}
         }
         @media(max-width:600px){
-          .client-row{flex-wrap:wrap;gap:10px;}
+          .client-row{flex-wrap:wrap;gap:8px;}
           .client-actions{width:100%;justify-content:flex-end;}
           .client-since{display:none;}
+          .coach-stats{grid-template-columns:repeat(2,1fr);gap:8px;}
+          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
         }
         @media(max-width:420px){
-          .coach-stats{grid-template-columns:repeat(2,1fr);gap:8px;}
           .client-actions button .btn-label{display:none;}
+          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
         }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
@@ -353,10 +363,14 @@ export default function CoachDashboard() {
                     {navExpanded ? '▲ Less' : '▼ More'}
                   </button>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div className="nav-grid-essential">
                   {NAV_ESSENTIALS.map(item => <NavBtn key={item.label} item={item} />)}
-                  {navExpanded && NAV_EXPANDED.map(item => <NavBtn key={item.label} item={item} />)}
                 </div>
+                {navExpanded && (
+                  <div className="nav-grid-expanded" style={{ marginTop:8 }}>
+                    {NAV_EXPANDED.map(item => <NavBtn key={item.label} item={item} />)}
+                  </div>
+                )}
               </div>
             </div>
 
