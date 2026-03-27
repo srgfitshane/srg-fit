@@ -186,14 +186,30 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? n.value : null }
     const cal100 = get('energy'); const pro100 = get('protein')
     const carb100 = get('carbohydrate'); const fat100 = get('total lipid')
+
+    // Check for real serving size (branded foods have this, generic/SR Legacy usually don't)
     const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
                    : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495 : null
-    const scale = servingG ? servingG / 100 : 1
-    const round1 = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
-    const servingLabel = servingG ? `${food.servingSize}${food.servingSizeUnit||'g'}` : '100g'
+
     const name = food.description || ''
-    const cleaned = name === name.toUpperCase() ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
-    setPendingFood({ food_name: cleaned, calories: round1(cal100), protein_g: round1(pro100), carbs_g: round1(carb100), fat_g: round1(fat100), serving_size: servingLabel })
+    const cleaned = name === name.toUpperCase()
+      ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
+
+    if (!servingG) {
+      // No serving size — ask the user how many grams
+      const input = prompt(`How many grams of "${cleaned}"?`, '100')
+      if (!input) return
+      const grams = parseFloat(input)
+      if (isNaN(grams) || grams <= 0) return
+      const scale = grams / 100
+      const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
+      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: `${grams}g` })
+    } else {
+      const scale = servingG / 100
+      const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
+      const servingLabel = `${food.servingSize}${food.servingSizeUnit || 'g'}`
+      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: servingLabel })
+    }
   }
 
   // FatSecret food picker - servings already per-serving, no math needed
@@ -419,7 +435,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                     <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.description}</div>
                     <div style={{ fontSize:11, color:t.textMuted }}>
-                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : 'per 100g'}
+                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : <span style={{color:t.orange}}>enter grams ↗</span>}
                     </div>
                   </button>
                 )
