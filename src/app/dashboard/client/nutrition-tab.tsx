@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
-const FS_API = '/api/nutrition/search'
+const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 
 const MEAL_LABELS = [
   { id:'breakfast',    label:'Breakfast',    icon:'🌅' },
