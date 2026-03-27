@@ -1,8 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
-const USDA_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || ''
-const FDC_URL  = 'https://api.nal.usda.gov/fdc/v1'
+const FS_API = '/api/nutrition/search'
 
 const MEAL_LABELS = [
   { id:'breakfast',    label:'Breakfast',    icon:'🌅' },
@@ -159,75 +158,44 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   async function doSearch(q: string) {
     setSearching(true)
     try {
-      // No sortBy — it breaks results. All dataTypes, no filter.
-      const params = new URLSearchParams({
-        api_key: USDA_KEY,
-        query: q,
-        pageSize: '15',
-      })
-      const res = await fetch(FDC_URL+'/foods/search?'+params.toString())
+      const res  = await fetch(`${FS_API}?q=${encodeURIComponent(q)}`)
       const data = await res.json()
-      const foods = (data.foods || []) as any[]
-
-      // Prefer Foundation/SR Legacy (government-measured) over Branded
-      const priority = (f: any) => {
-        if (f.dataType === 'Foundation') return 0
-        if (f.dataType === 'SR Legacy') return 1
-        if (f.dataType === 'Survey (FNDDS)') return 2
-        return 3
-      }
-      const sorted = [...foods].sort((a,b) => priority(a) - priority(b))
-
-      // Dedupe by cleaned name
-      const seen = new Set<string>()
-      const deduped = sorted.filter(f => {
-        const key = cleanFoodName(f.description).toLowerCase().slice(0,40)
-        if (seen.has(key)) return false
-        seen.add(key); return true
-      }).slice(0, 10)
-
-      setSearchResults(deduped)
+      const raw  = data?.foods?.food
+      const foods = Array.isArray(raw) ? raw : raw ? [raw] : []
+      setSearchResults(foods.slice(0, 10))
     } catch { setSearchResults([]) }
     setSearching(false)
   }
 
-  // Clean up USDA all-caps names like "EGG, WHOLE, RAW, FRESH" → "Egg, whole, raw"
-  function cleanFoodName(name: string): string {
-    if (!name) return name
-    // If it's all caps (USDA style), convert to title-ish case
-    if (name === name.toUpperCase()) {
-      return name.toLowerCase().replace(/(^\w|,\s*\w)/g, c => c.toUpperCase())
-    }
-    return name
-  }
-  function pickUSDAFood(food: any) {
-    const nutrients = food.foodNutrients || []
-    // USDA always returns values per 100g — get raw per-100g values first
-    const get100g = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? n.value : null }
-    const cal100  = get100g('energy')
-    const pro100  = get100g('protein')
-    const carb100 = get100g('carbohydrate')
-    const fat100  = get100g('total lipid')
-
-    // If the food has a real serving size (branded/labeled foods), scale down to it
-    const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
-                   : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495
-                   : null
-    const scale = servingG ? servingG / 100 : 1
-    const round1 = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
-
-    const servingLabel = servingG
-      ? `${food.servingSize}${food.servingSizeUnit || 'g'}${Math.round(servingG) !== food.servingSize ? ` (${Math.round(servingG)}g)` : ''}`
-      : '100g'
-
+  // FatSecret food picker - servings already per-serving, no math needed
+  function pickFSFood(food: any) {
+    // Get the first/best serving from FatSecret
+    const servings = food.servings?.serving
+    const serving  = Array.isArray(servings) ? servings[0] : servings
+    const round1   = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
+    const servingDesc = serving?.serving_description || '1 serving'
     setPendingFood({
-      food_name:  cleanFoodName(food.description),
-      calories:   round1(cal100),
-      protein_g:  round1(pro100),
-      carbs_g:    round1(carb100),
-      fat_g:      round1(fat100),
-      serving_size: servingLabel,
+      food_name:   food.food_name,
+      calories:    round1(serving?.calories),
+      protein_g:   round1(serving?.protein),
+      carbs_g:     round1(serving?.carbohydrate),
+      fat_g:       round1(serving?.fat),
+      serving_size: servingDesc,
     })
+  }
+
+  // For search results list display - parse FatSecret food_description string
+  // e.g. "Per 1 Large: 72 Calories | 0.4g Carbs | 4.8g Fat | 6.3g Protein"
+  function parseFSDescription(desc: string) {
+    if (!desc) return { cal: null, pro: null, servingLabel: '1 serving' }
+    const calMatch = desc.match(/(\d+\.?\d*)\s*Calorie/)
+    const proMatch = desc.match(/(\d+\.?\d*)g\s*Protein/)
+    const perMatch = desc.match(/^Per ([^:]+):/)
+    return {
+      cal: calMatch ? parseFloat(calMatch[1]) : null,
+      pro: proMatch ? parseFloat(proMatch[1]) : null,
+      servingLabel: perMatch ? perMatch[1] : '1 serving',
+    }
   }
 
   // ── Barcode scanner (Quagga via CDN) ──────────────────────────────────────
@@ -281,11 +249,28 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   async function lookupBarcode(code: string) {
     setBarcodeLoading(true); setBarcodeErr(''); setBarcodeResult(null)
     try {
+      // Try FatSecret first (better data when Premier approved)
+      const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`)
+      const fsData = await fsRes.json()
+      const foodId = fsData?.food_id?.value || fsData?.food_id
+      if (foodId) {
+        const detailRes  = await fetch(`${FS_API}?food_id=${foodId}`)
+        const detailData = await detailRes.json()
+        const food = detailData?.food
+        if (food) {
+          const servings = food.servings?.serving
+          const serving  = Array.isArray(servings) ? servings[0] : servings
+          const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
+          setBarcodeResult({ food_name: food.food_name, calories: r(serving?.calories), protein_g: r(serving?.protein), carbs_g: r(serving?.carbohydrate), fat_g: r(serving?.fat), serving_size: serving?.serving_description || '1 serving' })
+          setBarcodeLoading(false); return
+        }
+      }
+      // Fallback: Open Food Facts
       const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
       const data = await res.json()
       if (data.status === 1 && data.product) {
         const p = data.product; const n = p.nutriments || {}
-        setBarcodeResult({ food_name: p.product_name || p.product_name_en || 'Unknown product', calories: n['energy-kcal_100g']||n['energy-kcal']||null, protein_g: n.proteins_100g||n.proteins||null, carbs_g: n.carbohydrates_100g||n.carbohydrates||null, fat_g: n.fat_100g||n.fat||null, serving_size: p.serving_size||'100g' })
+        setBarcodeResult({ food_name: p.product_name || p.product_name_en || 'Unknown product', calories: n['energy-kcal_serving']||n['energy-kcal_100g']||null, protein_g: n.proteins_serving||n.proteins_100g||null, carbs_g: n.carbohydrates_serving||n.carbohydrates_100g||null, fat_g: n.fat_serving||n.fat_100g||null, serving_size: p.serving_size||'1 serving' })
       } else { setBarcodeErr(`Product not found (${code}). Try Quick Add instead.`) }
     } catch { setBarcodeErr('Lookup failed. Check your connection.') }
     setBarcodeLoading(false)
@@ -377,20 +362,21 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
               <button onClick={()=>{setAddMode('none');setSearchQ('');setSearchResults([])}} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
             </div>
             <input value={searchQ} onChange={e=>handleSearchInput(e.target.value)} placeholder="e.g. chicken breast, greek yogurt..." autoFocus style={{ ...inp, marginBottom:10 }}/>
-            {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'8px 0' }}>Searching USDA database...</div>}
+            {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching FatSecret database...</div>}
             {searchResults.map((food:any) => {
-              const n = food.foodNutrients||[]
-              const cal = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value
-              const pro = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
-              const isGeneric = food.dataType === 'Foundation' || food.dataType === 'SR Legacy' || food.dataType === 'Survey (FNDDS)'
+              const { cal, pro, servingLabel } = parseFSDescription(food.food_description || '')
               return (
-                <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", display:'block' }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
-                    <div style={{ fontSize:13, fontWeight:700, flex:1 }}>{cleanFoodName(food.description)}</div>
-                    {isGeneric && <span style={{ fontSize:9, fontWeight:700, color:t.teal, background:t.tealDim, borderRadius:4, padding:'1px 5px', flexShrink:0 }}>GENERIC</span>}
-                  </div>
+                <button key={food.food_id} onClick={async () => {
+                  // Fetch full food detail to get accurate serving data
+                  try {
+                    const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
+                    const data = await res.json()
+                    pickFSFood(data?.food || food)
+                  } catch { pickFSFood(food) }
+                }} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.food_name}</div>
                   <div style={{ fontSize:11, color:t.textMuted }}>
-                    {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : 'per 100g'}
+                    {cal != null ? Math.round(cal)+' kcal' : '—'} · {pro != null ? pro+'g protein' : '—'} · per {servingLabel}
                   </div>
                 </button>
               )

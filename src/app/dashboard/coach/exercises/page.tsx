@@ -11,7 +11,7 @@ const t = {
   text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
 }
 
-const MUSCLES    = ['Chest','Back','Shoulders','Biceps','Triceps','Forearms','Quads','Hamstrings','Glutes','Calves','Core','Full Body','Cardio']
+const MUSCLES    = ['Chest','Back','Shoulders','Biceps','Triceps','Forearms','Quads','Hamstrings','Glutes','Calves','Hip Flexors','Abductors','Adductors','Legs','Core','Lower Back','Obliques','Traps','Lats','Rear Delts','Full Body','Cardio']
 const EQUIPMENT  = [
   'Barbell','Dumbbell','Cable','Machine','Bodyweight','Kettlebell','Resistance Band',
   'EZ Bar','Trap Bar','Smith Machine','Pull-up Bar','Bench','Stability Ball',
