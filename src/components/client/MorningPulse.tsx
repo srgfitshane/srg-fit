@@ -126,10 +126,15 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
                 {journal}
               </div>
             )}
-            <button onClick={()=>{ setStep('sleep'); setCollapsed(false) }}
-              style={{ background:'none', border:'1px solid '+t.border, borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              Edit today's check-in
-            </button>
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <button onClick={()=>{ setStep('sleep'); setCollapsed(false) }}
+                style={{ background:'none', border:'1px solid '+t.border, borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Edit today's check-in
+              </button>
+              <a href="/dashboard/client/progress" style={{ background:'none', border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textDecoration:'none', display:'inline-block' }}>
+                View Trends →
+              </a>
+            </div>
           </div>
         )}
       </div>
