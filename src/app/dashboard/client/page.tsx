@@ -124,6 +124,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [journalDate,      setJournalDate]      = useState('')
   const [pastEntries,      setPastEntries]      = useState<any[]>([])
   const [pastEntriesOpen,  setPastEntriesOpen]  = useState(false)
+  const [activeGoals,      setActiveGoals]      = useState<any[]>([])
   const router       = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -148,6 +149,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: todayCheckin },
           { data: todayJournal },
           { data: pastData },
+          { data: goalsData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
@@ -175,6 +177,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('daily_checkins').select('*').eq('client_id', cid).eq('checkin_date', todayStr).single(),
           supabase.from('journal_entries').select('*').eq('client_id', cid).eq('entry_date', todayStr).single(),
           supabase.from('journal_entries').select('*').eq('client_id', cid).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
+          supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
         ])
 
         setHabits(habitData || [])
@@ -204,6 +207,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         }
 
         setPastEntries(pastData || [])
+        setActiveGoals(goalsData || [])
     } // end loadClientData
 
     const load = async () => {
@@ -464,6 +468,63 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <button onClick={()=>dismissMilestone(m.id)} style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>✕</button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+
+          {/* Goals Card */}
+          {activeGoals.length > 0 && (
+            <div className="fade" style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:t.purple, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
+                🎯 Active Goals
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {activeGoals.map((goal:any) => {
+                  const pct = goal.target_value && goal.current_value
+                    ? Math.min(100, Math.round((Number(goal.current_value)/Number(goal.target_value))*100))
+                    : null
+                  const isPast = goal.target_date && new Date(goal.target_date) < new Date()
+                  const daysLeft = goal.target_date
+                    ? Math.ceil((new Date(goal.target_date).getTime() - Date.now()) / 86400000)
+                    : null
+                  return (
+                    <div key={goal.id} style={{ background:t.surface, border:'1px solid '+(isPast?t.red+'30':t.purple+'30'), borderRadius:14, padding:'13px 14px' }}>
+                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8, marginBottom: pct!==null ? 10 : 0 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:800, color:t.text, marginBottom:3 }}>{goal.title}</div>
+                          <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const }}>
+                            {goal.target_value && (
+                              <span style={{ fontSize:11, color:t.textMuted }}>
+                                Target: <strong style={{color:t.purple}}>{goal.target_value}{goal.unit ? ' '+goal.unit : ''}</strong>
+                                {goal.current_value != null ? <> · Now: <strong style={{color:t.teal}}>{goal.current_value}{goal.unit ? ' '+goal.unit : ''}</strong></> : null}
+                              </span>
+                            )}
+                            {daysLeft !== null && (
+                              <span style={{ fontSize:11, color: isPast ? t.red : daysLeft <= 7 ? t.orange : t.textMuted, fontWeight: daysLeft <= 7 ? 700 : 400 }}>
+                                {isPast ? 'Overdue' : daysLeft === 0 ? 'Due today!' : daysLeft === 1 ? '1 day left' : daysLeft+' days left'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {pct !== null && pct >= 100 && (
+                          <div style={{ fontSize:18, flexShrink:0 }}>🏆</div>
+                        )}
+                      </div>
+                      {pct !== null && (
+                        <div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginBottom:4 }}>
+                            <span>Progress</span>
+                            <span style={{ fontWeight:700, color: pct>=100?t.teal:pct>=50?t.orange:t.textDim }}>{pct}%</span>
+                          </div>
+                          <div style={{ height:5, borderRadius:3, background:t.surfaceHigh, overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:pct+'%', borderRadius:3, background: pct>=100?t.teal:'linear-gradient(90deg,'+t.purple+','+t.orange+')', transition:'width 0.5s ease' }}/>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

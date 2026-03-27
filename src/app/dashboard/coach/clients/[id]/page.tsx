@@ -23,6 +23,7 @@ const TABS = [
   { id:'program',   label:'Program',   icon:'📋' },
   { id:'nutrition', label:'Nutrition', icon:'🥦' },
   { id:'checkins',  label:'Check-ins', icon:'✓' },
+  { id:'goals',     label:'Goals',           icon:'🎯' },
   { id:'pulse',     label:'Pulse & Journal', icon:'❤' },
   { id:'messages',  label:'Messages',  icon:'💬' },
   { id:'intake',    label:'Intake',    icon:'📊' },
@@ -63,6 +64,10 @@ export default function ClientDetail() {
   const [callRequests,  setCallRequests]  = useState<any[]>([])
   const [approvingCall, setApprovingCall] = useState<string|null>(null)
   const [zoomLink,      setZoomLink]      = useState('')
+  const [goals,         setGoals]         = useState<any[]>([])
+  const [showAddGoal,   setShowAddGoal]   = useState(false)
+  const [goalForm,      setGoalForm]      = useState({ title:'', description:'', goal_type:'custom', target_value:'', unit:'', target_date:'' })
+  const [goalSaving,    setGoalSaving]    = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
   const [showFlag, setShowFlag] = useState(false)
@@ -159,6 +164,13 @@ export default function ClientDetail() {
         .eq('client_id', clientId).eq('status','pending')
         .order('created_at', { ascending: false })
       setCallRequests(callData || [])
+
+      // Load active goals
+      const { data: goalsData } = await supabase
+        .from('client_goals').select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+      setGoals(goalsData || [])
 
       setLoading(false)
     }
@@ -1102,6 +1114,103 @@ export default function ClientDetail() {
         </div>
 
 
+
+        {/* Add Goal Modal */}
+        {showAddGoal && (
+          <>
+            <div onClick={()=>{if(!goalSaving)setShowAddGoal(false)}}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', backdropFilter:'blur(6px)', zIndex:200 }}/>
+            <div style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:201, padding:'24px 24px 40px', fontFamily:"'DM Sans',sans-serif", maxHeight:'90vh', overflowY:'auto' }}>
+              <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }}/>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>New Goal</div>
+              <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Set a target for {client?.profile?.full_name?.split(' ')[0]}</div>
+
+              <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                {/* Title */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Goal *</div>
+                  <input value={goalForm.title} onChange={e=>setGoalForm(p=>({...p,title:e.target.value}))}
+                    placeholder="e.g. Hit 200lb squat, Lose 15 lbs, Complete 30 workouts"
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', boxSizing:'border-box' as const }}/>
+                </div>
+
+                {/* Type */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Type</div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
+                    {(['strength','weight','consistency','custom'] as const).map(type => (
+                      <button key={type} onClick={()=>setGoalForm(p=>({...p,goal_type:type}))}
+                        style={{ padding:'6px 14px', borderRadius:20, border:'1px solid '+(goalForm.goal_type===type?t.teal:t.border), background:goalForm.goal_type===type?t.teal+'20':'transparent', color:goalForm.goal_type===type?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' as const }}>
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Target value + unit */}
+                <div style={{ display:'flex', gap:10 }}>
+                  <div style={{ flex:2 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Target Value</div>
+                    <input type="number" value={goalForm.target_value} onChange={e=>setGoalForm(p=>({...p,target_value:e.target.value}))}
+                      placeholder="e.g. 200"
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', boxSizing:'border-box' as const }}/>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Unit</div>
+                    <input value={goalForm.unit} onChange={e=>setGoalForm(p=>({...p,unit:e.target.value}))}
+                      placeholder="lbs, kg, %..."
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', boxSizing:'border-box' as const }}/>
+                  </div>
+                </div>
+
+                {/* Target date */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Target Date (optional)</div>
+                  <input type="date" value={goalForm.target_date} onChange={e=>setGoalForm(p=>({...p,target_date:e.target.value}))}
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:goalForm.target_date?t.text:t.textMuted, fontFamily:"'DM Sans',sans-serif", outline:'none', boxSizing:'border-box' as const, colorScheme:'dark' as any }}/>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Notes (optional)</div>
+                  <textarea value={goalForm.description} onChange={e=>setGoalForm(p=>({...p,description:e.target.value}))} rows={2}
+                    placeholder="Any extra context for this goal..."
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', resize:'none' as any, boxSizing:'border-box' as const }}/>
+                </div>
+
+                <div style={{ display:'flex', gap:10, marginTop:4 }}>
+                  <button onClick={()=>setShowAddGoal(false)}
+                    style={{ flex:1, padding:'12px', borderRadius:11, border:'1px solid '+t.border, background:'transparent', color:t.textMuted, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Cancel
+                  </button>
+                  <button disabled={!goalForm.title.trim()||goalSaving} onClick={async()=>{
+                    if (!goalForm.title.trim()) return
+                    setGoalSaving(true)
+                    const { data: newGoal } = await supabase.from('client_goals').insert({
+                      client_id: clientId,
+                      coach_id: coachId,
+                      title: goalForm.title.trim(),
+                      description: goalForm.description || null,
+                      goal_type: goalForm.goal_type,
+                      target_value: goalForm.target_value ? parseFloat(goalForm.target_value) : null,
+                      unit: goalForm.unit || null,
+                      target_date: goalForm.target_date || null,
+                      status: 'active',
+                    }).select().single()
+                    if (newGoal) setGoals(p => [newGoal, ...p])
+                    setGoalSaving(false)
+                    setShowAddGoal(false)
+                    setGoalForm({ title:'', description:'', goal_type:'custom', target_value:'', unit:'', target_date:'' })
+                  }}
+                    style={{ flex:2, padding:'12px', borderRadius:11, border:'none', background: goalForm.title.trim() ? 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)' : t.surfaceHigh, color: goalForm.title.trim() ? '#000' : t.textMuted, fontSize:13, fontWeight:800, cursor: goalForm.title.trim() ? 'pointer' : 'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
+                    {goalSaving ? 'Saving...' : 'Add Goal'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Assign form modal */}
         {showAssignForm && (
           <div onClick={()=>setShowAssignForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
@@ -1243,6 +1352,125 @@ export default function ClientDetail() {
             </button>
           </div>
         </div>
+
+
+          {/* GOALS TAB */}
+          {activeTab === 'goals' && (
+            <div className="tab-content">
+              {/* Header */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+                <div>
+                  <div style={{ fontSize:16, fontWeight:800 }}>Client Goals</div>
+                  <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>Set targets. Track progress. Celebrate wins.</div>
+                </div>
+                <button onClick={()=>setShowAddGoal(true)}
+                  style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  + Add Goal
+                </button>
+              </div>
+
+              {/* Goals list */}
+              {goals.length === 0 ? (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'40px 20px', textAlign:'center' as const, color:t.textMuted }}>
+                  <div style={{ fontSize:32, marginBottom:12 }}>🎯</div>
+                  <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No goals set yet</div>
+                  <div style={{ fontSize:12, lineHeight:1.6 }}>Add a goal to give your client something concrete to work toward.</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                  {goals.map((goal:any) => {
+                    const pct = goal.target_value && goal.current_value
+                      ? Math.min(100, Math.round((Number(goal.current_value) / Number(goal.target_value)) * 100))
+                      : null
+                    const isCompleted = goal.status === 'completed'
+                    const isPast = goal.target_date && new Date(goal.target_date) < new Date() && !isCompleted
+                    return (
+                      <div key={goal.id} style={{ background:t.surface, border:'1px solid '+(isCompleted ? t.teal+'50' : isPast ? t.red+'30' : t.border), borderRadius:16, padding:18, opacity: isCompleted ? 0.8 : 1 }}>
+                        <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom: pct !== null ? 14 : 0 }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                              <div style={{ fontSize:14, fontWeight:800, color: isCompleted ? t.teal : t.text }}>
+                                {isCompleted ? '\u2713 ' : ''}{goal.title}
+                              </div>
+                              {isPast && !isCompleted && (
+                                <span style={{ fontSize:10, fontWeight:700, color:t.red, background:t.red+'15', borderRadius:20, padding:'2px 8px' }}>Overdue</span>
+                              )}
+                            </div>
+                            {goal.description && (
+                              <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5, marginBottom:6 }}>{goal.description}</div>
+                            )}
+                            <div style={{ display:'flex', gap:12, flexWrap:'wrap' as const }}>
+                              {goal.target_value && (
+                                <span style={{ fontSize:11, color:t.textDim }}>
+                                  Target: <strong style={{color:t.text}}>{goal.target_value}{goal.unit ? ' '+goal.unit : ''}</strong>
+                                  {goal.current_value ? <> · Now: <strong style={{color:t.teal}}>{goal.current_value}{goal.unit ? ' '+goal.unit : ''}</strong></> : null}
+                                </span>
+                              )}
+                              {goal.target_date && (
+                                <span style={{ fontSize:11, color: isPast ? t.red : t.textDim }}>
+                                  📅 {new Date(goal.target_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Actions */}
+                          <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                            {!isCompleted && (
+                              <button onClick={async()=>{
+                                const val = prompt('Update current value for ' + goal.title + ':')
+                                if (val === null) return
+                                const num = parseFloat(val)
+                                if (isNaN(num)) return
+                                await supabase.from('client_goals').update({ current_value: num, updated_at: new Date().toISOString() }).eq('id', goal.id)
+                                setGoals(p => p.map(g => g.id === goal.id ? {...g, current_value: num} : g))
+                              }}
+                                style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+t.border, background:'transparent', color:t.textMuted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                Update
+                              </button>
+                            )}
+                            {!isCompleted && (
+                              <button onClick={async()=>{
+                                if (!confirm('Mark "' + goal.title + '" as complete?')) return
+                                const now = new Date().toISOString()
+                                await supabase.from('client_goals').update({ status:'completed', completed_at: now, current_value: goal.target_value, updated_at: now }).eq('id', goal.id)
+                                // Fire milestone
+                                await supabase.from('milestones').insert({ client_id: clientId, milestone_type:'goal', message: '🏆 Goal achieved: ' + goal.title + '!', seen: false })
+                                setGoals(p => p.map(g => g.id === goal.id ? {...g, status:'completed', completed_at: now} : g))
+                              }}
+                                style={{ padding:'6px 10px', borderRadius:8, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                ✓ Done
+                              </button>
+                            )}
+                            <button onClick={async()=>{
+                              if (!confirm('Delete this goal?')) return
+                              await supabase.from('client_goals').delete().eq('id', goal.id)
+                              setGoals(p => p.filter(g => g.id !== goal.id))
+                            }}
+                              style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+t.red+'30', background:t.red+'10', color:t.red, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        {pct !== null && (
+                          <div>
+                            <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginBottom:4 }}>
+                              <span>Progress</span>
+                              <span style={{ fontWeight:700, color: pct >= 100 ? t.teal : t.text }}>{pct}%</span>
+                            </div>
+                            <div style={{ height:6, borderRadius:4, background:t.surfaceHigh, overflow:'hidden' }}>
+                              <div style={{ height:'100%', width: pct+'%', borderRadius:4, background: pct>=100 ? t.teal : 'linear-gradient(90deg,'+t.orange+','+t.yellow+')', transition:'width 0.4s ease' }}/>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
         {/* ── DAILY PULSE TAB ── */}
         {activeTab === 'pulse' && (
