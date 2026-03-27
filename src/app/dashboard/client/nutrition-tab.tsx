@@ -90,19 +90,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   async function commitEntry(meal_time: string) {
     if (!pendingFood) return
     setSaving(true)
-    const s = pendingServings
-    const currentLog = await ensureLog()
-    const { data: saved } = await supabase.from('food_entries').insert({
-      daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
-      food_name: pendingFood.food_name || '',
-      serving_size: `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
-      serving_qty: s,
-      calories:  pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
-      protein_g: pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
-      carbs_g:   pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
-      fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
-    }).select().single()
-    if (saved) { const next = [...entries, saved]; setEntries(next); await recalcTotals(currentLog.id, next) }
+    try {
+      const s = pendingServings
+      const currentLog = await ensureLog()
+      if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); setSaving(false); return }
+
+      const { data: saved, error } = await supabase.from('food_entries').insert({
+        daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
+        food_name: pendingFood.food_name || '',
+        serving_size: `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
+        serving_qty: s,
+        calories:  pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
+        protein_g: pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
+        carbs_g:   pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
+        fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
+      }).select().single()
+
+      if (error) { console.error('food_entries insert error:', error.message); setSaving(false); return }
+      if (saved) { const next = [...entries, saved]; setEntries(next); await recalcTotals(currentLog.id, next) }
+    } catch (e) { console.error('commitEntry exception:', e) }
+
     setPendingFood(null); setPendingServings(1); setAddMode('none')
     setSearchQ(''); setSearchResults([])
     setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
@@ -187,28 +194,24 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     const cal100 = get('energy'); const pro100 = get('protein')
     const carb100 = get('carbohydrate'); const fat100 = get('total lipid')
 
-    // Check for real serving size (branded foods have this, generic/SR Legacy usually don't)
-    const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
-                   : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495 : null
-
     const name = food.description || ''
     const cleaned = name === name.toUpperCase()
       ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
 
-    if (!servingG) {
-      // No serving size — ask the user how many grams
-      const input = prompt(`How many grams of "${cleaned}"?`, '100')
-      if (!input) return
-      const grams = parseFloat(input)
-      if (isNaN(grams) || grams <= 0) return
-      const scale = grams / 100
-      const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
-      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: `${grams}g` })
-    } else {
+    // Check for real serving size (branded foods have this)
+    const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
+                   : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495 : null
+
+    if (servingG) {
+      // Branded food with real serving — use it directly, let serving multiplier handle quantity
       const scale = servingG / 100
       const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
-      const servingLabel = `${food.servingSize}${food.servingSizeUnit || 'g'}`
-      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: servingLabel })
+      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: `${food.servingSize}${food.servingSizeUnit||'g'}` })
+    } else {
+      // Generic food (SR Legacy) — values are per 100g
+      // Treat 100g as "1 serving" so the serving multiplier on the next screen does the work
+      const r = (v: number | null) => v != null ? Math.round(v * 10) / 10 : null
+      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: '100g' })
     }
   }
 
@@ -435,7 +438,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                     <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.description}</div>
                     <div style={{ fontSize:11, color:t.textMuted }}>
-                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : <span style={{color:t.orange}}>enter grams ↗</span>}
+                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : 'per 100g'}
                     </div>
                   </button>
                 )
@@ -553,18 +556,31 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             {/* Servings stepper */}
             <div style={{ display:'flex', alignItems:'center', gap:12, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>SERVINGS</div>
+                <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>
+                  {pendingFood.serving_size === '100g' ? 'AMOUNT (grams)' : 'SERVINGS'}
+                </div>
                 <div style={{ fontSize:13, fontWeight:700, color:t.teal }}>
                   {pendingFood.calories != null ? `${Math.round(pendingFood.calories * pendingServings)} kcal` : '—'}
                   {pendingFood.protein_g != null ? ` · ${Math.round(pendingFood.protein_g * pendingServings * 10)/10}g P` : ''}
                 </div>
-                <div style={{ fontSize:11, color:t.textMuted }}>{pendingServings}x {pendingFood.serving_size}</div>
+                <div style={{ fontSize:11, color:t.textMuted }}>
+                  {pendingFood.serving_size === '100g'
+                    ? `${Math.round(pendingServings * 100)}g`
+                    : `${pendingServings}x ${pendingFood.serving_size}`}
+                </div>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:0, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
-                <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                <button onClick={()=>setPendingServings(s=>Math.max(
+                  pendingFood.serving_size === '100g' ? 0.1 : 0.5,
+                  Math.round((s - (pendingFood.serving_size === '100g' ? 0.1 : 0.5))*10)/10
+                ))}
                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
-                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:32, textAlign:'center' }}>{pendingServings}</div>
-                <button onClick={()=>setPendingServings(s=>Math.round((s+0.5)*10)/10)}
+                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>
+                  {pendingFood.serving_size === '100g'
+                    ? `${Math.round(pendingServings * 100)}g`
+                    : pendingServings}
+                </div>
+                <button onClick={()=>setPendingServings(s=>Math.round((s + (pendingFood.serving_size === '100g' ? 0.1 : 0.5))*10)/10)}
                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
               </div>
             </div>
