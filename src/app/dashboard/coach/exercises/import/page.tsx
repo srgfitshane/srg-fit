@@ -159,9 +159,7 @@ export default function DriveImporter() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       const foldersData = await foldersRes.json()
-      console.log('Drive folders response:', JSON.stringify(foldersData))
       const folders: DriveFile[] = foldersData.files || []
-      console.log('Folders found:', folders.length, folders.map(f=>f.name))
 
       for (const folder of folders) {
         setProgress(p => ({ ...p, folder: folder.name }))

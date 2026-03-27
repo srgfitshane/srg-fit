@@ -184,6 +184,8 @@ export default function CheckinForm() {
     }
 
     // Notify coach + trigger AI insights
+    // Update last_checkin_at on client record
+    await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', clientRecord.id)
     if (clientRecord.coach_id) {
       await supabase.functions.invoke('send-notification', {
         body: {
