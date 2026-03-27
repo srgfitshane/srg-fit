@@ -46,6 +46,8 @@ export default function ExerciseLibrary() {
   const [filterPattern, setFilterPattern] = useState('all')
   const [filterVideo,   setFilterVideo]   = useState<'all'|'has'|'missing'>('all')
   const [filterDetail,  setFilterDetail]  = useState<'all'|'missing'>('all')
+  const [page,          setPage]          = useState(1)
+  const PAGE_SIZE = 50
   const [showNew,   setShowNew]     = useState(false)
   const [editingId, setEditingId]   = useState<string|null>(null)
   const [uploading, setUploading]   = useState<string|null>(null)
@@ -164,6 +166,7 @@ export default function ExerciseLibrary() {
     if (filterDetail === 'missing' && e.muscles?.length > 0 && e.movement_pattern && e.description) return false
     return true
   })
+  const displayed = filtered.slice(0, page * PAGE_SIZE)
 
   const stats = {
     total: exercises.length,
@@ -201,32 +204,32 @@ export default function ExerciseLibrary() {
 
         {/* Filters */}
         <div style={{background:t.surface,borderBottom:'1px solid '+t.border,padding:'10px 24px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or muscle..."
+          <input ref={searchRef} value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder="Search name or muscle..."
             style={{flex:1,minWidth:180,background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
-          <select value={filterMuscle} onChange={e=>setFilterMuscle(e.target.value)}
+          <select value={filterMuscle} onChange={e=>{setFilterMuscle(e.target.value);setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterMuscle!=='all'?t.teal:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Muscles</option>
             {MUSCLES.map(m=><option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={filterPattern} onChange={e=>setFilterPattern(e.target.value)}
+          <select value={filterPattern} onChange={e=>{setFilterPattern(e.target.value);setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterPattern!=='all'?t.purple:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Patterns</option>
             {PATTERNS.map(p=><option key={p} value={p} style={{textTransform:'capitalize'}}>{p}</option>)}
           </select>
-          <select value={filterVideo} onChange={e=>setFilterVideo(e.target.value as any)}
+          <select value={filterVideo} onChange={e=>{setFilterVideo(e.target.value as any);setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterVideo!=='all'?t.orange:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Videos</option>
             <option value="has">Has Video</option>
             <option value="missing">No Video</option>
           </select>
-          <select value={filterDetail} onChange={e=>setFilterDetail(e.target.value as any)}
+          <select value={filterDetail} onChange={e=>{setFilterDetail(e.target.value as any);setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterDetail!=='all'?t.red:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Detail</option>
             <option value="missing">Needs Detail</option>
           </select>
-          <span style={{fontSize:12,color:t.textMuted}}>{filtered.length} shown</span>
+          <span style={{fontSize:12,color:t.textMuted}}>{displayed.length}/{filtered.length}</span>
           {(search||filterMuscle!=='all'||filterPattern!=='all'||filterVideo!=='all'||filterDetail!=='all') && (
-            <button onClick={()=>{setSearch('');setFilterMuscle('all');setFilterPattern('all');setFilterVideo('all');setFilterDetail('all')}}
+            <button onClick={()=>{setSearch('');setFilterMuscle('all');setFilterPattern('all');setFilterVideo('all');setFilterDetail('all');setPage(1)}}
               style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>✕ Clear</button>
           )}
         </div>
@@ -239,8 +242,9 @@ export default function ExerciseLibrary() {
               <div style={{fontSize:14,fontWeight:700}}>No exercises match</div>
             </div>
           ) : (
+            <>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
-              {filtered.map(ex => (
+              {displayed.map(ex => (
                 <ExerciseCard key={ex.id} ex={ex}
                   isEditing={editingId===ex.id}
                   isUploading={uploading===ex.id}
@@ -253,6 +257,17 @@ export default function ExerciseLibrary() {
                   saving={saving} t={t}/>
               ))}
             </div>
+
+            {/* Load More */}
+            {displayed.length < filtered.length && (
+              <div style={{textAlign:'center',padding:'24px 0'}}>
+                <button onClick={()=>setPage(p=>p+1)}
+                  style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'10px 28px',fontSize:13,fontWeight:700,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Load more ({filtered.length - displayed.length} remaining)
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
 
