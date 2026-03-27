@@ -18,17 +18,14 @@ const t = {
 }
 
 const TABS = [
-  { id:'overview',   label:'Overview',   icon:'👤' },
-  { id:'workouts',   label:'Workouts',   icon:'💪' },
-  { id:'program',    label:'Program',    icon:'📋' },
-  { id:'nutrition',  label:'Nutrition',  icon:'🥗' },
-  { id:'checkins',   label:'Check-ins',  icon:'✅' },
-  { id:'pulse',      label:'Daily Pulse',icon:'🧠' },
-  { id:'journal',    label:'Journal',    icon:'✍️' },
-  { id:'metrics',    label:'Metrics',    icon:'📈' },
-  { id:'forms',      label:'Forms',      icon:'📝' },
-  { id:'messages',   label:'Messages',   icon:'💬' },
-  { id:'intake',     label:'Intake',     icon:'📋' },
+  { id:'overview',  label:'Overview',  icon:'👤' },
+  { id:'training',  label:'Training',  icon:'🏋' },
+  { id:'program',   label:'Program',   icon:'📋' },
+  { id:'nutrition', label:'Nutrition', icon:'🥦' },
+  { id:'checkins',  label:'Check-ins', icon:'✓' },
+  { id:'pulse',     label:'Pulse & Journal', icon:'❤' },
+  { id:'messages',  label:'Messages',  icon:'💬' },
+  { id:'intake',    label:'Intake',    icon:'📊' },
 ]
 
 
@@ -364,11 +361,11 @@ export default function ClientDetail() {
 
 
         {/* Tab content */}
-        <div style={{ maxWidth:1200, margin:'0 auto', padding:28 }}>
+        <div className="tab-content">
 
           {/* OVERVIEW */}
           {activeTab === 'overview' && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+            <div className="overview-grid">
 
               {/* Latest check-in */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
@@ -483,7 +480,7 @@ export default function ClientDetail() {
 
 
           {/* ── WORKOUTS TAB ── */}
-          {activeTab === 'workouts' && (
+          {activeTab === 'training' && (
             <div>
               <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Workout Sessions</div>
               <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap any session to see the full set-by-set log.</div>
@@ -855,7 +852,7 @@ export default function ClientDetail() {
           )}
 
           {/* METRICS TAB */}
-          {activeTab === 'metrics' && (
+          {activeTab === 'training' && (
             <CoachMetricsTab metrics={metrics} t={t} />
           )}
 
@@ -1006,7 +1003,7 @@ export default function ClientDetail() {
           )}
 
           {/* FORMS TAB */}
-          {activeTab === 'forms' && (
+          {activeTab === 'checkins' && (
             <FormsTab clientId={clientId} coachId={coachId!} forms={forms} onAssign={() => setShowAssignForm(true)} supabase={supabase} router={router} t={t} />
           )}
 
@@ -1129,91 +1126,92 @@ export default function ClientDetail() {
         )}
 
 
-        {/* INTAKE TAB */}
-        {activeTab === 'intake' && (
-          <div style={{ paddingBottom:32 }}>
-            <div style={{ fontSize:20, fontWeight:900, marginBottom:4 }}>Intake Profile</div>
-            <div style={{ fontSize:13, color:'#5a5a78', marginBottom:24 }}>
-              {intake?.intake_completed_at
-                ? `Completed ${new Date(intake.intake_completed_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`
-                : 'Not yet completed'}
+
+          {/* INTAKE TAB */}
+          {activeTab === 'intake' && (
+            <div style={{ paddingBottom:32 }}>
+              <div style={{ fontSize:20, fontWeight:900, marginBottom:4 }}>Intake Profile</div>
+              <div style={{ fontSize:13, color:'#5a5a78', marginBottom:24 }}>
+                {intake?.intake_completed_at
+                  ? `Completed ${new Date(intake.intake_completed_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`
+                  : 'Not yet completed'}
+              </div>
+
+              {!intake ? (
+                <div style={{ background:'#161624', border:'1px solid #252538', borderRadius:14, padding:32, textAlign:'center', color:'#5a5a78' }}>
+                  Client has not completed intake yet.
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+                  {/* Personal */}
+                  <IntakeSection title="Personal Info" color="#00c9b1">
+                    <IntakeRow label="Date of Birth"    value={intake.date_of_birth} />
+                    <IntakeRow label="Phone"            value={intake.phone} />
+                    <IntakeRow label="Gender"           value={intake.gender} />
+                    <IntakeRow label="Pronouns"         value={intake.pronouns} />
+                    <IntakeRow label="Timezone"         value={intake.timezone} />
+                  </IntakeSection>
+
+                  {/* Stats */}
+                  <IntakeSection title="Starting Stats" color="#f5a623">
+                    <IntakeRow label="Height"          value={intake.height_inches ? `${intake.height_inches}"` : null} />
+                    <IntakeRow label="Starting Weight" value={intake.starting_weight_lbs ? `${intake.starting_weight_lbs} lbs` : null} />
+                    <IntakeRow label="Current Weight"  value={intake.current_weight_lbs ? `${intake.current_weight_lbs} lbs` : null} />
+                    <IntakeRow label="Goal Weight"     value={intake.goal_weight_lbs ? `${intake.goal_weight_lbs} lbs` : null} />
+                    <IntakeRow label="Body Fat %"      value={intake.body_fat_pct ? `${intake.body_fat_pct}%` : null} />
+                  </IntakeSection>
+
+                  {/* Training */}
+                  <IntakeSection title="Training Background" color="#8b5cf6">
+                    <IntakeRow label="Experience"       value={intake.training_experience} />
+                    <IntakeRow label="Days/Week"        value={intake.training_frequency ? `${intake.training_frequency} days` : null} />
+                    <IntakeRow label="Preferred Days"   value={intake.preferred_days?.join(', ')} />
+                    <IntakeRow label="Equipment"        value={intake.equipment_access?.join(', ')} />
+                    <IntakeRow label="Cardio"           value={intake.cardio_preference} />
+                    <IntakeRow label="Injuries"         value={intake.injuries_limitations} long />
+                    <IntakeRow label="Past Injuries"    value={intake.past_injuries} long />
+                  </IntakeSection>
+
+                  {/* Goals */}
+                  <IntakeSection title="Goals" color="#f5a623">
+                    <IntakeRow label="Primary Goal"     value={intake.primary_goal} />
+                    <IntakeRow label="Secondary Goal"   value={intake.secondary_goal} />
+                    <IntakeRow label="Target Date"      value={intake.goal_target_date} />
+                    <IntakeRow label="Motivation"       value={intake.motivation_why} long />
+                    <IntakeRow label="Biggest Obstacle" value={intake.biggest_obstacle} long />
+                  </IntakeSection>
+
+                  {/* Lifestyle */}
+                  <IntakeSection title="Lifestyle" color="#00c9b1">
+                    <IntakeRow label="Activity Level"   value={intake.activity_level} />
+                    <IntakeRow label="Avg Sleep"        value={intake.avg_sleep_hours ? `${intake.avg_sleep_hours} hrs` : null} />
+                    <IntakeRow label="Stress Level"     value={intake.stress_level ? `${intake.stress_level} / 10` : null} />
+                    <IntakeRow label="Alcohol"          value={intake.alcohol_frequency} />
+                  </IntakeSection>
+
+                  {/* Nutrition */}
+                  <IntakeSection title="Nutrition" color="#22c55e">
+                    <IntakeRow label="Dietary Approach"  value={intake.dietary_approach} />
+                    <IntakeRow label="Allergies"         value={intake.allergies_restrictions} />
+                    <IntakeRow label="Foods Disliked"    value={intake.foods_disliked} />
+                    <IntakeRow label="Supplements"       value={intake.supplement_use} />
+                  </IntakeSection>
+
+                  {/* Health */}
+                  <IntakeSection title="Health" color="#ef4444">
+                    <IntakeRow label="Medical Conditions" value={intake.medical_conditions} long />
+                    <IntakeRow label="Medications"        value={intake.current_medications} long />
+                    <IntakeRow label="Surgeries"          value={intake.recent_surgeries} />
+                  </IntakeSection>
+
+                </div>
+              )}
             </div>
-
-            {!intake ? (
-              <div style={{ background:'#161624', border:'1px solid #252538', borderRadius:14, padding:32, textAlign:'center', color:'#5a5a78' }}>
-                Client has not completed intake yet.
-              </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-
-                {/* Personal */}
-                <IntakeSection title="Personal Info" color="#00c9b1">
-                  <IntakeRow label="Date of Birth"    value={intake.date_of_birth} />
-                  <IntakeRow label="Phone"            value={intake.phone} />
-                  <IntakeRow label="Gender"           value={intake.gender} />
-                  <IntakeRow label="Pronouns"         value={intake.pronouns} />
-                  <IntakeRow label="Timezone"         value={intake.timezone} />
-                </IntakeSection>
-
-                {/* Stats */}
-                <IntakeSection title="Starting Stats" color="#f5a623">
-                  <IntakeRow label="Height"          value={intake.height_inches ? `${intake.height_inches}"` : null} />
-                  <IntakeRow label="Starting Weight" value={intake.starting_weight_lbs ? `${intake.starting_weight_lbs} lbs` : null} />
-                  <IntakeRow label="Current Weight"  value={intake.current_weight_lbs ? `${intake.current_weight_lbs} lbs` : null} />
-                  <IntakeRow label="Goal Weight"     value={intake.goal_weight_lbs ? `${intake.goal_weight_lbs} lbs` : null} />
-                  <IntakeRow label="Body Fat %"      value={intake.body_fat_pct ? `${intake.body_fat_pct}%` : null} />
-                </IntakeSection>
-
-                {/* Training */}
-                <IntakeSection title="Training Background" color="#8b5cf6">
-                  <IntakeRow label="Experience"       value={intake.training_experience} />
-                  <IntakeRow label="Days/Week"        value={intake.training_frequency ? `${intake.training_frequency} days` : null} />
-                  <IntakeRow label="Preferred Days"   value={intake.preferred_days?.join(', ')} />
-                  <IntakeRow label="Equipment"        value={intake.equipment_access?.join(', ')} />
-                  <IntakeRow label="Cardio"           value={intake.cardio_preference} />
-                  <IntakeRow label="Injuries"         value={intake.injuries_limitations} long />
-                  <IntakeRow label="Past Injuries"    value={intake.past_injuries} long />
-                </IntakeSection>
-
-                {/* Goals */}
-                <IntakeSection title="Goals" color="#f5a623">
-                  <IntakeRow label="Primary Goal"     value={intake.primary_goal} />
-                  <IntakeRow label="Secondary Goal"   value={intake.secondary_goal} />
-                  <IntakeRow label="Target Date"      value={intake.goal_target_date} />
-                  <IntakeRow label="Motivation"       value={intake.motivation_why} long />
-                  <IntakeRow label="Biggest Obstacle" value={intake.biggest_obstacle} long />
-                </IntakeSection>
-
-                {/* Lifestyle */}
-                <IntakeSection title="Lifestyle" color="#00c9b1">
-                  <IntakeRow label="Activity Level"   value={intake.activity_level} />
-                  <IntakeRow label="Avg Sleep"        value={intake.avg_sleep_hours ? `${intake.avg_sleep_hours} hrs` : null} />
-                  <IntakeRow label="Stress Level"     value={intake.stress_level ? `${intake.stress_level} / 10` : null} />
-                  <IntakeRow label="Alcohol"          value={intake.alcohol_frequency} />
-                </IntakeSection>
-
-                {/* Nutrition */}
-                <IntakeSection title="Nutrition" color="#22c55e">
-                  <IntakeRow label="Dietary Approach"  value={intake.dietary_approach} />
-                  <IntakeRow label="Allergies"         value={intake.allergies_restrictions} />
-                  <IntakeRow label="Foods Disliked"    value={intake.foods_disliked} />
-                  <IntakeRow label="Supplements"       value={intake.supplement_use} />
-                </IntakeSection>
-
-                {/* Health */}
-                <IntakeSection title="Health" color="#ef4444">
-                  <IntakeRow label="Medical Conditions" value={intake.medical_conditions} long />
-                  <IntakeRow label="Medications"        value={intake.current_medications} long />
-                  <IntakeRow label="Surgeries"          value={intake.recent_surgeries} />
-                </IntakeSection>
-
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
         {/* Sticky save & back bar */}
-        <div style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)' }}>
+        <div className="sticky-bar" style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)' }}>
           <div style={{ fontSize:12, color:t.textMuted }}>
             Viewing {client?.profile?.full_name}'s profile
           </div>
@@ -1338,7 +1336,7 @@ export default function ClientDetail() {
         )}
 
         {/* ── JOURNAL TAB ── */}
-        {activeTab === 'journal' && (
+        {activeTab === 'pulse' && (
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Client Journal</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Only entries the client marked "Visible to Coach" appear here. Private entries are never shown.</div>
