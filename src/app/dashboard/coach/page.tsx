@@ -144,12 +144,11 @@ export default function CoachDashboard() {
 
   const NavBtn = ({ item }: { item: { label:string, icon:string, path:string } }) => (
     <button onClick={()=>router.push(item.path)}
-      style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%' }}
+      style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 11px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%', minWidth:0 }}
       onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceHigh)}
       onMouseLeave={e=>(e.currentTarget.style.background=t.surfaceUp)}>
-      <span style={{ fontSize:16 }}>{item.icon}</span>
-      <span style={{ fontSize:13, fontWeight:600, color:t.text }}>{item.label}</span>
-      <span style={{ marginLeft:'auto', color:t.textMuted, fontSize:12 }}>→</span>
+      <span style={{ fontSize:15, flexShrink:0 }}>{item.icon}</span>
+      <span style={{ fontSize:12, fontWeight:600, color:t.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{item.label}</span>
     </button>
   )
 
@@ -169,19 +168,27 @@ export default function CoachDashboard() {
         body{background:${t.bg};overflow-x:hidden;}
         button{-webkit-tap-highlight-color:transparent;}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-        .coach-main{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start;}
+        /* coach-main: right col wide enough to hold 2-col nav comfortably */
+        .coach-main{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
         .coach-topbar-label{display:block;}
-        .nav-grid-essential{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
-        .nav-grid-expanded{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+        /* nav grid: 2 cols by default inside the right sidebar */
+        .nav-grid-essential{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+        .nav-grid-expanded{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+        /* wider screens: go 3 cols in the nav sidebar */
+        @media(min-width:1400px){
+          .coach-main{grid-template-columns:1fr 420px;}
+          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
+          .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
+        }
+        /* below 1100px: stack main layout */
         @media(max-width:1100px){
           .coach-main{grid-template-columns:1fr;}
-          .nav-grid-essential{grid-template-columns:repeat(5,1fr);}
+          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
+          .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
         }
         @media(max-width:900px){
           .coach-stats{grid-template-columns:repeat(2,1fr);}
-          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
-          .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
         }
         @media(max-width:700px){
           .coach-topbar-name{display:none;}
@@ -193,11 +200,10 @@ export default function CoachDashboard() {
           .client-actions{width:100%;justify-content:flex-end;}
           .client-since{display:none;}
           .coach-stats{grid-template-columns:repeat(2,1fr);gap:8px;}
-          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
+          .nav-grid-essential{grid-template-columns:repeat(2,1fr);}
         }
         @media(max-width:420px){
           .client-actions button .btn-label{display:none;}
-          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
         }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
