@@ -47,7 +47,7 @@ export default function ExerciseLibrary() {
   const [filterVideo,   setFilterVideo]   = useState<'all'|'has'|'missing'>('all')
   const [filterDetail,  setFilterDetail]  = useState<'all'|'missing'>('all')
   const [page,          setPage]          = useState(1)
-  const PAGE_SIZE = 50
+  const PAGE_SIZE = 25
   const [showNew,   setShowNew]     = useState(false)
   const [editingId, setEditingId]   = useState<string|null>(null)
   const [uploading, setUploading]   = useState<string|null>(null)
@@ -478,16 +478,19 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
 
             {/* Video or placeholder */}
             {activeUrl ? (
-              <div style={{width:'100%',height:'100%',cursor:'pointer'}} onClick={()=>setPlaying(p=>!p)}>
+              <div style={{width:'100%',height:'100%',cursor:'pointer',position:'relative'}} onClick={()=>setPlaying(p=>!p)}>
                 {playing ? (
                   <video src={activeUrl} autoPlay controls style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
                 ) : (
+                  /* Show static thumbnail — no video decode until clicked */
                   <>
-                    <video src={activeUrl} preload="metadata" muted playsInline
-                      onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
-                      style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
-                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.25)'}}>
-                      <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,0.55)',border:'2px solid rgba(255,255,255,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>▶</div>
+                    <div style={{width:'100%',height:'100%',background:'#0a0a14',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <div style={{fontSize:11,color:'#3a3a52',textAlign:'center' as const,padding:'0 8px',lineHeight:1.5}}>
+                        {ex.name}
+                      </div>
+                    </div>
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <div style={{width:44,height:44,borderRadius:'50%',background:'rgba(0,0,0,0.7)',border:'2px solid rgba(255,255,255,0.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>▶</div>
                     </div>
                   </>
                 )}
