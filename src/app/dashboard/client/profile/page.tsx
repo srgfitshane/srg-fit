@@ -93,7 +93,7 @@ function ProfilePageInner() {
   const save = async () => {
     if (!clientId) return
     setSaving(true)
-    const payload = { ...intake, client_id: clientId, intake_completed_by: 'client', intake_completed_at: new Date().toISOString() }
+    const payload = { ...intake, client_id: clientId, intake_completed_by: 'client' }
     const { error } = await supabase.from('client_intake_profiles').upsert(payload, { onConflict: 'client_id' })
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
     setSaving(false)

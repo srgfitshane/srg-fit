@@ -313,7 +313,6 @@ export default function CoachDashboard() {
                             <span style={{ fontSize:14, fontWeight:700 }}>{client.profile?.full_name || 'Unknown'}</span>
                             {client.paused   && <span style={{ fontSize:10, fontWeight:800, color:t.orange, background:t.orangeDim, borderRadius:6, padding:'2px 7px' }}>⏸ PAUSED</span>}
                             {client.flagged  && <span style={{ fontSize:10, fontWeight:800, color:t.red, background:t.redDim, borderRadius:6, padding:'2px 7px' }}>🚩</span>}
-                            {!client.onboarding_completed && <span style={{ fontSize:10, fontWeight:800, color:t.purple, background:t.purpleDim, borderRadius:6, padding:'2px 7px' }}>📋</span>}
                           </div>
                           <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{client.profile?.email}</div>
                         </div>

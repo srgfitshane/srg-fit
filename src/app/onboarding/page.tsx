@@ -252,6 +252,12 @@ export default function OnboardingPage() {
                 </div>
               </div>
               <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Cardio Preference</label>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                  {['No cardio','Walking','Running','Cycling','Rowing','Swimming','HIIT','Jump rope','Elliptical','Open to anything'].map(opt => chip(opt, data.cardio_preference===opt, ()=>set('cardio_preference',opt)))}
+                </div>
+              </div>
+              <div>
                 <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6, display:'block' }}>Injuries or Limitations</label>
                 <textarea value={data.injuries_limitations||''} onChange={e=>set('injuries_limitations',e.target.value)} rows={3}
                   placeholder="Any current injuries, chronic pain, or movement restrictions..." style={{...inp(), resize:'none' as any, lineHeight:1.6}} />
