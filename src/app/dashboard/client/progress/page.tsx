@@ -51,6 +51,8 @@ export default function ClientProgressPage() {
   const [lightbox, setLightbox] = useState<any>(null)
   const [compareMode,  setCompareMode]  = useState(false)
   const [compareSelection, setCompareSelection] = useState<any[]>([])
+  const [pulseHistory, setPulseHistory] = useState<any[]>([])
+  const [pulseTimeframe, setPulseTimeframe] = useState(30)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { init() }, [])
@@ -71,13 +73,18 @@ export default function ClientProgressPage() {
     cutoff.setDate(cutoff.getDate() - timeframe.days)
     const dateStr = timeframe.days===9999 ? '2000-01-01' : cutoff.toISOString().split('T')[0]
 
-    const [{ data: mData }, { data: pData }] = await Promise.all([
+    const [{ data: mData }, { data: pData }, { data: pulseData }] = await Promise.all([
       supabase.from('metrics').select('*').eq('client_id', clientRecord.id)
         .gte('logged_date', dateStr).order('logged_date'),
       supabase.from('progress_photos').select('*').eq('client_id', user.id)
         .gte('photo_date', dateStr).order('photo_date', { ascending: false }),
+      supabase.from('daily_checkins').select('checkin_date,sleep_quality,energy_score,mood_emoji')
+        .eq('client_id', clientRecord.id)
+        .order('checkin_date', { ascending: true })
+        .limit(90),
     ])
     setMetrics(mData || [])
+    setPulseHistory(pulseData || [])
     if (pData?.length) {
       const withUrls = await Promise.all(pData.map(async (p: any) => {
         const { data: url } = await supabase.storage.from('progress-photos').createSignedUrl(p.storage_path, 3600)
@@ -230,6 +237,68 @@ export default function ClientProgressPage() {
           </ResponsiveContainer>
         )}
       </div>
+
+
+      {/* Daily Pulse Charts */}
+      {pulseHistory.length > 0 && (
+        <div style={{ marginBottom:28 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:16, fontWeight:800 }}>Morning Pulse</div>
+              <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>Sleep & energy trends over time</div>
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              {[30,60,90].map(d => (
+                <button key={d} onClick={()=>setPulseTimeframe(d)}
+                  style={{ padding:'4px 10px', borderRadius:8, border:'1px solid '+(pulseTimeframe===d?t.teal:t.border),
+                    background:pulseTimeframe===d?t.teal+'20':'transparent',
+                    color:pulseTimeframe===d?t.teal:t.textMuted,
+                    fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sleep & Energy line chart */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'16px 8px 8px', marginBottom:12 }}>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart
+                data={pulseHistory.slice(-pulseTimeframe).map((d:any) => ({
+                  date: new Date(d.checkin_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}),
+                  sleep: d.sleep_quality,
+                  energy: d.energy_score,
+                }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
+                <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:9 }} axisLine={false} tickLine={false}
+                  interval={Math.floor(pulseHistory.slice(-pulseTimeframe).length / 5)} />
+                <YAxis domain={[0,5]} ticks={[1,2,3,4,5]} tick={{ fill:t.textMuted, fontSize:9 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text, fontSize:12 }} />
+                <Legend wrapperStyle={{ paddingTop:8, color:t.textMuted, fontSize:11 }} />
+                <Line type="monotone" dataKey="sleep" name="🌙 Sleep" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
+                <Line type="monotone" dataKey="energy" name="⚡ Energy" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Mood strip */}
+          {(() => {
+            const recent = pulseHistory.slice(-pulseTimeframe)
+            const withMood = recent.filter((d:any) => d.mood_emoji)
+            if (!withMood.length) return null
+            return (
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'12px 14px' }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Mood Log</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                  {withMood.slice(-30).map((d:any,i:number) => (
+                    <div key={i} title={d.checkin_date} style={{ fontSize:18, lineHeight:1 }}>{d.mood_emoji}</div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Progress Photos */}
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
