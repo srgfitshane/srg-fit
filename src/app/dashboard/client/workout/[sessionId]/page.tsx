@@ -352,6 +352,110 @@ export default function ActiveWorkoutPage() {
 
     setSaving(false)
     setPhase('complete')
+
+    // Detect PRs and milestones fire-and-forget
+    if (session?.client_id) {
+      const today = new Date()
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+      detectPRsAndMilestones(session.client_id, todayStr).catch(() => {})
+    }
+  }
+
+
+  // Detect PRs and milestones after workout completion
+  async function detectPRsAndMilestones(clientId: string, today: string) {
+    try {
+      // 1. Get all sets from this session with exercise info
+      const { data: sessionExs } = await supabase
+        .from('session_exercises')
+        .select('id, exercise_id, exercise_name')
+        .eq('session_id', sessionId)
+
+      if (!sessionExs?.length) return
+
+      const newMilestones: string[] = []
+
+      for (const se of sessionExs) {
+        if (!se.exercise_id) continue
+
+        // Get best set logged this session (non-warmup, highest weight)
+        const { data: sets } = await supabase
+          .from('exercise_sets')
+          .select('weight_value, reps_completed')
+          .eq('session_exercise_id', se.id)
+          .eq('is_warmup', false)
+          .not('weight_value', 'is', null)
+          .order('weight_value', { ascending: false })
+          .limit(1)
+
+        if (!sets?.length || !sets[0].weight_value) continue
+        const bestWeight = Number(sets[0].weight_value)
+        const bestReps   = sets[0].reps_completed
+
+        // Get existing PR for this exercise
+        const { data: existing } = await supabase
+          .from('personal_records')
+          .select('weight_pr, rep_pr_reps, rep_pr_weight')
+          .eq('client_id', clientId)
+          .eq('exercise_id', se.exercise_id)
+          .single()
+
+        const isWeightPR = !existing || bestWeight > (Number(existing.weight_pr) || 0)
+
+        if (isWeightPR) {
+          // Upsert the PR record
+          await supabase.from('personal_records').upsert({
+            client_id: clientId,
+            exercise_id: se.exercise_id,
+            weight_pr: bestWeight,
+            rep_pr_reps: bestReps || null,
+            rep_pr_weight: bestWeight,
+            logged_date: today,
+          }, { onConflict: 'client_id,exercise_id' })
+
+          const exerciseName = se.exercise_name || 'exercise'
+          newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs!`)
+        }
+      }
+
+      // 2. Check consistency milestones
+      const { count: totalDone } = await supabase
+        .from('workout_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId)
+        .eq('status', 'completed')
+
+      const total = totalDone || 0
+      const milestoneThresholds = [
+        { count: 1,   msg: `💪 First workout complete — let's go!` },
+        { count: 5,   msg: `🔥 5 workouts done. The habit is forming.` },
+        { count: 10,  msg: `⭐ 10 workouts! You're building something real.` },
+        { count: 25,  msg: `🏆 25 workouts. Consistency is your superpower.` },
+        { count: 50,  msg: `🔥 50 workouts. You are not the same person you were.` },
+        { count: 100, msg: `🏆 100 WORKOUTS. Legendary. Absolute legend.` },
+      ]
+
+      for (const t of milestoneThresholds) {
+        if (total === t.count) {
+          newMilestones.push(t.msg)
+          break
+        }
+      }
+
+      // 3. Insert all new milestones
+      if (newMilestones.length > 0) {
+        await supabase.from('milestones').insert(
+          newMilestones.map(msg => ({
+            client_id: clientId,
+            milestone_type: msg.includes('PR') ? 'pr' : 'consistency',
+            message: msg,
+            seen: false,
+          }))
+        )
+      }
+    } catch (e) {
+      console.error('PR/milestone detection error:', e)
+    }
   }
 
   const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
