@@ -143,9 +143,7 @@ export default function CoachReportsPage() {
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
         .roster-row{display:grid;grid-template-columns:200px 80px 80px 80px 1fr 90px 80px;gap:12px;align-items:center;}
         @media(max-width:800px){.roster-row{grid-template-columns:1fr 60px 60px;gap:8px;}.roster-hide{display:none;}}
         .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}

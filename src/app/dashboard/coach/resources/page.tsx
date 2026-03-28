@@ -182,9 +182,7 @@ export default function CoachResourcesPage() {
   if (loading) return <div style={{background:t.bg,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'DM Sans',sans-serif",color:t.teal,fontSize:14,fontWeight:700}}>Loading...</div>
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
         .resources-grid{display:grid;grid-template-columns:220px 1fr;gap:20px;max-width:1200px;margin:0 auto;padding:24px;}
         @media(max-width:700px){.resources-grid{grid-template-columns:1fr;padding:14px;}}
       `}</style>

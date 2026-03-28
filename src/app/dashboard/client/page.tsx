@@ -26,6 +26,27 @@ const getGreeting = () => {
   return 'Good evening'
 }
 
+type DashboardTab = 'today' | 'nutrition' | 'resources' | 'messages' | 'metrics' | 'training' | 'billing'
+
+function coerceDashboardTab(tab: string | null): DashboardTab {
+  switch (tab) {
+    case 'nutrition':
+    case 'resources':
+    case 'messages':
+    case 'metrics':
+    case 'training':
+    case 'billing':
+      return tab
+    default:
+      return 'today'
+  }
+}
+
+function formatSessionDate(date?: string | null) {
+  if (!date) return 'No date scheduled'
+  return new Date(`${date}T00:00:00`).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })
+}
+
 const NAV = [
   { id:'today',     icon:'home',      label:'Home'      },
   { id:'nutrition', icon:'nutrition', label:'Nutrition' },
@@ -96,11 +117,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
   const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
   const [loading,      setLoading]      = useState(true)
-  const [activeNav,    setActiveNav]    = useState(() => {
+  const [activeNav,    setActiveNav]    = useState<DashboardTab>(() => {
     // Allow deep-linking via ?tab=billing etc from profile page
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search).get('tab')
-      if (p) return p
+      return coerceDashboardTab(p)
     }
     return 'today'
   })
@@ -133,6 +154,89 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
   })()
+
+  const incompleteHabits = habits.filter((habit: any) => {
+    const value = habitLogs[habit.id] || 0
+    if (habit.habit_type === 'check') return !value
+    return value < (habit.target || 0)
+  }).length
+
+  const todayPriorities = [
+    !pulseData ? {
+      id: 'pulse',
+      title: 'Log your morning pulse',
+      detail: 'Quick recovery feedback keeps your coach loop sharp.',
+      accent: t.teal,
+      background: t.tealDim,
+      action: 'Check in',
+      onClick: () => document.getElementById('morning-pulse-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    } : null,
+    pendingReviews.length > 0 ? {
+      id: 'reviews',
+      title: `${pendingReviews.length} coach review${pendingReviews.length !== 1 ? 's' : ''} waiting`,
+      detail: 'Open your feedback before your next session.',
+      accent: t.green,
+      background: t.greenDim,
+      action: 'View review',
+      onClick: () => document.getElementById('coach-review-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    } : null,
+    nextSession ? {
+      id: 'workout',
+      title: nextSession.status === 'in_progress' ? 'Resume your workout' : nextSession.isToday ? 'Today\'s workout is ready' : `Next workout: ${formatSessionDate(nextSession.scheduled_date)}`,
+      detail: nextSession.title,
+      accent: t.orange,
+      background: t.orangeDim,
+      action: nextSession.status === 'in_progress' ? 'Resume' : 'Start',
+      onClick: () => router.push(`/dashboard/client/workout/${nextSession.id}`),
+    } : null,
+    pendingCheckins.length > 0 ? {
+      id: 'forms',
+      title: `${pendingCheckins.length} form${pendingCheckins.length !== 1 ? 's' : ''} needs attention`,
+      detail: 'Stay current so coaching adjustments happen faster.',
+      accent: t.purple,
+      background: t.purpleDim,
+      action: 'Open forms',
+      onClick: () => router.push(`/dashboard/client/forms/${pendingCheckins[0].id}`),
+    } : null,
+    incompleteHabits > 0 ? {
+      id: 'habits',
+      title: `${incompleteHabits} habit${incompleteHabits !== 1 ? 's' : ''} left today`,
+      detail: 'Small daily consistency compounds quickly.',
+      accent: t.yellow,
+      background: t.yellowDim,
+      action: 'Review habits',
+      onClick: () => document.getElementById('daily-habits-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    } : null,
+  ].filter(Boolean) as Array<{ id: string; title: string; detail: string; accent: string; background: string; action: string; onClick: () => void }>
+
+  const prioritySummary = [
+    { label: 'Coach feedback', value: pendingReviews.length, color: t.green },
+    { label: 'Open forms', value: pendingCheckins.length, color: t.purple },
+    { label: 'Habits left', value: incompleteHabits, color: t.orange },
+    { label: 'Messages', value: activeNav === 'messages' ? 1 : 0, color: t.teal },
+  ]
+
+  const openTab = (tab: DashboardTab) => {
+    if (tab !== 'messages') setMessagesView('hub')
+    setPlusOpen(false)
+    setActiveNav(tab)
+
+    if (overrideClientId) return
+
+    if (tab === 'metrics') {
+      router.push('/dashboard/client/progress')
+      return
+    }
+    if (tab === 'resources') {
+      router.push('/dashboard/client/resources')
+      return
+    }
+    if (tab === 'today') {
+      router.push('/dashboard/client')
+      return
+    }
+    router.push(`/dashboard/client?tab=${tab}`)
+  }
 
   useEffect(() => {
     const loadClientData = async (clientData: any, todayStr: string) => {
@@ -255,16 +359,23 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     } // end load
     load()
 
-    // Read ?tab param from bottom nav (e.g. coming from Resources page)
-    const tab = searchParams.get('tab')
-    if (tab) setActiveNav(tab)
-
     // Midnight refresh — re-run when the date rolls over so Today tab stays fresh
     const now = new Date()
     const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime()
     const midnightTimer = setTimeout(() => { load() }, msUntilMidnight)
     return () => clearTimeout(midnightTimer)
   }, [])
+
+  useEffect(() => {
+    if (overrideClientId) return
+    setActiveNav(coerceDashboardTab(searchParams.get('tab')))
+  }, [overrideClientId, searchParams])
+
+  useEffect(() => {
+    if (activeNav !== 'messages' && messagesView !== 'hub') {
+      setMessagesView('hub')
+    }
+  }, [activeNav, messagesView])
 
 
   const logHabit = async (habitId: string, value: number) => {
@@ -368,9 +479,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`
+    <>      <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};overflow-x:hidden;}
         ::-webkit-scrollbar{width:4px;}
@@ -390,6 +499,13 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         .scroll-view{-webkit-overflow-scrolling:touch;}
         /* Prevent text selection on tap */
         .no-select{-webkit-user-select:none;user-select:none;}
+        .today-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+        .today-actions-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+        .messages-hub-grid{display:grid;gap:14px;}
+        @media(max-width:420px){
+          .today-summary-grid{grid-template-columns:repeat(2,1fr);}
+          .today-actions-grid{grid-template-columns:1fr;}
+        }
       `}</style>
 
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', flexDirection:'column', maxWidth:480, margin:'0 auto', position:'relative' }}>
@@ -446,6 +562,48 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <span className="card-text">{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</span>
             </div>
             <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
+          </div>
+
+          <div className="fade" style={{ background:'linear-gradient(135deg,'+t.teal+'14,'+t.orange+'08)', border:'1px solid '+t.teal+'26', borderRadius:18, padding:'16px', marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, marginBottom:12 }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:800, color:t.teal, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Today Priorities</div>
+                <div style={{ fontSize:16, fontWeight:800, lineHeight:1.3 }}>
+                  {todayPriorities[0]?.title || 'You are caught up for today'}
+                </div>
+                <div style={{ fontSize:12, color:t.textMuted, marginTop:4, lineHeight:1.5 }}>
+                  {todayPriorities[0]?.detail || 'Use the quick actions below to review training, nutrition, and coach support when you need it.'}
+                </div>
+              </div>
+              {todayPriorities[0] && (
+                <button onClick={todayPriorities[0].onClick}
+                  style={{ background:todayPriorities[0].background, border:'1px solid '+todayPriorities[0].accent+'44', borderRadius:12, padding:'10px 14px', fontSize:12, fontWeight:800, color:todayPriorities[0].accent, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                  {todayPriorities[0].action}
+                </button>
+              )}
+            </div>
+            <div className="today-summary-grid" style={{ marginBottom:12 }}>
+              {prioritySummary.map((item) => (
+                <div key={item.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                  <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{item.label}</div>
+                  <div style={{ fontSize:18, fontWeight:900, color:item.color }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="today-actions-grid">
+              <button onClick={() => nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : openTab('training')}
+                style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:12, fontWeight:800, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                {nextSession ? (nextSession.status === 'in_progress' ? 'Resume workout' : 'Start workout') : 'View training'}
+              </button>
+              <button onClick={() => openTab('messages')}
+                style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:12, fontWeight:800, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                Message coach
+              </button>
+              <button onClick={() => openTab('nutrition')}
+                style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:12, fontWeight:800, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                Log nutrition
+              </button>
+            </div>
           </div>
 
           {/* ── 2. RECENT WINS PLAQUE ── */}
@@ -531,7 +689,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── 3. MORNING PULSE ── */}
           {clientRecord && (
-            <div className="fade">
+            <div className="fade" id="morning-pulse-card">
               <MorningPulse
                 clientId={clientRecord.id}
                 today={today}
@@ -551,7 +709,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── COACH REVIEWS NOTIFICATION ── */}
           {pendingReviews.length > 0 && (
-            <div className="fade" style={{ marginBottom:14 }}>
+            <div className="fade" style={{ marginBottom:14 }} id="coach-review-card">
               {pendingReviews.map(r => {
                 const isOpen = expandedReview === r.id
                 return (
@@ -656,7 +814,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── 5. TASKS / HABITS ── */}
           {habits.length > 0 && (
-            <div style={{ marginBottom:14 }} className="fade">
+            <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {habits.map((h:any) => {
@@ -769,11 +927,35 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── MESSAGES TAB ── */}
           {activeNav === 'messages' && messagesView === 'hub' && (
-            <div style={{ paddingBottom:32 }}>
+            <div className="messages-hub-grid" style={{ paddingBottom:32 }}>
               <div style={{ fontSize:22, fontWeight:900, marginBottom:6, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
                 Connect
               </div>
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:24 }}>Message your coach or check in with the community</div>
+
+              <div style={{ background:'linear-gradient(135deg,'+t.teal+'14,'+t.purple+'0c)', border:'1px solid '+t.border, borderRadius:18, padding:'14px 16px' }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.teal, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Support Snapshot</div>
+                <div className="today-summary-grid">
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Coach Access</div>
+                    <div style={{ fontSize:14, fontWeight:900, color:t.teal }}>24/7</div>
+                  </div>
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Pending Forms</div>
+                    <div style={{ fontSize:14, fontWeight:900, color:t.purple }}>{pendingCheckins.length}</div>
+                  </div>
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Workout Status</div>
+                    <div style={{ fontSize:14, fontWeight:900, color:t.orange }}>
+                      {nextSession ? (nextSession.status === 'in_progress' ? 'Active' : nextSession.isToday ? 'Ready' : 'Upcoming') : 'Rest'}
+                    </div>
+                  </div>
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Call Request</div>
+                    <div style={{ fontSize:14, fontWeight:900, color:t.yellow }}>{callSubmitted ? 'Sent' : 'Available'}</div>
+                  </div>
+                </div>
+              </div>
 
               {/* Coach message card */}
               <button onClick={()=>setMessagesView('coach')}
@@ -827,7 +1009,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>Request a Call</div>
-                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Schedule a 30-minute Zoom with Coach Shane</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>
+                      {callSubmitted ? 'Request sent. Shane will follow up with a confirmed time.' : 'Schedule a 30-minute Zoom with Coach Shane'}
+                    </div>
                   </div>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6"/>
@@ -842,7 +1026,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ height:'calc(100vh - 52px - 60px)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
               {/* Back button */}
               <div style={{ padding:'10px 0 6px', flexShrink:0 }}>
-                <button onClick={()=>setMessagesView('hub')}
+              <button onClick={()=>setMessagesView('hub')}
+                aria-label="Back to messages hub"
                   style={{ background:'none', border:'none', color:t.teal, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:"'DM Sans',sans-serif", padding:0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 18 9 12 15 6"/>
@@ -888,14 +1073,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {/* Action menu */}
           {plusOpen && (
             <div className="plus-action" style={{ position:'absolute', bottom:60, right:0, display:'flex', flexDirection:'column', gap:10, alignItems:'flex-end', pointerEvents:'all' }}>
-              <button onClick={()=>{ setPlusOpen(false); setActiveNav('nutrition') }}
+              <button onClick={()=>openTab('nutrition')}
                 style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
                 </svg>
                 Log Food
               </button>
-              <button onClick={()=>{ setPlusOpen(false); nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : setActiveNav('training') }}
+              <button onClick={()=>{ setPlusOpen(false); nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : openTab('training') }}
                 style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
@@ -906,6 +1091,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           )}
           {/* + button */}
           <button onClick={()=>setPlusOpen(o=>!o)}
+            aria-label={plusOpen ? 'Close quick actions' : 'Open quick actions'}
             style={{ width:52, height:52, borderRadius:26, background:plusOpen ? t.surfaceHigh : `linear-gradient(135deg,${t.teal},${t.teal}cc)`, border: plusOpen ? '1px solid '+t.border : 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 4px 20px rgba(0,201,177,0.35)', transition:'all 0.2s ease', transform: plusOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={plusOpen ? t.textMuted : '#000'} strokeWidth="2.5" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -1079,12 +1265,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'stretch', height:'calc(60px + env(safe-area-inset-bottom))', zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
           {NAV.map(n => (
-            <button key={n.id} onClick={()=>{ 
-              if(n.id === 'metrics'){ router.push('/dashboard/client/progress'); return }
-              if(n.id === 'resources'){ router.push('/dashboard/client/resources'); return }
-              if(n.id !== 'messages') setMessagesView('hub')
-              setActiveNav(n.id) 
-            }}
+            <button key={n.id} onClick={()=>openTab(n.id as DashboardTab)}
+              aria-label={`Open ${n.label}`}
+              aria-pressed={activeNav === n.id}
               className="nav-btn no-select" style={{ flex:1, background:'none', border:'none', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', padding:'6px 0', position:'relative', minWidth:0 }}>
               {activeNav === n.id && (
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />

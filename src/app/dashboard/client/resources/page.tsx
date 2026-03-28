@@ -104,9 +104,7 @@ export default function ClientResourcesPage() {
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
       <div style={{background:t.bg,minHeight:'100vh',fontFamily:"'DM Sans',sans-serif",color:t.text}}>
 
         <div style={{background:t.surface,borderBottom:'1px solid '+t.border,padding:'0 20px',display:'flex',alignItems:'center',height:60,gap:12}}>

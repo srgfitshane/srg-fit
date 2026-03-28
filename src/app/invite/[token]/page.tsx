@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
+import { getInviteAvailability } from '@/lib/invite-utils'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', border:'#252538',
@@ -21,9 +22,10 @@ export default function InviteAcceptPage() {
   useEffect(() => {
     const load = async () => {
       const { data: inv } = await supabase.from('client_invites').select('*').eq('token', token).single()
-      if (!inv) { setStatus('invalid'); return }
-      if (inv.status === 'accepted') { setStatus('already_accepted'); return }
-      if (inv.status === 'cancelled' || new Date(inv.expires_at) < new Date()) { setStatus('expired'); return }
+      const availability = getInviteAvailability(inv)
+      if (availability === 'invalid') { setStatus('invalid'); return }
+      if (availability === 'already_accepted') { setStatus('already_accepted'); return }
+      if (availability === 'expired') { setStatus('expired'); return }
       const { data: coachProfile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', inv.coach_id).single()
       setInvite(inv)
       setCoach(coachProfile)
@@ -43,25 +45,17 @@ export default function InviteAcceptPage() {
       return
     }
 
-    // Check if already a client for this coach
-    const { data: existing } = await supabase.from('clients').select('id').eq('profile_id', user.id).eq('coach_id', invite.coach_id).single()
-    if (existing) { router.push('/onboarding'); return }
+    const res = await fetch('/api/invite/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const result = await res.json()
 
-    // Create client record
-    const { data: cl, error: clErr } = await supabase.from('clients').insert({
-      profile_id: user.id, coach_id: invite.coach_id, active: true,
-      start_date: new Date().toISOString().split('T')[0], invite_id: invite.id
-    }).select().single()
-
-    if (clErr || !cl) { setError('Something went wrong. Please try again or contact your coach.'); setStatus('valid'); return }
-
-    // Mark invite accepted
-    await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', invite.id)
-
-    // Update profile name if not set
-    if (invite.full_name) {
-      const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-      if (!prof?.full_name) await supabase.from('profiles').update({ full_name: invite.full_name }).eq('id', user.id)
+    if (!res.ok) {
+      setError(result.error || 'Something went wrong. Please try again or contact your coach.')
+      setStatus(result.error === 'Invite expired' ? 'expired' : 'valid')
+      return
     }
 
     // Auto welcome message from coach
@@ -101,9 +95,7 @@ export default function InviteAcceptPage() {
   if (status === 'already_accepted') return <Card icon="✅" title="Already accepted" body="You've already accepted this invite." cta="Go to Dashboard" onCta={()=>router.push('/dashboard/client')} />
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", padding:20 }}>
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:32, maxWidth:440, width:'100%', textAlign:'center' }}>
           <div style={{ fontSize:32, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:4 }}>SRG FIT</div>

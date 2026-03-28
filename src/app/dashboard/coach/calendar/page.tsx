@@ -397,9 +397,7 @@ export default function CoachCalendar() {
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
         .cal-grid{display:grid;grid-template-columns:1fr 270px;gap:0;max-width:1200px;margin:0 auto;padding:16px 12px;}
         .cal-cell{min-height:80px;}
         .cal-sidebar{}

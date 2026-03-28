@@ -162,9 +162,7 @@ export default function ClientFormPage() {
   )
 
   if (submitted) return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", padding:20 }}>
+    <>      <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", padding:20 }}>
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:40, maxWidth:440, width:'100%', textAlign:'center' }}>
           <div style={{ fontSize:48, marginBottom:16 }}>🎉</div>
           <div style={{ fontSize:20, fontWeight:900, marginBottom:8 }}>All done!</div>
@@ -181,9 +179,7 @@ export default function ClientFormPage() {
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
 
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, padding:'24px 20px 80px' }}>
         <div style={{ maxWidth:620, margin:'0 auto' }}>

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -9,6 +10,14 @@ const t = {
   orangeDim:'#f5a62315', red:'#ef4444', redDim:'#ef444415', green:'#22c55e',
   greenDim:'#22c55e15', yellow:'#facc15', yellowDim:'#facc1515',
   text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
+}
+
+const MOOD_EMOJI: Record<string, string> = {
+  great:'😄',
+  good:'🙂',
+  okay:'😐',
+  tired:'😴',
+  awful:'😓',
 }
 
 type Review = {
@@ -23,11 +32,64 @@ type Exercise = {
   id: string; exercise_name: string; sets_completed: number | null
   sets_prescribed: number | null; reps_prescribed: string | null
   notes_client: string | null; notes_coach: string | null
-  client_video_url: string | null; sets: ExSet[]
+  client_video_url: string | null; original_exercise_name?: string | null
+  swap_reason?: string | null; swap_note?: string | null; skipped?: boolean | null
+  skip_reason?: string | null; skip_note?: string | null; sets: ExSet[]
 }
 type ExSet = {
   set_number: number; reps_completed: number | null; weight_value: number | null
   weight_unit: string | null; rpe: number | null; notes: string | null
+}
+
+type WorkoutSessionRow = {
+  id: string
+  title: string
+  scheduled_date: string
+  completed_at: string
+  review_due_at: string
+  session_rpe: number | null
+  energy_level: number | null
+  mood: string | null
+  notes_client: string | null
+  duration_seconds: number | null
+  coach_reviewed_at: string | null
+  coach_review_video_url: string | null
+  client?: {
+    id: string
+    profile?: { full_name?: string | null } | null
+  } | null
+}
+
+type SessionExerciseRow = {
+  id: string
+  exercise_name: string
+  sets_completed: number | null
+  sets_prescribed: number | null
+  reps_prescribed: string | null
+  notes_client: string | null
+  notes_coach: string | null
+  client_video_url: string | null
+  original_exercise_name?: string | null
+  swap_reason?: string | null
+  swap_note?: string | null
+  skipped?: boolean | null
+  skip_reason?: string | null
+  skip_note?: string | null
+}
+
+type ReviewIntelligence = {
+  skippedCount: number
+  swapCount: number
+  formCheckCount: number
+  highRpeSetCount: number
+  incompleteExerciseCount: number
+  lowEnergy: boolean
+  frictionScore: number
+  coachFocus: string
+  hotspotExercises: string[]
+  frictionReasons: string[]
+  summary: string
+  tags: Array<{ label: string; color: string; bg: string }>
 }
 
 function urgency(dueAt: string): 'green'|'yellow'|'red'|'overdue' {
@@ -47,7 +109,72 @@ function countdown(dueAt: string) {
   return h>0?`${h}h ${m}m left`:`${m}m left`
 }
 const fmtDuration = (s:number|null) => s ? `${Math.floor(s/60)}m` : '—'
-const moodEmoji = (m:string|null) => ({ great:'😄',good:'🙂',okay:'😐',tired:'😴',awful:'😓' } as any)[m||''] || '—'
+const moodEmoji = (m:string|null) => (m ? MOOD_EMOJI[m] : undefined) || '—'
+
+function getReviewIntelligence(review: Review): ReviewIntelligence {
+  const skippedCount = review.exercises.filter(ex => ex.skipped).length
+  const swapCount = review.exercises.filter(ex => !!ex.original_exercise_name).length
+  const formCheckCount = review.exercises.filter(ex => !!ex.client_video_url).length
+  const allSets = review.exercises.flatMap(ex => ex.sets || [])
+  const highRpeSetCount = allSets.filter(setRow => (setRow.rpe || 0) >= 9).length
+  const incompleteExerciseCount = review.exercises.filter(ex => !ex.skipped && (ex.sets_completed || 0) < (ex.sets_prescribed || 0)).length
+  const lowEnergy = (review.energy_level || 0) <= 2 || review.mood === 'tired' || review.mood === 'awful'
+  const frictionScore = skippedCount * 3 + swapCount * 2 + formCheckCount + highRpeSetCount + incompleteExerciseCount + (lowEnergy ? 2 : 0)
+  const hotspotExercises = review.exercises
+    .filter(ex => ex.skipped || ex.original_exercise_name || !!ex.client_video_url || (ex.sets_completed || 0) < (ex.sets_prescribed || 0))
+    .map(ex => ex.exercise_name)
+    .slice(0, 3)
+  const frictionReasons = Array.from(new Set(
+    review.exercises
+      .flatMap(ex => [ex.skip_reason, ex.swap_reason, ex.skip_note, ex.swap_note])
+      .filter(Boolean)
+      .map(reason => String(reason).trim())
+      .filter(Boolean)
+  )).slice(0, 3)
+  const coachFocus = skippedCount > 0
+    ? 'Review why the skipped movements were not completed and decide if the plan needs a cleaner alternative.'
+    : swapCount > 0
+      ? 'Check whether the repeated swaps point to an exercise mismatch or equipment limitation.'
+      : lowEnergy || highRpeSetCount > 0
+        ? 'Recovery looks like the first thing to evaluate before pushing progression.'
+        : formCheckCount > 0
+          ? 'Use the submitted videos to tighten execution and reinforce the most important movement cues.'
+          : incompleteExerciseCount > 0
+            ? 'Look at where session completion dropped off and decide if fatigue, time, or buy-in was the blocker.'
+            : 'This session looks clean, so the review can focus on reinforcement and next-step progression.'
+  const summaryParts = [
+    skippedCount ? `${skippedCount} skipped` : null,
+    swapCount ? `${swapCount} swapped` : null,
+    formCheckCount ? `${formCheckCount} form check${formCheckCount !== 1 ? 's' : ''}` : null,
+    highRpeSetCount ? `${highRpeSetCount} high-RPE set${highRpeSetCount !== 1 ? 's' : ''}` : null,
+    incompleteExerciseCount ? `${incompleteExerciseCount} incomplete exercise${incompleteExerciseCount !== 1 ? 's' : ''}` : null,
+    lowEnergy ? 'low recovery signal' : null,
+  ].filter(Boolean)
+
+  const tags = [
+    skippedCount ? { label:`${skippedCount} skipped`, color:t.red, bg:t.redDim } : null,
+    swapCount ? { label:`${swapCount} swaps`, color:t.teal, bg:t.tealDim } : null,
+    formCheckCount ? { label:`${formCheckCount} videos`, color:t.teal, bg:t.tealDim } : null,
+    highRpeSetCount ? { label:'High RPE', color:t.orange, bg:t.orangeDim } : null,
+    incompleteExerciseCount ? { label:'Completion drop', color:t.orange, bg:t.orangeDim } : null,
+    lowEnergy ? { label:'Low energy', color:t.yellow, bg:t.yellowDim } : null,
+  ].filter(Boolean) as Array<{ label: string; color: string; bg: string }>
+
+  return {
+    skippedCount,
+    swapCount,
+    formCheckCount,
+    highRpeSetCount,
+    incompleteExerciseCount,
+    lowEnergy,
+    frictionScore,
+    coachFocus,
+    hotspotExercises,
+    frictionReasons,
+    summary: summaryParts.length ? summaryParts.join(' · ') : 'Clean session with no obvious friction flags',
+    tags,
+  }
+}
 
 // Inline video player component
 function VideoPlayer({ url, label }: { url: string; label: string }) {
@@ -100,18 +227,18 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
   const camVidRef       = useRef<HTMLVideoElement|null>(null)  // hidden, feeds canvas pip
   const previewVidRef   = useRef<HTMLVideoElement|null>(null)  // live canvas preview shown to user
   const rafRef          = useRef<number>(0)
-  const timerRef        = useRef<any>(null)
+  const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => () => { stopAll() }, [])
-
-  function stopAll() {
+  const stopAll = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
     clearInterval(timerRef.current)
-    recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop()
+    if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop()
     screenStreamRef.current?.getTracks().forEach(t => t.stop())
     camStreamRef.current?.getTracks().forEach(t => t.stop())
     if (previewUrl) URL.revokeObjectURL(previewUrl)
-  }
+  }, [previewUrl])
+
+  useEffect(() => () => { stopAll() }, [stopAll])
 
   // Draw screen + pip camera onto canvas each animation frame
   function startCompositing() {
@@ -180,8 +307,9 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
       setPhase('recording')
       // Give React a tick to render the preview element
       requestAnimationFrame(() => { startCompositing(); beginRecording(screen, cam) })
-    } catch(e: any) {
-      setError(e?.message?.includes('Permission denied') ? 'Screen share cancelled or denied.' : (e?.message || 'Could not start recording'))
+    } catch(e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not start recording'
+      setError(message.includes('Permission denied') ? 'Screen share cancelled or denied.' : message)
       setPhase('idle')
     }
   }
@@ -217,8 +345,8 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
 
       setPhase('recording')
       requestAnimationFrame(() => beginRecording(null, cam))
-    } catch(e: any) {
-      setError(e?.message || 'Camera access denied')
+    } catch(e: unknown) {
+      setError(e instanceof Error ? e.message : 'Camera access denied')
       setPhase('idle')
     }
   }
@@ -361,6 +489,7 @@ export default function ReviewsPage() {
   const [reviewNote, setReviewNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [reviewVideoUrl, setReviewVideoUrl] = useState('')
+  const [reviewVideoPath, setReviewVideoPath] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [, setTick] = useState(0)
 
@@ -384,25 +513,39 @@ export default function ReviewsPage() {
       .is('coach_reviewed_at', null).not('review_due_at', 'is', null)
       .order('review_due_at', { ascending: true })
     if (!sessions) { setLoading(false); return }
-    const enriched: Review[] = await Promise.all(sessions.map(async (s: any) => {
+    const sessionRows = (sessions || []) as WorkoutSessionRow[]
+    const enriched: Review[] = await Promise.all(sessionRows.map(async (s) => {
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('id, exercise_name, sets_completed, sets_prescribed, reps_prescribed, notes_client, notes_coach, client_video_url')
+        .select('id, exercise_name, sets_completed, sets_prescribed, reps_prescribed, notes_client, notes_coach, client_video_url, original_exercise_name, swap_reason, swap_note, skipped, skip_reason, skip_note')
         .eq('session_id', s.id).order('order_index')
-      const exercises: Exercise[] = await Promise.all((exs||[]).map(async (ex: any) => {
+      const exerciseRows = (exs || []) as SessionExerciseRow[]
+      const exercises: Exercise[] = await Promise.all(exerciseRows.map(async (ex) => {
         const { data: sets } = await supabase
           .from('exercise_sets')
           .select('set_number, reps_completed, weight_value, weight_unit, rpe, notes')
           .eq('session_exercise_id', ex.id).order('set_number')
-        return { ...ex, sets: sets || [] }
+        return {
+          ...ex,
+          client_video_url: await resolveSignedMediaUrl(supabase, 'form-checks', ex.client_video_url),
+          sets: sets || [],
+        }
       }))
-      return { ...s, client: s.client ? { id:s.client.id, full_name:(s.client as any)?.profile?.full_name??null } : null, exercises }
+      return {
+        ...s,
+        coach_review_video_url: await resolveSignedMediaUrl(supabase, 'workout-reviews', s.coach_review_video_url),
+        client: s.client ? { id:s.client.id, full_name:s.client.profile?.full_name??null } : null,
+        exercises,
+      }
     }))
     setReviews(enriched)
     setLoading(false)
-  }, [])
+  }, [supabase])
 
-  useEffect(() => { loadReviews() }, [loadReviews])
+  useEffect(() => {
+    const timeoutId = setTimeout(() => { void loadReviews() }, 0)
+    return () => clearTimeout(timeoutId)
+  }, [loadReviews])
 
   async function uploadReviewVideo(blobOrFile: Blob | File, sessionId: string) {
     setUploadingVideo(true)
@@ -412,8 +555,9 @@ export default function ReviewsPage() {
     const path = `${user.id}/${sessionId}/review_${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('workout-reviews').upload(path, blobOrFile)
     if (!error) {
-      const { data: urlData } = supabase.storage.from('workout-reviews').getPublicUrl(path)
-      setReviewVideoUrl(urlData.publicUrl)
+      const signedUrl = await resolveSignedMediaUrl(supabase, 'workout-reviews', path)
+      setReviewVideoPath(path)
+      setReviewVideoUrl(signedUrl || '')
     }
     setUploadingVideo(false)
   }
@@ -423,10 +567,10 @@ export default function ReviewsPage() {
     await supabase.from('workout_sessions').update({
       coach_reviewed_at: new Date().toISOString(),
       coach_review_notes: reviewNote || null,
-      coach_review_video_url: reviewVideoUrl || null,
+      coach_review_video_url: reviewVideoPath || null,
     }).eq('id', sessionId)
     setReviews(prev => prev.filter(r => r.id !== sessionId))
-    setSelected(null); setReviewNote(''); setReviewVideoUrl('')
+    setSelected(null); setReviewNote(''); setReviewVideoUrl(''); setReviewVideoPath('')
     setSaving(false)
   }
 
@@ -442,9 +586,9 @@ export default function ReviewsPage() {
   if (selected) {
     const u = urgency(selected.review_due_at)
     const hasFormChecks = selected.exercises.some(ex => ex.client_video_url)
+    const intelligence = getReviewIntelligence(selected)
     return (
       <>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
         <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
         <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:680, margin:'0 auto', padding:'20px 16px 100px' }}>
 
@@ -478,6 +622,44 @@ export default function ReviewsPage() {
             ))}
           </div>
 
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 16px', marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:8, flexWrap:'wrap' }}>
+              <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em' }}>Coach Intelligence</div>
+              <div style={{ fontSize:12, fontWeight:800, color:intelligence.frictionScore >= 5 ? t.red : intelligence.frictionScore >= 3 ? t.orange : t.green }}>
+                Friction score {intelligence.frictionScore}
+              </div>
+            </div>
+            <div style={{ fontSize:13, color:t.text, lineHeight:1.6, marginBottom:intelligence.tags.length ? 10 : 0 }}>
+              {intelligence.summary}
+            </div>
+            <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6, marginBottom:(intelligence.hotspotExercises.length || intelligence.frictionReasons.length || intelligence.tags.length) ? 10 : 0 }}>
+              Focus: {intelligence.coachFocus}
+            </div>
+            {intelligence.hotspotExercises.length > 0 && (
+              <div style={{ fontSize:11, color:t.textDim, marginBottom:8 }}>
+                Hotspots: {intelligence.hotspotExercises.join(' · ')}
+              </div>
+            )}
+            {intelligence.frictionReasons.length > 0 && (
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+                {intelligence.frictionReasons.map(reason => (
+                  <div key={reason} style={{ fontSize:10, fontWeight:700, color:t.orange, background:t.orangeDim, borderRadius:999, padding:'4px 8px' }}>
+                    {reason}
+                  </div>
+                ))}
+              </div>
+            )}
+            {intelligence.tags.length > 0 && (
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {intelligence.tags.map(tag => (
+                  <div key={tag.label} style={{ fontSize:11, fontWeight:700, color:tag.color, background:tag.bg, borderRadius:999, padding:'4px 10px' }}>
+                    {tag.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Client notes */}
           {selected.notes_client && (
             <div style={{ background:'#1a1a0a', border:'1px solid #3a3a1a', borderRadius:12, padding:'12px 14px', marginBottom:16 }}>
@@ -498,6 +680,23 @@ export default function ReviewsPage() {
                 </div>
                 {ex.notes_client && (
                   <div style={{ fontSize:12, color:ex.notes_client.startsWith('[SKIPPED]')?t.textMuted:t.orange, marginBottom:8, fontStyle:'italic' }}>{ex.notes_client}</div>
+                )}
+                {(ex.original_exercise_name || ex.skipped) && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:8 }}>
+                    {ex.original_exercise_name && (
+                      <div style={{ fontSize:11, color:t.teal }}>
+                        Smart swap: <strong>{ex.original_exercise_name}</strong> → <strong>{ex.exercise_name}</strong>
+                        {ex.swap_reason ? ` · ${ex.swap_reason}` : ''}
+                        {ex.swap_note ? ` · ${ex.swap_note}` : ''}
+                      </div>
+                    )}
+                    {ex.skipped && (
+                      <div style={{ fontSize:11, color:t.red }}>
+                        Skipped: {ex.skip_reason || 'reason not provided'}
+                        {ex.skip_note ? ` · ${ex.skip_note}` : ''}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {ex.sets.length > 0 && (
                   <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12, marginBottom: ex.client_video_url ? 8 : 0 }}>
@@ -533,7 +732,7 @@ export default function ReviewsPage() {
               <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>📹 Review Video</div>
               <VideoReviewer
                 onReady={blob => uploadReviewVideo(blob, selected.id)}
-                onClear={() => setReviewVideoUrl('')}
+                onClear={() => { setReviewVideoUrl(''); setReviewVideoPath('') }}
                 uploading={uploadingVideo}
                 doneUrl={reviewVideoUrl}
               />
@@ -567,7 +766,6 @@ export default function ReviewsPage() {
   // ── Inbox view ──────────────────────────────────────────────────────────
   return (
     <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:680, margin:'0 auto', padding:'20px 16px 80px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:24 }}>
@@ -588,6 +786,7 @@ export default function ReviewsPage() {
             {reviews.map(r => {
               const u=urgency(r.review_due_at); const uc=urgencyColor(u); const ub=urgencyBg(u)
               const hasVideo = r.exercises.some(ex => ex.client_video_url)
+              const intelligence = getReviewIntelligence(r)
               return (
                 <button key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('')}}
                   style={{ background:t.surface, border:`1px solid ${u==='overdue'||u==='red'?t.red+'50':t.border}`, borderRadius:16, padding:'16px', textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", width:'100%' }}>
@@ -613,6 +812,21 @@ export default function ReviewsPage() {
                           💬 {r.notes_client}
                         </div>
                       )}
+                      <div style={{ marginTop:8, fontSize:12, color:t.textDim, lineHeight:1.5 }}>
+                        {intelligence.coachFocus}
+                      </div>
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>
+                        {intelligence.tags.slice(0, 3).map(tag => (
+                          <div key={tag.label} style={{ fontSize:10, fontWeight:700, color:tag.color, background:tag.bg, borderRadius:999, padding:'3px 8px' }}>
+                            {tag.label}
+                          </div>
+                        ))}
+                        {intelligence.tags.length === 0 && (
+                          <div style={{ fontSize:10, fontWeight:700, color:t.green, background:t.greenDim, borderRadius:999, padding:'3px 8px' }}>
+                            Clean session
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div style={{ fontSize:20, color:t.textMuted, flexShrink:0 }}>›</div>
                   </div>

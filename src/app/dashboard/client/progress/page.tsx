@@ -99,6 +99,7 @@ export default function ClientProgressPage() {
   const first = metrics[0], last = metrics[metrics.length-1]
   const weightChange = first&&last ? (last.weight-first.weight).toFixed(1) : null
   const bfChange = first&&last&&first.body_fat&&last.body_fat ? (last.body_fat-first.body_fat).toFixed(1) : null
+  const latestPulse = pulseHistory[pulseHistory.length - 1]
   const chartData = metrics.map(m => ({
     date: fmt(m.logged_date),
     ...METRIC_GROUPS[activeGroup].fields.reduce((acc:any,f) => {
@@ -156,7 +157,7 @@ export default function ClientProgressPage() {
           <h1 style={{ fontSize:22, fontWeight:800, margin:0 }}>📈 My Progress</h1>
           <p style={{ color:t.textMuted, margin:'4px 0 0', fontSize:13 }}>Track your transformation over time</p>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           <button onClick={()=>setPhotoOpen(true)} style={{ background:t.purple+'22', color:t.purple, border:'1px solid '+t.purple+'44',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
@@ -165,6 +166,38 @@ export default function ClientProgressPage() {
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             + Log Metrics
           </button>
+        </div>
+      </div>
+
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'16px 18px', marginBottom:20 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'flex-start' }}>
+          <div style={{ flex:'1 1 240px' }}>
+            <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Progress Snapshot</div>
+            <div style={{ fontSize:16, fontWeight:800, color:t.text }}>
+              {metrics.length === 0 ? 'Start with your first metric or progress photo' : 'Your progress story is building'}
+            </div>
+            <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5, marginTop:4 }}>
+              {metrics.length === 0
+                ? 'Consistent check-ins make it easier to spot what is working before motivation dips.'
+                : latestPulse
+                ? `Latest recovery check-in: sleep ${latestPulse.sleep_quality ?? '—'}/5, energy ${latestPulse.energy_score ?? '—'}/5.`
+                : 'Keep logging photos and measurements so coaching adjustments stay evidence-based.'}
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:8, flex:'1 1 260px' }}>
+            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Metric Entries</div>
+              <div style={{ fontSize:16, fontWeight:800, color:t.teal }}>{metrics.length}</div>
+            </div>
+            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Photo Checkpoints</div>
+              <div style={{ fontSize:16, fontWeight:800, color:t.purple }}>{photos.length}</div>
+            </div>
+            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Current Focus</div>
+              <div style={{ fontSize:16, fontWeight:800, color:t.orange }}>{METRIC_GROUPS[activeGroup].label}</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -376,7 +409,7 @@ export default function ClientProgressPage() {
               <div style={{ fontWeight:800, fontSize:17 }}>Log Metrics</div>
               <button onClick={()=>setLogOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
               {[
                 { key:'date', label:'Date', type:'date', full:true },
                 { key:'weight', label:'Weight (lbs)' }, { key:'body_fat', label:'Body Fat %' },
@@ -474,7 +507,7 @@ export default function ClientProgressPage() {
           style={{ position:'fixed', inset:0, background:'#000e', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:200, padding:20, overflowY:'auto' }}>
           <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:900 }}>
             <div style={{ fontSize:16, fontWeight:800, color:t.text, textAlign:'center', marginBottom:16 }}>📸 Photo Comparison</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12 }}>
               {lightbox.photos.map((p: any, i: number) => (
                 <div key={p.id} style={{ background:t.surface, borderRadius:16, overflow:'hidden', border:'2px solid '+(i===0 ? t.teal : t.purple) }}>
                   <div style={{ background:i===0 ? t.tealDim : t.purpleDim, padding:'8px 14px', fontSize:11, fontWeight:700, color:i===0?t.teal:t.purple, display:'flex', alignItems:'center', gap:6 }}>

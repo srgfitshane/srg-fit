@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { getUnreadInsights } from '@/lib/ai-insights'
@@ -46,26 +46,130 @@ const NAV_EXPANDED = [
   { label:'Invites',     icon:'📨', path:'/dashboard/coach/invites'    },
 ]
 
+type CoachClient = {
+  id: string
+  profile_id?: string | null
+  paused?: boolean | null
+  flagged?: boolean | null
+  start_date?: string | null
+  last_checkin_at?: string | null
+  profile?: { full_name?: string | null; email?: string | null; avatar_url?: string | null } | null
+}
+
+type CoachProfile = {
+  id: string
+  full_name?: string | null
+}
+
+type ReviewQueueSession = {
+  id: string
+  title: string
+  review_due_at: string
+  completed_at: string
+  client?: { profile?: { full_name?: string | null } | null } | null
+}
+
+type DashboardInsight = Awaited<ReturnType<typeof getUnreadInsights>>[number]
+
+type InsightQueueItem = {
+  id: string
+  category?: string | null
+  severity?: string | null
+  content?: { title?: string | null; suggested_action?: string | null } | null
+}
+
+type InboxMessage = {
+  sender_id: string
+  body?: string | null
+  created_at: string
+}
+
+type RecentSession = {
+  id: string
+  client_id: string
+  title: string
+  completed_at: string
+  session_rpe?: number | null
+}
+
+type SessionExerciseRow = {
+  session_id: string
+  exercise_name?: string | null
+  original_exercise_name?: string | null
+  swap_reason?: string | null
+  skip_reason?: string | null
+  skipped?: boolean | null
+}
+
+type QueueItem = {
+  id: string
+  type: 'review' | 'insight' | 'message' | 'checkin' | 'friction'
+  priority: number
+  title: string
+  detail: string
+  action: string
+  color: string
+  onClick: () => void
+}
+
+const truncate = (value: string | null | undefined, max = 72) => {
+  if (!value) return ''
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value
+}
+
+const getDaysSince = (iso: string | null | undefined) => {
+  if (!iso) return null
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24))
+}
+
+const formatCheckInGap = (iso: string | null | undefined) => {
+  const days = getDaysSince(iso)
+  if (days === null) return 'No check-in logged yet'
+  if (days <= 0) return 'Checked in today'
+  if (days === 1) return 'Last check-in 1 day ago'
+  return `Last check-in ${days} days ago`
+}
+
+const queueTypeLabel: Record<QueueItem['type'], string> = {
+  review: 'Review',
+  insight: 'Insight',
+  message: 'Message',
+  checkin: 'Check-in',
+  friction: 'Friction',
+}
+
+const queueTypeColor = (type: QueueItem['type']) => {
+  switch (type) {
+    case 'review': return { color: t.red, bg: t.redDim }
+    case 'insight': return { color: t.purple, bg: t.purpleDim }
+    case 'message': return { color: t.teal, bg: t.tealDim }
+    case 'checkin': return { color: t.yellow, bg: `${t.yellow}15` }
+    case 'friction': return { color: t.orange, bg: t.orangeDim }
+  }
+}
+
 export default function CoachDashboard() {
-  const [profile,  setProfile]  = useState<any>(null)
-  const [clients,  setClients]  = useState<any[]>([])
+  const [profile,  setProfile]  = useState<CoachProfile | null>(null)
+  const [clients,  setClients]  = useState<CoachClient[]>([])
   const [loading,  setLoading]  = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName,  setInviteName]  = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
-  const [aiInsights, setAiInsights] = useState<any[]>([])
+  const [aiInsights, setAiInsights] = useState<DashboardInsight[]>([])
   const [showInsights, setShowInsights] = useState(false)
-  const [lifecycleClient, setLifecycleClient] = useState<any>(null)
+  const [lifecycleClient, setLifecycleClient] = useState<CoachClient | null>(null)
   const [lifecycleAction, setLifecycleAction] = useState<'pause'|'resume'|'archive'|'delete'|null>(null)
   const [lifecycleReason, setLifecycleReason] = useState('')
   const [lifecycleLoading, setLifecycleLoading] = useState(false)
   const [clientFilter, setClientFilter] = useState<'active'|'paused'>('active')
+  const [clientSearch, setClientSearch] = useState('')
   const [navExpanded, setNavExpanded] = useState(false)
   const [pendingReviews, setPendingReviews] = useState(0)
   const [checkInsDue,    setCheckInsDue]    = useState(0)
   const [unreadMsgs,     setUnreadMsgs]     = useState(0)
+  const [actionQueue,    setActionQueue]    = useState<QueueItem[]>([])
   const router   = useRouter()
   const supabase = createClient()
 
@@ -73,14 +177,15 @@ export default function CoachDashboard() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data: prof } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single()
       setProfile(prof)
       const { data: clientList } = await supabase
         .from('clients')
         .select(`*, profile:profiles!profile_id(full_name, email, avatar_url)`)
         .eq('coach_id', user.id)
         .neq('archived', true)
-      setClients(clientList || [])
+      const safeClientList = (clientList || []) as CoachClient[]
+      setClients(safeClientList)
       const insights = await getUnreadInsights(user.id)
       setAiInsights(insights)
       // Pending workout reviews
@@ -114,10 +219,158 @@ export default function CoachDashboard() {
         .eq('read', false)
       setUnreadMsgs(msgCount || 0)
 
+      const reviewWindowStart = new Date()
+      reviewWindowStart.setDate(reviewWindowStart.getDate() - 14)
+
+      const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes] = await Promise.all([
+        supabase
+          .from('workout_sessions')
+          .select(`id, title, review_due_at, completed_at, client:clients!workout_sessions_client_id_fkey(id, profile:profiles!clients_profile_id_fkey(full_name))`)
+          .eq('coach_id', user.id)
+          .eq('status', 'completed')
+          .is('coach_reviewed_at', null)
+          .not('review_due_at', 'is', null)
+          .order('review_due_at', { ascending: true })
+          .limit(5),
+        supabase
+          .from('ai_insights')
+          .select('id, client_id, category, severity, generated_at, content')
+          .eq('coach_id', user.id)
+          .eq('action_status', 'unread')
+          .eq('is_dismissed', false)
+          .order('generated_at', { ascending: false })
+          .limit(6),
+        supabase
+          .from('messages')
+          .select('sender_id, body, created_at')
+          .eq('recipient_id', user.id)
+          .eq('read', false)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        supabase
+          .from('workout_sessions')
+          .select('id, client_id, title, completed_at, session_rpe')
+          .eq('coach_id', user.id)
+          .eq('status', 'completed')
+          .gte('completed_at', reviewWindowStart.toISOString())
+          .order('completed_at', { ascending: false })
+          .limit(12),
+      ])
+
+      const clientNameByProfileId = new Map(
+        safeClientList
+          .filter((client) => client.profile_id)
+          .map((client) => [client.profile_id as string, client.profile?.full_name || 'Client'])
+      )
+
+      const checkInQueueItems: QueueItem[] = safeClientList
+        .filter((client) => !client.paused)
+        .filter((client) => {
+          const gap = getDaysSince(client.last_checkin_at)
+          return gap === null || gap >= 7
+        })
+        .sort((a, b) => {
+          const aGap = getDaysSince(a.last_checkin_at)
+          const bGap = getDaysSince(b.last_checkin_at)
+          if (aGap === null) return -1
+          if (bGap === null) return 1
+          return bGap - aGap
+        })
+        .slice(0, 3)
+        .map((client) => ({
+          id: `checkin-${client.id}`,
+          type: 'checkin',
+          priority: 78 + Math.min(getDaysSince(client.last_checkin_at) || 8, 10),
+          title: `${client.profile?.full_name || 'Client'} needs a recovery check-in`,
+          detail: formatCheckInGap(client.last_checkin_at),
+          action: 'Open check-ins',
+          color: t.yellow,
+          onClick: () => router.push('/dashboard/coach/checkins'),
+        }))
+
+      const recentSessions = (recentSessionsRes.data || []) as RecentSession[]
+      let frictionQueueItems: QueueItem[] = []
+      if (recentSessions.length > 0) {
+        const sessionIds = recentSessions.map((session) => session.id)
+        const { data: sessionExercises } = await supabase
+          .from('session_exercises')
+          .select('session_id, exercise_name, original_exercise_name, swap_reason, skip_reason, skipped')
+          .in('session_id', sessionIds)
+
+        const frictionBySession = new Map<string, { swaps: number; skips: number; reasons: string[] }>()
+        for (const exercise of (sessionExercises || []) as SessionExerciseRow[]) {
+          const current = frictionBySession.get(exercise.session_id) || { swaps: 0, skips: 0, reasons: [] }
+          if (exercise.original_exercise_name || exercise.swap_reason) current.swaps += 1
+          if (exercise.skipped || exercise.skip_reason) current.skips += 1
+          const reason = exercise.skip_reason || exercise.swap_reason
+          if (reason) current.reasons.push(reason)
+          frictionBySession.set(exercise.session_id, current)
+        }
+
+        frictionQueueItems = recentSessions
+          .map((session) => {
+            const friction = frictionBySession.get(session.id)
+            if (!friction || (!friction.swaps && !friction.skips)) return null
+            const totalFriction = friction.swaps + friction.skips
+            return {
+              id: `friction-${session.id}`,
+              type: 'friction' as const,
+              priority: 72 + Math.min(totalFriction * 3, 12),
+              title: `${safeClientList.find((client) => client.id === session.client_id)?.profile?.full_name || 'Client'} hit workout friction`,
+              detail: `${friction.skips ? `${friction.skips} skip${friction.skips === 1 ? '' : 's'}` : ''}${friction.skips && friction.swaps ? ' · ' : ''}${friction.swaps ? `${friction.swaps} swap${friction.swaps === 1 ? '' : 's'}` : ''}${friction.reasons[0] ? ` · ${truncate(friction.reasons[0], 38)}` : ''}`,
+              action: 'Review session',
+              color: t.orange,
+              onClick: () => router.push('/dashboard/coach/reviews'),
+            }
+          })
+          .filter(Boolean)
+          .map((item) => item as QueueItem)
+          .slice(0, 3)
+      }
+
+      const queueItems: QueueItem[] = [
+        ...((reviewSessionsRes.data || []) as ReviewQueueSession[]).map((session) => ({
+          id: `review-${session.id}`,
+          type: 'review',
+          priority: new Date(session.review_due_at).getTime() < Date.now() ? 100 : 85,
+          title: `${session.client?.profile?.full_name || 'Client'} workout review due`,
+          detail: `${session.title} · ${new Date(session.completed_at).toLocaleDateString([], { month:'short', day:'numeric' })}`,
+          action: 'Open review',
+          color: t.red,
+          onClick: () => router.push('/dashboard/coach/reviews'),
+        })),
+        ...((unreadInsightsRes.data || []) as InsightQueueItem[]).map((insight) => ({
+          id: `insight-${insight.id}`,
+          type: 'insight',
+          priority: insight.severity === 'urgent' ? 95 : insight.severity === 'high' ? 80 : 60,
+          title: insight.content?.title || 'New coaching insight',
+          detail: insight.content?.suggested_action || insight.category || 'Review this client insight',
+          action: 'Open insight',
+          color: insight.severity === 'urgent' || insight.severity === 'high' ? t.orange : t.purple,
+          onClick: () => router.push('/dashboard/coach/insights'),
+        })),
+        ...((unreadMessagesRes.data || []) as InboxMessage[]).slice(0, 4).map((message, index) => ({
+          id: `message-${message.sender_id}-${index}`,
+          type: 'message',
+          priority: 70 - index,
+          title: `${clientNameByProfileId.get(message.sender_id) || 'Client'} needs a reply`,
+          detail: truncate(message.body || 'Unread client message'),
+          action: 'Open inbox',
+          color: t.teal,
+          onClick: () => router.push('/dashboard/coach/messages'),
+        })),
+        ...checkInQueueItems,
+        ...frictionQueueItems,
+      ]
+        .sort((a, b) => b.priority - a.priority)
+        .slice(0, 8)
+
+      setActionQueue(queueItems)
+
       setLoading(false)
     }
-    load()
-  }, [])
+    void load()
+  }, [router, supabase])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -151,6 +404,7 @@ export default function CoachDashboard() {
     if (!inviteEmail || !inviteName) return
     setInviting(true); setInviteMsg('')
     const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setInviting(false); setInviteMsg('Please sign in again.'); return }
     const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -162,8 +416,8 @@ export default function CoachDashboard() {
     setInviting(false)
     const { data: clientList } = await supabase
       .from('clients').select(`*, profile:profiles!profile_id(full_name, email, avatar_url)`)
-      .eq('coach_id', user?.id!).neq('archived', true)
-    setClients(clientList || [])
+      .eq('coach_id', user.id).neq('archived', true)
+    setClients((clientList || []) as CoachClient[])
   }
 
   const NavBtn = ({ item }: { item: { label:string, icon:string, path:string } }) => (
@@ -182,18 +436,67 @@ export default function CoachDashboard() {
     </div>
   )
 
-  const filteredClients = clients.filter(c => clientFilter === 'active' ? !c.paused : c.paused)
+  const filteredClients = clients
+    .filter(c => clientFilter === 'active' ? !c.paused : c.paused)
+    .filter((client) => {
+      const needle = clientSearch.trim().toLowerCase()
+      if (!needle) return true
+      const haystack = `${client.profile?.full_name || ''} ${client.profile?.email || ''}`.toLowerCase()
+      return haystack.includes(needle)
+    })
+    .sort((a, b) => {
+      const aPriority = (a.flagged ? 2 : 0) + (!a.paused ? 1 : 0)
+      const bPriority = (b.flagged ? 2 : 0) + (!b.paused ? 1 : 0)
+      if (aPriority !== bPriority) return bPriority - aPriority
+      return (a.profile?.full_name || '').localeCompare(b.profile?.full_name || '')
+    })
+
+  const coachFlowCards = [
+    {
+      id: 'reviews',
+      eyebrow: 'Start here',
+      title: pendingReviews > 0 ? `${pendingReviews} review${pendingReviews === 1 ? '' : 's'} waiting` : 'Reviews are under control',
+      detail: pendingReviews > 0 ? 'Clear your oldest workout reviews first to protect the coaching SLA.' : 'No overdue workout feedback right now.',
+      color: t.red,
+      bg: t.redDim,
+      action: pendingReviews > 0 ? 'Open reviews' : 'View reviews',
+      onClick: () => router.push('/dashboard/coach/reviews'),
+    },
+    {
+      id: 'messages',
+      eyebrow: 'Client touchpoints',
+      title: unreadMsgs > 0 ? `${unreadMsgs} unread client message${unreadMsgs === 1 ? '' : 's'}` : 'Inbox is clear',
+      detail: unreadMsgs > 0 ? 'Reply to the most urgent client threads before programming work.' : 'Use messages for proactive outreach and quick support.',
+      color: t.teal,
+      bg: t.tealDim,
+      action: 'Open messages',
+      onClick: () => router.push('/dashboard/coach/messages'),
+    },
+    {
+      id: 'insights',
+      eyebrow: 'Coach AI',
+      title: aiInsights.length > 0 ? `${aiInsights.length} unread AI insight${aiInsights.length === 1 ? '' : 's'}` : 'Insights are quiet',
+      detail: aiInsights.length > 0 ? 'Use AI flags to spot low adherence, recovery risk, and churn early.' : 'No unread coach insights right now.',
+      color: t.purple,
+      bg: t.purpleDim,
+      action: 'Open insights',
+      onClick: () => router.push('/dashboard/coach/insights'),
+    },
+  ]
+
+  const todayFocus = actionQueue[0]
 
   return (
     <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};overflow-x:hidden;}
         button{-webkit-tap-highlight-color:transparent;}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+        .coach-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
         /* coach-main: right col wide enough to hold 2-col nav comfortably */
         .coach-main{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
+        .coach-sidebar{display:flex;flex-direction:column;gap:14px;position:sticky;top:18px;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
         .coach-topbar-label{display:block;}
         /* nav grid: 2 cols by default inside the right sidebar */
@@ -208,6 +511,8 @@ export default function CoachDashboard() {
         /* below 1100px: stack main layout */
         @media(max-width:1100px){
           .coach-main{grid-template-columns:1fr;}
+          .coach-flow{grid-template-columns:1fr;}
+          .coach-sidebar{position:static;}
           .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
           .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
         }
@@ -258,6 +563,32 @@ export default function CoachDashboard() {
             <div style={{ fontSize:13, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
 
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, padding:'20px 20px 18px', marginBottom:24 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', gap:14, flexWrap:'wrap', marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Coach Flow</div>
+                <div style={{ fontSize:18, fontWeight:900 }}>Run the day in the right order</div>
+              </div>
+              {todayFocus && (
+                <button onClick={todayFocus.onClick}
+                  style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Focus now: {todayFocus.action}
+                </button>
+              )}
+            </div>
+            <div className="coach-flow">
+              {coachFlowCards.map((card) => (
+                <button key={card.id} onClick={card.onClick}
+                  style={{ background:card.bg, border:'1px solid '+card.color+'30', borderRadius:16, padding:'16px 16px 14px', textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:card.color, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>{card.eyebrow}</div>
+                  <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>{card.title}</div>
+                  <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.55, marginBottom:12 }}>{card.detail}</div>
+                  <div style={{ fontSize:12, fontWeight:800, color:card.color }}>{card.action} →</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Pending reviews banner */}
           {pendingReviews > 0 && (
             <button onClick={()=>router.push('/dashboard/coach/reviews')}
@@ -276,7 +607,7 @@ export default function CoachDashboard() {
           {/* Stats */}
           <div className="coach-stats" style={{ marginBottom:28 }}>
             {[
-              { label:'Active Clients', val:clients.filter((c:any)=>!c.paused).length,                      color:t.teal,   icon:'👥' },
+              { label:'Active Clients', val:clients.filter((c)=>!c.paused).length,                      color:t.teal,   icon:'👥' },
               { label:'Flagged',        val:clients.filter(c=>c.flagged).length, color:t.red,    icon:'🚩' },
               { label:'Check-ins Due',  val:checkInsDue,                                 color:t.orange, icon:'✅' },
               { label:'Unread Msgs',    val:unreadMsgs,                                 color:t.purple, icon:'💬' },
@@ -291,6 +622,39 @@ export default function CoachDashboard() {
             ))}
           </div>
 
+          {actionQueue.length > 0 && (
+            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, padding:'18px 20px', marginBottom:24 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Action Queue</div>
+                  <div style={{ fontSize:16, fontWeight:800 }}>What needs your attention right now</div>
+                </div>
+                <button onClick={()=>router.push('/dashboard/coach/messages')}
+                  style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Open workspace
+                </button>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {actionQueue.map(item => (
+                  <button key={item.id} onClick={item.onClick}
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    <div style={{ width:10, height:10, borderRadius:'50%', background:item.color, flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+                        <div style={{ fontSize:13, fontWeight:800 }}>{item.title}</div>
+                        <span style={{ fontSize:10, fontWeight:800, color:queueTypeColor(item.type).color, background:queueTypeColor(item.type).bg, borderRadius:999, padding:'3px 7px' }}>
+                          {queueTypeLabel[item.type]}
+                        </span>
+                      </div>
+                      <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{item.detail}</div>
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:800, color:item.color }}>{item.action} →</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 2-col layout */}
           <div className="coach-main">
 
@@ -302,7 +666,14 @@ export default function CoachDashboard() {
                     ({clients.filter(c=>!c.paused).length} active{clients.filter(c=>c.paused).length > 0 ? ', '+clients.filter(c=>c.paused).length+' paused' : ''})
                   </span>
                 </div>
-                <div style={{ display:'flex', gap:8 }}>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                  <input
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    placeholder="Search clients"
+                    aria-label="Search clients"
+                    style={{ minWidth:180, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 12px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
+                  />
                   <button onClick={()=>router.push('/dashboard/coach/clients/archived')}
                     style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     Archived
@@ -336,8 +707,13 @@ export default function CoachDashboard() {
                   </div>
 
                   {/* Client rows */}
-                  {filteredClients.map((client:any, i:number) => {
-                    const initials = client.profile?.full_name?.split(' ').map((n:string)=>n[0]).join('') || '?'
+                  {filteredClients.length === 0 ? (
+                    <div style={{ padding:'36px 24px', textAlign:'center' }}>
+                      <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No clients match this view</div>
+                      <div style={{ fontSize:12, color:t.textMuted }}>Try a different filter or search term.</div>
+                    </div>
+                  ) : filteredClients.map((client, i) => {
+                    const initials = client.profile?.full_name?.split(' ').map((n) => n[0]).join('') || '?'
                     const color = CLIENT_COLORS[i % CLIENT_COLORS.length]
                     return (
                       <div key={client.id}
@@ -384,7 +760,38 @@ export default function CoachDashboard() {
             </div>
 
             {/* RIGHT: Quick access */}
-            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div className="coach-sidebar">
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
+                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Coach Pulse</div>
+                <div style={{ display:'grid', gap:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700 }}>Primary focus</div>
+                      <div style={{ fontSize:12, color:t.textMuted }}>{todayFocus ? todayFocus.title : 'Nothing urgent right now'}</div>
+                    </div>
+                    {todayFocus && (
+                      <button onClick={todayFocus.onClick}
+                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Open
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8 }}>
+                    {[
+                      { label:'Reviews', value: pendingReviews, color:t.red },
+                      { label:'Messages', value: unreadMsgs, color:t.teal },
+                      { label:'Check-ins', value: checkInsDue, color:t.orange },
+                      { label:'Insights', value: aiInsights.length, color:t.purple },
+                    ].map((item) => (
+                      <div key={item.label} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                        <div style={{ fontSize:18, fontWeight:900, color:item.color }}>{item.value}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>{item.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
                   <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>Quick Access</div>
@@ -429,12 +836,12 @@ export default function CoachDashboard() {
                   <div style={{ marginBottom:14 }}>
                     <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Full Name</div>
                     <input value={inviteName} onChange={e=>setInviteName(e.target.value)} placeholder="Alex Rivera"
-                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' as any }} />
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' } as CSSProperties} />
                   </div>
                   <div style={{ marginBottom:20 }}>
                     <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Email Address</div>
                     <input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} type="email" placeholder="client@email.com"
-                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' as any }} />
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' } as CSSProperties} />
                   </div>
                   <button onClick={handleInvite} disabled={inviting||!inviteEmail||!inviteName}
                     style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:inviting||!inviteEmail||!inviteName?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:inviting||!inviteEmail||!inviteName?0.6:1 }}>
@@ -475,7 +882,7 @@ export default function CoachDashboard() {
                   <div style={{ marginBottom:16 }}>
                     <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5 }}>Reason (optional)</div>
                     <input value={lifecycleReason} onChange={e=>setLifecycleReason(e.target.value)} placeholder="e.g. Taking a break..."
-                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as any }} />
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' } as CSSProperties} />
                   </div>
                 )}
                 <div style={{ display:'flex', gap:10 }}>

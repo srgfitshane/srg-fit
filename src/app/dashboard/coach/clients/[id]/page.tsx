@@ -290,9 +290,7 @@ export default function ClientDetail() {
   const latestCheckin = checkins[0]
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`
+    <>      <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};}
         .tab-content{padding:28px;max-width:1200px;margin:0 auto;}

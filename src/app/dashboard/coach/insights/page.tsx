@@ -29,6 +29,16 @@ const TYPE_LABELS: Record<string,string> = {
   checkin_brief:'Check-in Brief', progression:'Progression', red_flag:'Red Flag', recommended_action:'Action'
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  low_adherence: 'Low adherence',
+  recovery_risk: 'Recovery risk',
+  motivation_drop: 'Motivation drop',
+  nutrition_inconsistency: 'Nutrition inconsistency',
+  plateau: 'Plateau',
+  likely_exercise_mismatch: 'Exercise mismatch',
+  at_risk_churn: 'At-risk churn',
+}
+
 export default function CoachInsightsPage() {
   const supabase = createClient()
   const router   = useRouter()
@@ -41,8 +51,10 @@ export default function CoachInsightsPage() {
   const [genType,   setGenType]   = useState('checkin_brief')
   const [expanded,  setExpanded]  = useState<string|null>(null)
   const [filter,    setFilter]    = useState<'all'|'unread'|'saved'>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [saving,    setSaving]    = useState<string|null>(null)
   const [addingCal, setAddingCal] = useState<string|null>(null)
+  const [actingOn, setActingOn] = useState<string|null>(null)
 
   useEffect(()=>{ load() },[])
 
@@ -97,6 +109,16 @@ export default function CoachInsightsPage() {
     setInsights(p=>p.filter(i=>i.id!==id))
   }
 
+  const updateActionStatus = async (id: string, action_status: string, extra: Record<string, any> = {}) => {
+    setActingOn(id)
+    await supabase.from('ai_insights').update({
+      action_status,
+      ...extra,
+    }).eq('id', id)
+    setInsights(prev => prev.map(insight => insight.id === id ? { ...insight, action_status, ...extra } : insight))
+    setActingOn(null)
+  }
+
   const addToCalendar = async (insight: any) => {
     if (!coachId) return
     setAddingCal(insight.id)
@@ -141,18 +163,21 @@ export default function CoachInsightsPage() {
     if (filter==='unread') return !i.read
     if (filter==='saved') return i.is_saved
     return true
-  })
+  }).filter(i => categoryFilter === 'all' ? true : i.category === categoryFilter)
 
   const unreadCount = insights.filter(i=>!i.read).length
+  const groupedCounts = insights.reduce((acc: Record<string, number>, insight) => {
+    const key = insight.category || 'uncategorized'
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
 
   const inp = {background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'9px 12px',fontSize:13,color:t.text,outline:'none' as const,fontFamily:"'DM Sans',sans-serif",width:'100%'}
 
   if (loading) return <div style={{background:t.bg,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'DM Sans',sans-serif",color:t.teal,fontSize:14,fontWeight:700}}>Loading...</div>
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
         .insights-grid{display:grid;grid-template-columns:300px 1fr;gap:20px;}
         @media(max-width:700px){.insights-grid{grid-template-columns:1fr;}}
       `}</style>
@@ -160,7 +185,7 @@ export default function CoachInsightsPage() {
 
         {/* Top bar */}
         <div style={{background:t.surface,borderBottom:'1px solid '+t.border,padding:'0 24px',display:'flex',alignItems:'center',height:60,gap:12}}>
-          <button onClick={()=>router.push('/dashboard/coach')} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
+          <button onClick={()=>router.push('/dashboard/coach')} aria-label="Back to coach dashboard" style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
           <div style={{width:1,height:28,background:t.border}}/>
           <div style={{fontSize:14,fontWeight:700}}>🤖 AI Insights</div>
           {unreadCount>0 && <div style={{background:t.purple,color:'#fff',borderRadius:20,padding:'2px 8px',fontSize:11,fontWeight:800}}>{unreadCount} new</div>}
@@ -189,7 +214,7 @@ export default function CoachInsightsPage() {
                 <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:8,textTransform:'uppercase'}}>Insight Type</label>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
                   {INSIGHT_TYPES.map(it=>(
-                    <button key={it.id} onClick={()=>setGenType(it.id)}
+                    <button key={it.id} onClick={()=>setGenType(it.id)} aria-pressed={genType===it.id}
                       style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:10,border:'1px solid '+(genType===it.id?it.color+'50':t.border),background:genType===it.id?it.color+'12':'transparent',cursor:'pointer',textAlign:'left' as const,fontFamily:"'DM Sans',sans-serif"}}>
                       <span style={{fontSize:18,flexShrink:0}}>{it.icon}</span>
                       <div>
@@ -211,11 +236,11 @@ export default function CoachInsightsPage() {
             {/* Stats */}
             <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:14,padding:16}}>
               <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:12}}>Library</div>
-              {[
+              {[ 
                 {label:'Total Insights',val:insights.length,color:t.teal},
                 {label:'Unread',val:unreadCount,color:t.purple},
                 {label:'Saved',val:insights.filter(i=>i.is_saved).length,color:t.yellow},
-                {label:'High/Urgent',val:insights.filter(i=>i.flag_level==='high'||i.flag_level==='urgent').length,color:t.red},
+                {label:'High/Urgent',val:insights.filter(i=>i.severity==='high'||i.severity==='urgent').length,color:t.red},
               ].map(s=>(
                 <div key={s.label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid '+t.border+'44'}}>
                   <div style={{fontSize:12,color:t.textDim}}>{s.label}</div>
@@ -230,9 +255,28 @@ export default function CoachInsightsPage() {
             {/* Filter tabs */}
             <div style={{display:'flex',gap:6,marginBottom:16}}>
               {(['all','unread','saved'] as const).map(f=>(
-                <button key={f} onClick={()=>setFilter(f)}
+                <button key={f} onClick={()=>setFilter(f)} aria-pressed={filter===f}
                   style={{padding:'6px 14px',borderRadius:20,border:'1px solid '+(filter===f?t.teal+'60':t.border),background:filter===f?t.tealDim:'transparent',color:filter===f?t.teal:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,textTransform:'capitalize'}}>
                   {f}{f==='unread'&&unreadCount>0?` (${unreadCount})`:''}
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
+              <button
+                onClick={()=>setCategoryFilter('all')}
+                aria-pressed={categoryFilter==='all'}
+                style={{padding:'6px 14px',borderRadius:20,border:'1px solid '+(categoryFilter==='all'?t.orange+'60':t.border),background:categoryFilter==='all'?t.orangeDim:'transparent',color:categoryFilter==='all'?t.orange:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700}}
+              >
+                All categories
+              </button>
+              {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={()=>setCategoryFilter(key)}
+                  aria-pressed={categoryFilter===key}
+                  style={{padding:'6px 14px',borderRadius:20,border:'1px solid '+(categoryFilter===key?t.orange+'60':t.border),background:categoryFilter===key?t.orangeDim:'transparent',color:categoryFilter===key?t.orange:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700}}
+                >
+                  {label} {groupedCounts[key] ? `(${groupedCounts[key]})` : ''}
                 </button>
               ))}
             </div>
@@ -254,6 +298,7 @@ export default function CoachInsightsPage() {
                   const fm = FLAG_META[insight.flag_level||'normal'] || FLAG_META.normal
                   const isExpanded = expanded===insight.id
                   const typeLabel = TYPE_LABELS[insight.type]||insight.type
+                  const categoryLabel = CATEGORY_LABELS[insight.category] || 'Uncategorized'
 
                   return (
                     <div key={insight.id}
@@ -275,6 +320,7 @@ export default function CoachInsightsPage() {
                           <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
                             <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:fm.bg,color:fm.color}}>{fm.label}</span>
                             <span style={{fontSize:10,padding:'2px 7px',borderRadius:20,background:t.surfaceHigh,color:t.textMuted}}>{typeLabel}</span>
+                            <span style={{fontSize:10,padding:'2px 7px',borderRadius:20,background:t.orangeDim,color:t.orange}}>{categoryLabel}</span>
                             <span style={{fontSize:10,color:t.textMuted}}>👤 {clientName(insight.client_id)}</span>
                             <span style={{fontSize:10,color:t.textMuted}}>
                               {insight.generated_at ? new Date(insight.generated_at).toLocaleDateString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : ''}
@@ -306,6 +352,17 @@ export default function CoachInsightsPage() {
                             </div>
                           )}
 
+                          {Array.isArray(c.evidence) && c.evidence.length > 0 && (
+                            <div style={{marginBottom:12}}>
+                              <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',marginBottom:8}}>Evidence</div>
+                              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                                {c.evidence.map((item: string, index: number) => (
+                                  <div key={index} style={{fontSize:12,color:t.textDim,lineHeight:1.5}}>• {item}</div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {c.bullets?.length>0 && (
                             <div style={{marginBottom:12}}>
                               <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',marginBottom:8}}>Key Points</div>
@@ -327,12 +384,31 @@ export default function CoachInsightsPage() {
                             </div>
                           )}
 
+                          {c.follow_up && (
+                            <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:10,padding:'12px 14px',marginBottom:12}}>
+                              <div style={{fontSize:11,fontWeight:800,color:t.teal,textTransform:'uppercase',marginBottom:4}}>Follow-up</div>
+                              <div style={{fontSize:13,color:t.text,lineHeight:1.5}}>{c.follow_up}</div>
+                            </div>
+                          )}
+
                           <div style={{display:'flex',gap:8,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap'}}>
                             <div style={{fontSize:11,color:t.textMuted}}>
-                              Data confidence: <span style={{fontWeight:700,color:c.data_confidence==='high'?t.green:c.data_confidence==='medium'?t.orange:t.textMuted}}>{c.data_confidence||'—'}</span>
+                              Confidence: <span style={{fontWeight:700,color:(insight.confidence || 0) >= 0.75 ? t.green : (insight.confidence || 0) >= 0.5 ? t.orange : t.textMuted}}>{typeof insight.confidence === 'number' ? `${Math.round(insight.confidence * 100)}%` : '—'}</span>
+                              {' · '}
+                              Status: <span style={{fontWeight:700,color:t.text}}>{insight.action_status || 'unread'}</span>
                               {insight.insight_data?.checkins_analyzed!=null && ` · ${insight.insight_data.checkins_analyzed} check-ins · ${insight.insight_data.sessions_analyzed} sessions · ${insight.insight_data.metrics_analyzed} metrics`}
                             </div>
                             <div style={{display:'flex',gap:6}}>
+                              <button onClick={()=>updateActionStatus(insight.id, 'acted_on', { acted_on_at: new Date().toISOString(), is_reviewed: true, reviewed_at: new Date().toISOString() })}
+                                disabled={actingOn===insight.id}
+                                style={{background:t.greenDim,border:'1px solid '+t.green+'40',borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:t.green,cursor:actingOn===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                {actingOn===insight.id ? 'Saving...' : 'Acted on'}
+                              </button>
+                              <button onClick={()=>updateActionStatus(insight.id, 'snoozed', { snoozed_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() })}
+                                disabled={actingOn===insight.id}
+                                style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:t.textMuted,cursor:actingOn===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                Snooze 1d
+                              </button>
                               <button onClick={()=>addToCalendar(insight)} disabled={addingCal===insight.id}
                                 style={{background:insight.is_reviewed?t.surfaceHigh:t.tealDim,border:'1px solid '+(insight.is_reviewed?t.border:t.teal+'40'),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:insight.is_reviewed?t.textMuted:t.teal,cursor:addingCal===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:addingCal===insight.id?0.6:1}}>
                                 {addingCal===insight.id?'Adding...':insight.is_reviewed?'✓ On Calendar':'📅 Add to Calendar'}

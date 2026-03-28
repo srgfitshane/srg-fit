@@ -67,9 +67,7 @@ export default function JoinPage() {
   const ctaReady = !loading && email.trim() && name.trim()
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
       <div style={{ background:'#080810', minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:'#eeeef8' }}>
 
         {/* Hero */}

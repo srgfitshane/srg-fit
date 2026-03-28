@@ -13,8 +13,9 @@
  *   height      — container height (default '100%')
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const c = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -41,6 +42,13 @@ interface Message {
   reactions?: Reaction[]
 }
 
+const MEDIA_BUCKETS: Record<string, string> = {
+  image: 'message-media',
+  audio: 'message-media',
+  video: 'message-media',
+  file: 'message-media',
+}
+
 interface Reaction {
   id: string
   message_id: string
@@ -55,10 +63,20 @@ interface Props {
   otherAvatar?: string | null
   tenorKey?: string
   height?: string
+  quickReplies?: Array<{ id: string; title: string; body: string }>
 }
 
-export default function RichMessageThread({ myId, otherId, otherName, otherAvatar, tenorKey, height = '100%' }: Props) {
-  const supabase = createClient()
+interface TenorGif {
+  url?: string
+  content_description?: string
+  media_formats?: {
+    gif?: { url?: string }
+    tinygif?: { url?: string }
+  }
+}
+
+export default function RichMessageThread({ myId, otherId, otherName, tenorKey, height = '100%', quickReplies = [] }: Props) {
+  const supabase = useMemo(() => createClient(), [])
   const [thread,       setThread]       = useState<Message[]>([])
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
@@ -66,13 +84,14 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
   const [recording,    setRecording]    = useState(false)
   const [recSeconds,   setRecSeconds]   = useState(0)
   const [gifQuery,     setGifQuery]     = useState('')
-  const [gifs,         setGifs]         = useState<any[]>([])
+  const [gifs,         setGifs]         = useState<TenorGif[]>([])
   const [gifLoading,   setGifLoading]   = useState(false)
   const [reactTarget,  setReactTarget]  = useState<string|null>(null)
   const [reactPos,     setReactPos]     = useState<{x:number,y:number}>({x:0,y:0})
   const longPressRef = useRef<ReturnType<typeof setTimeout>|null>(null)
   const [previewFile,  setPreviewFile]  = useState<File|null>(null)
   const [uploading,    setUploading]    = useState(false)
+  const [showMacros,   setShowMacros]   = useState(false)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
@@ -98,9 +117,14 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
       ? await supabase.from('message_reactions').select('*').in('message_id', msgIds)
       : { data: [] }
 
-    const withReactions = msgs.map(m => ({
-      ...m,
-      reactions: (reactions || []).filter(r => r.message_id === m.id),
+    const withReactions = await Promise.all(msgs.map(async (m) => {
+      const bucket = MEDIA_BUCKETS[m.message_type]
+      const mediaUrl = bucket ? await resolveSignedMediaUrl(supabase, bucket, m.media_url) : m.media_url
+      return {
+        ...m,
+        media_url: mediaUrl,
+        reactions: (reactions || []).filter(r => r.message_id === m.id),
+      }
     }))
     setThread(withReactions)
 
@@ -108,9 +132,12 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
     await supabase.from('messages')
       .update({ read: true })
       .eq('sender_id', otherId).eq('recipient_id', myId).eq('read', false)
-  }, [myId, otherId])
+  }, [myId, otherId, supabase])
 
-  useEffect(() => { loadThread() }, [loadThread])
+  useEffect(() => {
+    const timeoutId = setTimeout(() => { void loadThread() }, 0)
+    return () => clearTimeout(timeoutId)
+  }, [loadThread])
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [thread])
@@ -134,7 +161,13 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [myId, otherId, loadThread])
+  }, [myId, otherId, loadThread, supabase])
+
+  const applyMacro = (body: string) => {
+    setDraft((prev) => prev.trim() ? `${prev}\n\n${body}` : body)
+    setShowMacros(false)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
 
   // ── Send text ─────────────────────────────────────────────────────────────
   const sendText = async () => {
@@ -161,13 +194,13 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
     const path = `${myId}/${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage.from('message-media').upload(path, file)
     if (upErr) { setUploading(false); alert('Upload failed: ' + upErr.message); return }
-    const { data: urlData } = supabase.storage.from('message-media').getPublicUrl(path)
+    const signedUrl = await resolveSignedMediaUrl(supabase, 'message-media', path)
     const { data } = await supabase.from('messages').insert({
       sender_id: myId, recipient_id: otherId,
       body: null, message_type: msgType,
-      media_url: urlData.publicUrl, media_type: file.type, read: false,
+      media_url: path, media_type: file.type, read: false,
     }).select().single()
-    if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
+    if (data) setThread(prev => [...prev, { ...data, media_url: signedUrl, reactions: [] }])
     setPreviewFile(null)
     setUploading(false)
     setMode('text')
@@ -247,7 +280,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
     setGifLoading(false)
   }
 
-  const sendGif = async (gif: any) => {
+  const sendGif = async (gif: TenorGif) => {
     const full  = gif.media_formats?.gif?.url || gif.url
     const tiny  = gif.media_formats?.tinygif?.url || full
     const { data } = await supabase.from('messages').insert({
@@ -350,9 +383,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
   }
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`
+    <>      <style>{`
         @keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
         @keyframes scaleIn{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:scale(1)}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -363,10 +394,14 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
         .rmt-input-area{display:flex;flex-direction:column;gap:6px;}
         .rmt-toolbar{display:flex;gap:4px;align-items:center;}
         .rmt-input-row{display:flex;gap:8px;align-items:flex-end;}
+        .rmt-macro-row{display:flex;gap:6px;flex-wrap:wrap;}
         .rmt-gif-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
         .rmt-picker{animation:scaleIn .15s ease;transform-origin:bottom center;}
         .rmt-bubble{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
-        @media(max-width:400px){.rmt-gif-grid{grid-template-columns:repeat(3,1fr);}}
+        @media(max-width:400px){
+          .rmt-gif-grid{grid-template-columns:repeat(3,1fr);}
+          .rmt-input-row{align-items:stretch;}
+        }
       `}</style>
 
       <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }}
@@ -395,6 +430,7 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
             }} onClick={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
               {QUICK_REACTIONS.map(emoji => (
                 <button key={emoji}
+                  aria-label={`React with ${emoji}`}
                   onTouchEnd={e=>{ e.preventDefault(); e.stopPropagation(); toggleReaction(reactTarget, emoji) }}
                   onClick={e=>{ e.stopPropagation(); toggleReaction(reactTarget, emoji) }}
                   style={{ background:'none', border:'none', cursor:'pointer', fontSize:26, padding:'6px 5px', borderRadius:8, lineHeight:1, WebkitTapHighlightColor:'transparent' }}>
@@ -539,34 +575,56 @@ export default function RichMessageThread({ myId, otherId, otherName, otherAvata
             <div className="rmt-input-area">
               {/* Toolbar row — full width above input */}
               <div className="rmt-toolbar">
-                <button title="Voice message" onClick={()=>{ setMode('audio'); startAudio() }}
+                {quickReplies.length > 0 && (
+                  <button title="Saved replies" aria-label="Toggle saved replies" aria-expanded={showMacros} onClick={()=>setShowMacros(s => !s)}
+                    style={{ ...btnBase, padding:'7px 10px', background: showMacros?c.orange+'22':'transparent', color:showMacros?c.orange:c.textMuted, border:'1px solid '+(showMacros?c.orange+'40':'transparent') }}>
+                    ⚡
+                  </button>
+                )}
+                <button title="Voice message" aria-label="Record voice message" onClick={()=>{ setMode('audio'); startAudio() }}
                   style={{ ...btnBase, padding:'7px 10px', background: mode==='audio'?c.tealDim:'transparent', color:mode==='audio'?c.teal:c.textMuted, border:'1px solid '+(mode==='audio'?c.teal+'40':'transparent') }}>
                   🎙️
                 </button>
-                <button title="Video message" onClick={()=>{ setMode('video'); startVideo() }}
+                <button title="Video message" aria-label="Record video message" onClick={()=>{ setMode('video'); startVideo() }}
                   style={{ ...btnBase, padding:'7px 10px', background: mode==='video'?c.tealDim:'transparent', color:mode==='video'?c.teal:c.textMuted, border:'1px solid '+(mode==='video'?c.teal+'40':'transparent') }}>
                   📹
                 </button>
-                <button title="Send image or file" onClick={()=>fileInputRef.current?.click()}
+                <button title="Send image or file" aria-label="Upload image, video, audio, or file" onClick={()=>fileInputRef.current?.click()}
                   style={{ ...btnBase, padding:'7px 10px', background:'transparent', color:c.textMuted, border:'1px solid transparent' }}>
                   📎
                 </button>
                 {tenorKey && (
-                  <button title="Send GIF or meme" onClick={()=>setMode(mode==='gif'?'text':'gif')}
+                  <button title="Send GIF or meme" aria-label="Toggle GIF search" aria-expanded={mode==='gif'} onClick={()=>setMode(mode==='gif'?'text':'gif')}
                     style={{ ...btnBase, padding:'5px 10px', background: mode==='gif'?c.orange+'22':'transparent', color:mode==='gif'?c.orange:c.textMuted, border:'1px solid '+(mode==='gif'?c.orange+'40':'transparent'), fontSize:11, fontWeight:900 }}>
                     GIF
                   </button>
                 )}
               </div>
 
+              {showMacros && quickReplies.length > 0 && (
+                <div className="rmt-macro-row">
+                  {quickReplies.map((macro) => (
+                    <button
+                      key={macro.id}
+                      aria-label={`Insert saved reply ${macro.title}`}
+                      onClick={()=>applyMacro(macro.body)}
+                      style={{ ...btnBase, padding:'5px 10px', background:c.surfaceHigh, color:c.text, border:'1px solid '+c.border, fontSize:11 }}
+                    >
+                      {macro.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Input + send row — full width */}
               <div className="rmt-input-row">
                 <textarea ref={inputRef} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={handleKey}
+                  aria-label={`Message ${otherName}`}
                   placeholder={`Message ${otherName.split(' ')[0]}...`} rows={1}
                   style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:12, padding:'10px 14px', fontSize:14, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto' }}
                   onInput={e=>{ const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px' }}
                 />
-                <button onClick={sendText} disabled={!draft.trim()||sending}
+                <button onClick={sendText} aria-label="Send message" disabled={!draft.trim()||sending}
                   style={{ background:c.teal, border:'none', borderRadius:10, width:44, height:44, display:'flex', alignItems:'center', justifyContent:'center', cursor:!draft.trim()||sending?'not-allowed':'pointer', opacity:!draft.trim()||sending?.4:1, flexShrink:0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>

@@ -176,9 +176,7 @@ export default function ClientCalendarPage() {
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`
+    <>      <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};}
         .cal-layout{display:grid;grid-template-columns:1fr 220px;gap:16px;}

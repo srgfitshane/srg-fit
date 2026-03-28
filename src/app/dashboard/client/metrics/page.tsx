@@ -127,9 +127,7 @@ export default function ClientMetrics() {
   )
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};} input[type=number]::-webkit-inner-spin-button{opacity:0.4}
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};} input[type=number]::-webkit-inner-spin-button{opacity:0.4}
         .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
         @media(max-width:520px){.metrics-grid{grid-template-columns:1fr;}}
       `}</style>

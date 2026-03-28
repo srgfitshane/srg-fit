@@ -25,13 +25,43 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  let role: string | null = null
 
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup') && !request.nextUrl.pathname.startsWith('/set-password')) {
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    role = profile?.role || null
+  }
+
+  if (
+    !user &&
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/join') &&
+    !request.nextUrl.pathname.startsWith('/set-password') &&
+    !request.nextUrl.pathname.startsWith('/auth/callback') &&
+    !request.nextUrl.pathname.startsWith('/invite/')
+  ) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup'))) {
+  if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/join'))) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  if (request.nextUrl.pathname.startsWith('/dashboard/coach') || request.nextUrl.pathname.startsWith('/dashboard/preview')) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    if (role !== 'coach') {
+      return NextResponse.redirect(new URL('/dashboard/client', request.url))
+    }
+  }
+
+  if (request.nextUrl.pathname.startsWith('/dashboard/client') && role === 'coach') {
+    return NextResponse.redirect(new URL('/dashboard/coach', request.url))
   }
 
   return response

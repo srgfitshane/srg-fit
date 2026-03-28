@@ -31,9 +31,7 @@ function SuccessInner() {
   }, [sessionId])
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
       <div style={{ minHeight:'100vh', background:t.bg, fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
         <div style={{ maxWidth:480, width:'100%', textAlign:'center' }}>
           <div style={{ fontSize:64, marginBottom:20 }}>🎉</div>

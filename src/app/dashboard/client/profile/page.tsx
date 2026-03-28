@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense, createContext as _cc, useContext
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -47,7 +48,7 @@ const TextArea = ({field,placeholder,rows=3}:any) => { const {intake,set,t}=_uc(
 const Select = ({field,options,placeholder}:{field:string,options:{val:string,label:string}[],placeholder?:string}) => { const {intake,set,t}=_uc(_Ctx); return <select value={intake[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:intake[field]?t.text:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif",appearance:'none' as any,boxSizing:'border-box' as const,colorScheme:'dark' as any}}><option value="">{placeholder||'Select...'}</option>{options.map((o:any)=><option key={o.val} value={o.val} style={{background:t.surfaceHigh}}>{o.label}</option>)}</select> }
 const ChipGroup = ({field,options}:{field:string,options:string[]}) => { const {intake,toggleArray,t}=_uc(_Ctx); return <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{options.map(o=>{const on=(intake[field]||[]).includes(o);return <button key={o} onClick={()=>toggleArray(field,o)} style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid '+(on?t.teal+'60':t.border),background:on?t.tealDim:'transparent',color:on?t.teal:t.textDim,fontFamily:"'DM Sans',sans-serif",transition:'all .1s'}}>{o}</button>})}</div> }
 const SliderField = ({field,min,max,label}:{field:string,min:number,max:number,label:string}) => { const {intake,set,t}=_uc(_Ctx); return <div><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em'}}>{label}</span><span style={{fontSize:13,fontWeight:800,color:t.teal}}>{intake[field]??'—'}</span></div><input type="range" min={min} max={max} value={intake[field]||min} onChange={e=>set(field,parseInt(e.target.value))} style={{width:'100%',accentColor:t.teal}}/><div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:t.textMuted,marginTop:2}}><span>{min}</span><span>{max}</span></div></div> }
-const FieldRow = ({children}:{children:React.ReactNode}) => <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{children}</div>
+const FieldRow = ({children}:{children:React.ReactNode}) => <div className="profile-field-row" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{children}</div>
 const Field = ({label,children}:{label:string,children:React.ReactNode}) => <div><Label>{label}</Label>{children}</div>
 
 function ProfilePageInner() {
@@ -70,14 +71,18 @@ function ProfilePageInner() {
       if (!user) { router.push('/login'); return }
 
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      setProfile(prof)
+      const signedAvatar = await resolveSignedMediaUrl(supabase, 'avatars', prof?.avatar_url)
+      setProfile(prof ? { ...prof, avatar_url: signedAvatar } : null)
 
       const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).eq('active', true).single()
       if (!cl) { router.push('/dashboard/client'); return }
       setClientId(cl.id)
 
       const { data: existing } = await supabase.from('client_intake_profiles').select('*').eq('client_id', cl.id).single()
-      if (existing) setIntake(existing)
+      if (existing) {
+        const signedPhoto = await resolveSignedMediaUrl(supabase, 'avatars', existing.profile_photo_url)
+        setIntake({ ...existing, profile_photo_url: signedPhoto })
+      }
       setLoading(false)
     }
     load()
@@ -105,9 +110,11 @@ function ProfilePageInner() {
     const path = `profile-photos/${clientId}/${Date.now()}.${file.name.split('.').pop()}`
     const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
     if (!error) {
-      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-      set('profile_photo_url', data.publicUrl)
-      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', profile.id)
+      const signedUrl = await resolveSignedMediaUrl(supabase, 'avatars', path)
+      set('profile_photo_url', signedUrl)
+      await supabase.from('client_intake_profiles').upsert({ client_id: clientId, profile_photo_url: path }, { onConflict: 'client_id' })
+      await supabase.from('profiles').update({ avatar_url: path }).eq('id', profile.id)
+      setProfile((prev: any) => prev ? { ...prev, avatar_url: signedUrl } : prev)
     }
     setPhotoUploading(false)
   }
@@ -148,9 +155,9 @@ function ProfilePageInner() {
 
   return (
     <_Ctx.Provider value={_ctxVal}>
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}select option{background:${t.surfaceHigh};}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}select option{background:${t.surfaceHigh};}
+        @media(max-width:640px){.profile-field-row{grid-template-columns:1fr!important;gap:12px!important;}}
+      `}</style>
 
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:680, margin:'0 auto', padding:'0 0 80px' }}>
 
@@ -194,7 +201,11 @@ function ProfilePageInner() {
               {/* Photo upload */}
               <div style={{ display:'flex', alignItems:'center', gap:16, background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:16 }}>
                 <div style={{ width:72, height:72, borderRadius:'50%', background:t.surfaceHigh, overflow:'hidden', flexShrink:0, border:'2px solid '+t.teal+'40', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
-                  onClick={()=>photoRef.current?.click()}>
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload profile photo"
+                  onClick={()=>photoRef.current?.click()}
+                  onKeyDown={e=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); photoRef.current?.click() } }}>
                   {intake.profile_photo_url || profile?.avatar_url
                     ? <img src={intake.profile_photo_url || profile?.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
                     : <span style={{ fontSize:28 }}>👤</span>}
@@ -202,6 +213,7 @@ function ProfilePageInner() {
                 <div>
                   <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>Profile Photo</div>
                   <button onClick={()=>photoRef.current?.click()} disabled={photoUploading}
+                    aria-label="Open profile photo upload"
                     style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {photoUploading ? 'Uploading...' : '📸 Upload Photo'}
                   </button>
@@ -500,7 +512,7 @@ function ProfilePageInner() {
                 const res = await fetch('/api/stripe/portal', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ user_id: user.id }),
+                  body: JSON.stringify({}),
                 })
                 const data = await res.json()
                 if (data.url) window.location.href = data.url

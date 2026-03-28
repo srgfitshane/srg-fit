@@ -68,19 +68,24 @@ export default function InvitesPage() {
       const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, coachId }),
+        body: JSON.stringify(form),
       })
       const result = await res.json()
       if (!res.ok) { alert(result.error || 'Failed to send invite'); setSending(false); return }
       
-      // inviteUserByEmail sends via Supabase SMTP — no manual link needed
-      setSendResult({ url: '', note: `An invite email was securely sent to ${form.email}. They will use a 6-digit code to log in.` })
+      setSendResult({
+        url: result.inviteUrl || '',
+        note: result.inviteUrl
+          ? `Invite email sent to ${form.email}. You can also copy the direct invite link below.`
+          : `An invite email was securely sent to ${form.email}.`,
+      })
 
       // Reload invites list to reflect new entry
       const { data: inv } = await supabase.from('client_invites').select('*').eq('coach_id', coachId).order('created_at', { ascending: false })
       setInvites(inv || [])
-      // For "what's next" modal, create a stub invite object
-      setLastInvite({ id: '', email: form.email, full_name: form.full_name || null, status: 'pending', created_at: new Date().toISOString(), expires_at: '', accepted_at: null, message: null })
+      setAssignDone(false)
+      setNextNote('')
+      setLastInvite(result.invite || { id: result.inviteId, email: form.email, full_name: form.full_name || null, status: 'pending', created_at: new Date().toISOString(), expires_at: '', accepted_at: null, message: form.message || null })
       const chosenForm = form.onboarding_form_id || forms.find(f=>f.is_default)?.id || ''
       setNextFormId(chosenForm)
       setShowModal(false)
@@ -93,9 +98,10 @@ export default function InvitesPage() {
   const assignFormToInvite = async () => {
     if (!nextFormId || !lastInvite || !coachId) return
     setAssigning(true)
-    // We don't have a client_id yet (not accepted), so we store on the invite itself
-    // and the accept flow will pick it up. For now just update the invite's form.
-    await supabase.from('client_invites').update({ onboarding_form_id: nextFormId }).eq('id', lastInvite.id)
+    const updatePayload: { onboarding_form_id: string; message?: string } = { onboarding_form_id: nextFormId }
+    if (nextNote.trim()) updatePayload.message = nextNote.trim()
+    await supabase.from('client_invites').update(updatePayload).eq('id', lastInvite.id)
+    setLastInvite(prev => prev ? { ...prev, onboarding_form_id: nextFormId, message: nextNote.trim() || prev.message } : prev)
     setAssignDone(true)
     setAssigning(false)
   }
@@ -117,10 +123,18 @@ export default function InvitesPage() {
     const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: inv.email, resend: true, coachId }),
+      body: JSON.stringify({ email: inv.email, full_name: inv.full_name, resend: true }),
     })
+    const result = await res.json()
     if (res.ok) {
-      setLastInvite(inv)
+      setSendResult({
+        url: result.inviteUrl || '',
+        note: result.inviteUrl
+          ? `Invite resent to ${inv.email}. You can also copy the direct invite link below.`
+          : `Invite resent to ${inv.email}.`,
+      })
+      setLastInvite(result.invite || inv)
+      setAssignDone(false)
       setShowNext(true)
     }
     setInvites(p => p.map(i => i.id === id ? { ...i, status: 'pending' } : i))
@@ -168,9 +182,7 @@ export default function InvitesPage() {
   if (loading) return <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.textMuted }}>Loading...</div>
 
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
 
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:800, margin:'0 auto', padding:'20px 20px 80px' }}>
 
@@ -353,15 +365,15 @@ export default function InvitesPage() {
                 <div style={{ fontSize:36, marginBottom:8 }}>🎉</div>
                 <div style={{ fontSize:17, fontWeight:900, marginBottom:4 }}>Invite sent!</div>
                 <div style={{ fontSize:13, color:t.textMuted }}>
-                  {lastInvite.full_name || lastInvite.email} will get an email shortly.
+                  {lastInvite.full_name || lastInvite.email} can use the invite email or direct link below.
                 </div>
               </div>
 
-              {/* Show direct link if email may not have gone out */}
+              {/* Show direct link so coach can resend/share manually if needed */}
               {sendResult?.url && (
                 <div style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:12, padding:'12px 14px', marginBottom:16 }}>
                   <div style={{ fontSize:12, fontWeight:800, color:t.orange, marginBottom:6 }}>
-                    ⚠️ {sendResult.note || 'Email may not have sent — share this link directly:'}
+                    ⚠️ {sendResult.note || 'Share this link directly:'}
                   </div>
                   <div style={{ fontSize:11, color:t.text, wordBreak:'break-all', background:t.surfaceHigh, borderRadius:8, padding:'8px 10px', marginBottom:8, fontFamily:'monospace' }}>
                     {sendResult.url}

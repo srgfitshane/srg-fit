@@ -48,8 +48,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [barcodeErr,     setBarcodeErr]     = useState('')
 
-  useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
-
   async function loadData() {
     setLoading(true)
     const [{ data: activePlan }, { data: dailyLog }] = await Promise.all([
@@ -70,6 +68,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     }
     setLoading(false)
   }
+
+  useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
 
   async function ensureLog() {
     if (log) return log
@@ -281,12 +281,19 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     { label:'Carbs',    val:Math.round(totals.carbs),    target:plan?.carbs_g,         unit:'g',    color:'#f5a623' },
     { label:'Fat',      val:Math.round(totals.fat),      target:plan?.fat_g,           unit:'g',    color:'#f472b6' },
   ]
+  const remainingMacros = macros.map(m => ({
+    ...m,
+    remaining: typeof m.target === 'number' ? Math.max(0, Math.round(m.target - m.val)) : null,
+  }))
+  const leadMacro = remainingMacros
+    .filter(m => typeof m.target === 'number')
+    .sort((a, b) => pct(a.val, a.target as number) - pct(b.val, b.target as number))[0]
   const byMeal: Record<string, FoodEntry[]> = {}
   for (const e of entries) { const k = e.meal_time||'snack'; if (!byMeal[k]) byMeal[k]=[]; byMeal[k].push(e) }
   const mealOrder = MEAL_LABELS.map(m => m.id)
   const usedMeals = [...new Set([...mealOrder.filter(m=>byMeal[m]),...Object.keys(byMeal).filter(m=>!mealOrder.includes(m))])]
   const inp = { width:'100%', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:9, padding:'9px 12px', color:t.text, fontSize:14, fontFamily:"'DM Sans',sans-serif", outline:'none' } as const
-  const macroRow = { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6 } as const
+  const macroRow = { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(72px,1fr))', gap:6 } as const
 
   if (!clientRecord) return null
 
@@ -316,8 +323,44 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           </div>
         )}
 
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:'16px 18px', marginBottom:18 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Daily Nutrition Snapshot</div>
+              <div style={{ fontSize:16, fontWeight:800, color:t.text }}>
+                {entries.length === 0
+                  ? 'Start with your first meal or snack'
+                  : plan && leadMacro?.remaining != null
+                  ? `${leadMacro.remaining}${leadMacro.unit} ${leadMacro.label.toLowerCase()} still open`
+                  : `${entries.length} food item${entries.length !== 1 ? 's' : ''} logged`}
+              </div>
+              <div style={{ fontSize:12, color:t.textMuted, marginTop:4, lineHeight:1.5 }}>
+                {entries.length === 0
+                  ? 'Logging early makes it much easier to stay on track through the day.'
+                  : plan && leadMacro?.remaining != null
+                  ? 'Use search, saved foods, or quick add to close the gap without losing momentum.'
+                  : 'Your coach can make better adjustments when this log stays current.'}
+              </div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(88px,1fr))', gap:8, flex:'1 1 220px' }}>
+              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 12px' }}>
+                <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Meals Logged</div>
+                <div style={{ fontSize:16, fontWeight:800, color:t.teal }}>{usedMeals.length}</div>
+              </div>
+              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 12px' }}>
+                <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Entries</div>
+                <div style={{ fontSize:16, fontWeight:800, color:t.orange }}>{entries.length}</div>
+              </div>
+              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 12px' }}>
+                <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Plan Status</div>
+                <div style={{ fontSize:16, fontWeight:800, color:plan ? t.green : t.textMuted }}>{plan ? 'Active' : 'Pending'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Macro rings */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(88px,1fr))', gap:10, marginBottom:20 }}>
           {macros.map(m => {
             const p = pct(m.val, m.target); const r=22, circ=2*Math.PI*r
             return (
@@ -339,7 +382,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {addMode === 'none' && !pendingFood && (
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:13, fontWeight:800, color:t.textDim, marginBottom:10 }}>Add food to {selectedDate===today?'Today':selectedDate}</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:8 }}>
               {([{mode:'search' as AddMode,icon:'🔍',label:'Search Foods'},{mode:'quick' as AddMode,icon:'➕',label:'Quick Add'},{mode:'barcode' as AddMode,icon:'📷',label:'Barcode'},{mode:'saved' as AddMode,icon:'⭐',label:'Saved Foods'}]).map(({mode,icon,label})=>(
                 <button key={mode} onClick={()=>setAddMode(mode)} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
                   <span style={{ fontSize:22 }}>{icon}</span>
@@ -481,7 +524,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             </div>
 
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(92px,1fr))', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
                 <button key={m.id} onClick={()=>commitEntry(m.id)} disabled={saving}
                   style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'12px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4, opacity:saving?0.6:1 }}>

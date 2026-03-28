@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import RichMessageThread from '@/components/messaging/RichMessageThread'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const TENOR_KEY = process.env.NEXT_PUBLIC_TENOR_KEY || ''
 
@@ -26,16 +27,32 @@ function MessagesInner() {
   const [coachId,    setCoachId]    = useState<string | null>(null)
   const [clients,    setClients]    = useState<any[]>([])
   const [activeId,   setActiveId]   = useState<string | null>(null)
-  const [thread,     setThread]     = useState<any[]>([])
-  const [draft,      setDraft]      = useState('')
-  const [sending,    setSending]    = useState(false)
   const [unread,     setUnread]     = useState<Record<string, number>>({})
   const [loading,    setLoading]    = useState(true)
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef  = useRef<HTMLTextAreaElement>(null)
+  const [clientContext, setClientContext] = useState<any>(null)
+  const [macros, setMacros] = useState<Array<{ id: string; title: string; body: string }>>([])
+  const [macroTitle, setMacroTitle] = useState('')
+  const [macroBody, setMacroBody] = useState('')
+  const [savingMacro, setSavingMacro] = useState(false)
+  const [filter, setFilter] = useState<'all'|'priority'|'unread'|'stale'>('all')
   const router    = useRouter()
   const params    = useSearchParams()
   const supabase  = createClient()
+
+  const updateClientMetadata = (profileId: string, body?: string | null, createdAt?: string) => {
+    const lowered = `${body || ''}`.toLowerCase()
+    setClients(prev => prev.map(client => {
+      if (client.profile?.id !== profileId) return client
+      return {
+        ...client,
+        lastMessageAt: createdAt || client.lastMessageAt,
+        lastClientMessageAt: createdAt || client.lastClientMessageAt,
+        lastMessagePreview: body?.trim() || client.lastMessagePreview,
+        staleFollowUp: false,
+        distress: client.distress || ['hurt', 'pain', 'overwhelmed', 'anxious', 'stressed', 'hungry', 'can’t', 'cant'].some(keyword => lowered.includes(keyword)),
+      }
+    }))
+  }
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -50,22 +67,73 @@ function MessagesInner() {
         .eq('coach_id', user.id)
         .eq('active', true)
         .order('created_at', { ascending: false })
-      setClients(cls || [])
+      const normalizedClients = await Promise.all((cls || []).map(async (client: any) => ({
+        ...client,
+        profile: client.profile ? {
+          ...client.profile,
+          avatar_url: await resolveSignedMediaUrl(supabase, 'avatars', client.profile.avatar_url),
+        } : client.profile,
+      })))
 
       // Count unread per client
       const { data: msgs } = await supabase
         .from('messages')
-        .select('sender_id, read')
+        .select('sender_id, read, body, created_at')
         .eq('recipient_id', user.id)
         .eq('read', false)
       const counts: Record<string, number> = {}
       for (const m of msgs || []) counts[m.sender_id] = (counts[m.sender_id] || 0) + 1
       setUnread(counts)
 
+      const { data: allMsgs } = await supabase
+        .from('messages')
+        .select('sender_id, recipient_id, body, created_at, read')
+        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+
+      const enrichedClients = normalizedClients.map((client: any) => {
+        const profileId = client.profile?.id
+        const related = (allMsgs || []).filter((message: any) => message.sender_id === profileId || message.recipient_id === profileId)
+        const lastMessage = related[0]
+        const lastClientMessage = related.find((message: any) => message.sender_id === profileId)
+        const preview = lastMessage?.body?.trim() || 'No recent messages'
+        const staleHours = lastClientMessage?.created_at
+          ? (Date.now() - new Date(lastClientMessage.created_at).getTime()) / (1000 * 60 * 60)
+          : null
+        const text = `${lastMessage?.body || ''}`.toLowerCase()
+        const distress = ['hurt', 'pain', 'overwhelmed', 'anxious', 'stressed', 'hungry', 'can’t', 'cant'].some(keyword => text.includes(keyword))
+        return {
+          ...client,
+          lastMessageAt: lastMessage?.created_at || null,
+          lastMessagePreview: preview,
+          lastClientMessageAt: lastClientMessage?.created_at || null,
+          staleFollowUp: staleHours !== null && staleHours >= 72,
+          distress,
+        }
+      })
+
+      setClients(enrichedClients)
+
+      const { data: savedMacros } = await supabase
+        .from('coach_message_macros')
+        .select('id, title, body')
+        .eq('coach_id', user.id)
+        .order('created_at', { ascending: true })
+
+      if (savedMacros?.length) {
+        setMacros(savedMacros)
+      } else {
+        setMacros([
+          { id:'default-1', title:'Check-in', body:'Checking in on you. How are recovery, energy, and soreness today?' },
+          { id:'default-2', title:'Form Follow-up', body:'I saw your workout come through. Send me a quick note or video if anything felt off technically.' },
+          { id:'default-3', title:'Nutrition Nudge', body:'Let’s tighten up protein and meal consistency today. Give me a quick update on how meals are going.' },
+        ])
+      }
+
       // Auto-open if ?client= param passed
       const pid = params.get('client')
       if (pid) {
-        const match = (cls || []).find((c: any) => c.id === pid)
+        const match = enrichedClients.find((c: any) => c.id === pid)
         if (match) openThread(user.id, match)
       }
       setLoading(false)
@@ -83,10 +151,9 @@ function MessagesInner() {
         filter: `recipient_id=eq.${coachId}`,
       }, (payload) => {
         const msg = payload.new as any
-        // If this is the active thread, append + mark read
+        updateClientMetadata(msg.sender_id, msg.body, msg.created_at)
         const active = clients.find(c => c.profile?.id === msg.sender_id)
         if (active && active.id === activeId) {
-          setThread(prev => [...prev, msg])
           markRead(coachId, active.profile.id)
         } else {
           setUnread(prev => ({ ...prev, [msg.sender_id]: (prev[msg.sender_id] || 0) + 1 }))
@@ -96,26 +163,64 @@ function MessagesInner() {
     return () => { supabase.removeChannel(channel) }
   }, [coachId, activeId, clients])
 
-  // ── Scroll to bottom on new messages ─────────────────────────────────────
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [thread])
-
   // ── Open a conversation thread ────────────────────────────────────────────
   const openThread = async (cid: string, client: any) => {
     setActiveId(client.id)
     const profileId = client.profile?.id
     if (!profileId) return
 
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`and(sender_id.eq.${cid},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${cid})`)
-      .order('created_at', { ascending: true })
-    setThread(data || [])
     markRead(cid, profileId)
     setUnread(prev => { const n = { ...prev }; delete n[profileId]; return n })
-    setTimeout(() => inputRef.current?.focus(), 100)
+    loadClientContext(cid, profileId)
+  }
+
+  const loadClientContext = async (currentCoachId: string, profileId: string) => {
+    const [
+      { data: recentWorkouts },
+      { data: recentPulse },
+      { data: recentCheckins },
+      { data: recentMessages },
+    ] = await Promise.all([
+      supabase.from('workout_sessions')
+        .select('title, status, completed_at, review_due_at, session_rpe, notes_client')
+        .eq('client_id', profileId)
+        .order('completed_at', { ascending: false })
+        .limit(3),
+      supabase.from('daily_checkins')
+        .select('checkin_date, sleep_quality, energy_score, mood_emoji, body')
+        .eq('client_id', profileId)
+        .order('checkin_date', { ascending: false })
+        .limit(5),
+      supabase.from('checkins')
+        .select('submitted_at, wins, struggles')
+        .eq('client_id', profileId)
+        .order('submitted_at', { ascending: false })
+        .limit(3),
+      supabase.from('messages')
+        .select('body, created_at, sender_id')
+        .or(`and(sender_id.eq.${currentCoachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${currentCoachId})`)
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ])
+
+    const latestMessage = (recentMessages || []).find((message: any) => message.body?.trim())
+    const text = latestMessage?.body?.toLowerCase() || ''
+    const unreadCount = unread[profileId] || 0
+    const concernSignals = [
+      text.includes('hurt') || text.includes('pain') ? 'form issue' : null,
+      text.includes('stress') || text.includes('overwhelmed') ? 'emotional support' : null,
+      text.includes('meal') || text.includes('protein') || text.includes('hungry') ? 'nutrition help' : null,
+      text.includes('schedule') || text.includes('travel') ? 'scheduling' : null,
+      unreadCount >= 3 ? 'urgent' : null,
+    ].filter(Boolean)
+
+    setClientContext({
+      recentWorkouts: recentWorkouts || [],
+      recentPulse: recentPulse || [],
+      recentCheckins: recentCheckins || [],
+      latestMessage: latestMessage?.body || null,
+      tags: concernSignals,
+    })
   }
 
   const markRead = async (myId: string, senderId: string) => {
@@ -127,42 +232,65 @@ function MessagesInner() {
       .eq('read', false)
   }
 
-  // ── Send message ──────────────────────────────────────────────────────────
-  const send = async () => {
-    if (!draft.trim() || !coachId || !activeId) return
-    const client = clients.find(c => c.id === activeId)
-    if (!client?.profile?.id) return
-    setSending(true)
-    const msg = { sender_id: coachId, recipient_id: client.profile.id, body: draft.trim(), read: false }
-    const { data } = await supabase.from('messages').insert(msg).select().single()
-    if (data) setThread(prev => [...prev, data])
-    setDraft('')
-    setSending(false)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  const saveMacro = async () => {
+    if (!coachId || !macroTitle.trim() || !macroBody.trim()) return
+    setSavingMacro(true)
+    const { data, error } = await supabase.from('coach_message_macros').insert({
+      coach_id: coachId,
+      title: macroTitle.trim(),
+      body: macroBody.trim(),
+    }).select('id, title, body').single()
+    if (!error && data) {
+      setMacros(prev => [...prev, data])
+      setMacroTitle('')
+      setMacroBody('')
+    }
+    setSavingMacro(false)
   }
 
   const activeClient = clients.find(c => c.id === activeId)
   const totalUnread  = Object.values(unread).reduce((a, b) => a + b, 0)
+  const clientPriority = (client: any) => {
+    const count = unread[client.profile?.id] || 0
+    if (count >= 3) return { label: 'Urgent', color: t.red, bg: `${t.red}18` }
+    if (count > 0) return { label: 'Needs reply', color: t.orange, bg: `${t.orange}18` }
+    return { label: 'Clear', color: t.textMuted, bg: t.surfaceHigh }
+  }
+  const clientPriorityScore = (client: any) => {
+    const unreadCount = unread[client.profile?.id] || 0
+    return (
+      unreadCount * 10 +
+      (client.distress ? 6 : 0) +
+      (client.staleFollowUp ? 4 : 0) +
+      (client.lastMessageAt ? Math.max(0, 3 - ((Date.now() - new Date(client.lastMessageAt).getTime()) / (1000 * 60 * 60 * 24))) : 0)
+    )
+  }
+  const filteredClients = [...clients]
+    .filter(client => {
+      if (filter === 'unread') return (unread[client.profile?.id] || 0) > 0
+      if (filter === 'priority') return clientPriorityScore(client) >= 6
+      if (filter === 'stale') return client.staleFollowUp
+      return true
+    })
+    .sort((a, b) => clientPriorityScore(b) - clientPriorityScore(a))
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
         .msg-input::-webkit-scrollbar{width:4px;}
         .msg-input::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}
         .msg-bubble{max-width:72%;word-break:break-word;line-height:1.55;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         .msg-sidebar{width:280px;flex-shrink:0;}
         .msg-thread{flex:1;min-width:0;}
+        .msg-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;flex:1;min-height:0;}
+        .msg-context-panel{border-left:1px solid ${t.border};background:${t.surface};padding:16px 14px;overflow-y:auto;}
         @media(max-width:640px){
           .msg-sidebar{width:100%;border-right:none!important;}
           .msg-sidebar-hidden{display:none!important;}
           .msg-thread-hidden{display:none!important;}
+          .msg-detail-grid{grid-template-columns:minmax(0,1fr);}
+          .msg-context-panel{display:none;}
         }
       `}</style>
 
@@ -174,11 +302,25 @@ function MessagesInner() {
           {/* Sidebar header */}
           <div style={{ padding:'16px 18px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', gap:10, height:60 }}>
             <button onClick={()=>router.push('/dashboard/coach')}
+              aria-label="Back to coach dashboard"
               style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", padding:0 }}>←</button>
             <div style={{ fontSize:14, fontWeight:800 }}>Messages</div>
             {totalUnread > 0 && (
               <span style={{ background:t.teal, color:'#000', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:900, marginLeft:'auto' }}>{totalUnread}</span>
             )}
+          </div>
+
+          <div style={{ display:'flex', gap:6, padding:'10px 12px', borderBottom:'1px solid '+t.border, flexWrap:'wrap' }}>
+            {(['all','priority','unread','stale'] as const).map(value => (
+              <button
+                key={value}
+                onClick={()=>setFilter(value)}
+                aria-pressed={filter===value}
+                style={{ background:filter===value?t.tealDim:'transparent', border:'1px solid '+(filter===value?t.teal+'40':t.border), color:filter===value?t.teal:t.textDim, borderRadius:999, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' }}
+              >
+                {value}
+              </button>
+            ))}
           </div>
 
           {/* Client rows */}
@@ -187,9 +329,10 @@ function MessagesInner() {
               <div style={{ padding:20, color:t.textMuted, fontSize:13 }}>Loading...</div>
             ) : clients.length === 0 ? (
               <div style={{ padding:20, color:t.textMuted, fontSize:13 }}>No active clients yet.</div>
-            ) : clients.map(c => {
+            ) : filteredClients.map(c => {
               const isActive = c.id === activeId
               const uCount   = unread[c.profile?.id] || 0
+              const priority = clientPriority(c)
               return (
                 <div key={c.id} onClick={()=>{ if(coachId) openThread(coachId, c) }}
                   style={{ padding:'12px 18px', cursor:'pointer', display:'flex', alignItems:'center', gap:12,
@@ -206,6 +349,10 @@ function MessagesInner() {
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight: uCount > 0 ? 800 : 600, color: uCount > 0 ? t.text : t.textDim, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                       {c.profile?.full_name || 'Unknown'}
+                    </div>
+                    <div style={{ fontSize:10, color: priority.color, marginTop:3 }}>{priority.label}{c.staleFollowUp ? ' · Stale follow-up' : ''}</div>
+                    <div style={{ fontSize:10, color:t.textMuted, marginTop:3, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      {c.lastMessagePreview}
                     </div>
                   </div>
                   {uCount > 0 && (
@@ -225,6 +372,7 @@ function MessagesInner() {
             <div style={{ height:56, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
               {/* Back button — always visible, critical on mobile */}
               <button onClick={()=>setActiveId(null)}
+                aria-label="Back to client list"
                 style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20, lineHeight:1, flexShrink:0, padding:'4px' }}>←</button>
               <div style={{ width:30, height:30, borderRadius:'50%', background:t.surfaceHigh, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:t.teal, overflow:'hidden', flexShrink:0 }}>
                 {activeClient.profile?.avatar_url
@@ -233,22 +381,119 @@ function MessagesInner() {
               </div>
               <div style={{ fontWeight:800, fontSize:14, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{activeClient.profile?.full_name}</div>
               <button onClick={()=>router.push('/dashboard/coach/clients/'+activeClient.id)}
+                aria-label={`Open ${activeClient.profile?.full_name || 'client'} profile`}
                 style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                 Profile →
               </button>
             </div>
 
-            {/* Rich thread */}
-            {coachId && activeClient.profile?.id && (
-              <RichMessageThread
-                myId={coachId}
-                otherId={activeClient.profile.id}
-                otherName={activeClient.profile.full_name || 'Client'}
-                otherAvatar={activeClient.profile.avatar_url}
-                tenorKey={TENOR_KEY}
-                height="100%"
-              />
-            )}
+            <div className="msg-detail-grid">
+              <div style={{ minWidth:0, minHeight:0 }}>
+                {coachId && activeClient.profile?.id && (
+                  <RichMessageThread
+                    myId={coachId}
+                    otherId={activeClient.profile.id}
+                    otherName={activeClient.profile.full_name || 'Client'}
+                    otherAvatar={activeClient.profile.avatar_url}
+                    tenorKey={TENOR_KEY}
+                    height="100%"
+                    quickReplies={macros}
+                  />
+                )}
+              </div>
+              <div className="msg-context-panel">
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Coach Context</div>
+                {clientContext?.tags?.length > 0 && (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:14 }}>
+                    {clientContext.tags.map((tag: string) => (
+                      <span key={tag} style={{ padding:'4px 8px', borderRadius:999, background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700 }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                  <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:8 }}>Saved replies</div>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+                      {macros.map((macro) => (
+                        <span key={macro.id} style={{ padding:'4px 8px', borderRadius:999, background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700 }}>
+                          {macro.title}
+                        </span>
+                      ))}
+                    </div>
+                    <input
+                      value={macroTitle}
+                      onChange={e=>setMacroTitle(e.target.value)}
+                      placeholder="Macro title"
+                      aria-label="Macro title"
+                      style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', color:t.text, fontSize:12, fontFamily:"'DM Sans',sans-serif", marginBottom:8 }}
+                    />
+                    <textarea
+                      value={macroBody}
+                      onChange={e=>setMacroBody(e.target.value)}
+                      placeholder="Saved reply text"
+                      aria-label="Macro body"
+                      rows={3}
+                      style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', color:t.text, fontSize:12, resize:'vertical', fontFamily:"'DM Sans',sans-serif", marginBottom:8 }}
+                    />
+                    <button
+                      onClick={saveMacro}
+                      disabled={savingMacro || !macroTitle.trim() || !macroBody.trim()}
+                      style={{ width:'100%', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700, color:t.teal, cursor:savingMacro?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:savingMacro ? 0.6 : 1 }}
+                    >
+                      {savingMacro ? 'Saving...' : 'Save macro'}
+                    </button>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Latest message</div>
+                    <div style={{ fontSize:12, color:t.textDim, lineHeight:1.5 }}>
+                      {clientContext?.latestMessage || 'No recent message body available.'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Recent workouts</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {(clientContext?.recentWorkouts || []).slice(0, 3).map((workout: any) => (
+                        <div key={`${workout.title}-${workout.completed_at || workout.review_due_at}`} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'8px 10px' }}>
+                          <div style={{ fontSize:12, fontWeight:700 }}>{workout.title}</div>
+                          <div style={{ fontSize:10, color:t.textMuted, marginTop:3 }}>
+                            {workout.completed_at ? `Completed ${new Date(workout.completed_at).toLocaleDateString()}` : workout.status}
+                            {workout.session_rpe ? ` · RPE ${workout.session_rpe}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Daily pulse</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {(clientContext?.recentPulse || []).slice(0, 3).map((pulse: any) => (
+                        <div key={pulse.checkin_date} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'8px 10px' }}>
+                          <div style={{ fontSize:12, fontWeight:700 }}>{pulse.checkin_date}</div>
+                          <div style={{ fontSize:10, color:t.textMuted, marginTop:3 }}>
+                            Sleep {pulse.sleep_quality ?? '—'}/5 · Energy {pulse.energy_score ?? '—'}/5 {pulse.mood_emoji ? `· ${pulse.mood_emoji}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Recent check-ins</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {(clientContext?.recentCheckins || []).slice(0, 2).map((checkin: any) => (
+                        <div key={checkin.submitted_at} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'8px 10px' }}>
+                          <div style={{ fontSize:10, color:t.textMuted, marginBottom:4 }}>{new Date(checkin.submitted_at).toLocaleDateString()}</div>
+                          <div style={{ fontSize:12, color:t.textDim, lineHeight:1.5 }}>
+                            {checkin.struggles || checkin.wins || 'No notes'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="msg-thread msg-thread-hidden" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>

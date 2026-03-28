@@ -1,5 +1,5 @@
 'use client'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 
 const t = {
   surface: '#0f0f1a', border: '#252538',
@@ -44,10 +44,12 @@ const NavIcon = ({ id, active }: { id: string; active: boolean }) => {
   )
 }
 
-// Active tab detection — pathname only, no searchParams needed.
-// The main client page handles ?tab param internally via its own useSearchParams.
-// This component just needs to know which standalone page we're on.
-function getActive(pathname: string): string {
+function getActive(pathname: string, tab: string | null): string {
+  if (pathname === '/dashboard/client') {
+    if (tab === 'nutrition') return 'nutrition'
+    if (tab === 'messages') return 'messages'
+    return 'today'
+  }
   if (pathname.startsWith('/dashboard/client/resources'))   return 'resources'
   if (pathname.startsWith('/dashboard/client/progress'))    return 'metrics'
   if (pathname.startsWith('/dashboard/client/metrics'))     return 'metrics'
@@ -58,7 +60,8 @@ function getActive(pathname: string): string {
 export default function ClientBottomNav() {
   const router   = useRouter()
   const pathname = usePathname()
-  const active   = getActive(pathname)
+  const searchParams = useSearchParams()
+  const active   = getActive(pathname, searchParams.get('tab'))
 
   const handleClick = (n: typeof NAV[0]) => {
     if (n.tab) {
@@ -80,6 +83,8 @@ export default function ClientBottomNav() {
       }}>
         {NAV.map(n => (
           <button key={n.id} onClick={() => handleClick(n)}
+            aria-label={`Open ${n.label}`}
+            aria-pressed={active === n.id}
             style={{
               flex: 1, background: 'none', border: 'none',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
