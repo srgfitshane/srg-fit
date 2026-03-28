@@ -23,7 +23,7 @@ type FoodEntry = {
   serving_size: string
   logged_at: string
 }
-type AddMode = 'none' | 'search' | 'quick' | 'saved'
+type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved'
 
 export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const today = new Date().toISOString().split('T')[0]
@@ -41,9 +41,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const [pendingFood,    setPendingFood]    = useState<Partial<FoodEntry> | null>(null)
   const [pendingServings,setPendingServings]= useState(1)
   const [saving,         setSaving]         = useState(false)
-  const [editingEntry,   setEditingEntry]   = useState<string|null>(null)  // entry id being adjusted
+  const [editingEntry,   setEditingEntry]   = useState<string|null>(null)
   const [editServings,   setEditServings]   = useState(1)
   const [savedFoods,     setSavedFoods]     = useState<any[]>([])
+  const [barcodeVal,     setBarcodeVal]     = useState('')
+  const [barcodeLoading, setBarcodeLoading] = useState(false)
+  const [barcodeErr,     setBarcodeErr]     = useState('')
 
   useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
 
@@ -236,6 +239,40 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
 
 
+  // Barcode lookup via Edge Function (manual input only — no camera)
+  async function lookupBarcode(code: string) {
+    setBarcodeLoading(true); setBarcodeErr('')
+    try {
+      const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`)
+      const fsData = await fsRes.json()
+      const foodId = fsData?.food_id?.value || fsData?.food_id
+      if (foodId) {
+        const detailRes  = await fetch(`${FS_API}?food_id=${foodId}`)
+        const detailData = await detailRes.json()
+        const food = detailData?.food
+        if (food) {
+          const servings = food.servings?.serving
+          const serving  = Array.isArray(servings) ? servings[0] : servings
+          const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
+          setPendingFood({ food_name: food.food_name, calories: r(serving?.calories), protein_g: r(serving?.protein), carbs_g: r(serving?.carbohydrate), fat_g: r(serving?.fat), serving_size: serving?.serving_description || '1 serving' })
+          setBarcodeVal(''); setAddMode('none')
+          setBarcodeLoading(false); return
+        }
+      }
+      const offRes  = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
+      const offData = await offRes.json()
+      if (offData?.status === 1) {
+        const p = offData.product; const n = p.nutriments || {}
+        const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
+        setPendingFood({ food_name: p.product_name || 'Unknown product', calories: r(n['energy-kcal_serving'] ?? n['energy-kcal_100g']), protein_g: r(n.proteins_serving ?? n.proteins_100g), carbs_g: r(n.carbohydrates_serving ?? n.carbohydrates_100g), fat_g: r(n.fat_serving ?? n.fat_100g), serving_size: p.serving_size || '1 serving' })
+        setBarcodeVal(''); setAddMode('none')
+      } else {
+        setBarcodeErr('Product not found. Try searching by name or use Quick Add.')
+      }
+    } catch { setBarcodeErr('Lookup failed. Check your connection and try again.') }
+    setBarcodeLoading(false)
+  }
+
   const totals = { calories: log?.total_calories||0, protein: log?.total_protein||0, carbs: log?.total_carbs||0, fat: log?.total_fat||0 }
   const pct = (val: number, target: number) => target > 0 ? Math.min(100, Math.round((val/target)*100)) : 0
   const macros = [
@@ -381,6 +418,29 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
               disabled={!quick.food_name} style={{ width:'100%', background:t.teal, border:'none', borderRadius:10, padding:'11px', fontSize:14, fontWeight:800, color:'#0f0f0f', cursor:'pointer', opacity:quick.food_name?1:0.5 }}>
               Next: Choose Meal →
             </button>
+          </div>
+        )}
+
+        {/* BARCODE MODE */}
+        {addMode==='barcode' && !pendingFood && (
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <span style={{ fontSize:15, fontWeight:800 }}>🔢 Barcode Lookup</span>
+              <button onClick={()=>{ setAddMode('none'); setBarcodeVal(''); setBarcodeErr('') }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={barcodeVal} onChange={e=>setBarcodeVal(e.target.value.replace(/\D/g,''))}
+                placeholder="Type barcode number..." inputMode="numeric" autoFocus
+                onKeyDown={e=>{ if(e.key==='Enter' && barcodeVal.length>5) lookupBarcode(barcodeVal) }}
+                style={{ ...inp, flex:1 }}/>
+              <button onClick={()=>{ if(barcodeVal.length>5) lookupBarcode(barcodeVal) }}
+                disabled={barcodeVal.length<6||barcodeLoading}
+                style={{ background:t.teal, border:'none', borderRadius:9, padding:'9px 16px', fontSize:13, fontWeight:700, color:'#0f0f0f', cursor:'pointer', whiteSpace:'nowrap' as const, opacity:barcodeVal.length<6?0.5:1 }}>
+                {barcodeLoading ? '...' : 'Look Up'}
+              </button>
+            </div>
+            {barcodeErr && <div style={{ fontSize:12, color:t.red, marginTop:8 }}>{barcodeErr}</div>}
+            {barcodeLoading && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'10px 0' }}>Looking up product...</div>}
           </div>
         )}
 
