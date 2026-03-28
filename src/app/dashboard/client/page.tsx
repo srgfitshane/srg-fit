@@ -264,7 +264,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .eq('client_id', cid)
             .not('program_id', 'is', null)
             .in('status', ['assigned', 'in_progress'])
-            .or(`scheduled_date.eq.${todayStr},status.eq.in_progress,scheduled_date.gte.${todayStr}`)
+            .or(`scheduled_date.eq.${todayStr},status.eq.in_progress`)
             .order('status', { ascending: false })
             .order('scheduled_date', { ascending: true })
             .limit(1)
