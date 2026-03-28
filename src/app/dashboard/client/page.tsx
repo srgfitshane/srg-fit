@@ -835,30 +835,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </div>
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:24 }}>Message your coach or check in with the community</div>
 
-              <div style={{ background:'linear-gradient(135deg,'+t.teal+'14,'+t.purple+'0c)', border:'1px solid '+t.border, borderRadius:18, padding:'14px 16px' }}>
-                <div style={{ fontSize:11, fontWeight:800, color:t.teal, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Support Snapshot</div>
-                <div className="today-summary-grid">
-                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Coach Access</div>
-                    <div style={{ fontSize:14, fontWeight:900, color:t.teal }}>24/7</div>
-                  </div>
-                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Pending Forms</div>
-                    <div style={{ fontSize:14, fontWeight:900, color:t.purple }}>{pendingCheckins.length}</div>
-                  </div>
-                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Workout Status</div>
-                    <div style={{ fontSize:14, fontWeight:900, color:t.orange }}>
-                      {nextSession ? (nextSession.status === 'in_progress' ? 'Active' : nextSession.isToday ? 'Ready' : 'Upcoming') : 'Rest'}
-                    </div>
-                  </div>
-                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Call Request</div>
-                    <div style={{ fontSize:14, fontWeight:900, color:t.yellow }}>{callSubmitted ? 'Sent' : 'Available'}</div>
-                  </div>
-                </div>
-              </div>
-
               {/* Coach message card */}
               <button onClick={()=>setMessagesView('coach')}
                 style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
