@@ -23,7 +23,7 @@ type FoodEntry = {
   serving_size: string
   logged_at: string
 }
-type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved'
+type AddMode = 'none' | 'search' | 'quick' | 'saved'
 
 export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const today = new Date().toISOString().split('T')[0]
@@ -43,19 +43,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const [saving,         setSaving]         = useState(false)
   const [editingEntry,   setEditingEntry]   = useState<string|null>(null)  // entry id being adjusted
   const [editServings,   setEditServings]   = useState(1)
-  const [barcodeVal,     setBarcodeVal]     = useState('')
-  const [barcodeResult,  setBarcodeResult]  = useState<any>(null)
-  const [barcodeErr,     setBarcodeErr]     = useState('')
-  const [barcodeLoading, setBarcodeLoading] = useState(false)
-  const [scannerActive,  setScannerActive]  = useState(false)
   const [savedFoods,     setSavedFoods]     = useState<any[]>([])
-  const scannerRef  = useRef<HTMLDivElement>(null)
-  const quaggaRef   = useRef<any>(null)
 
   useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
-
-  // stop scanner when leaving barcode mode
-  useEffect(() => { if (addMode !== 'barcode') stopScanner() }, [addMode])
 
   async function loadData() {
     setLoading(true)
@@ -113,7 +103,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     setPendingFood(null); setPendingServings(1); setAddMode('none')
     setSearchQ(''); setSearchResults([])
     setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
-    setBarcodeVal(''); setBarcodeResult(null); setBarcodeErr('')
     setSaving(false)
   }
 
@@ -245,85 +234,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     }
   }
 
-  // ── Barcode scanner (Quagga via CDN) ──────────────────────────────────────
-  const detectedRef = useRef(false)
 
-  async function startScanner() {
-    setScannerActive(true); setBarcodeErr(''); detectedRef.current = false
-    if (!(window as any).Quagga) {
-      await new Promise<void>((resolve, reject) => {
-        const s = document.createElement('script')
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
-        s.onload = () => resolve(); s.onerror = () => reject()
-        document.head.appendChild(s)
-      }).catch(() => { setBarcodeErr('Could not load scanner. Try manual entry.'); setScannerActive(false) })
-    }
-    const Quagga = (window as any).Quagga
-    if (!Quagga) return
-    quaggaRef.current = Quagga
-    setTimeout(() => {
-      Quagga.init({
-        inputStream: { name:'Live', type:'LiveStream', target: scannerRef.current, constraints: { facingMode:'environment', width:400, height:300 } },
-        decoder: { readers: ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'] },
-        locate: true,
-        numOfWorkers: 2,
-        frequency: 10,
-      }, (err: any) => {
-        if (err) { setBarcodeErr('Camera access denied or unavailable.'); setScannerActive(false); return }
-        Quagga.start()
-      })
-      Quagga.onDetected((result: any) => {
-        // Guard against duplicate fires
-        if (detectedRef.current) return
-        const code = result?.codeResult?.code
-        const errors = result?.codeResult?.decodedCodes?.filter((x:any) => x.error != null).map((x:any) => x.error) || []
-        const avgErr = errors.length ? errors.reduce((a:number,b:number)=>a+b,0)/errors.length : 1
-        // Only accept if confidence is reasonable (avg error below 0.15)
-        if (!code || avgErr > 0.15) return
-        detectedRef.current = true
-        setTimeout(() => {
-          try { Quagga.stop() } catch {}
-          setScannerActive(false)
-          lookupBarcode(code)
-        }, 100)
-      })
-    }, 150)
-  }
-  function stopScanner() {
-    if (quaggaRef.current) { try { quaggaRef.current.stop() } catch {} }
-    setScannerActive(false)
-  }
-  async function lookupBarcode(code: string) {
-    setBarcodeLoading(true); setBarcodeErr(''); setBarcodeResult(null)
-    try {
-      // Try FatSecret first (better data when Premier approved)
-      const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`)
-      const fsData = await fsRes.json()
-      const foodId = fsData?.food_id?.value || fsData?.food_id
-      if (foodId) {
-        const detailRes  = await fetch(`${FS_API}?food_id=${foodId}`)
-        const detailData = await detailRes.json()
-        const food = detailData?.food
-        if (food) {
-          const servings = food.servings?.serving
-          const serving  = Array.isArray(servings) ? servings[0] : servings
-          const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
-          setBarcodeResult({ food_name: food.food_name, calories: r(serving?.calories), protein_g: r(serving?.protein), carbs_g: r(serving?.carbohydrate), fat_g: r(serving?.fat), serving_size: serving?.serving_description || '1 serving' })
-          setBarcodeLoading(false); return
-        }
-      }
-      // Fallback: Open Food Facts
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
-      const data = await res.json()
-      if (data.status === 1 && data.product) {
-        const p = data.product; const n = p.nutriments || {}
-        setBarcodeResult({ food_name: p.product_name || p.product_name_en || 'Unknown product', calories: n['energy-kcal_serving']||n['energy-kcal_100g']||null, protein_g: n.proteins_serving||n.proteins_100g||null, carbs_g: n.carbohydrates_serving||n.carbohydrates_100g||null, fat_g: n.fat_serving||n.fat_100g||null, serving_size: p.serving_size||'1 serving' })
-      } else { setBarcodeErr(`Product not found (${code}). Try Quick Add instead.`) }
-    } catch { setBarcodeErr('Lookup failed. Check your connection.') }
-    setBarcodeLoading(false)
-  }
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const totals = { calories: log?.total_calories||0, protein: log?.total_protein||0, carbs: log?.total_carbs||0, fat: log?.total_fat||0 }
   const pct = (val: number, target: number) => target > 0 ? Math.min(100, Math.round((val/target)*100)) : 0
   const macros = [
@@ -472,83 +384,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           </div>
         )}
 
-        {/* BARCODE MODE */}
-        {addMode==='barcode' && !pendingFood && (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>📷 Barcode Scanner</span>
-              <button onClick={()=>{stopScanner();setAddMode('none');setBarcodeVal('');setBarcodeResult(null);setBarcodeErr('')}} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
-            </div>
-            {!barcodeResult && (<>
-              {/* Camera viewfinder */}
-              <div ref={scannerRef} style={{ width:'100%', height:scannerActive?220:0, overflow:'hidden', borderRadius:12, background:'#000', marginBottom:scannerActive?12:0, position:'relative', transition:'height 0.2s' }}>
-                {scannerActive && (
-                  <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:10 }}>
-                    <div style={{ width:220, height:100, border:`2px solid ${t.teal}`, borderRadius:8, boxShadow:'0 0 0 2000px rgba(0,0,0,0.45)' }}/>
-                  </div>
-                )}
-              </div>
-              <div style={{ marginBottom:12 }}>
-                {!scannerActive
-                  ? <button onClick={startScanner} style={{ width:'100%', background:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:10, padding:'13px', fontSize:14, fontWeight:800, color:'#0f0f0f', cursor:'pointer' }}>📷 Tap to Scan Barcode</button>
-                  : <button onClick={stopScanner} style={{ width:'100%', background:t.redDim, border:`1px solid ${t.red}40`, borderRadius:10, padding:'11px', fontSize:13, fontWeight:700, color:t.red, cursor:'pointer' }}>Stop Camera</button>
-                }
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-                <div style={{ flex:1, height:1, background:t.border }}/><span style={{ fontSize:11, color:t.textMuted }}>or enter manually</span><div style={{ flex:1, height:1, background:t.border }}/>
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <input value={barcodeVal} onChange={e=>setBarcodeVal(e.target.value.replace(/\D/g,''))} placeholder="e.g. 021130126026" inputMode="numeric" style={{ ...inp, flex:1 }}/>
-                <button onClick={()=>{ if(barcodeVal.length>5) lookupBarcode(barcodeVal) }} disabled={barcodeVal.length<6||barcodeLoading}
-                  style={{ background:t.teal, border:'none', borderRadius:9, padding:'9px 16px', fontSize:13, fontWeight:700, color:'#0f0f0f', cursor:'pointer', whiteSpace:'nowrap', opacity:barcodeVal.length<6?0.5:1 }}>
-                  {barcodeLoading?'...':'Look Up'}
-                </button>
-              </div>
-              {barcodeErr && <div style={{ fontSize:12, color:t.red, marginTop:8 }}>{barcodeErr}</div>}
-              {barcodeLoading && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'12px 0' }}>Looking up product...</div>}
-            </>)}
-            {barcodeResult && (
-              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.teal}40`, borderRadius:12, padding:14 }}>
-                <div style={{ fontSize:14, fontWeight:800, marginBottom:8 }}>{barcodeResult.food_name}</div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:8 }}>
-                  {[{l:'Cal',v:barcodeResult.calories,u:'kcal',c:'#c8f545'},{l:'Pro',v:barcodeResult.protein_g,u:'g',c:'#60a5fa'},{l:'Carb',v:barcodeResult.carbs_g,u:'g',c:'#f5a623'},{l:'Fat',v:barcodeResult.fat_g,u:'g',c:'#f472b6'}].map(m=>(
-                    <div key={m.l} style={{ textAlign:'center' }}>
-                      <div style={{ fontSize:15, fontWeight:800, color:m.c }}>{m.v!=null?Math.round(m.v):'—'}<span style={{ fontSize:10 }}>{m.u}</span></div>
-                      <div style={{ fontSize:10, color:t.textMuted }}>{m.l}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize:11, color:t.textMuted, marginBottom:10 }}>Per {barcodeResult.serving_size}</div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={()=>setPendingFood(barcodeResult)} style={{ flex:1, background:t.teal, border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer' }}>Add This Food →</button>
-                  <button onClick={()=>{setBarcodeResult(null);setBarcodeVal('')}} style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', fontSize:12, color:t.textMuted, cursor:'pointer' }}>Scan Again</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* SAVED FOODS MODE */}
-        {addMode==='saved' && !pendingFood && (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>⭐ Saved Foods</span>
-              <button onClick={()=>setAddMode('none')} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
-            </div>
-            {savedFoods.length===0
-              ? <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'16px 0' }}>No saved foods yet — they appear here after you log meals.</div>
-              : savedFoods.map((f:any,i:number)=>(
-                <button key={i} onClick={()=>setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size })}
-                  style={{ width:'100%', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", display:'block' }}>
-                  <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{f.food_name}</div>
-                  <div style={{ fontSize:11, color:t.textMuted }}>{f.calories?`${Math.round(f.calories)} kcal`:''}{f.protein_g?` · ${f.protein_g}g P`:''} {f.serving_size||''}</div>
-                </button>
-              ))
-            }
-          </div>
-        )}
-
-        {/* MEAL LABEL PICKER */}
         {pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.teal}40`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>Adding: {pendingFood.food_name}</div>
@@ -595,7 +430,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 </button>
               ))}
             </div>
-            <button onClick={()=>{ setPendingFood(null); setPendingServings(1); setBarcodeResult(null) }}
+            <button onClick={()=>{ setPendingFood(null); setPendingServings(1) }}
               style={{ background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'8px 16px', fontSize:12, color:t.textMuted, cursor:'pointer' }}>← Back</button>
           </div>
         )}
