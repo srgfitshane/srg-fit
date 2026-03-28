@@ -1,0 +1,379 @@
+'use client'
+import { useState, useEffect } from 'react'
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+function toDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate()
+}
+
+// Quick-add modal
+function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: any) {
+  const inp = { background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", width:'100%', colorScheme:'dark' as const }
+  const [mode,       setMode]       = useState<'pick'|'workout'|'event'>('pick')
+  const [title,      setTitle]      = useState('')
+  const [wkMode,     setWkMode]     = useState<'blank'|'template'>('blank')
+  const [templates,  setTemplates]  = useState<any[]>([])
+  const [templateId, setTemplateId] = useState('')
+  const [eventType,  setEventType]  = useState('check_in_call')
+  const [saving,     setSaving]     = useState(false)
+  const [error,      setError]      = useState('')
+
+  useEffect(() => { if (mode === 'workout') loadTemplates() }, [mode])
+
+  const loadTemplates = async () => {
+    const { data } = await supabase.from('programs').select('id, name').eq('is_template', true).order('name')
+    setTemplates(data || [])
+  }
+
+  const EVENT_TYPES = [
+    { id:'check_in_call', label:'Check-in Call', icon:'📞', color:'#8b5cf6' },
+    { id:'consultation',  label:'Consultation',  icon:'💬', color:'#f472b6' },
+    { id:'rest_day',      label:'Rest Day',       icon:'😴', color:'#5a5a78' },
+    { id:'note',          label:'Coach Note',     icon:'📌', color:'#f5a623' },
+  ]
+
+  const handleSave = async () => {
+    setSaving(true); setError('')
+    try {
+      if (mode === 'workout') {
+        if (wkMode === 'blank') {
+          if (!title.trim()) { setError('Enter a workout title'); setSaving(false); return }
+          await supabase.from('workout_sessions').insert({
+            client_id:clientId, coach_id:coachId, title:title.trim(),
+            scheduled_date:date, status:'scheduled',
+          })
+        } else {
+          if (!templateId) { setError('Select a template'); setSaving(false); return }
+          const { data: tplSessions } = await supabase
+            .from('workout_sessions').select('id,title,day_number,day_label')
+            .eq('program_id', templateId).eq('status','template').order('day_number')
+          const tpl = templates.find(t => t.id === templateId)
+          if (!tplSessions?.length) {
+            await supabase.from('workout_sessions').insert({
+              client_id:clientId, coach_id:coachId,
+              title:tpl?.name||'Workout', scheduled_date:date, status:'scheduled',
+            })
+          } else {
+            for (let i = 0; i < tplSessions.length; i++) {
+              const s = tplSessions[i]
+              const d = new Date(date + 'T12:00:00')
+              d.setDate(d.getDate() + i)
+              const { data: ns } = await supabase.from('workout_sessions').insert({
+                client_id:clientId, coach_id:coachId,
+                title:s.title||s.day_label||`Day ${i+1}`,
+                scheduled_date:toDateStr(d), status:'scheduled',
+              }).select().single()
+              if (ns) {
+                const { data: exs } = await supabase.from('session_exercises')
+                  .select('*').eq('session_id', s.id).order('order_index')
+                if (exs?.length) await supabase.from('session_exercises').insert(
+                  exs.map(({ id:_a, session_id:_b, created_at:_c, ...rest }: any) => ({ ...rest, session_id:ns.id }))
+                )
+              }
+            }
+          }
+        }
+      } else if (mode === 'event') {
+        const meta = EVENT_TYPES.find(e => e.id === eventType)
+        await supabase.from('calendar_events').insert({
+          coach_id:coachId, client_id:clientId,
+          title:title.trim()||meta?.label||'Event', event_type:eventType,
+          start_at:date+'T10:00:00', color:meta?.color||'#8b5cf6',
+        })
+      }
+      onSave()
+    } catch(e: any) { setError(e.message); setSaving(false) }
+  }
+
+  // pick screen
+  if (mode === 'pick') return (
+    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420 }}>
+        <div style={{ fontSize:13, fontWeight:800, color:t.textMuted, marginBottom:16, textAlign:'center' }}>
+          {new Date(date+'T12:00').toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <button onClick={()=>setMode('workout')}
+            style={{ padding:'18px 12px', borderRadius:14, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontWeight:800, fontSize:13, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:24 }}>🏋️</span>Workout
+          </button>
+          <button onClick={()=>setMode('event')}
+            style={{ padding:'18px 12px', borderRadius:14, border:'1px solid '+t.border, background:t.surfaceHigh, color:t.textDim, fontWeight:800, fontSize:13, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:24 }}>📅</span>Event / Note
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // workout screen
+  if (mode === 'workout') return (
+    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+          <button onClick={()=>setMode('pick')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13 }}>← Back</button>
+          <div style={{ fontSize:13, fontWeight:800 }}>Schedule Workout</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18 }}>✕</button>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {(['blank','template'] as const).map(m=>(
+              <button key={m} onClick={()=>setWkMode(m)}
+                style={{ padding:'10px', borderRadius:10, border:'1px solid '+(wkMode===m?t.teal:t.border), background:wkMode===m?t.tealDim:'transparent', color:wkMode===m?t.teal:t.textDim, fontWeight:700, fontSize:12, cursor:'pointer' }}>
+                {m==='blank' ? '✏️ Blank' : '📋 Template'}
+              </button>
+            ))}
+          </div>
+          {wkMode==='blank' && (
+            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Workout title (e.g. Upper Body A)..." style={inp} autoFocus />
+          )}
+          {wkMode==='template' && (
+            templates.length===0
+              ? <div style={{ fontSize:12, color:t.textMuted, padding:'8px 0' }}>No templates yet. Create one in Programs.</div>
+              : <select value={templateId} onChange={e=>setTemplateId(e.target.value)} style={inp}>
+                  <option value="">— Select template —</option>
+                  {templates.map(tpl=><option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
+                </select>
+          )}
+          {error && <div style={{ fontSize:12, color:t.red, background:t.redDim, borderRadius:8, padding:'8px 12px' }}>{error}</div>}
+          <button onClick={handleSave} disabled={saving}
+            style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', opacity:saving?0.6:1 }}>
+            {saving ? 'Scheduling...' : '📅 Schedule Workout'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // event screen
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+          <button onClick={()=>setMode('pick')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13 }}>← Back</button>
+          <div style={{ fontSize:13, fontWeight:800 }}>Add Event</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18 }}>✕</button>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {EVENT_TYPES.map(et=>(
+              <button key={et.id} onClick={()=>setEventType(et.id)}
+                style={{ padding:'10px', borderRadius:10, border:'1px solid '+(eventType===et.id?et.color:t.border), background:eventType===et.id?et.color+'22':'transparent', color:eventType===et.id?et.color:t.textDim, fontWeight:700, fontSize:12, cursor:'pointer', textAlign:'left' }}>
+                {et.icon} {et.label}
+              </button>
+            ))}
+          </div>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional — defaults to type)" style={inp} />
+          {error && <div style={{ fontSize:12, color:t.red, background:t.redDim, borderRadius:8, padding:'8px 12px' }}>{error}</div>}
+          <button onClick={handleSave} disabled={saving}
+            style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', opacity:saving?0.6:1 }}>
+            {saving ? 'Saving...' : '📅 Add to Schedule'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main ScheduleTab component ────────────────────────────────────────────────
+export default function ScheduleTab({ clientId, coachId, clientName, supabase, t }: {
+  clientId: string
+  coachId: string
+  clientName: string
+  supabase: any
+  t: any
+}) {
+  const today = new Date()
+  const [viewMonth,  setViewMonth]  = useState(today.getMonth())
+  const [viewYear,   setViewYear]   = useState(today.getFullYear())
+  const [sessions,   setSessions]   = useState<any[]>([])
+  const [calEvents,  setCalEvents]  = useState<any[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [addModal,   setAddModal]   = useState<string|null>(null) // date string or null
+  const [delConfirm, setDelConfirm] = useState<any>(null) // item to delete
+
+  useEffect(() => { load() }, [clientId])
+
+  const load = async () => {
+    setLoading(true)
+    const [{ data: sess }, { data: evts }] = await Promise.all([
+      supabase.from('workout_sessions')
+        .select('id, title, scheduled_date, status')
+        .eq('client_id', clientId)
+        .not('scheduled_date', 'is', null)
+        .neq('status', 'template')
+        .order('scheduled_date'),
+      supabase.from('calendar_events')
+        .select('id, title, event_type, start_at, color')
+        .eq('client_id', clientId)
+        .order('start_at'),
+    ])
+    setSessions(sess || [])
+    setCalEvents(evts || [])
+    setLoading(false)
+  }
+
+  const deleteSession = async (id: string) => {
+    await supabase.from('workout_sessions').delete().eq('id', id)
+    setSessions(p => p.filter(s => s.id !== id))
+    setDelConfirm(null)
+  }
+  const deleteEvent = async (id: string) => {
+    await supabase.from('calendar_events').delete().eq('id', id)
+    setCalEvents(p => p.filter(e => e.id !== id))
+    setDelConfirm(null)
+  }
+
+  // Build calendar grid
+  const firstDay = new Date(viewYear, viewMonth, 1)
+  const lastDay  = new Date(viewYear, viewMonth + 1, 0)
+  const cells: (Date|null)[] = [
+    ...Array(firstDay.getDay()).fill(null),
+    ...Array.from({ length: lastDay.getDate() }, (_, i) => new Date(viewYear, viewMonth, i + 1))
+  ]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const itemsForDay = (d: Date) => {
+    const ds = toDateStr(d)
+    const sess = sessions
+      .filter(s => s.scheduled_date === ds)
+      .map(s => ({ ...s, _type: 'session', _color: s.status === 'completed' ? '#22c55e' : s.status === 'in_progress' ? '#f5a623' : t.teal }))
+    const evts = calEvents
+      .filter(e => e.start_at?.startsWith(ds))
+      .map(e => ({ ...e, _type: 'event', _color: e.color || '#8b5cf6' }))
+    return [...sess, ...evts]
+  }
+
+  const STATUS_LABEL: Record<string,string> = {
+    scheduled: 'Scheduled', in_progress: 'In Progress',
+    completed: 'Done', skipped: 'Skipped',
+  }
+  const EVENT_ICON: Record<string,string> = {
+    check_in_call:'📞', consultation:'💬', rest_day:'😴', note:'📌', session:'🏋️', other:'📅',
+  }
+
+  if (loading) return (
+    <div style={{ padding:40, textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading schedule...</div>
+  )
+
+  return (
+    <div style={{ padding:'20px 24px', maxWidth:900, margin:'0 auto' }}>
+
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:15, fontWeight:800 }}>📅 Schedule</div>
+          <div style={{ fontSize:12, color:t.textMuted }}>Click any day to add a workout or event</div>
+        </div>
+        <button onClick={()=>{ setViewMonth(today.getMonth()); setViewYear(today.getFullYear()) }}
+          style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer' }}>
+          Today
+        </button>
+      </div>
+
+      {/* Month nav */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+        <button onClick={()=>{ const d=new Date(viewYear,viewMonth-1,1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }}
+          style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 12px', color:t.text, cursor:'pointer', fontSize:16 }}>‹</button>
+        <div style={{ fontSize:15, fontWeight:800, flex:1, textAlign:'center' }}>{MONTHS[viewMonth]} {viewYear}</div>
+        <button onClick={()=>{ const d=new Date(viewYear,viewMonth+1,1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }}
+          style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 12px', color:t.text, cursor:'pointer', fontSize:16 }}>›</button>
+      </div>
+
+      {/* Day headers */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+          <div key={d} style={{ textAlign:'center', fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', padding:'4px 0' }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3 }}>
+        {cells.map((d, i) => {
+          const isToday   = d ? isSameDay(d, today) : false
+          const dayItems  = d ? itemsForDay(d) : []
+          const dateStr   = d ? toDateStr(d) : ''
+          return (
+            <div key={i}
+              onClick={() => { if (d) setAddModal(dateStr) }}
+              style={{ minHeight:72, background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'50':t.border), borderRadius:10, padding:'5px 6px', cursor:d?'pointer':'default', opacity:d?1:0.25, position:'relative' }}>
+              {d && <>
+                <div style={{ fontSize:11, fontWeight:isToday?900:600, color:isToday?t.teal:t.textDim, marginBottom:3 }}>{d.getDate()}</div>
+                {dayItems.map(item => (
+                  <div key={item.id}
+                    onClick={e => { e.stopPropagation(); setDelConfirm(item) }}
+                    style={{ fontSize:9, fontWeight:700, background:item._color+'22', color:item._color, border:'1px solid '+item._color+'40', borderRadius:4, padding:'2px 5px', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}
+                    title={item.title}>
+                    {item._type==='session' ? '🏋️' : (EVENT_ICON[item.event_type]||'📅')} {item.title}
+                  </div>
+                ))}
+                {/* + button always visible on hover via JS alternative — show on empty days */}
+                {dayItems.length === 0 && (
+                  <div style={{ position:'absolute', bottom:4, right:4, width:16, height:16, borderRadius:'50%', background:t.border, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:t.textMuted, fontWeight:700 }}>+</div>
+                )}
+              </>}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display:'flex', gap:16, marginTop:16, flexWrap:'wrap' }}>
+        {[{color:t.teal,label:'Scheduled'},{color:'#f5a623',label:'In Progress'},{color:'#22c55e',label:'Completed'},{color:'#8b5cf6',label:'Event'}].map(l=>(
+          <div key={l.label} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:t.textDim }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:l.color }}/>
+            {l.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Add modal */}
+      {addModal && (
+        <AddDayModal
+          date={addModal}
+          clientId={clientId}
+          coachId={coachId}
+          supabase={supabase}
+          t={t}
+          onSave={async () => { setAddModal(null); await load() }}
+          onClose={() => setAddModal(null)}
+        />
+      )}
+
+      {/* Delete / detail confirm */}
+      {delConfirm && (
+        <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={()=>setDelConfirm(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:360 }}>
+            <div style={{ fontSize:14, fontWeight:800, marginBottom:8 }}>
+              {delConfirm._type==='session' ? '🏋️' : (EVENT_ICON[delConfirm.event_type]||'📅')} {delConfirm.title}
+            </div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:6 }}>
+              {delConfirm._type==='session' ? delConfirm.scheduled_date : delConfirm.start_at?.split('T')[0]}
+            </div>
+            {delConfirm._type==='session' && (
+              <div style={{ marginBottom:16 }}>
+                <span style={{ fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:5, background:delConfirm._color+'22', color:delConfirm._color }}>
+                  {STATUS_LABEL[delConfirm.status] || delConfirm.status}
+                </span>
+              </div>
+            )}
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setDelConfirm(null)}
+                style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.textDim, cursor:'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={()=>delConfirm._type==='session' ? deleteSession(delConfirm.id) : deleteEvent(delConfirm.id)}
+                style={{ flex:1, background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.red, cursor:'pointer' }}>
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

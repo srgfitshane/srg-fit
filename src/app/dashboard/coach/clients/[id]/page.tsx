@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import ScheduleTab from '@/components/coach/ScheduleTab'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import {
@@ -21,6 +22,7 @@ const TABS = [
   { id:'overview',  label:'Overview',  icon:'👤' },
   { id:'training',  label:'Training',  icon:'🏋' },
   { id:'program',   label:'Program',   icon:'📋' },
+  { id:'schedule',  label:'Schedule',  icon:'📅' },
   { id:'nutrition', label:'Nutrition', icon:'🥦' },
   { id:'checkins',  label:'Check-ins', icon:'✓' },
   { id:'goals',     label:'Goals',           icon:'🎯' },
@@ -896,6 +898,17 @@ export default function ClientDetail() {
               router={router}
               t={t}
               onProgramChange={setProgram}
+            />
+          )}
+
+          {/* SCHEDULE TAB */}
+          {activeTab === 'schedule' && client && (
+            <ScheduleTab
+              clientId={client.id}
+              coachId={coachId!}
+              clientName={client.profiles?.full_name || ''}
+              supabase={supabase}
+              t={t}
             />
           )}
 
