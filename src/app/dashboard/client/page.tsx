@@ -564,139 +564,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
 
-          <div className="fade" style={{ background:'linear-gradient(135deg,'+t.teal+'14,'+t.orange+'08)', border:'1px solid '+t.teal+'26', borderRadius:18, padding:'16px', marginBottom:14 }}>
-            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, marginBottom:12 }}>
-              <div>
-                <div style={{ fontSize:11, fontWeight:800, color:t.teal, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Today Priorities</div>
-                <div style={{ fontSize:16, fontWeight:800, lineHeight:1.3 }}>
-                  {todayPriorities[0]?.title || 'You are caught up for today'}
-                </div>
-                <div style={{ fontSize:12, color:t.textMuted, marginTop:4, lineHeight:1.5 }}>
-                  {todayPriorities[0]?.detail || 'Use the quick actions below to review training, nutrition, and coach support when you need it.'}
-                </div>
-              </div>
-              {todayPriorities[0] && (
-                <button onClick={todayPriorities[0].onClick}
-                  style={{ background:todayPriorities[0].background, border:'1px solid '+todayPriorities[0].accent+'44', borderRadius:12, padding:'10px 14px', fontSize:12, fontWeight:800, color:todayPriorities[0].accent, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
-                  {todayPriorities[0].action}
-                </button>
-              )}
-            </div>
-            <div className="today-summary-grid" style={{ marginBottom:12 }}>
-              {prioritySummary.map((item) => (
-                <div key={item.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                  <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{item.label}</div>
-                  <div style={{ fontSize:18, fontWeight:900, color:item.color }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="today-actions-grid">
-              <button onClick={() => nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : openTab('training')}
-                style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:12, fontWeight:800, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
-                {nextSession ? (nextSession.status === 'in_progress' ? 'Resume workout' : 'Start workout') : 'View training'}
-              </button>
-              <button onClick={() => openTab('messages')}
-                style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:12, fontWeight:800, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
-                Message coach
-              </button>
-              <button onClick={() => openTab('nutrition')}
-                style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:12, fontWeight:800, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
-                Log nutrition
-              </button>
-            </div>
-          </div>
-
-          {/* ── 2. RECENT WINS PLAQUE ── */}
-          {(milestones.length > 0 || recentPRs.length > 0) && (
-            <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+t.yellow+'35', borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>🏆</div>
-              <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>🏆 Recent Wins</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                {recentPRs.map((pr:any) => (
-                  <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ width:6, height:6, borderRadius:'50%', background:t.yellow, flexShrink:0 }}/>
-                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR — {pr.exercise?.name}</div>
-                    <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs 💪</div>
-                  </div>
-                ))}
-                {milestones.map((m:any) => (
-                  <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ width:6, height:6, borderRadius:'50%', background:t.orange, flexShrink:0 }}/>
-                    <div style={{ fontSize:13, color:t.text, flex:1, lineHeight:1.4 }}>{m.message}</div>
-                    <button onClick={()=>dismissMilestone(m.id)} style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-
-          {/* Goals Card */}
-          {activeGoals.length > 0 && (
-            <div className="fade" style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, fontWeight:800, color:t.purple, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
-                🎯 Active Goals
-              </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {activeGoals.map((goal:any) => {
-                  const pct = goal.target_value && goal.current_value
-                    ? Math.min(100, Math.round((Number(goal.current_value)/Number(goal.target_value))*100))
-                    : null
-                  const isPast = goal.target_date && new Date(goal.target_date) < new Date()
-                  const daysLeft = goal.target_date
-                    ? Math.ceil((new Date(goal.target_date).getTime() - Date.now()) / 86400000)
-                    : null
-                  return (
-                    <div key={goal.id} style={{ background:t.surface, border:'1px solid '+(isPast?t.red+'30':t.purple+'30'), borderRadius:14, padding:'13px 14px' }}>
-                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8, marginBottom: pct!==null ? 10 : 0 }}>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:13, fontWeight:800, color:t.text, marginBottom:3 }}>{goal.title}</div>
-                          <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const }}>
-                            {goal.target_value && (
-                              <span style={{ fontSize:11, color:t.textMuted }}>
-                                Target: <strong style={{color:t.purple}}>{goal.target_value}{goal.unit ? ' '+goal.unit : ''}</strong>
-                                {goal.current_value != null ? <> · Now: <strong style={{color:t.teal}}>{goal.current_value}{goal.unit ? ' '+goal.unit : ''}</strong></> : null}
-                              </span>
-                            )}
-                            {daysLeft !== null && (
-                              <span style={{ fontSize:11, color: isPast ? t.red : daysLeft <= 7 ? t.orange : t.textMuted, fontWeight: daysLeft <= 7 ? 700 : 400 }}>
-                                {isPast ? 'Overdue' : daysLeft === 0 ? 'Due today!' : daysLeft === 1 ? '1 day left' : daysLeft+' days left'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {pct !== null && pct >= 100 && (
-                          <div style={{ fontSize:18, flexShrink:0 }}>🏆</div>
-                        )}
-                      </div>
-                      {pct !== null && (
-                        <div>
-                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginBottom:4 }}>
-                            <span>Progress</span>
-                            <span style={{ fontWeight:700, color: pct>=100?t.teal:pct>=50?t.orange:t.textDim }}>{pct}%</span>
-                          </div>
-                          <div style={{ height:5, borderRadius:3, background:t.surfaceHigh, overflow:'hidden' }}>
-                            <div style={{ height:'100%', width:pct+'%', borderRadius:3, background: pct>=100?t.teal:'linear-gradient(90deg,'+t.purple+','+t.orange+')', transition:'width 0.5s ease' }}/>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── 3. MORNING PULSE ── */}
+          {/* ── 2. MORNING PULSE ── */}
           {clientRecord && (
-            <div className="fade" id="morning-pulse-card">
+            <div className="fade" id="morning-pulse-card" style={{ marginBottom:14 }}>
               <MorningPulse
                 clientId={clientRecord.id}
                 today={today}
                 supabase={supabase}
                 existing={pulseData}
                 onSaved={() => {
-                  // Reload pulse data after save
                   supabase.from('daily_checkins').select('*')
                     .eq('client_id', clientRecord.id)
                     .eq('checkin_date', today)
@@ -775,6 +651,30 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
+          {/* ── 3. RECENT WINS ── */}
+          {(milestones.length > 0 || recentPRs.length > 0) && (
+            <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+t.yellow+'35', borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>🏆</div>
+              <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>🏆 Recent Wins</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {recentPRs.map((pr:any) => (
+                  <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:6, height:6, borderRadius:'50%', background:t.yellow, flexShrink:0 }}/>
+                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR — {pr.exercise?.name}</div>
+                    <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs 💪</div>
+                  </div>
+                ))}
+                {milestones.map((m:any) => (
+                  <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:6, height:6, borderRadius:'50%', background:t.orange, flexShrink:0 }}/>
+                    <div style={{ fontSize:13, color:t.text, flex:1, lineHeight:1.4 }}>{m.message}</div>
+                    <button onClick={()=>dismissMilestone(m.id)} style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', flexShrink:0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── 4. TODAY'S WORKOUT ── */}
           <div style={{ background:t.surface, border:'1px solid '+(nextSession ? t.border : t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
             <div style={{ height:3, background: nextSession ? 'linear-gradient(90deg,'+t.teal+','+t.orange+')' : 'linear-gradient(90deg,'+t.purple+','+t.teal+')' }}/>
@@ -795,10 +695,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       </div>
                     </div>
                   </div>
-                  <button onClick={()=>router.push(`/dashboard/client/workout/${nextSession.id}`)}
-                    style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {nextSession.status === 'in_progress' ? 'Resume Workout 🔄' : nextSession.isToday ? 'Start Workout 💪' : 'Start Early 💪'}
-                  </button>
+                  {(nextSession.status === 'in_progress' || nextSession.isToday) && (
+                    <button onClick={()=>router.push(`/dashboard/client/workout/${nextSession.id}`)}
+                      style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      {nextSession.status === 'in_progress' ? 'Resume Workout 🔄' : 'Start Workout 💪'}
+                    </button>
+                  )}
                 </>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
