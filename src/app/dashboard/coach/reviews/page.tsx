@@ -54,10 +54,8 @@ type WorkoutSessionRow = {
   duration_seconds: number | null
   coach_reviewed_at: string | null
   coach_review_video_url: string | null
-  client?: {
-    id: string
-    profile?: { full_name?: string | null } | null
-  } | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client?: any
 }
 
 type SessionExerciseRow = {
@@ -231,7 +229,7 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
 
   const stopAll = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
-    clearInterval(timerRef.current)
+    clearInterval(timerRef.current ?? undefined)
     if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop()
     screenStreamRef.current?.getTracks().forEach(t => t.stop())
     camStreamRef.current?.getTracks().forEach(t => t.stop())
@@ -371,7 +369,7 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
       const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' })
       setPreviewUrl(URL.createObjectURL(blob))
       setPreviewBlob(blob)
-      clearInterval(timerRef.current)
+      clearInterval(timerRef.current ?? undefined)
       setPhase('preview')
     }
     recorderRef.current = rec
@@ -385,7 +383,7 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
 
   function stopRecording() {
     recorderRef.current?.stop()
-    clearInterval(timerRef.current)
+    clearInterval(timerRef.current ?? undefined)
     screenStreamRef.current?.getTracks().forEach(t => t.stop())
     camStreamRef.current?.getTracks().forEach(t => t.stop())
   }

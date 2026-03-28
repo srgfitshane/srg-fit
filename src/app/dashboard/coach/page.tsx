@@ -279,7 +279,7 @@ export default function CoachDashboard() {
         .slice(0, 3)
         .map((client) => ({
           id: `checkin-${client.id}`,
-          type: 'checkin',
+          type: 'checkin' as const,
           priority: 78 + Math.min(getDaysSince(client.last_checkin_at) || 8, 10),
           title: `${client.profile?.full_name || 'Client'} needs a recovery check-in`,
           detail: formatCheckInGap(client.last_checkin_at),
@@ -331,7 +331,7 @@ export default function CoachDashboard() {
       const queueItems: QueueItem[] = [
         ...((reviewSessionsRes.data || []) as ReviewQueueSession[]).map((session) => ({
           id: `review-${session.id}`,
-          type: 'review',
+          type: 'review' as const,
           priority: new Date(session.review_due_at).getTime() < Date.now() ? 100 : 85,
           title: `${session.client?.profile?.full_name || 'Client'} workout review due`,
           detail: `${session.title} · ${new Date(session.completed_at).toLocaleDateString([], { month:'short', day:'numeric' })}`,
@@ -341,7 +341,7 @@ export default function CoachDashboard() {
         })),
         ...((unreadInsightsRes.data || []) as InsightQueueItem[]).map((insight) => ({
           id: `insight-${insight.id}`,
-          type: 'insight',
+          type: 'insight' as const,
           priority: insight.severity === 'urgent' ? 95 : insight.severity === 'high' ? 80 : 60,
           title: insight.content?.title || 'New coaching insight',
           detail: insight.content?.suggested_action || insight.category || 'Review this client insight',
@@ -351,7 +351,7 @@ export default function CoachDashboard() {
         })),
         ...((unreadMessagesRes.data || []) as InboxMessage[]).slice(0, 4).map((message, index) => ({
           id: `message-${message.sender_id}-${index}`,
-          type: 'message',
+          type: 'message' as const,
           priority: 70 - index,
           title: `${clientNameByProfileId.get(message.sender_id) || 'Client'} needs a reply`,
           detail: truncate(message.body || 'Unread client message'),
@@ -733,7 +733,7 @@ export default function CoachDashboard() {
                           <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{client.profile?.email}</div>
                         </div>
                         <div style={{ fontSize:11, color:t.textMuted, flexShrink:0 }} className="client-since">
-                          {new Date(client.start_date).toLocaleDateString([], { month:'short', year:'numeric' })}
+                          {client.start_date ? new Date(client.start_date).toLocaleDateString([], { month:'short', year:'numeric' }) : '—'}
                         </div>
                         <div className="client-actions" onClick={e=>e.stopPropagation()}>
                           {client.paused ? (

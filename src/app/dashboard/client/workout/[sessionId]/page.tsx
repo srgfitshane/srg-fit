@@ -30,6 +30,9 @@ interface WorkoutSession {
   started_at?: string | null
   scheduled_date?: string | null
   title?: string | null
+  coach_id?: string | null
+  day_label?: string | null
+  notes_coach?: string | null
 }
 
 interface ExerciseLibraryItem {
@@ -53,10 +56,14 @@ interface SessionExercise {
   original_exercise_name?: string | null
   exercise_name: string
   sets_prescribed?: number | null
+  reps_prescribed?: string | null
+  weight_prescribed?: string | null
   skipped?: boolean | null
   notes_client?: string | null
+  notes_coach?: string | null
   rest_seconds?: number | null
   client_video_url?: string | null
+  swap_reason?: string | null
   exercise?: ExerciseLibraryItem | null
 }
 
@@ -98,7 +105,8 @@ export default function ActiveWorkoutPage() {
   const [videoUploads, setVideoUploads]   = useState<Record<string,string>>({})
   const [videoUploading, setVideoUploading] = useState<Record<string,boolean>>({})
   const router = useRouter()
-  const { sessionId } = useParams()
+  const { sessionId: sessionIdParam } = useParams()
+  const sessionId = sessionIdParam as string
 
   const [session, setSession] = useState<WorkoutSession | null>(null)
   const [exercises, setExercises] = useState<SessionExercise[]>([])
@@ -161,12 +169,12 @@ export default function ActiveWorkoutPage() {
   // Workout elapsed timer
   useEffect(() => {
     timerRef.current = setInterval(() => setElapsedSeconds(s => s+1), 1000)
-    return () => clearInterval(timerRef.current)
+    return () => clearInterval(timerRef.current ?? undefined)
   }, [])
 
   // Rest countdown
   useEffect(() => {
-    if (!restActive || restTimer === null || restTimer <= 0) return () => clearTimeout(restRef.current || undefined)
+    if (!restActive || restTimer === null || restTimer <= 0) return () => clearTimeout(restRef.current ?? undefined)
     restRef.current = setTimeout(() => {
       setRestTimer((current) => {
         if (current === null) return current
@@ -177,7 +185,7 @@ export default function ActiveWorkoutPage() {
         return current - 1
       })
     }, 1000)
-    return () => clearTimeout(restRef.current)
+    return () => clearTimeout(restRef.current ?? undefined)
   }, [restActive, restTimer])
 
   const loadSession = useCallback(async () => {
@@ -235,7 +243,7 @@ export default function ActiveWorkoutPage() {
       const signedExercises = await withSignedMedia((exs || []) as SessionExercise[])
       setExercises(signedExercises)
       setSkipped(signedExercises.reduce((acc, exerciseRow) => {
-        acc[exerciseRow.id] = !!exerciseRow.skipped || exerciseRow.notes_client?.startsWith('[SKIPPED]')
+        acc[exerciseRow.id] = !!exerciseRow.skipped || !!(exerciseRow.notes_client?.startsWith('[SKIPPED]'))
         return acc
       }, {} as Record<string, boolean>))
       setSetData(initSets)
@@ -323,10 +331,10 @@ export default function ActiveWorkoutPage() {
                 .limit(6)
 
               if (priorSets && priorSets.length > 0) {
-                prev[ex.id] = priorSets.map((s: LoggedSetRow) => ({
+                prev[ex.id] = priorSets.map((s: { reps_completed: number|null; weight_value: number|null; weight_unit: string|null }) => ({
                   reps: s.reps_completed,
                   weight: s.weight_value,
-                  unit: s.weight_unit || 'lbs'
+                  unit: (s.weight_unit as 'lbs'|'kg'|'bw') || 'lbs'
                 }))
               }
             }
@@ -340,7 +348,7 @@ export default function ActiveWorkoutPage() {
     const signedExercises = await withSignedMedia((exs || []) as SessionExercise[])
     setExercises(signedExercises)
     setSkipped(signedExercises.reduce((acc, exerciseRow) => {
-      acc[exerciseRow.id] = !!exerciseRow.skipped || exerciseRow.notes_client?.startsWith('[SKIPPED]')
+      acc[exerciseRow.id] = !!exerciseRow.skipped || !!(exerciseRow.notes_client?.startsWith('[SKIPPED]'))
       return acc
     }, {} as Record<string, boolean>))
     setSetData(initSets)
@@ -486,7 +494,7 @@ export default function ActiveWorkoutPage() {
     setExercises(prev => prev.map(ex => ex.id === exerciseRow.id ? {
       ...ex,
       exercise_id: replacement.id,
-      exercise_name: replacement.name,
+      exercise_name: replacement.name || '',
       original_exercise_id: originalExerciseId,
       original_exercise_name: originalExerciseName,
       swap_exercise_id: replacement.id,
@@ -1034,7 +1042,7 @@ export default function ActiveWorkoutPage() {
                     )}
 
                     {/* Muscles */}
-                    {(ex.exercise?.muscles?.length > 0 || ex.exercise?.secondary_muscles?.length > 0) && (
+                    {((ex.exercise?.muscles?.length ?? 0) > 0 || (ex.exercise?.secondary_muscles?.length ?? 0) > 0) && (
                       <div style={{marginBottom:10}}>
                         <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>Muscles</div>
                         <div style={{display:'flex',flexWrap:'wrap' as const,gap:5}}>
