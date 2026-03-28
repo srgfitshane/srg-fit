@@ -1,12 +1,5 @@
 import type { Metadata, Viewport } from "next"
-import { DM_Sans } from "next/font/google"
 import "./globals.css"
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-  display: "swap",
-})
 
 export const metadata: Metadata = {
   title: "SRG Fit",
@@ -39,7 +32,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={dmSans.className} style={{ margin: 0, padding: 0, background: "#080810" }}>
+      <body style={{ margin: 0, padding: 0, background: "#080810" }}>
         <a href="#main-content" className="skip-link">Skip to content</a>
         <main id="main-content">
           {children}
