@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildInviteUrl, getInviteAvailability, isCoachRole } from '../src/lib/invite-utils.ts'
+import { buildInviteUrl, getInviteAvailability, isCoachRole } from '../src/lib/invite-utils'
 
 assert.equal(
   getInviteAvailability({ status: 'pending', expires_at: '2099-01-01T00:00:00.000Z' }, new Date('2026-01-01T00:00:00.000Z')),
