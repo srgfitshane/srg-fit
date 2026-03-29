@@ -323,41 +323,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           </div>
         )}
 
-        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:'16px 18px', marginBottom:18 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
-            <div>
-              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Daily Nutrition Snapshot</div>
-              <div style={{ fontSize:16, fontWeight:800, color:t.text }}>
-                {entries.length === 0
-                  ? 'Start with your first meal or snack'
-                  : plan && leadMacro?.remaining != null
-                  ? `${leadMacro.remaining}${leadMacro.unit} ${leadMacro.label.toLowerCase()} still open`
-                  : `${entries.length} food item${entries.length !== 1 ? 's' : ''} logged`}
-              </div>
-              <div style={{ fontSize:12, color:t.textMuted, marginTop:4, lineHeight:1.5 }}>
-                {entries.length === 0
-                  ? 'Logging early makes it much easier to stay on track through the day.'
-                  : plan && leadMacro?.remaining != null
-                  ? 'Use search, saved foods, or quick add to close the gap without losing momentum.'
-                  : 'Your coach can make better adjustments when this log stays current.'}
-              </div>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(88px,1fr))', gap:8, flex:'1 1 220px' }}>
-              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 12px' }}>
-                <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Meals Logged</div>
-                <div style={{ fontSize:16, fontWeight:800, color:t.teal }}>{usedMeals.length}</div>
-              </div>
-              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 12px' }}>
-                <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Entries</div>
-                <div style={{ fontSize:16, fontWeight:800, color:t.orange }}>{entries.length}</div>
-              </div>
-              <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 12px' }}>
-                <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Plan Status</div>
-                <div style={{ fontSize:16, fontWeight:800, color:plan ? t.green : t.textMuted }}>{plan ? 'Active' : 'Pending'}</div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Macro rings */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(88px,1fr))', gap:10, marginBottom:20 }}>
