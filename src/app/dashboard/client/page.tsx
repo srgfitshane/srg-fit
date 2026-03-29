@@ -802,35 +802,19 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           </div>
 
-          {/* ── 5. EXTRA ACTIVITY ── */}
+          {/* ── 5. EXTRA ACTIVITY — only shown when logged ── */}
+          {recentActivities.length > 0 && (
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
             <div style={{ height:3, background:'linear-gradient(90deg,'+t.green+','+t.teal+')' }}/>
             <div style={{ padding:'14px 16px' }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:12 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
-                  <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🌿</div>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:14, fontWeight:800 }}>Extra activity</div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Walks, hikes, cardio, sports, mobility, recovery work.</div>
-                  </div>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🌿</div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:14, fontWeight:800 }}>Extra activity</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Outside your programmed sessions</div>
                 </div>
-                <button
-                  onClick={openActivityLog}
-                  style={{ background:t.greenDim, border:'1px solid '+t.green+'35', borderRadius:999, padding:'7px 12px', fontSize:11, fontWeight:800, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}
-                >
-                  + Log
-                </button>
               </div>
-
-              {recentActivities.length === 0 ? (
-                <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px' }}>
-                  <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>Nothing logged yet</div>
-                  <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6 }}>
-                    Track the extra work you do outside your programmed sessions so Shane can see the full picture.
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                   {recentActivities.slice(0, 3).map((activity) => {
                     const config = getClientActivityConfig(activity.activity_type)
                     const summary = summarizeClientActivity(activity)
@@ -855,10 +839,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       </div>
                     )
                   })}
-                </div>
-              )}
+              </div>
             </div>
           </div>
+          )}
 
           {/* ── 6. TASKS / HABITS ── */}
           {habits.length > 0 && (
