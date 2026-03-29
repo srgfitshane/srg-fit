@@ -341,7 +341,17 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     setBarcodeLoading(false)
   }
 
-  const totals = { calories: log?.total_calories||0, protein: log?.total_protein||0, carbs: log?.total_carbs||0, fat: log?.total_fat||0 }
+  const totals = entries.reduce((acc, entry) => ({
+    calories: acc.calories + (entry.calories || 0),
+    protein: acc.protein + (entry.protein_g || 0),
+    carbs: acc.carbs + (entry.carbs_g || 0),
+    fat: acc.fat + (entry.fat_g || 0),
+  }), {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  })
   const pct = (val: number, target: number) => target > 0 ? Math.min(100, Math.round((val/target)*100)) : 0
   const macros = [
     { label:'Calories', val:Math.round(totals.calories), target:plan?.calories_target, unit:'kcal', color:'#c8f545' },
