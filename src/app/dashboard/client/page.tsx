@@ -7,6 +7,17 @@ import RichMessageThread from '@/components/messaging/RichMessageThread'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import NutritionTab from './nutrition-tab'
 import MorningPulse from '@/components/client/MorningPulse'
+import {
+  CLIENT_ACTIVITY_INTENSITIES,
+  CLIENT_ACTIVITY_TYPES,
+  formatClientActivityDate,
+  getClientActivityConfig,
+  getClientActivityTitle,
+  summarizeClientActivity,
+  type ClientActivityRecord,
+  type ClientActivityType,
+  type ClientActivityIntensity,
+} from '@/lib/client-activities'
 
 const TENOR_KEY = process.env.NEXT_PUBLIC_TENOR_KEY || ''
 
@@ -27,6 +38,28 @@ const getGreeting = () => {
 }
 
 type DashboardTab = 'today' | 'nutrition' | 'resources' | 'messages' | 'metrics' | 'training' | 'billing'
+
+type ActivityDraft = {
+  activity_date: string
+  activity_type: ClientActivityType
+  title: string
+  duration_minutes: string
+  distance_value: string
+  distance_unit: string
+  intensity: ClientActivityIntensity
+  notes: string
+}
+
+const createActivityDraft = (today: string): ActivityDraft => ({
+  activity_date: today,
+  activity_type: 'walk',
+  title: '',
+  duration_minutes: '',
+  distance_value: '',
+  distance_unit: 'mi',
+  intensity: 'moderate',
+  notes: '',
+})
 
 function coerceDashboardTab(tab: string | null): DashboardTab {
   switch (tab) {
@@ -133,6 +166,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [callNote, setCallNote] = useState('')
   const [callSubmitting, setCallSubmitting] = useState(false)
   const [callSubmitted, setCallSubmitted] = useState(false)
+  const [recentActivities, setRecentActivities] = useState<ClientActivityRecord[]>([])
+  const [showActivityLog, setShowActivityLog] = useState(false)
+  const [activityDraft, setActivityDraft] = useState<ActivityDraft>(() => createActivityDraft(
+    (() => {
+      const d = new Date()
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    })()
+  ))
+  const [activitySaving, setActivitySaving] = useState(false)
   // Habit daily refresh tracking
   const [habitLoadDate, setHabitLoadDate] = useState('')
   // Morning Pulse check-in
@@ -254,6 +296,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: todayJournal },
           { data: pastData },
           { data: goalsData },
+          { data: activityData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
@@ -282,6 +325,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('journal_entries').select('*').eq('client_id', cid).eq('entry_date', todayStr).single(),
           supabase.from('journal_entries').select('*').eq('client_id', cid).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
+          supabase.from('client_activities').select('*').eq('client_id', cid).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(5),
         ])
 
         setHabits(habitData || [])
@@ -312,6 +356,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         setPastEntries(pastData || [])
         setActiveGoals(goalsData || [])
+        setRecentActivities((activityData || []) as ClientActivityRecord[])
     } // end loadClientData
 
     const load = async () => {
@@ -449,6 +494,45 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     setPastEntries(pastData || [])
   }
 
+  const openActivityLog = () => {
+    setPlusOpen(false)
+    setActivityDraft(createActivityDraft(today))
+    setShowActivityLog(true)
+  }
+
+  const saveActivity = async () => {
+    if (!clientRecord || activitySaving) return
+
+    setActivitySaving(true)
+
+    const payload = {
+      client_id: clientRecord.id,
+      coach_id: clientRecord.coach_id,
+      activity_date: activityDraft.activity_date || today,
+      activity_type: activityDraft.activity_type,
+      title: activityDraft.title.trim() || null,
+      duration_minutes: activityDraft.duration_minutes ? Number(activityDraft.duration_minutes) : null,
+      distance_value: activityDraft.distance_value ? Number(activityDraft.distance_value) : null,
+      distance_unit: activityDraft.distance_value ? activityDraft.distance_unit : null,
+      intensity: activityDraft.intensity,
+      notes: activityDraft.notes.trim() || null,
+    }
+
+    const { data } = await supabase
+      .from('client_activities')
+      .insert(payload)
+      .select('*')
+      .single()
+
+    if (data) {
+      setRecentActivities((prev) => [data as ClientActivityRecord, ...prev].slice(0, 5))
+      setShowActivityLog(false)
+      setActivityDraft(createActivityDraft(today))
+    }
+
+    setActivitySaving(false)
+  }
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
@@ -463,6 +547,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setJournalDate(today)
     }
   }, [today, journalDate])
+
+  useEffect(() => {
+    setActivityDraft((prev) => prev.activity_date === today ? prev : { ...prev, activity_date: today })
+  }, [today])
 
   // Reset habit logs if the client keeps the app open past midnight
   useEffect(() => {
@@ -714,7 +802,65 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           </div>
 
-          {/* ── 5. TASKS / HABITS ── */}
+          {/* ── 5. EXTRA ACTIVITY ── */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
+            <div style={{ height:3, background:'linear-gradient(90deg,'+t.green+','+t.teal+')' }}/>
+            <div style={{ padding:'14px 16px' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:12 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
+                  <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🌿</div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:14, fontWeight:800 }}>Extra activity</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Walks, hikes, cardio, sports, mobility, recovery work.</div>
+                  </div>
+                </div>
+                <button
+                  onClick={openActivityLog}
+                  style={{ background:t.greenDim, border:'1px solid '+t.green+'35', borderRadius:999, padding:'7px 12px', fontSize:11, fontWeight:800, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}
+                >
+                  + Log
+                </button>
+              </div>
+
+              {recentActivities.length === 0 ? (
+                <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px' }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>Nothing logged yet</div>
+                  <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6 }}>
+                    Track the extra work you do outside your programmed sessions so Shane can see the full picture.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {recentActivities.slice(0, 3).map((activity) => {
+                    const config = getClientActivityConfig(activity.activity_type)
+                    const summary = summarizeClientActivity(activity)
+                    return (
+                      <div key={activity.id} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                          <div style={{ width:32, height:32, borderRadius:10, background:t.greenDim, border:'1px solid '+t.green+'25', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                            {config.icon}
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                              <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{getClientActivityTitle(activity)}</div>
+                              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', whiteSpace:'nowrap' as const }}>
+                                {formatClientActivityDate(activity.activity_date)}
+                              </div>
+                            </div>
+                            <div style={{ fontSize:11, color:t.textMuted, marginTop:3, lineHeight:1.5 }}>
+                              {summary.length > 0 ? summary.join(' • ') : 'Added to your activity log'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── 6. TASKS / HABITS ── */}
           {habits.length > 0 && (
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
@@ -762,7 +908,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ── 6. JOURNAL ── */}
+          {/* ── 7. JOURNAL ── */}
           <div className="fade" style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
             <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
             <div style={{ padding:'14px 16px' }}>
@@ -958,12 +1104,19 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </svg>
                 Log Food
               </button>
+              <button onClick={openActivityLog}
+                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.green+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 21s-6.7-4.35-8.78-9.31C1.55 7.79 3.86 4 7.89 4c1.84 0 3.06.87 4.11 2.13C13.05 4.87 14.27 4 16.11 4c4.03 0 6.34 3.79 4.67 7.69C18.7 16.65 12 21 12 21z"/>
+                </svg>
+                Log Activity
+              </button>
               <button onClick={()=>{ setPlusOpen(false); nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : openTab('training') }}
                 style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
                 </svg>
-                {nextSession ? 'Start Workout' : 'Log Activity'}
+                {nextSession ? 'Start Workout' : 'Open Training'}
               </button>
             </div>
           )}
@@ -1052,6 +1205,143 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Save ✓
               </button>
+            </div>
+          </>
+        )}
+
+        {/* Activity Log Modal */}
+        {showActivityLog && (
+          <>
+            <div onClick={()=>{ if (!activitySaving) setShowActivityLog(false) }}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 48px',maxHeight:'90vh',overflowY:'auto' as const}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 20px'}}/>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:18}}>
+                <div>
+                  <div style={{fontSize:17,fontWeight:800,color:t.text}}>Log extra activity</div>
+                  <div style={{fontSize:13,color:t.textMuted,marginTop:4,lineHeight:1.6}}>
+                    Add the extra work you did outside your programmed workout so Shane can see the full week.
+                  </div>
+                </div>
+                <button onClick={()=>setShowActivityLog(false)} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:20,lineHeight:1,padding:0}}>✕</button>
+              </div>
+
+              <div style={{display:'grid',gap:14}}>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Date</div>
+                  <input
+                    type="date"
+                    value={activityDraft.activity_date}
+                    onChange={e=>setActivityDraft(prev => ({ ...prev, activity_date: e.target.value }))}
+                    style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as const,outline:'none',boxSizing:'border-box' as const}}
+                  />
+                </div>
+
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Activity type</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(3, minmax(0, 1fr))',gap:8}}>
+                    {CLIENT_ACTIVITY_TYPES.map(option => {
+                      const active = activityDraft.activity_type === option.id
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={()=>setActivityDraft(prev => ({ ...prev, activity_type: option.id }))}
+                          style={{background:active?t.greenDim:t.surfaceUp,border:'1px solid '+(active?t.green+'40':t.border),borderRadius:12,padding:'10px 8px',color:active?t.green:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}
+                        >
+                          <div style={{fontSize:18,marginBottom:4}}>{option.icon}</div>
+                          <div style={{fontSize:11,fontWeight:700}}>{option.label}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Title</div>
+                  <input
+                    value={activityDraft.title}
+                    onChange={e=>setActivityDraft(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="Optional: Neighborhood walk, trail hike, pickleball..."
+                    style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",outline:'none',boxSizing:'border-box' as const}}
+                  />
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Duration</div>
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={activityDraft.duration_minutes}
+                      onChange={e=>setActivityDraft(prev => ({ ...prev, duration_minutes: e.target.value }))}
+                      placeholder="Minutes"
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",outline:'none',boxSizing:'border-box' as const}}
+                    />
+                  </div>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Intensity</div>
+                    <select
+                      value={activityDraft.intensity}
+                      onChange={e=>setActivityDraft(prev => ({ ...prev, intensity: e.target.value as ClientActivityIntensity }))}
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",outline:'none',boxSizing:'border-box' as const,colorScheme:'dark' as const}}
+                    >
+                      {CLIENT_ACTIVITY_INTENSITIES.map(option => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'1fr 110px',gap:10}}>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Distance</div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      inputMode="decimal"
+                      value={activityDraft.distance_value}
+                      onChange={e=>setActivityDraft(prev => ({ ...prev, distance_value: e.target.value }))}
+                      placeholder="Optional"
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",outline:'none',boxSizing:'border-box' as const}}
+                    />
+                  </div>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Unit</div>
+                    <select
+                      value={activityDraft.distance_unit}
+                      onChange={e=>setActivityDraft(prev => ({ ...prev, distance_unit: e.target.value }))}
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",outline:'none',boxSizing:'border-box' as const,colorScheme:'dark' as const}}
+                    >
+                      <option value="mi">mi</option>
+                      <option value="km">km</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Notes</div>
+                  <textarea
+                    rows={3}
+                    value={activityDraft.notes}
+                    onChange={e=>setActivityDraft(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Optional: easy recovery walk, long hike with family, legs felt heavy, got some fresh air..."
+                    style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",resize:'none' as const,outline:'none',boxSizing:'border-box' as const,lineHeight:1.6}}
+                  />
+                </div>
+              </div>
+
+              <div style={{display:'flex',gap:10,marginTop:20}}>
+                <button onClick={()=>setShowActivityLog(false)}
+                  style={{flex:1,padding:'12px',borderRadius:11,border:'1px solid '+t.border,background:'transparent',color:t.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancel
+                </button>
+                <button onClick={saveActivity} disabled={activitySaving}
+                  style={{flex:1,padding:'12px',borderRadius:11,border:'none',background:`linear-gradient(135deg,${t.green},${t.teal})`,color:'#000',fontSize:13,fontWeight:800,cursor:activitySaving?'default':'pointer',opacity:activitySaving?0.7:1,fontFamily:"'DM Sans',sans-serif"}}>
+                  {activitySaving ? 'Saving...' : 'Save activity'}
+                </button>
+              </div>
             </div>
           </>
         )}

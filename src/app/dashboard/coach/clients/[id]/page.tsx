@@ -5,6 +5,13 @@ import ScheduleTab from '@/components/coach/ScheduleTab'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import {
+  formatClientActivityDate,
+  getClientActivityConfig,
+  getClientActivityTitle,
+  summarizeClientActivity,
+  type ClientActivityRecord,
+} from '@/lib/client-activities'
+import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
 } from 'recharts'
@@ -67,12 +74,25 @@ export default function ClientDetail() {
   const [approvingCall, setApprovingCall] = useState<string|null>(null)
   const [zoomLink,      setZoomLink]      = useState('')
   const [goals,         setGoals]         = useState<any[]>([])
+  const [activities,    setActivities]    = useState<ClientActivityRecord[]>([])
   const [showAddGoal,   setShowAddGoal]   = useState(false)
   const [goalForm,      setGoalForm]      = useState({ title:'', description:'', goal_type:'custom', target_value:'', unit:'', target_date:'' })
   const [goalSaving,    setGoalSaving]    = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
   const [showFlag, setShowFlag] = useState(false)
+  const [coachNotes, setCoachNotes] = useState('')
+  const [notesSaved, setNotesSaved] = useState(false)
+  const [clientGender, setClientGender] = useState('')
+  const [genderSaved, setGenderSaved] = useState(false)
+  const [forms,        setForms]        = useState<any[]>([])
+  const [showAssignForm, setShowAssignForm] = useState(false)
+  const [assignFormId,   setAssignFormId]   = useState('')
+  const [assignNote,     setAssignNote]     = useState('')
+  const [assigning,      setAssigning]      = useState(false)
+  const [assignedDone,   setAssignedDone]   = useState(false)
+  const [resending,      setResending]      = useState(false)
+  const [resendDone,     setResendDone]     = useState(false)
   const router   = useRouter()
   const params   = useParams()
   const supabase = createClient()
@@ -116,6 +136,7 @@ export default function ClientDetail() {
         { data: intakeData },
         { data: schedData },
         { data: assignData },
+        { data: activityData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
         supabase.from('checkins').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(10),
@@ -128,6 +149,7 @@ export default function ClientDetail() {
         supabase.from('client_intake_profiles').select('*').eq('client_id', clientId).single(),
         supabase.from('check_in_schedules').select('*').eq('client_id', clientId).eq('coach_id', user.id).order('created_at', { ascending: false }).limit(1).single(),
         supabase.from('client_form_assignments').select('*, form:onboarding_forms(title)').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).order('assigned_at', { ascending: false }).limit(20),
+        supabase.from('client_activities').select('*').eq('client_id', clientId).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(8),
       ])
 
       setForms(formData || [])
@@ -150,6 +172,7 @@ export default function ClientDetail() {
       setJournalEntries(journalData || [])
       setIntake(intakeData || null)
       setCheckinSchedule(schedData || null)
+      setActivities((activityData || []) as ClientActivityRecord[])
       if (schedData) {
         setScheduleForm({
           send_day:  schedData.send_day  ?? 0,
@@ -178,19 +201,6 @@ export default function ClientDetail() {
     }
     load()
   }, [clientId])
-
-  const [coachNotes, setCoachNotes] = useState('')
-  const [notesSaved, setNotesSaved] = useState(false)
-  const [clientGender, setClientGender] = useState('')
-  const [genderSaved, setGenderSaved] = useState(false)
-  const [forms,        setForms]        = useState<any[]>([])
-  const [showAssignForm, setShowAssignForm] = useState(false)
-  const [assignFormId,   setAssignFormId]   = useState('')
-  const [assignNote,     setAssignNote]     = useState('')
-  const [assigning,      setAssigning]      = useState(false)
-  const [assignedDone,   setAssignedDone]   = useState(false)
-  const [resending,      setResending]      = useState(false)
-  const [resendDone,     setResendDone]     = useState(false)
 
   const assignForm = async () => {
     if (!assignFormId || !coachId) return
@@ -463,6 +473,49 @@ export default function ClientDetail() {
                   </div>
                 )) : (
                   <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No workouts logged yet</div>
+                )}
+              </div>
+
+              {/* Recent activity */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:800 }}>Recent Activity</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>
+                    Outside formal training
+                  </div>
+                </div>
+                {activities.length > 0 ? (
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {activities.slice(0, 5).map((activity) => {
+                      const config = getClientActivityConfig(activity.activity_type)
+                      const summary = summarizeClientActivity(activity)
+                      return (
+                        <div key={activity.id} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
+                          <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                            <div style={{ width:34, height:34, borderRadius:10, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>
+                              {config.icon}
+                            </div>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:4 }}>
+                                <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{getClientActivityTitle(activity)}</div>
+                                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, whiteSpace:'nowrap' as const }}>
+                                  {formatClientActivityDate(activity.activity_date)}
+                                </div>
+                              </div>
+                              <div style={{ fontSize:11, color:t.green, fontWeight:700, marginBottom:4 }}>{config.label}</div>
+                              <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.55 }}>
+                                {summary.length > 0 ? summary.join(' • ') : 'Logged extra movement'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>
+                    No extra activity logged yet.
+                  </div>
                 )}
               </div>
 
