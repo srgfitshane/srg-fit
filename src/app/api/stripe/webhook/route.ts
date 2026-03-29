@@ -1,22 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+type StripeSubscriptionWithPeriods = Stripe.Subscription & {
+  current_period_start?: number | null
+  current_period_end?: number | null
+}
+
+// Supabase database types have not been generated in this repo yet, so we use the base client here.
+let supabaseAdmin: SupabaseClient | null = null
+
+function getSupabaseAdminClient(): SupabaseClient {
+  if (!supabaseAdmin) {
+    supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+  }
+  return supabaseAdmin
+}
 
 export async function POST(req: NextRequest) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as any })
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as Stripe.LatestApiVersion })
+  const supabase = getSupabaseAdminClient()
   const body = await req.text()
-  const sig = req.headers.get('stripe-signature')!
+  const sig = req.headers.get('stripe-signature')
+
+  if (!sig) {
+    return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 })
+  }
 
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
-  } catch (err: any) {
-    console.error('Webhook signature failed:', err.message)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown signature error'
+    console.error('Webhook signature failed:', message)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -48,28 +67,36 @@ export async function POST(req: NextRequest) {
       }
 
       case 'invoice.payment_failed': {
-        const inv = event.data.object as any
-        const subId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id
+        const inv = event.data.object as Stripe.Invoice
+        const invoiceSubscription = inv.parent?.type === 'subscription_details'
+          ? inv.parent.subscription_details?.subscription
+          : null
+        const subId = typeof invoiceSubscription === 'string' ? invoiceSubscription : invoiceSubscription?.id
+        const customerId = typeof inv.customer === 'string' ? inv.customer : inv.customer?.id
         if (subId) {
           await supabase.from('subscriptions')
             .update({ status: 'past_due', updated_at: new Date().toISOString() })
             .eq('stripe_subscription_id', subId)
-          await supabase.from('clients')
-            .update({ subscription_status: 'past_due' })
-            .eq('stripe_customer_id', inv.customer as string)
+          if (customerId) {
+            await supabase.from('clients')
+              .update({ subscription_status: 'past_due' })
+              .eq('stripe_customer_id', customerId)
+          }
         }
         break
       }
     }
-  } catch (err: any) {
-    console.error('Webhook handler error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error: unknown) {
+    console.error('Webhook handler error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown webhook handler error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe: Stripe) {
+  const supabase = getSupabaseAdminClient()
   const email = session.customer_email || session.customer_details?.email
   if (!email) { console.error('No email on checkout session', session.id); return }
 
@@ -115,7 +142,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   const { data: existingClient } = await supabase
     .from('clients').select('id').eq('profile_id', userId).single()
 
-  const coachId = process.env.COACH_PROFILE_ID || '133f93d0-2399-4542-bc57-db4de8b98d79'
+  const coachId = process.env.COACH_PROFILE_ID
+  if (!coachId) {
+    throw new Error('COACH_PROFILE_ID is not configured')
+  }
 
   if (!existingClient) {
     await supabase.from('clients').insert({
@@ -134,9 +164,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   }
 
   // 4. Fetch subscription details from Stripe
-  let subData: Stripe.Subscription | null = null
+  let subData: StripeSubscriptionWithPeriods | null = null
   if (stripeSubId) {
-    subData = await stripe.subscriptions.retrieve(stripeSubId) as Stripe.Subscription
+    subData = await stripe.subscriptions.retrieve(stripeSubId) as StripeSubscriptionWithPeriods
   }
 
   // 5. Upsert subscription record
@@ -144,7 +174,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     .from('clients').select('id').eq('profile_id', userId).single()
 
   if (clientRow && stripeSubId) {
-    const s = subData as any
     await supabase.from('subscriptions').upsert({
       client_id: clientRow.id,
       stripe_subscription_id: stripeSubId,
@@ -152,9 +181,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       status: 'trialing',
       plan_name: subData?.items?.data?.[0]?.price?.nickname || 'Coaching',
       stripe_price_id: subData?.items?.data?.[0]?.price?.id || '',
-      trial_end: s?.trial_end ? new Date(s.trial_end * 1000).toISOString() : null,
-      current_period_start: s?.current_period_start ? new Date(s.current_period_start * 1000).toISOString() : null,
-      current_period_end: s?.current_period_end ? new Date(s.current_period_end * 1000).toISOString() : null,
+      trial_end: subData?.trial_end ? new Date(subData.trial_end * 1000).toISOString() : null,
+      current_period_start: subData?.current_period_start ? new Date(subData.current_period_start * 1000).toISOString() : null,
+      current_period_end: subData?.current_period_end ? new Date(subData.current_period_end * 1000).toISOString() : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'stripe_subscription_id' })
@@ -164,6 +193,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
 }
 
 async function handleTrialWillEnd(sub: Stripe.Subscription) {
+  const supabase = getSupabaseAdminClient()
   // Fires 3 days before trial ends — send reminder push notification
   const stripeCustomerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
   const { data: client } = await supabase
@@ -183,8 +213,9 @@ async function handleTrialWillEnd(sub: Stripe.Subscription) {
 }
 
 async function handleSubUpdate(sub: Stripe.Subscription, deleted = false) {
-  const s = sub as any
-  const stripeCustomerId = typeof s.customer === 'string' ? s.customer : s.customer?.id
+  const supabase = getSupabaseAdminClient()
+  const subscription = sub as StripeSubscriptionWithPeriods
+  const stripeCustomerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
   const status = deleted ? 'canceled' : sub.status
   const planName = sub.items?.data?.[0]?.price?.nickname || 'Coaching'
   const stripePriceId = sub.items?.data?.[0]?.price?.id || ''
@@ -193,11 +224,11 @@ async function handleSubUpdate(sub: Stripe.Subscription, deleted = false) {
     status,
     plan_name: planName,
     stripe_price_id: stripePriceId,
-    trial_end: s.trial_end ? new Date(s.trial_end * 1000).toISOString() : null,
-    current_period_start: s.current_period_start ? new Date(s.current_period_start * 1000).toISOString() : null,
-    current_period_end: s.current_period_end ? new Date(s.current_period_end * 1000).toISOString() : null,
-    cancel_at_period_end: s.cancel_at_period_end,
-    canceled_at: s.canceled_at ? new Date(s.canceled_at * 1000).toISOString() : null,
+    trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+    current_period_start: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
+    current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+    cancel_at_period_end: subscription.cancel_at_period_end,
+    canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
     updated_at: new Date().toISOString(),
   }).eq('stripe_subscription_id', sub.id)
 

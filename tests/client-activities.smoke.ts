@@ -3,7 +3,7 @@ import {
   formatClientActivityDate,
   getClientActivityTitle,
   summarizeClientActivity,
-} from '../src/lib/client-activities'
+} from '../src/lib/client-activities.ts'
 
 assert.equal(getClientActivityTitle({ activity_type: 'walk', title: null }), 'Walk')
 assert.equal(getClientActivityTitle({ activity_type: 'other', title: 'Neighborhood trail' }), 'Neighborhood trail')

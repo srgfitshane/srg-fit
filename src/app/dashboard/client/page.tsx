@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
+import { useState, useEffect, Suspense, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
-import RichMessageThread from '@/components/messaging/RichMessageThread'
 import NotificationBell from '@/components/notifications/NotificationBell'
-import NutritionTab from './nutrition-tab'
 import MorningPulse from '@/components/client/MorningPulse'
 import {
   CLIENT_ACTIVITY_INTENSITIES,
@@ -29,6 +28,16 @@ const t = {
   pink:"#f472b6", pinkDim:"#f472b615",
   text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
 }
+
+const RichMessageThread = dynamic(() => import('@/components/messaging/RichMessageThread'), {
+  ssr: false,
+  loading: () => <InlineLoader label="Loading messages..." />,
+})
+
+const NutritionTab = dynamic(() => import('./nutrition-tab'), {
+  ssr: false,
+  loading: () => <InlineLoader label="Loading nutrition..." />,
+})
 
 const getGreeting = () => {
   const h = new Date().getHours()
@@ -78,6 +87,19 @@ function coerceDashboardTab(tab: string | null): DashboardTab {
 function formatSessionDate(date?: string | null) {
   if (!date) return 'No date scheduled'
   return new Date(`${date}T00:00:00`).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })
+}
+
+function getLocalDateString() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+function InlineLoader({ label }: { label: string }) {
+  return (
+    <div style={{ padding: 24, textAlign:'center', color:t.textMuted, fontSize:13 }}>
+      {label}
+    </div>
+  )
 }
 
 const NAV = [
@@ -190,20 +212,18 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [activeGoals,      setActiveGoals]      = useState<any[]>([])
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
-  // Use local date, not UTC — prevents "rest day" when DB is UTC-ahead of client's timezone
-  const today = (() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  })()
+  const supabase = useMemo(() => createClient(), [])
+  const [today, setToday] = useState(() => getLocalDateString())
 
-  const incompleteHabits = habits.filter((habit: any) => {
-    const value = habitLogs[habit.id] || 0
-    if (habit.habit_type === 'check') return !value
-    return value < (habit.target || 0)
-  }).length
+  const incompleteHabits = useMemo(() => (
+    habits.filter((habit: any) => {
+      const value = habitLogs[habit.id] || 0
+      if (habit.habit_type === 'check') return !value
+      return value < (habit.target || 0)
+    }).length
+  ), [habitLogs, habits])
 
-  const todayPriorities = [
+  const todayPriorities = useMemo(() => ([
     !pulseData ? {
       id: 'pulse',
       title: 'Log your morning pulse',
@@ -249,14 +269,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       action: 'Review habits',
       onClick: () => document.getElementById('daily-habits-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
     } : null,
-  ].filter(Boolean) as Array<{ id: string; title: string; detail: string; accent: string; background: string; action: string; onClick: () => void }>
+  ].filter(Boolean) as Array<{ id: string; title: string; detail: string; accent: string; background: string; action: string; onClick: () => void }>), [incompleteHabits, nextSession, pendingCheckins, pendingReviews.length, pulseData, router])
 
-  const prioritySummary = [
+  const prioritySummary = useMemo(() => ([
     { label: 'Coach feedback', value: pendingReviews.length, color: t.green },
     { label: 'Open forms', value: pendingCheckins.length, color: t.purple },
     { label: 'Habits left', value: incompleteHabits, color: t.orange },
     { label: 'Messages', value: activeNav === 'messages' ? 1 : 0, color: t.teal },
-  ]
+  ]), [activeNav, incompleteHabits, pendingCheckins.length, pendingReviews.length])
 
   const openTab = (tab: DashboardTab) => {
     if (tab !== 'messages') setMessagesView('hub')
@@ -279,6 +299,13 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     }
     router.push(`/dashboard/client?tab=${tab}`)
   }
+
+  useEffect(() => {
+    const now = new Date()
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime()
+    const timer = setTimeout(() => setToday(getLocalDateString()), msUntilMidnight)
+    return () => clearTimeout(timer)
+  }, [today])
 
   useEffect(() => {
     const loadClientData = async (clientData: any, todayStr: string) => {
@@ -333,7 +360,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         const logMap: Record<string,number> = {}
         habitLogData?.forEach((l:any) => { logMap[l.habit_id] = l.value })
         setHabitLogs(logMap)
-        setHabitLoadDate(today)
+        setHabitLoadDate(todayStr)
 
         setMilestones(milestoneData || [])
         setRecentPRs(prData || [])
@@ -369,9 +396,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         const { data: prof } = await supabase
           .from('profiles').select('*').eq('id', clientData.profile_id).single()
         setProfile(prof)
-        const { data: coachProf } = await supabase
-          .from('profiles').select('id').eq('id', clientData.coach_id).single()
-        if (coachProf) setCoachProfileId(coachProf.id)
+        setCoachProfileId(clientData.coach_id || null)
         await loadClientData(clientData, today)
         setLoading(false)
         return
@@ -381,35 +406,27 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data: prof } = await supabase
-        .from('profiles').select('*').eq('id', user.id).single()
+      const [{ data: prof }, { data: clientData }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase
+          .from('clients')
+          .select('*')
+          .eq('profile_id', user.id)
+          .eq('active', true)
+          .single(),
+      ])
       setProfile(prof)
-
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('profile_id', user.id)
-        .eq('active', true)
-        .single()
       setClientRecord(clientData)
+      setCoachProfileId(clientData?.coach_id || null)
 
       if (clientData) {
-        const { data: coachProf } = await supabase
-          .from('profiles').select('id').eq('id', clientData.coach_id).single()
-        if (coachProf) setCoachProfileId(coachProf.id)
         await loadClientData(clientData, today)
       }
 
       setLoading(false)
     } // end load
-    load()
-
-    // Midnight refresh — re-run when the date rolls over so Today tab stays fresh
-    const now = new Date()
-    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime()
-    const midnightTimer = setTimeout(() => { load() }, msUntilMidnight)
-    return () => clearTimeout(midnightTimer)
-  }, [])
+    void load()
+  }, [overrideClientId, router, supabase, today])
 
   useEffect(() => {
     if (overrideClientId) return
@@ -421,6 +438,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setMessagesView('hub')
     }
   }, [activeNav, messagesView])
+
+  const refreshPulseData = useCallback(() => {
+    if (!clientRecord?.id) return
+    void supabase
+      .from('daily_checkins')
+      .select('*')
+      .eq('client_id', clientRecord.id)
+      .eq('checkin_date', today)
+      .single()
+      .then(({ data }) => setPulseData(data))
+  }, [clientRecord?.id, supabase, today])
 
 
   const logHabit = async (habitId: string, value: number) => {
@@ -660,13 +688,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 today={today}
                 supabase={supabase}
                 existing={pulseData}
-                onSaved={() => {
-                  supabase.from('daily_checkins').select('*')
-                    .eq('client_id', clientRecord.id)
-                    .eq('checkin_date', today)
-                    .single()
-                    .then(({ data }) => setPulseData(data))
-                }}
+                onSaved={refreshPulseData}
               />
             </div>
           )}

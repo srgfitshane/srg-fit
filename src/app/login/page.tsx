@@ -97,7 +97,7 @@ export default function LoginPage() {
           {mode === 'forgot' && (
             <>
               <div style={{ fontSize:13, color:s.dim, marginBottom:20, lineHeight:1.6 }}>
-                Enter your email and we'll send you a link to reset your password.
+                Enter your email and we&apos;ll send you a link to reset your password.
               </div>
               <div style={{ marginBottom:24 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:s.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Email</div>

@@ -1,37 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SRG Fit
 
-## Getting Started
+SRG Fit is Coach Shane's online coaching platform. It combines client onboarding, workouts, nutrition, messaging, community, progress tracking, billing, and coach-side review workflows in one Next.js and Supabase application.
 
-First, run the development server:
+## Product Areas
+
+- Marketing and checkout flow for new clients
+- Invite-based client onboarding
+- Coach dashboard for client management, reviews, outreach, programming, and insights
+- Client dashboard for daily actions, workouts, nutrition, messages, metrics, and resources
+- Stripe subscription billing
+- Supabase-backed notifications, messaging, community, and activity tracking
+
+## Stack
+
+- Next.js App Router
+- React 19
+- TypeScript
+- Supabase Auth, Database, Storage, and Edge Functions
+- Stripe subscriptions
+
+## Local Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Create `.env.local` with the required values:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SITE_URL=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PRICE_MONTHLY=
+NEXT_PUBLIC_STRIPE_PRICE_WEEKLY=
+COACH_PROFILE_ID=
+FATSECRET_CLIENT_ID=
+FATSECRET_CLIENT_SECRET=
+NEXT_PUBLIC_TENOR_KEY=
+```
+
+3. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Verification Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
-## Learn More
+Notes:
 
-To learn more about Next.js, take a look at the following resources:
+- `npm test` runs the current smoke checks for invite utilities and client activity utilities.
+- `npm run build` should be run from a clean working tree or after clearing a locked `.next` directory.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Key Routes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `/join` for public signup and checkout
+- `/login` for returning users
+- `/invite/[token]` for invite acceptance
+- `/set-password` for invite and recovery completion
+- `/onboarding` for client intake
+- `/dashboard/coach` for the coach home
+- `/dashboard/client` for the client home
 
-## Deploy on Vercel
+## Current Readiness Priorities
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Keep launch-critical flows stable: checkout, webhook provisioning, invite acceptance, onboarding, and messaging
+- Avoid misleading behavior in incomplete integrations
+- Protect coaching and health-adjacent data with explicit access controls
+- Prefer small, reviewable changes over broad rewrites
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# srg-fit
+## Deployment Notes
+
+- Stripe webhook provisioning requires `COACH_PROFILE_ID` to be set correctly
+- Calendar sync is not fully implemented yet and should not be marketed as active
+- Supabase migrations in `supabase/migrations/` cover only part of the schema history, so production schema changes should be validated against the live project before release

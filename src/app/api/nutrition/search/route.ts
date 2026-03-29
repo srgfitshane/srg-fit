@@ -5,6 +5,7 @@ const FS_CLIENT_ID     = process.env.FATSECRET_CLIENT_ID || ''
 const FS_CLIENT_SECRET = process.env.FATSECRET_CLIENT_SECRET || ''
 
 let tokenCache: { token: string; expiresAt: number } | null = null
+type FatSecretTokenResponse = { access_token: string; expires_in: number }
 
 async function getToken(): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.expiresAt - 60_000) return tokenCache.token
@@ -19,7 +20,7 @@ async function getToken(): Promise<string> {
     }),
   })
   if (!res.ok) throw new Error(`Token failed: ${res.status}`)
-  const data = await res.json()
+  const data = await res.json() as FatSecretTokenResponse
   tokenCache = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 }
   return tokenCache.token
 }
@@ -56,7 +57,8 @@ export async function GET(req: NextRequest) {
     if (!res.ok) return NextResponse.json({ error: `API error ${res.status}` }, { status: res.status })
     const data = await res.json()
     return NextResponse.json(data)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

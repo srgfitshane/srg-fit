@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -19,7 +19,6 @@ export default function SetPasswordPage() {
 }
 
 function SetPasswordInner() {
-  const [initialHash, setInitialHash] = useState('SSR')
   const [password,  setPassword]  = useState('')
   const [confirm,   setConfirm]   = useState('')
   const [otpEmail,  setOtpEmail]  = useState('')
@@ -30,12 +29,10 @@ function SetPasswordInner() {
   const [sessionOk, setSessionOk] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const checkSession = async () => {
-      setInitialHash(window.location.hash || 'EMPTY')
-
       // 1. Hash fragment flow (desktop email clients)
       if (window.location.hash.includes('access_token=')) {
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
@@ -70,7 +67,7 @@ function SetPasswordInner() {
       }
     })
     return () => subscription.unsubscribe()
-  }, [searchParams])
+  }, [searchParams, supabase])
 
   const handleVerifyOtp = async () => {
     setError('')

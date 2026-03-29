@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as any })
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as Stripe.LatestApiVersion })
   try {
-    const { priceId, email, name } = await req.json()
+    const { priceId, email, name } = await req.json() as { priceId?: string; email?: string; name?: string }
     if (!priceId) return NextResponse.json({ error: 'Missing priceId' }, { status: 400 })
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin
@@ -35,8 +35,9 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ url: session.url })
-  } catch (err: any) {
-    console.error('Stripe checkout error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error: unknown) {
+    console.error('Stripe checkout error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
