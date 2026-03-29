@@ -18,8 +18,19 @@ const TYPE_ICONS: Record<string,string> = {
   checkin_brief:'📋', progression:'📈', red_flag:'🚨', recommended_action:'⚡',
 }
 
+type DashboardInsight = {
+  id: string
+  type: string
+  flag_level?: string | null
+  content?: {
+    title?: string | null
+    summary?: string | null
+    suggested_action?: string | null
+  } | null
+}
+
 interface Props {
-  insights: any[]
+  insights: DashboardInsight[]
   onDismiss: (id: string) => void
   onClose: () => void
 }
@@ -30,7 +41,7 @@ export default function AiInsightsPanel({ insights, onDismiss, onClose }: Props)
     <div style={{ position:'fixed', inset:0, background:'#000000aa', display:'flex', alignItems:'flex-start', justifyContent:'flex-end', zIndex:500, padding:16 }} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, width:380, maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.6)' }}>
         <div style={{ padding:'16px 18px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <div style={{ fontSize:14, fontWeight:800 }}>🧠 AI Insights <span style={{ fontSize:11, color:t.textMuted, fontWeight:500 }}>({insights.length} unread)</span></div>
+          <div style={{ fontSize:14, fontWeight:800 }}>🧠 Coach Copilot <span style={{ fontSize:11, color:t.textMuted, fontWeight:500 }}>({insights.length} unread)</span></div>
           <div style={{ display:'flex', gap:8, alignItems:'center' }}>
             <button onClick={()=>{ onClose(); router.push('/dashboard/coach/insights') }}
               style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -55,7 +66,7 @@ export default function AiInsightsPanel({ insights, onDismiss, onClose }: Props)
                         <span style={{ fontSize:12, fontWeight:700 }}>{c.title || insight.type}</span>
                         <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:20, background:fm.bg, color:fm.color }}>{fm.label}</span>
                       </div>
-                      {c.summary && <div style={{ fontSize:11, color:t.textDim, lineHeight:1.5, marginBottom:6, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' as any }}>{c.summary}</div>}
+                      {c.summary && <div style={{ fontSize:11, color:t.textDim, lineHeight:1.5, marginBottom:6, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' as const }}>{c.summary}</div>}
                       {c.suggested_action && <div style={{ fontSize:11, color:t.purple, fontWeight:600 }}>⚡ {c.suggested_action}</div>}
                     </div>
                     <button onClick={()=>onDismiss(insight.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>

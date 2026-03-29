@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 
@@ -39,11 +39,73 @@ const CATEGORY_LABELS: Record<string, string> = {
   at_risk_churn: 'At-risk churn',
 }
 
+const FEEDBACK_OPTIONS = [
+  { id: 'helpful', label: 'Helpful', color: '#22c55e' },
+  { id: 'too_obvious', label: 'Too obvious', color: '#f5a623' },
+  { id: 'off_target', label: 'Off target', color: '#ef4444' },
+] as const
+
+type ClientListItem = {
+  id: string
+  profiles?: { full_name?: string | null } | Array<{ full_name?: string | null }> | null
+}
+
+type CoachOption = {
+  label?: string | null
+  rationale?: string | null
+  tradeoff?: string | null
+}
+
+type InsightContent = {
+  title?: string | null
+  summary?: string | null
+  evidence?: string[] | null
+  bullets?: string[] | null
+  suggested_action?: string | null
+  follow_up?: string | null
+  coach_options?: CoachOption[] | null
+  draft_message?: string | null
+  coaching_note?: string | null
+}
+
+type InsightRecord = {
+  id: string
+  type: string
+  client_id: string
+  flag_level?: string | null
+  generated_at?: string | null
+  is_dismissed?: boolean | null
+  read?: boolean | null
+  is_saved?: boolean | null
+  is_reviewed?: boolean | null
+  action_status?: string | null
+  confidence?: number | null
+  category?: string | null
+  severity?: string | null
+  content?: InsightContent | null
+  source_refs?: Record<string, unknown> | null
+  coach_draft?: {
+    client_message?: string | null
+    coach_note?: string | null
+    programming_adjustment?: string | null
+  } | null
+  generation_meta?: {
+    model?: string | null
+  } | null
+  insight_data?: {
+    checkins_analyzed?: number | null
+    sessions_analyzed?: number | null
+    metrics_analyzed?: number | null
+  } | null
+  surfaced_count?: number | null
+  coach_feedback?: string | null
+}
+
 export default function CoachInsightsPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
-  const [clients,   setClients]   = useState<any[]>([])
-  const [insights,  setInsights]  = useState<any[]>([])
+  const [clients,   setClients]   = useState<ClientListItem[]>([])
+  const [insights,  setInsights]  = useState<InsightRecord[]>([])
   const [loading,   setLoading]   = useState(true)
   const [coachId,   setCoachId]   = useState('')
   const [generating,setGenerating]= useState(false)
@@ -55,10 +117,10 @@ export default function CoachInsightsPage() {
   const [saving,    setSaving]    = useState<string|null>(null)
   const [addingCal, setAddingCal] = useState<string|null>(null)
   const [actingOn, setActingOn] = useState<string|null>(null)
+  const [feedbacking, setFeedbacking] = useState<string|null>(null)
+  const [copiedDraft, setCopiedDraft] = useState<string|null>(null)
 
-  useEffect(()=>{ load() },[])
-
-  const load = async () => {
+  const load = useCallback(async () => {
     const {data:{user}} = await supabase.auth.getUser()
     if (!user){router.push('/login');return}
     setCoachId(user.id)
@@ -66,11 +128,14 @@ export default function CoachInsightsPage() {
       supabase.from('clients').select('id, profiles!profile_id(full_name)').eq('coach_id',user.id).eq('status','active'),
       supabase.from('ai_insights').select('*').eq('coach_id',user.id).eq('is_dismissed',false).order('generated_at',{ascending:false}).limit(50),
     ])
-    setClients(cls||[])
-    setInsights(ins||[])
-    if (cls?.length && !genClient) setGenClient(cls[0].id)
+    const safeClients = (cls || []) as ClientListItem[]
+    setClients(safeClients)
+    setInsights((ins || []) as InsightRecord[])
+    setGenClient((current) => current || safeClients[0]?.id || '')
     setLoading(false)
-  }
+  }, [router, supabase])
+
+  useEffect(()=>{ void load() },[load])
 
   const generate = async () => {
     if (!genClient || !coachId) return
@@ -86,8 +151,9 @@ export default function CoachInsightsPage() {
       if (data.error) throw new Error(data.error)
       await load()
       setExpanded(data.insight_id)
-    } catch(e:any) {
-      alert('Generation failed: '+e.message)
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error'
+      alert('Generation failed: ' + message)
     }
     setGenerating(false)
   }
@@ -109,7 +175,24 @@ export default function CoachInsightsPage() {
     setInsights(p=>p.filter(i=>i.id!==id))
   }
 
-  const updateActionStatus = async (id: string, action_status: string, extra: Record<string, any> = {}) => {
+  const submitFeedback = async (id: string, coach_feedback: string) => {
+    setFeedbacking(id)
+    await supabase.from('ai_insights').update({ coach_feedback }).eq('id', id)
+    setInsights(prev => prev.map(insight => insight.id === id ? { ...insight, coach_feedback } : insight))
+    setFeedbacking(null)
+  }
+
+  const copyDraft = async (id: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedDraft(id)
+      setTimeout(() => setCopiedDraft((current) => current === id ? null : current), 2000)
+    } catch {
+      // best effort only
+    }
+  }
+
+  const updateActionStatus = async (id: string, action_status: string, extra: Record<string, unknown> = {}) => {
     setActingOn(id)
     await supabase.from('ai_insights').update({
       action_status,
@@ -119,7 +202,7 @@ export default function CoachInsightsPage() {
     setActingOn(null)
   }
 
-  const addToCalendar = async (insight: any) => {
+  const addToCalendar = async (insight: InsightRecord) => {
     if (!coachId) return
     setAddingCal(insight.id)
     const c = insight.content || {}
@@ -166,11 +249,19 @@ export default function CoachInsightsPage() {
   }).filter(i => categoryFilter === 'all' ? true : i.category === categoryFilter)
 
   const unreadCount = insights.filter(i=>!i.read).length
-  const groupedCounts = insights.reduce((acc: Record<string, number>, insight) => {
+  const groupedCounts = insights.reduce<Record<string, number>>((acc, insight) => {
     const key = insight.category || 'uncategorized'
     acc[key] = (acc[key] || 0) + 1
     return acc
   }, {})
+
+  const getSourceCount = (refs: unknown) => {
+    if (!refs || typeof refs !== 'object') return 0
+    return Object.values(refs as Record<string, unknown>).reduce<number>((sum, value) => {
+      if (Array.isArray(value)) return sum + value.length
+      return sum
+    }, 0)
+  }
 
   const inp = {background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'9px 12px',fontSize:13,color:t.text,outline:'none' as const,fontFamily:"'DM Sans',sans-serif",width:'100%'}
 
@@ -187,7 +278,7 @@ export default function CoachInsightsPage() {
         <div style={{background:t.surface,borderBottom:'1px solid '+t.border,padding:'0 24px',display:'flex',alignItems:'center',height:60,gap:12}}>
           <button onClick={()=>router.push('/dashboard/coach')} aria-label="Back to coach dashboard" style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
           <div style={{width:1,height:28,background:t.border}}/>
-          <div style={{fontSize:14,fontWeight:700}}>🤖 AI Insights</div>
+          <div style={{fontSize:14,fontWeight:700}}>🤖 Coach Copilot</div>
           {unreadCount>0 && <div style={{background:t.purple,color:'#fff',borderRadius:20,padding:'2px 8px',fontSize:11,fontWeight:800}}>{unreadCount} new</div>}
           <div style={{flex:1}}/>
         </div>
@@ -198,7 +289,7 @@ export default function CoachInsightsPage() {
           {/* Left: Generator panel */}
           <div>
             <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:16,padding:20,marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:800,marginBottom:16,color:t.text}}>✨ Generate Insight</div>
+              <div style={{fontSize:13,fontWeight:800,marginBottom:16,color:t.text}}>✨ Generate Copilot Brief</div>
 
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:5,textTransform:'uppercase'}}>Client</label>
@@ -228,9 +319,9 @@ export default function CoachInsightsPage() {
 
               <button onClick={generate} disabled={generating||!genClient}
                 style={{width:'100%',background:generating?t.surfaceHigh:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)',border:'none',borderRadius:10,padding:'12px',fontSize:13,fontWeight:800,color:generating?t.textMuted:'#fff',cursor:generating?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",transition:'all 0.2s'}}>
-                {generating ? '⏳ Generating...' : '✨ Generate Insight'}
+                {generating ? '⏳ Generating...' : '✨ Generate Brief'}
               </button>
-              {generating && <div style={{fontSize:11,color:t.textMuted,textAlign:'center',marginTop:8}}>Analyzing client data with Claude...</div>}
+              {generating && <div style={{fontSize:11,color:t.textMuted,textAlign:'center',marginTop:8}}>Analyzing client context and preparing coach options...</div>}
             </div>
 
             {/* Stats */}
@@ -298,7 +389,13 @@ export default function CoachInsightsPage() {
                   const fm = FLAG_META[insight.flag_level||'normal'] || FLAG_META.normal
                   const isExpanded = expanded===insight.id
                   const typeLabel = TYPE_LABELS[insight.type]||insight.type
-                  const categoryLabel = CATEGORY_LABELS[insight.category] || 'Uncategorized'
+                  const categoryLabel = insight.category ? (CATEGORY_LABELS[insight.category] || 'Uncategorized') : 'Uncategorized'
+                  const coachOptions = Array.isArray(c.coach_options) ? c.coach_options : []
+                  const bullets = Array.isArray(c.bullets) ? c.bullets : []
+                  const sourceCount = getSourceCount(insight.source_refs)
+                  const draftMessage = typeof c.draft_message === 'string' ? c.draft_message : insight.coach_draft?.client_message
+                  const coachingNote = typeof c.coaching_note === 'string' ? c.coaching_note : insight.coach_draft?.coach_note
+                  const programmingAdjustment = insight.coach_draft?.programming_adjustment
 
                   return (
                     <div key={insight.id}
@@ -327,12 +424,12 @@ export default function CoachInsightsPage() {
                             </span>
                           </div>
                           {!isExpanded && c.summary && (
-                            <div style={{fontSize:12,color:t.textDim,marginTop:6,lineHeight:1.5,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any}}>{c.summary}</div>
+                            <div style={{fontSize:12,color:t.textDim,marginTop:6,lineHeight:1.5,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as const}}>{c.summary}</div>
                           )}
                         </div>
 
                         <div style={{display:'flex',gap:4,flexShrink:0}}>
-                          <button onClick={e=>{e.stopPropagation();toggleSave(insight.id,insight.is_saved)}}
+                          <button onClick={e=>{e.stopPropagation();toggleSave(insight.id, !!insight.is_saved)}}
                             style={{background:'none',border:'none',cursor:'pointer',fontSize:16,opacity:saving===insight.id?0.5:1}} title="Save">
                             {insight.is_saved?'⭐':'☆'}
                           </button>
@@ -363,11 +460,11 @@ export default function CoachInsightsPage() {
                             </div>
                           )}
 
-                          {c.bullets?.length>0 && (
+                          {bullets.length > 0 && (
                             <div style={{marginBottom:12}}>
                               <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',marginBottom:8}}>Key Points</div>
                               <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                                {c.bullets.map((b:string,i:number)=>(
+                                {bullets.map((b:string,i:number)=>(
                                   <div key={i} style={{display:'flex',gap:8,alignItems:'flex-start'}}>
                                     <div style={{width:5,height:5,borderRadius:'50%',background:fm.color,flexShrink:0,marginTop:6}}/>
                                     <div style={{fontSize:12,color:t.textDim,lineHeight:1.5}}>{b}</div>
@@ -391,6 +488,80 @@ export default function CoachInsightsPage() {
                             </div>
                           )}
 
+                          {coachOptions.length > 0 && (
+                            <div style={{marginBottom:12}}>
+                              <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',marginBottom:8}}>Best Options</div>
+                              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                                {coachOptions.map((option: CoachOption, index: number) => (
+                                  <div key={`${insight.id}-option-${index}`} style={{background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'12px 14px'}}>
+                                    <div style={{fontSize:11,fontWeight:800,color:index===0?t.green:index===1?t.orange:t.purple,textTransform:'uppercase',marginBottom:5}}>
+                                      {option.label || `Option ${index + 1}`}
+                                    </div>
+                                    <div style={{fontSize:13,color:t.text,lineHeight:1.5,marginBottom:option.tradeoff ? 6 : 0}}>{option.rationale}</div>
+                                    {option.tradeoff && (
+                                      <div style={{fontSize:11,color:t.textMuted,lineHeight:1.5}}>Tradeoff: {option.tradeoff}</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {draftMessage && (
+                            <div style={{background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'12px 14px',marginBottom:12}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:8}}>
+                                <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase'}}>Draft Message</div>
+                                <button
+                                  onClick={()=>copyDraft(insight.id, draftMessage)}
+                                  style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'4px 8px',fontSize:11,fontWeight:700,color:copiedDraft===insight.id?t.green:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}
+                                >
+                                  {copiedDraft===insight.id ? 'Copied' : 'Copy'}
+                                </button>
+                              </div>
+                              <div style={{fontSize:13,color:t.text,lineHeight:1.6,whiteSpace:'pre-wrap' as const}}>{draftMessage}</div>
+                            </div>
+                          )}
+
+                          {(coachingNote || programmingAdjustment) && (
+                            <div style={{background:t.orangeDim,border:'1px solid '+t.orange+'30',borderRadius:10,padding:'12px 14px',marginBottom:12}}>
+                              <div style={{fontSize:11,fontWeight:800,color:t.orange,textTransform:'uppercase',marginBottom:6}}>Coach Assist</div>
+                              {coachingNote && <div style={{fontSize:13,color:t.text,lineHeight:1.5,marginBottom:programmingAdjustment ? 8 : 0}}>{coachingNote}</div>}
+                              {programmingAdjustment && <div style={{fontSize:12,color:t.textDim,lineHeight:1.5}}>Programming note: {programmingAdjustment}</div>}
+                            </div>
+                          )}
+
+                          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+                            <div style={{fontSize:11,color:t.textMuted,background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:20,padding:'4px 10px'}}>
+                              {sourceCount > 0 ? `${sourceCount} source references` : 'No source references stored'}
+                            </div>
+                            {insight.generation_meta?.model && (
+                              <div style={{fontSize:11,color:t.textMuted,background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:20,padding:'4px 10px'}}>
+                                {insight.generation_meta.model}
+                              </div>
+                            )}
+                            {(insight.surfaced_count || 0) > 1 && (
+                              <div style={{fontSize:11,color:t.textMuted,background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:20,padding:'4px 10px'}}>
+                                surfaced {insight.surfaced_count}x
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{marginBottom:12}}>
+                            <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',marginBottom:8}}>Coach Feedback</div>
+                            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                              {FEEDBACK_OPTIONS.map((option) => (
+                                <button
+                                  key={option.id}
+                                  onClick={()=>submitFeedback(insight.id, option.id)}
+                                  disabled={feedbacking===insight.id}
+                                  style={{padding:'6px 12px',borderRadius:20,border:'1px solid '+((insight.coach_feedback||'')===option.id ? option.color+'60' : t.border),background:(insight.coach_feedback||'')===option.id ? option.color+'18' : 'transparent',color:(insight.coach_feedback||'')===option.id ? option.color : t.textMuted,cursor:feedbacking===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700}}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
                           <div style={{display:'flex',gap:8,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap'}}>
                             <div style={{fontSize:11,color:t.textMuted}}>
                               Confidence: <span style={{fontWeight:700,color:(insight.confidence || 0) >= 0.75 ? t.green : (insight.confidence || 0) >= 0.5 ? t.orange : t.textMuted}}>{typeof insight.confidence === 'number' ? `${Math.round(insight.confidence * 100)}%` : '—'}</span>
@@ -413,7 +584,7 @@ export default function CoachInsightsPage() {
                                 style={{background:insight.is_reviewed?t.surfaceHigh:t.tealDim,border:'1px solid '+(insight.is_reviewed?t.border:t.teal+'40'),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:insight.is_reviewed?t.textMuted:t.teal,cursor:addingCal===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:addingCal===insight.id?0.6:1}}>
                                 {addingCal===insight.id?'Adding...':insight.is_reviewed?'✓ On Calendar':'📅 Add to Calendar'}
                               </button>
-                              <button onClick={()=>toggleSave(insight.id,insight.is_saved)}
+                              <button onClick={()=>toggleSave(insight.id, !!insight.is_saved)}
                                 style={{background:insight.is_saved?t.yellow+'18':'transparent',border:'1px solid '+(insight.is_saved?t.yellow+'60':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:insight.is_saved?t.yellow:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                 {insight.is_saved?'⭐ Saved':'☆ Save'}
                               </button>

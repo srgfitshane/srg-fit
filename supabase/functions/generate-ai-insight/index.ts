@@ -22,12 +22,14 @@ type InsightCategory = typeof ALLOWED_CATEGORIES[number]
 type InsightSeverity = typeof ALLOWED_SEVERITIES[number]
 
 type RecentCheckin = {
+  id?: string
   submitted_at: string | null
   wins?: string | null
   struggles?: string | null
 }
 
 type RecentWorkout = {
+  id?: string
   title?: string | null
   status?: string | null
   completed_at: string | null
@@ -37,6 +39,7 @@ type RecentWorkout = {
 }
 
 type RecentPulseEntry = {
+  id?: string
   checkin_date?: string | null
   sleep_quality?: number | null
   energy_score?: number | null
@@ -45,18 +48,22 @@ type RecentPulseEntry = {
 }
 
 type PersonalRecord = {
+  id?: string
   weight_pr?: number | null
   logged_date?: string | null
   exercise?: { name?: string | null } | null
 }
 
 type ClientGoal = {
+  id?: string
   title?: string | null
   goal_type?: string | null
   target_value?: number | null
 }
 
 type SessionExerciseEvent = {
+  id?: string
+  session_id?: string | null
   exercise_name?: string | null
   original_exercise_name?: string | null
   swap_reason?: string | null
@@ -69,14 +76,22 @@ type SessionExerciseEvent = {
 }
 
 type NutritionDailyLog = {
+  id?: string
   log_date?: string | null
   total_calories?: number | null
   total_protein?: number | null
 }
 
 type RecentMessage = {
+  id?: string
   body?: string | null
   created_at?: string | null
+}
+
+type CoachOption = {
+  label?: string
+  rationale?: string
+  tradeoff?: string
 }
 
 type InsightResponse = {
@@ -90,6 +105,9 @@ type InsightResponse = {
   suggested_action?: string
   follow_up?: string
   client_impact?: string
+  coach_options?: unknown
+  draft_message?: string
+  coaching_note?: string
 }
 
 function mapLegacyTypeToCategory(type: string) {
@@ -132,6 +150,49 @@ function trimEvidence(items: unknown, fallback: string[]) {
     .slice(0, 6)
 
   return cleaned.length ? cleaned : fallback
+}
+
+function trimCoachOptions(items: unknown, fallbackAction: string) {
+  if (!Array.isArray(items)) {
+    return [
+      {
+        label: 'Recommended next step',
+        rationale: fallbackAction,
+        tradeoff: 'Lowest lift and easiest to act on immediately.',
+      },
+    ]
+  }
+
+  const cleaned = items
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const option = item as CoachOption
+      return {
+        label: typeof option.label === 'string' ? option.label.trim() : '',
+        rationale: typeof option.rationale === 'string' ? option.rationale.trim() : '',
+        tradeoff: typeof option.tradeoff === 'string' ? option.tradeoff.trim() : '',
+      }
+    })
+    .filter((option) => option.label && option.rationale)
+    .slice(0, 3)
+
+  return cleaned.length
+    ? cleaned
+    : [
+        {
+          label: 'Recommended next step',
+          rationale: fallbackAction,
+          tradeoff: 'Lowest lift and easiest to act on immediately.',
+        },
+      ]
+}
+
+function buildCoachDrafts(clientName: string, summary: string, suggestedAction: string, followUp: string) {
+  return {
+    client_message: `Hey ${clientName} - quick check-in. ${suggestedAction} ${followUp}`.trim(),
+    coach_note: `${summary} Next move: ${suggestedAction}`.trim(),
+    programming_adjustment: followUp || 'Review the next session before making changes.',
+  }
 }
 
 function deriveFallbackInsight(clientName: string, defaults: { category: string; severity: string }, context: {
@@ -315,17 +376,17 @@ serve(async (req) => {
       { data: recentNutritionLogs },
     ] = await Promise.all([
       supabase.from('clients').select('*, profile:profiles!profile_id(full_name)').eq('id', client_id).single(),
-      supabase.from('checkins').select('submitted_at, wins, struggles').eq('client_id', client_id).order('submitted_at', { ascending: false }).limit(4),
-      supabase.from('workout_sessions').select('title, status, completed_at, session_rpe, mood, notes_client').eq('client_id', client_id).eq('status', 'completed').order('completed_at', { ascending: false }).limit(10),
-      supabase.from('daily_checkins').select('checkin_date, sleep_quality, energy_score, mood_emoji, body').eq('client_id', client_id).order('checkin_date', { ascending: false }).limit(14),
-      supabase.from('personal_records').select('weight_pr, logged_date, exercise:exercises(name)').eq('client_id', client_id).order('logged_date', { ascending: false }).limit(5),
-      supabase.from('client_goals').select('title, goal_type, target_value').eq('client_id', client_id).eq('status', 'active'),
-      supabase.from('session_exercises').select('exercise_name, original_exercise_name, swap_reason, skip_reason, skipped, skipped_at, swapped_at, client_video_url, session:workout_sessions!session_exercises_session_id_fkey(completed_at)').eq('session.client_id', client_id).order('swapped_at', { ascending: false }).limit(40),
-      supabase.from('nutrition_daily_logs').select('log_date, total_calories, total_protein').eq('client_id', client_id).order('log_date', { ascending: false }).limit(10),
+      supabase.from('checkins').select('id, submitted_at, wins, struggles').eq('client_id', client_id).order('submitted_at', { ascending: false }).limit(4),
+      supabase.from('workout_sessions').select('id, title, status, completed_at, session_rpe, mood, notes_client').eq('client_id', client_id).eq('status', 'completed').order('completed_at', { ascending: false }).limit(10),
+      supabase.from('daily_checkins').select('id, checkin_date, sleep_quality, energy_score, mood_emoji, body').eq('client_id', client_id).order('checkin_date', { ascending: false }).limit(14),
+      supabase.from('personal_records').select('id, weight_pr, logged_date, exercise:exercises(name)').eq('client_id', client_id).order('logged_date', { ascending: false }).limit(5),
+      supabase.from('client_goals').select('id, title, goal_type, target_value').eq('client_id', client_id).eq('status', 'active'),
+      supabase.from('session_exercises').select('id, session_id, exercise_name, original_exercise_name, swap_reason, skip_reason, skipped, skipped_at, swapped_at, client_video_url, session:workout_sessions!session_exercises_session_id_fkey(completed_at)').eq('session.client_id', client_id).order('swapped_at', { ascending: false }).limit(40),
+      supabase.from('nutrition_daily_logs').select('id, log_date, total_calories, total_protein').eq('client_id', client_id).order('log_date', { ascending: false }).limit(10),
     ])
 
     const { data: recentMessages } = client?.profile_id
-      ? await supabase.from('messages').select('body, created_at').eq('sender_id', client.profile_id).order('created_at', { ascending: false }).limit(8)
+      ? await supabase.from('messages').select('id, body, created_at').eq('sender_id', client.profile_id).order('created_at', { ascending: false }).limit(8)
       : { data: [] }
 
     const clientName = client?.profile?.full_name?.split(' ')[0] || 'Client'
@@ -420,8 +481,22 @@ serve(async (req) => {
       nutrition_logs: nutritionLogs,
     }
 
+    const sourceRefs = {
+      checkin_ids: checkinEntries.map((entry) => entry.id).filter(Boolean),
+      workout_session_ids: workoutEntries.map((entry) => entry.id).filter(Boolean),
+      pulse_entry_ids: pulseEntries.map((entry) => entry.id).filter(Boolean),
+      message_ids: messageEntries.map((entry) => entry.id).filter(Boolean),
+      session_exercise_ids: sessionExerciseEvents.map((entry) => entry.id).filter(Boolean),
+      nutrition_log_ids: nutritionLogs.map((entry) => entry.id).filter(Boolean),
+      personal_record_ids: personalRecords.map((entry) => entry.id).filter(Boolean),
+      goal_ids: clientGoals.map((entry) => entry.id).filter(Boolean),
+    }
+
     const prompt = `
-You are the internal AI copilot for a strength and nutrition coach. The AI is coach-facing only.
+You are the internal AI copilot for Coach Shane at SRG Fit. The AI is coach-facing only.
+Your job is to help Coach Shane notice patterns faster and choose strong next-step options.
+You must never replace the coach's judgment, never diagnose, never shame the client, and never write as if the AI is the relationship owner.
+The client population may include people dealing with anxiety, depression, low motivation, and overwhelm. Favor calm, practical, low-friction options.
 Given the client context, produce one explainable coaching alert or recommendation.
 
 Rules:
@@ -434,6 +509,9 @@ Rules:
 - Do not roleplay as the coach to the client
 - The recommendation should be decisive enough to put into a coach action queue
 - Prefer one concrete next step over vague encouragement
+- Offer options that help the coach decide, not commands that replace the coach
+- Keep language grounded in the supplied data and avoid overclaiming
+- Draft message should sound warm, simple, and supportive in Coach Shane's style without being pushy
 - If skipped or swapped exercises show a pattern, treat that as programming friction
 - If sleep, energy, workout gaps, or message silence are concerning, bias toward earlier follow-up
 
@@ -463,7 +541,14 @@ Respond with strict JSON:
   "bullets": ["optional supporting point 1", "optional supporting point 2"],
   "suggested_action": "what the coach should do next",
   "follow_up": "when or how the coach should follow up",
-  "client_impact": "why this matters for the client"
+  "client_impact": "why this matters for the client",
+  "coach_options": [
+    { "label": "recommended", "rationale": "best option and why", "tradeoff": "what to watch for" },
+    { "label": "lighter_touch", "rationale": "lower-friction option", "tradeoff": "slower signal or lower impact" },
+    { "label": "stronger_intervention", "rationale": "stronger move if needed", "tradeoff": "more intrusive or higher lift" }
+  ],
+  "draft_message": "short editable draft Coach Shane could send to the client",
+  "coaching_note": "short internal note or programming reminder for Coach Shane"
 }`.trim()
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -525,29 +610,78 @@ Respond with strict JSON:
     const normalizedBullets = Array.isArray(parsed.bullets)
       ? parsed.bullets.filter((item: unknown) => typeof item === 'string').map((item: string) => item.trim()).filter(Boolean).slice(0, 4)
       : []
+    const normalizedSuggestedAction = parsed.suggested_action || 'Review the client context and take one focused next step.'
+    const normalizedFollowUp = parsed.follow_up || 'Reassess after the next meaningful client signal.'
+    const normalizedSummary = parsed.summary || 'Recent coaching data indicates a worthwhile follow-up.'
+    const normalizedCoachOptions = trimCoachOptions(parsed.coach_options, normalizedSuggestedAction)
+    const normalizedDrafts = buildCoachDrafts(
+      clientName,
+      normalizedSummary,
+      normalizedSuggestedAction,
+      normalizedFollowUp,
+    )
+    const normalizedDraftMessage = typeof parsed.draft_message === 'string' && parsed.draft_message.trim()
+      ? parsed.draft_message.trim()
+      : normalizedDrafts.client_message
+    const normalizedCoachingNote = typeof parsed.coaching_note === 'string' && parsed.coaching_note.trim()
+      ? parsed.coaching_note.trim()
+      : normalizedDrafts.coach_note
     const recommendation = {
-      action: parsed.suggested_action || '',
+      action: normalizedSuggestedAction,
       client_impact: parsed.client_impact || '',
       category: normalizedCategory,
       severity: normalizedSeverity,
+      options: normalizedCoachOptions,
     }
     const followUp = {
-      plan: parsed.follow_up || '',
+      plan: normalizedFollowUp,
       priority_window: normalizedSeverity === 'urgent' ? 'same_day' : normalizedSeverity === 'high' ? '24h' : '72h',
+    }
+    const dedupeKey = `${coach_id}:${client_id}:${normalizedCategory}:${normalizedSeverity}`
+
+    const { data: existingInsight } = await supabase
+      .from('ai_insights')
+      .select('id, surfaced_count')
+      .eq('dedupe_key', dedupeKey)
+      .eq('is_dismissed', false)
+      .in('action_status', ['unread', 'read', 'snoozed'])
+      .gte('generated_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingInsight?.id) {
+      await supabase
+        .from('ai_insights')
+        .update({
+          surfaced_at: new Date().toISOString(),
+          surfaced_count: (existingInsight.surfaced_count || 1) + 1,
+          read: false,
+          action_status: 'unread',
+        })
+        .eq('id', existingInsight.id)
+
+      return new Response(JSON.stringify({ success: true, deduped: true, insight_id: existingInsight.id }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const payload = {
       coach_id,
       client_id,
+      dedupe_key: dedupeKey,
       type,
       content: {
         title: parsed.title,
-        summary: parsed.summary,
+        summary: normalizedSummary,
         bullets: normalizedBullets,
-        suggested_action: parsed.suggested_action || '',
+        suggested_action: normalizedSuggestedAction,
         evidence: normalizedEvidence,
-        follow_up: parsed.follow_up || '',
+        follow_up: normalizedFollowUp,
         client_impact: parsed.client_impact || '',
+        coach_options: normalizedCoachOptions,
+        draft_message: normalizedDraftMessage,
+        coaching_note: normalizedCoachingNote,
       },
       insight_data: {
         clientName,
@@ -562,10 +696,24 @@ Respond with strict JSON:
         swapped_exercises_analyzed: swappedExercises14d,
         form_checks_analyzed: formCheckSubmissions14d,
       },
+      source_refs: sourceRefs,
+      coach_draft: {
+        client_message: normalizedDraftMessage,
+        coach_note: normalizedCoachingNote,
+        programming_adjustment: normalizedDrafts.programming_adjustment,
+      },
+      generation_meta: {
+        model: 'claude-sonnet-4-20250514',
+        requested_type: type,
+        generated_by: 'generate-ai-insight',
+        dedupe_window_hours: 24,
+      },
       flag_level: normalizedSeverity === 'urgent' ? 'urgent' : normalizedSeverity === 'high' ? 'high' : normalizedSeverity === 'medium' ? 'normal' : 'low',
       read: false,
       is_dismissed: false,
       generated_at: new Date().toISOString(),
+      surfaced_at: new Date().toISOString(),
+      surfaced_count: 1,
       action_status: 'unread',
       confidence: normalizedConfidence,
       severity: normalizedSeverity,
