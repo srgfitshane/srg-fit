@@ -20,12 +20,13 @@ serve(async (req: Request) => {
 
     const now = new Date().toISOString()
     
-    // Find all active check-in schedules that are due (or overdue)
+    // Find all active check-in schedules that are due (or overdue), including
+    // ones that have never been sent (next_send_at is null)
     const { data: schedules, error: fetchErr } = await supabase
       .from('check_in_schedules')
       .select('*, clients(profile_id)')
       .eq('active', true)
-      .lte('next_send_at', now)
+      .or(`next_send_at.is.null,next_send_at.lte.${now}`)
 
     if (fetchErr) throw fetchErr
 
@@ -81,7 +82,8 @@ serve(async (req: Request) => {
         }
 
         // 3. Update next_send_at to next week
-        const nextDate = new Date(sched.next_send_at)
+        const baseDate = sched.next_send_at ? new Date(sched.next_send_at) : new Date()
+        const nextDate = new Date(baseDate)
         nextDate.setDate(nextDate.getDate() + 7)
         // Safety: If it was disabled for months and turned back on, avoid sending 10 checkins in a row.
         while (nextDate <= new Date()) {
