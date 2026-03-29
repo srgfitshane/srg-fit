@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
+const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
 
 const MEAL_LABELS = [
   { id:'breakfast',    label:'Breakfast',    icon:'🌅' },
@@ -25,6 +26,11 @@ type FoodEntry = {
 }
 type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved'
 
+type USDAServing = {
+  grams: number
+  label: string
+}
+
 export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const today = new Date().toISOString().split('T')[0]
   const [plan,           setPlan]           = useState<any>(null)
@@ -36,6 +42,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const [searchQ,        setSearchQ]        = useState('')
   const [searchResults,  setSearchResults]  = useState<any[]>([])
   const [searching,      setSearching]      = useState(false)
+  const [searchError,    setSearchError]    = useState('')
   const searchTimer = useRef<any>(null)
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
   const [pendingFood,    setPendingFood]    = useState<Partial<FoodEntry> | null>(null)
@@ -150,6 +157,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   // ── USDA search ───────────────────────────────────────────────────────────
   function handleSearchInput(val: string) {
     setSearchQ(val)
+    setSearchError('')
     clearTimeout(searchTimer.current)
     if (!val.trim()) { setSearchResults([]); return }
     searchTimer.current = setTimeout(() => doSearch(val), 300)
@@ -171,7 +179,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
       // FatSecret not configured or returned error — fall back to USDA
       const usda = await fetch(
-        `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'}&query=${encodeURIComponent(q)}&pageSize=12&dataType=Branded,Foundation,SR%20Legacy`
+        `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(q)}&pageSize=12&dataType=Branded,Foundation,SR%20Legacy`
       )
       const usdaData = await usda.json()
       setSearchResults((usdaData.foods || []).slice(0, 10))
@@ -179,8 +187,46 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     setSearching(false)
   }
 
-  // USDA fallback picker (per-100g values, scale to serving if available)
-  function pickUSDAFood(food: any) {
+  function getUSDAServing(food: any): USDAServing | null {
+    const servingSize = Number(food?.servingSize)
+    const servingUnit = typeof food?.servingSizeUnit === 'string' ? food.servingSizeUnit : ''
+    if (servingSize > 0) {
+      if (servingUnit.toLowerCase().includes('g')) {
+        return { grams: servingSize, label: `${servingSize}${servingUnit}` }
+      }
+      if (servingUnit.toLowerCase().includes('oz')) {
+        return { grams: Math.round(servingSize * 28.3495 * 10) / 10, label: `${servingSize}${servingUnit}` }
+      }
+    }
+
+    const portions = Array.isArray(food?.foodPortions) ? food.foodPortions : Array.isArray(food?.foodMeasures) ? food.foodMeasures : []
+    const portion = portions.find((item: any) => Number(item?.gramWeight) > 0)
+    if (portion) {
+      const amount = Number(portion.amount || 1)
+      const labelParts = [
+        amount !== 1 ? amount : '1',
+        portion.modifier || portion.measureUnit?.name || portion.measureUnit?.abbreviation || portion.portionDescription,
+      ].filter(Boolean)
+      return {
+        grams: Number(portion.gramWeight),
+        label: labelParts.join(' ').trim() || `${Math.round(Number(portion.gramWeight))}g serving`,
+      }
+    }
+
+    if (food?.householdServingFullText) {
+      const gramMatch = String(food.householdServingFullText).match(/\(([\d.]+)\s*g\)/i)
+      if (gramMatch) {
+        return {
+          grams: Number(gramMatch[1]),
+          label: String(food.householdServingFullText).trim(),
+        }
+      }
+    }
+
+    return null
+  }
+
+  async function pickUSDAFood(food: any) {
     const nutrients = food.foodNutrients || []
     const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? n.value : null }
     const cal100 = get('energy'); const pro100 = get('protein')
@@ -190,21 +236,32 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     const cleaned = name === name.toUpperCase()
       ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
 
-    // Check for real serving size (branded foods have this)
-    const servingG = food.servingSize && food.servingSizeUnit?.toLowerCase().includes('g') ? food.servingSize
-                   : food.servingSize && food.servingSizeUnit?.toLowerCase().includes('oz') ? food.servingSize * 28.3495 : null
-
-    if (servingG) {
-      // Branded food with real serving — use it directly, let serving multiplier handle quantity
-      const scale = servingG / 100
-      const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
-      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: `${food.servingSize}${food.servingSizeUnit||'g'}` })
-    } else {
-      // Generic food (SR Legacy) — values are per 100g
-      // Treat 100g as "1 serving" so the serving multiplier on the next screen does the work
-      const r = (v: number | null) => v != null ? Math.round(v * 10) / 10 : null
-      setPendingFood({ food_name: cleaned, calories: r(cal100), protein_g: r(pro100), carbs_g: r(carb100), fat_g: r(fat100), serving_size: '100g' })
+    let serving = getUSDAServing(food)
+    if (!serving && food?.fdcId) {
+      try {
+        const detailRes = await fetch(`https://api.nal.usda.gov/fdc/v1/food/${food.fdcId}?api_key=${USDA_API_KEY}`)
+        const detailFood = await detailRes.json()
+        serving = getUSDAServing(detailFood)
+      } catch {
+        serving = null
+      }
     }
+
+    if (!serving) {
+      setSearchError('That food does not include a simple serving size. Try a branded result or use Quick Add.')
+      return
+    }
+
+    const scale = serving.grams / 100
+    const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
+    setPendingFood({
+      food_name: cleaned,
+      calories: r(cal100),
+      protein_g: r(pro100),
+      carbs_g: r(carb100),
+      fat_g: r(fat100),
+      serving_size: serving.label,
+    })
   }
 
   // FatSecret food picker - servings already per-serving, no math needed
@@ -264,8 +321,19 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       if (offData?.status === 1) {
         const p = offData.product; const n = p.nutriments || {}
         const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
-        setPendingFood({ food_name: p.product_name || 'Unknown product', calories: r(n['energy-kcal_serving'] ?? n['energy-kcal_100g']), protein_g: r(n.proteins_serving ?? n.proteins_100g), carbs_g: r(n.carbohydrates_serving ?? n.carbohydrates_100g), fat_g: r(n.fat_serving ?? n.fat_100g), serving_size: p.serving_size || '1 serving' })
-        setBarcodeVal(''); setAddMode('none')
+        if (!p.serving_size && n['energy-kcal_serving'] == null && n.proteins_serving == null && n.carbohydrates_serving == null && n.fat_serving == null) {
+          setBarcodeErr('Product found, but serving info is missing. Try search or Quick Add.')
+        } else {
+          setPendingFood({
+            food_name: p.product_name || 'Unknown product',
+            calories: r(n['energy-kcal_serving']),
+            protein_g: r(n.proteins_serving),
+            carbs_g: r(n.carbohydrates_serving),
+            fat_g: r(n.fat_serving),
+            serving_size: p.serving_size || '1 serving',
+          })
+          setBarcodeVal(''); setAddMode('none')
+        }
       } else {
         setBarcodeErr('Product not found. Try searching by name or use Quick Add.')
       }
@@ -363,10 +431,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
               <span style={{ fontSize:15, fontWeight:800 }}>🔍 Search Foods</span>
-              <button onClick={()=>{setAddMode('none');setSearchQ('');setSearchResults([])}} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
+              <button onClick={()=>{setAddMode('none');setSearchQ('');setSearchResults([]);setSearchError('')}} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
             </div>
             <input value={searchQ} onChange={e=>handleSearchInput(e.target.value)} placeholder="e.g. chicken breast, greek yogurt..." autoFocus style={{ ...inp, marginBottom:10 }}/>
-            {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching FatSecret database...</div>}
+            {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching foods by serving...</div>}
+            {searchError && <div style={{ fontSize:12, color:t.orange, marginBottom:8 }}>{searchError}</div>}
             {searchResults.map((food:any) => {
               // Handle both FatSecret and USDA formats
               const isFS = !!food.food_id
@@ -391,11 +460,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 const n = food.foodNutrients || []
                 const cal = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value
                 const pro = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
+                const serving = getUSDAServing(food)
                 return (
                   <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                     <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.description}</div>
                     <div style={{ fontSize:11, color:t.textMuted }}>
-                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {food.servingSize ? `per ${food.servingSize}${food.servingSizeUnit||'g'}` : 'per 100g'}
+                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {serving ? `per ${serving.label}` : 'tap to check serving'}
                     </div>
                   </button>
                 )
@@ -459,31 +529,20 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             {/* Servings stepper */}
             <div style={{ display:'flex', alignItems:'center', gap:12, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>
-                  {pendingFood.serving_size === '100g' ? 'AMOUNT (grams)' : 'SERVINGS'}
-                </div>
+                <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>SERVINGS</div>
                 <div style={{ fontSize:13, fontWeight:700, color:t.teal }}>
                   {pendingFood.calories != null ? `${Math.round(pendingFood.calories * pendingServings)} kcal` : '—'}
                   {pendingFood.protein_g != null ? ` · ${Math.round(pendingFood.protein_g * pendingServings * 10)/10}g P` : ''}
                 </div>
                 <div style={{ fontSize:11, color:t.textMuted }}>
-                  {pendingFood.serving_size === '100g'
-                    ? `${Math.round(pendingServings * 100)}g`
-                    : `${pendingServings}x ${pendingFood.serving_size}`}
+                  {`${pendingServings}x ${pendingFood.serving_size}`}
                 </div>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:0, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
-                <button onClick={()=>setPendingServings(s=>Math.max(
-                  pendingFood.serving_size === '100g' ? 0.1 : 0.5,
-                  Math.round((s - (pendingFood.serving_size === '100g' ? 0.1 : 0.5))*10)/10
-                ))}
+                <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s - 0.5)*10)/10))}
                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
-                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>
-                  {pendingFood.serving_size === '100g'
-                    ? `${Math.round(pendingServings * 100)}g`
-                    : pendingServings}
-                </div>
-                <button onClick={()=>setPendingServings(s=>Math.round((s + (pendingFood.serving_size === '100g' ? 0.1 : 0.5))*10)/10)}
+                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>{pendingServings}</div>
+                <button onClick={()=>setPendingServings(s=>Math.round((s + 0.5)*10)/10)}
                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
               </div>
             </div>
