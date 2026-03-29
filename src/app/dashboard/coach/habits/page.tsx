@@ -76,6 +76,7 @@ export default function CoachHabits() {
     setSaving(true)
     await supabase.from('habits').insert({
       coach_id: coachId, client_id: selClient, label: fLabel, icon: fIcon,
+      habit_type: fTarget ? 'number' : 'check',
       unit: fUnit || null, target: fTarget ? +fTarget : null, color: fColor,
       category: fCategory, description: fDesc || null, active: true, frequency: 'daily',
     })
