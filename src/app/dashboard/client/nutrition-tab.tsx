@@ -52,10 +52,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
   const [barcodeErr,      setBarcodeErr]      = useState('')
-  const [cameraActive,    setCameraActive]    = useState(false)
-  const videoRef    = useRef<HTMLVideoElement>(null)
-  const cameraStream = useRef<MediaStream|null>(null)
-  const barcodeInterval = useRef<any>(null)
   // Image recognition
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [imageLoading,    setImageLoading]    = useState(false)
@@ -85,43 +81,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
 
-  // Stop camera on unmount or mode change
-  const stopCamera = useCallback(() => {
-    if (barcodeInterval.current) clearInterval(barcodeInterval.current)
-    if (cameraStream.current) { cameraStream.current.getTracks().forEach(t => t.stop()); cameraStream.current = null }
-    setCameraActive(false)
-  }, [])
-
-  useEffect(() => { if (addMode !== 'barcode') stopCamera() }, [addMode, stopCamera])
-  useEffect(() => () => stopCamera(), [stopCamera])
-
-  async function startCamera() {
-    // Check support before touching getUserMedia â€” avoids black camera on unsupported browsers
-    if (!('BarcodeDetector' in window)) {
-      setBarcodeErr('Camera scanning not supported on this browser. Type the barcode number below.')
-      return
-    }
-    let detector: any
-    try { detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] }) }
-    catch { setBarcodeErr('Barcode scanning not supported. Type the number below.'); return }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      cameraStream.current = stream
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
-      setCameraActive(true)
-      setBarcodeErr('')
-      barcodeInterval.current = setInterval(async () => {
-        if (!videoRef.current) return
-        try {
-          const codes = await detector.detect(videoRef.current)
-          if (codes.length > 0) { stopCamera(); lookupBarcode(codes[0].rawValue) }
-        } catch { /* ignore frame errors */ }
-      }, 400)
-    } catch (err: any) {
-      if (err.name === 'NotAllowedError') { setBarcodeErr('Camera permission denied. Type the barcode number below.') }
-      else { setBarcodeErr('Camera unavailable. Type the barcode number below.') }
-    }
-  }
 
   async function ensureLog() {
     if (log) return log
@@ -550,26 +509,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {addMode==='barcode' && !pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>📷 Scan Barcode</span>
-              <button onClick={()=>{ resetAdd(); stopCamera() }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
+              <span style={{ fontSize:15, fontWeight:800 }}>📷 Barcode Lookup</span>
+              <button onClick={()=>{ resetAdd(); setBarcodeVal(''); setBarcodeErr('') }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
-            {!cameraActive && !barcodeLoading && (
-              <button onClick={startCamera} style={{ width:'100%', background:t.teal+'20', border:`1px solid ${t.teal}40`, borderRadius:12, padding:'16px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', marginBottom:12 }}>
-                📹 Open Camera
-              </button>
-            )}
-            {cameraActive && (
-              <div style={{ position:'relative', borderRadius:12, overflow:'hidden', marginBottom:12 }}>
-                <video ref={videoRef} style={{ width:'100%', display:'block', borderRadius:12 }} playsInline muted/>
-                <div style={{ position:'absolute', inset:0, border:'2px solid '+t.teal, borderRadius:12, pointerEvents:'none' }}>
-                  <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:'60%', height:2, background:t.teal+'80' }}/>
-                </div>
-                <button onClick={stopCamera} style={{ position:'absolute', top:8, right:8, background:'#00000080', border:'none', borderRadius:8, padding:'4px 10px', fontSize:12, color:'#fff', cursor:'pointer' }}>Stop</button>
-              </div>
-            )}
             <div style={{ display:'flex', gap:8 }}>
               <input value={barcodeVal} onChange={e=>setBarcodeVal(e.target.value.replace(/\D/g,''))}
-                placeholder="Or type barcode number..." inputMode="numeric"
+                placeholder="Type or scan barcode number..." inputMode="numeric" autoFocus
                 onKeyDown={e=>{ if(e.key==='Enter' && barcodeVal.length>5) lookupBarcode(barcodeVal) }}
                 style={{ ...inp, flex:1 }}/>
               <button onClick={()=>{ if(barcodeVal.length>5) lookupBarcode(barcodeVal) }}
