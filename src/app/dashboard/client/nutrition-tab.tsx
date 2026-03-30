@@ -528,7 +528,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             </div>
             <div style={{ display:'flex', gap:8 }}>
               <input value={barcodeVal} onChange={e=>setBarcodeVal(e.target.value.replace(/\D/g,''))}
-                placeholder="Type or scan barcode number..." inputMode="numeric" autoFocus
+                placeholder="Enter barcode number..." inputMode="numeric" autoFocus
                 onKeyDown={e=>{ if(e.key==='Enter' && barcodeVal.length>5) lookupBarcode(barcodeVal) }}
                 style={{ ...inp, flex:1 }}/>
               <button onClick={()=>{ if(barcodeVal.length>5) lookupBarcode(barcodeVal) }}
