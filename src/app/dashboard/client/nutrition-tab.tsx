@@ -110,7 +110,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
       if (error) { console.error('food_entries insert error:', error.message); return }
-      if (saved) { await loadData() }
+      if (saved) {
+        // Recalc totals in DB then reload fresh
+        const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', currentLog.id)
+        const allEnts = fresh.data || []
+        await recalcTotals(currentLog.id, allEnts)
+        await loadData()
+      }
     } catch (e) { console.error('commitEntry exception:', e) }
     finally {
       setPendingFood(null); setPendingServings(1); setAddMode('none')
@@ -122,6 +128,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   async function removeEntry(id: string) {
     await supabase.from('food_entries').delete().eq('id', id)
+    if (log) {
+      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', log.id)
+      await recalcTotals(log.id, fresh.data || [])
+    }
     await loadData()
   }
 
@@ -138,6 +148,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     }
     await supabase.from('food_entries').update(updated).eq('id', entry.id)
     setEditingEntry(null)
+    if (log) {
+      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', log.id)
+      await recalcTotals(log.id, fresh.data || [])
+    }
     await loadData()
   }
 
