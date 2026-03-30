@@ -430,7 +430,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         )}
 
         {/* Macro rings */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(88px,1fr))', gap:10, marginBottom:20 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:20 }}>
           {macros.map(m => {
             const p = pct(m.val, m.target); const r=22, circ=2*Math.PI*r
             return (
