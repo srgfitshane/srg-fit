@@ -22,7 +22,7 @@ async function getToken(): Promise<string> {
       grant_type:    'client_credentials',
       client_id:     FS_CLIENT_ID,
       client_secret: FS_CLIENT_SECRET,
-      scope:         'basic',
+      scope:         'basic barcode',
     }),
   })
   if (!res.ok) throw new Error(`Token error: ${res.status}`)
@@ -46,18 +46,23 @@ serve(async (req) => {
     const q       = url.searchParams.get('q')
     const foodId  = url.searchParams.get('food_id')
     const barcode = url.searchParams.get('barcode')
+    const image   = url.searchParams.get('image')
 
     const token = await getToken()
 
     let params: Record<string, string> = { format: 'json' }
-    if (barcode) {
+
+    if (image) {
+      // Food image recognition - Premier tier
+      params = { ...params, method: 'food.recognize.v3', user_image: image }
+    } else if (barcode) {
       params = { ...params, method: 'food.find_id_for_barcode', barcode }
     } else if (foodId) {
       params = { ...params, method: 'food.get.v4', food_id: foodId }
     } else if (q) {
       params = { ...params, method: 'foods.search', search_expression: q, max_results: '10' }
     } else {
-      return new Response(JSON.stringify({ error: 'Missing q, food_id, or barcode' }), {
+      return new Response(JSON.stringify({ error: 'Missing q, food_id, barcode, or image' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }

@@ -1,5 +1,7 @@
-'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+
+// BarcodeDetector is experimental - declare types locally
+declare const BarcodeDetector: any
 
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
@@ -24,36 +26,41 @@ type FoodEntry = {
   serving_size: string
   logged_at: string
 }
-type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved'
-
-type USDAServing = {
-  grams: number
-  label: string
-}
+type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved' | 'image'
 
 export default function NutritionTab({ clientRecord, supabase, t }: any) {
-  const today = new Date().toISOString().split('T')[0]
-  const [plan,           setPlan]           = useState<any>(null)
-  const [log,            setLog]            = useState<any>(null)
-  const [entries,        setEntries]        = useState<FoodEntry[]>([])
-  const [loading,        setLoading]        = useState(true)
-  const [addMode,        setAddMode]        = useState<AddMode>('none')
-  const [selectedDate,   setSelectedDate]   = useState(today)
-  const [searchQ,        setSearchQ]        = useState('')
-  const [searchResults,  setSearchResults]  = useState<any[]>([])
-  const [searching,      setSearching]      = useState(false)
-  const [searchError,    setSearchError]    = useState('')
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+  const [plan,            setPlan]            = useState<any>(null)
+  const [log,             setLog]             = useState<any>(null)
+  const [entries,         setEntries]         = useState<FoodEntry[]>([])
+  const [loading,         setLoading]         = useState(true)
+  const [addMode,         setAddMode]         = useState<AddMode>('none')
+  const [selectedDate,    setSelectedDate]    = useState(today)
+  const [searchQ,         setSearchQ]         = useState('')
+  const [searchResults,   setSearchResults]   = useState<any[]>([])
+  const [searching,       setSearching]       = useState(false)
+  const [searchError,     setSearchError]     = useState('')
   const searchTimer = useRef<any>(null)
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
-  const [pendingFood,    setPendingFood]    = useState<Partial<FoodEntry> | null>(null)
-  const [pendingServings,setPendingServings]= useState(1)
-  const [saving,         setSaving]         = useState(false)
-  const [editingEntry,   setEditingEntry]   = useState<string|null>(null)
-  const [editServings,   setEditServings]   = useState(1)
-  const [savedFoods,     setSavedFoods]     = useState<any[]>([])
-  const [barcodeVal,     setBarcodeVal]     = useState('')
-  const [barcodeLoading, setBarcodeLoading] = useState(false)
-  const [barcodeErr,     setBarcodeErr]     = useState('')
+  const [pendingFood,     setPendingFood]     = useState<Partial<FoodEntry> | null>(null)
+  const [pendingServings, setPendingServings] = useState(1)
+  const [saving,          setSaving]          = useState(false)
+  const [editingEntry,    setEditingEntry]    = useState<string|null>(null)
+  const [editServings,    setEditServings]    = useState(1)
+  const [savedFoods,      setSavedFoods]      = useState<any[]>([])
+  // Barcode
+  const [barcodeVal,      setBarcodeVal]      = useState('')
+  const [barcodeLoading,  setBarcodeLoading]  = useState(false)
+  const [barcodeErr,      setBarcodeErr]      = useState('')
+  const [cameraActive,    setCameraActive]    = useState(false)
+  const videoRef    = useRef<HTMLVideoElement>(null)
+  const cameraStream = useRef<MediaStream|null>(null)
+  const barcodeInterval = useRef<any>(null)
+  // Image recognition
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const [imageLoading,    setImageLoading]    = useState(false)
+  const [imageResults,    setImageResults]    = useState<any[]>([])
+  const [imageErr,        setImageErr]        = useState('')
 
   async function loadData() {
     setLoading(true)
@@ -78,12 +85,48 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
 
+  // Stop camera on unmount or mode change
+  const stopCamera = useCallback(() => {
+    if (barcodeInterval.current) clearInterval(barcodeInterval.current)
+    if (cameraStream.current) { cameraStream.current.getTracks().forEach(t => t.stop()); cameraStream.current = null }
+    setCameraActive(false)
+  }, [])
+
+  useEffect(() => { if (addMode !== 'barcode') stopCamera() }, [addMode, stopCamera])
+  useEffect(() => () => stopCamera(), [stopCamera])
+
+  async function startCamera() {
+    if (!('BarcodeDetector' in window)) { setBarcodeErr('Camera scanning not supported on this browser. Enter the barcode number manually below.'); return }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      cameraStream.current = stream
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
+      setCameraActive(true)
+      setBarcodeErr('')
+      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] })
+      barcodeInterval.current = setInterval(async () => {
+        if (!videoRef.current) return
+        try {
+          const codes = await detector.detect(videoRef.current)
+          if (codes.length > 0) {
+            stopCamera()
+            lookupBarcode(codes[0].rawValue)
+          }
+        } catch { /* ignore frame errors */ }
+      }, 400)
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') { setBarcodeErr('Camera permission denied. Enter the barcode number manually below.') }
+      else { setBarcodeErr('Camera not available. Enter the barcode number manually below.') }
+    }
+  }
+
   async function ensureLog() {
     if (log) return log
-    const { data: newLog } = await supabase.from('nutrition_daily_logs').upsert({
+    const { data: newLog, error } = await supabase.from('nutrition_daily_logs').upsert({
       client_id: clientRecord.id, coach_id: clientRecord.coach_id,
       plan_id: plan?.id || null, log_date: selectedDate,
     }, { onConflict: 'client_id,log_date' }).select().single()
+    if (error) { console.error('ensureLog error:', error.message); return null }
     setLog(newLog); return newLog
   }
 
@@ -94,24 +137,21 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       const s = pendingServings
       const currentLog = await ensureLog()
       if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); setSaving(false); return }
-
       const { data: saved, error } = await supabase.from('food_entries').insert({
         daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
-        food_name: pendingFood.food_name || '',
+        food_name:    pendingFood.food_name || '',
         serving_size: `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
-        serving_qty: s,
+        serving_qty:  s,
         calories:  pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
         protein_g: pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
         carbs_g:   pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
         fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
-
       if (error) { console.error('food_entries insert error:', error.message); setSaving(false); return }
       if (saved) { const next = [...entries, saved]; setEntries(next); await recalcTotals(currentLog.id, next) }
     } catch (e) { console.error('commitEntry exception:', e) }
-
     setPendingFood(null); setPendingServings(1); setAddMode('none')
-    setSearchQ(''); setSearchResults([])
+    setSearchQ(''); setSearchResults([]); setImageResults([])
     setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
     setSaving(false)
   }
@@ -124,12 +164,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   }
 
   async function updateEntryServings(entry: FoodEntry, newServings: number) {
-    // Find original per-serving values from serving_qty stored in DB
-    // We stored scaled values, so divide by old qty and multiply by new
     const oldQty = (entry as any).serving_qty || 1
-    const scale = newServings / oldQty
+    const scale  = newServings / oldQty
     const updated = {
-      serving_qty: newServings,
+      serving_qty:  newServings,
       serving_size: `${newServings > 1 ? newServings+'x ' : ''}${(entry.serving_size || '').replace(/^\d+x\s*/,'')}`,
       calories:  entry.calories  != null ? Math.round(entry.calories  * scale * 10) / 10 : null,
       protein_g: entry.protein_g != null ? Math.round(entry.protein_g * scale * 10) / 10 : null,
@@ -154,30 +192,25 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     if (updated) setLog(updated)
   }
 
-  // ── USDA search ───────────────────────────────────────────────────────────
+  // â”€â”€ Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function handleSearchInput(val: string) {
-    setSearchQ(val)
-    setSearchError('')
+    setSearchQ(val); setSearchError('')
     clearTimeout(searchTimer.current)
     if (!val.trim()) { setSearchResults([]); return }
-    searchTimer.current = setTimeout(() => doSearch(val), 300)
+    searchTimer.current = setTimeout(() => doSearch(val), 350)
   }
+
   async function doSearch(q: string) {
     setSearching(true)
     try {
       const res  = await fetch(`${FS_API}?q=${encodeURIComponent(q)}`)
       const data = await res.json()
-
-      // FatSecret configured and returned results
       if (data?.foods?.food) {
-        const raw   = data.foods.food
-        const foods = Array.isArray(raw) ? raw : [raw]
-        setSearchResults(foods.slice(0, 10))
-        setSearching(false)
-        return
+        const raw = data.foods.food
+        setSearchResults(Array.isArray(raw) ? raw : [raw])
+        setSearching(false); return
       }
-
-      // FatSecret not configured or returned error — fall back to USDA
+      // FatSecret not configured or error â€” fall back to USDA
       const usda = await fetch(
         `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(q)}&pageSize=12&dataType=Branded,Foundation,SR%20Legacy`
       )
@@ -187,171 +220,172 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     setSearching(false)
   }
 
-  function getUSDAServing(food: any): USDAServing | null {
-    const servingSize = Number(food?.servingSize)
-    const servingUnit = typeof food?.servingSizeUnit === 'string' ? food.servingSizeUnit : ''
-    if (servingSize > 0) {
-      if (servingUnit.toLowerCase().includes('g')) {
-        return { grams: servingSize, label: `${servingSize}${servingUnit}` }
-      }
-      if (servingUnit.toLowerCase().includes('oz')) {
-        return { grams: Math.round(servingSize * 28.3495 * 10) / 10, label: `${servingSize}${servingUnit}` }
-      }
+  // â”€â”€ USDA serving resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // USDA: Foundation/SR Legacy nutrients are per 100g; Branded are per serving.
+  // We always want to present per-serving, so we scale Foundation/SR by actual serving grams.
+  function getUSDAServing(food: any): { grams: number; label: string } | null {
+    // servingSize field (present on some Branded)
+    const sSize = Number(food?.servingSize)
+    const sUnit = typeof food?.servingSizeUnit === 'string' ? food.servingSizeUnit.toLowerCase() : ''
+    if (sSize > 0) {
+      const grams = sUnit.includes('oz') ? Math.round(sSize * 28.3495 * 10) / 10 : sSize
+      const label = food?.householdServingFullText?.trim() || `${sSize}${food.servingSizeUnit}`
+      return { grams, label }
     }
-
-    const portions = Array.isArray(food?.foodPortions) ? food.foodPortions : Array.isArray(food?.foodMeasures) ? food.foodMeasures : []
-    const portion = portions.find((item: any) => Number(item?.gramWeight) > 0)
+    // foodPortions / foodMeasures
+    const portions = Array.isArray(food?.foodPortions) ? food.foodPortions
+      : Array.isArray(food?.foodMeasures) ? food.foodMeasures : []
+    const portion = portions.find((p: any) => Number(p?.gramWeight) > 0)
     if (portion) {
-      const amount = Number(portion.amount || 1)
-      const labelParts = [
-        amount !== 1 ? amount : '1',
-        portion.modifier || portion.measureUnit?.name || portion.measureUnit?.abbreviation || portion.portionDescription,
-      ].filter(Boolean)
-      return {
-        grams: Number(portion.gramWeight),
-        label: labelParts.join(' ').trim() || `${Math.round(Number(portion.gramWeight))}g serving`,
-      }
+      const amt = Number(portion.amount || 1)
+      const parts = [amt !== 1 ? amt : '', portion.modifier || portion.measureUnit?.name || portion.portionDescription].filter(Boolean)
+      return { grams: Number(portion.gramWeight), label: parts.join(' ').trim() || `${Math.round(Number(portion.gramWeight))}g` }
     }
-
+    // householdServingFullText e.g. "1 cup (240g)"
     if (food?.householdServingFullText) {
-      const gramMatch = String(food.householdServingFullText).match(/\(([\d.]+)\s*g\)/i)
-      if (gramMatch) {
-        return {
-          grams: Number(gramMatch[1]),
-          label: String(food.householdServingFullText).trim(),
-        }
-      }
+      const m = String(food.householdServingFullText).match(/\(([\d.]+)\s*g\)/i)
+      if (m) return { grams: Number(m[1]), label: String(food.householdServingFullText).trim() }
     }
-
     return null
   }
 
   async function pickUSDAFood(food: any) {
-    const nutrients = food.foodNutrients || []
-    const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n ? n.value : null }
-    const cal100 = get('energy'); const pro100 = get('protein')
-    const carb100 = get('carbohydrate'); const fat100 = get('total lipid')
-
+    const nutrients  = food.foodNutrients || []
+    const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n?.value ?? null }
+    const isBranded  = food.dataType === 'Branded'
+    // Branded: nutrients already per serving. Foundation/SR: per 100g, need serving scale.
+    let cal = get('energy'); let pro = get('protein')
+    let carb = get('carbohydrate'); let fat = get('total lipid')
     const name = food.description || ''
     const cleaned = name === name.toUpperCase()
       ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
 
-    let serving = getUSDAServing(food)
-    if (!serving && food?.fdcId) {
-      try {
-        const detailRes = await fetch(`https://api.nal.usda.gov/fdc/v1/food/${food.fdcId}?api_key=${USDA_API_KEY}`)
-        const detailFood = await detailRes.json()
-        serving = getUSDAServing(detailFood)
-      } catch {
-        serving = null
-      }
-    }
-
-    if (!serving) {
-      setSearchError('That food does not include a simple serving size. Try a branded result or use Quick Add.')
+    if (isBranded) {
+      // Branded: use values directly, serving label from servingSize field
+      const sSize = Number(food.servingSize)
+      const sLabel = food.householdServingFullText?.trim() || (sSize > 0 ? `${sSize}${food.servingSizeUnit||'g'}` : '1 serving')
+      setPendingFood({ food_name: cleaned, calories: cal != null ? Math.round(cal*10)/10 : null, protein_g: pro != null ? Math.round(pro*10)/10 : null, carbs_g: carb != null ? Math.round(carb*10)/10 : null, fat_g: fat != null ? Math.round(fat*10)/10 : null, serving_size: sLabel })
       return
     }
 
+    // Foundation / SR Legacy: per 100g, must find real serving
+    let serving = getUSDAServing(food)
+    if (!serving && food?.fdcId) {
+      try {
+        const det = await fetch(`https://api.nal.usda.gov/fdc/v1/food/${food.fdcId}?api_key=${USDA_API_KEY}`)
+        const detFood = await det.json()
+        serving = getUSDAServing(detFood)
+        // Merge nutrient data from detail response too
+        const dn = detFood.foodNutrients || []
+        const dget = (n: string) => { const x = dn.find((v:any) => v.nutrient?.name?.toLowerCase().includes(n)); return x?.amount ?? null }
+        if (cal == null) cal = dget('energy')
+        if (pro == null) pro = dget('protein')
+        if (carb == null) carb = dget('carbohydrat')
+        if (fat == null) fat = dget('total lipid')
+      } catch { serving = null }
+    }
+    if (!serving) { setSearchError('No serving size found for this food. Try a branded result or Quick Add.'); return }
     const scale = serving.grams / 100
     const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
+    setPendingFood({ food_name: cleaned, calories: r(cal), protein_g: r(pro), carbs_g: r(carb), fat_g: r(fat), serving_size: serving.label })
+  }
+
+  // â”€â”€ FatSecret food picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // FatSecret v4 returns all servings. Prefer the first non-100g serving.
+  function pickBestFSServing(food: any): any {
+    const raw = food.servings?.serving
+    if (!raw) return null
+    const all = Array.isArray(raw) ? raw : [raw]
+    // Prefer a serving where metric_serving_amount != 100 (actual portion) 
+    const realServing = all.find((s: any) => {
+      const amt = parseFloat(s.metric_serving_amount || '0')
+      return amt > 0 && Math.round(amt) !== 100
+    })
+    return realServing || all[0]
+  }
+
+  function pickFSFood(food: any) {
+    const serving = pickBestFSServing(food)
+    if (!serving) return
+    const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
     setPendingFood({
-      food_name: cleaned,
-      calories: r(cal100),
-      protein_g: r(pro100),
-      carbs_g: r(carb100),
-      fat_g: r(fat100),
-      serving_size: serving.label,
+      food_name:    food.food_name,
+      calories:     r(serving.calories),
+      protein_g:    r(serving.protein),
+      carbs_g:      r(serving.carbohydrate),
+      fat_g:        r(serving.fat),
+      serving_size: serving.serving_description || '1 serving',
     })
   }
 
-  // FatSecret food picker - servings already per-serving, no math needed
-  function pickFSFood(food: any) {    // Get the first/best serving from FatSecret
-    const servings = food.servings?.serving
-    const serving  = Array.isArray(servings) ? servings[0] : servings
-    const round1   = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
-    const servingDesc = serving?.serving_description || '1 serving'
-    setPendingFood({
-      food_name:   food.food_name,
-      calories:    round1(serving?.calories),
-      protein_g:   round1(serving?.protein),
-      carbs_g:     round1(serving?.carbohydrate),
-      fat_g:       round1(serving?.fat),
-      serving_size: servingDesc,
-    })
-  }
-
-  // For search results list display - parse FatSecret food_description string
-  // e.g. "Per 1 Large: 72 Calories | 0.4g Carbs | 4.8g Fat | 6.3g Protein"
   function parseFSDescription(desc: string) {
     if (!desc) return { cal: null, pro: null, servingLabel: '1 serving' }
-    const calMatch = desc.match(/(\d+\.?\d*)\s*Calorie/)
-    const proMatch = desc.match(/(\d+\.?\d*)g\s*Protein/)
-    const perMatch = desc.match(/^Per ([^:]+):/)
-    return {
-      cal: calMatch ? parseFloat(calMatch[1]) : null,
-      pro: proMatch ? parseFloat(proMatch[1]) : null,
-      servingLabel: perMatch ? perMatch[1] : '1 serving',
-    }
+    const calM = desc.match(/(\d+\.?\d*)\s*Calorie/)
+    const proM = desc.match(/(\d+\.?\d*)g\s*Protein/)
+    const perM = desc.match(/^Per ([^:]+):/)
+    return { cal: calM ? parseFloat(calM[1]) : null, pro: proM ? parseFloat(proM[1]) : null, servingLabel: perM ? perM[1] : '1 serving' }
   }
 
-
-
-  // Barcode lookup via Edge Function (manual input only — no camera)
+  // â”€â”€ Barcode lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function lookupBarcode(code: string) {
     setBarcodeLoading(true); setBarcodeErr('')
     try {
+      // Step 1: resolve barcode to food_id
       const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`)
       const fsData = await fsRes.json()
       const foodId = fsData?.food_id?.value || fsData?.food_id
       if (foodId) {
-        const detailRes  = await fetch(`${FS_API}?food_id=${foodId}`)
-        const detailData = await detailRes.json()
-        const food = detailData?.food
-        if (food) {
-          const servings = food.servings?.serving
-          const serving  = Array.isArray(servings) ? servings[0] : servings
-          const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
-          setPendingFood({ food_name: food.food_name, calories: r(serving?.calories), protein_g: r(serving?.protein), carbs_g: r(serving?.carbohydrate), fat_g: r(serving?.fat), serving_size: serving?.serving_description || '1 serving' })
-          setBarcodeVal(''); setAddMode('none')
-          setBarcodeLoading(false); return
-        }
+        const detRes  = await fetch(`${FS_API}?food_id=${foodId}`)
+        const detData = await detRes.json()
+        const food = detData?.food
+        if (food) { pickFSFood(food); setBarcodeVal(''); setAddMode('none'); setBarcodeLoading(false); return }
       }
+      // Fallback: Open Food Facts
       const offRes  = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
       const offData = await offRes.json()
       if (offData?.status === 1) {
         const p = offData.product; const n = p.nutriments || {}
         const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
-        if (!p.serving_size && n['energy-kcal_serving'] == null && n.proteins_serving == null && n.carbohydrates_serving == null && n.fat_serving == null) {
-          setBarcodeErr('Product found, but serving info is missing. Try search or Quick Add.')
+        if (!p.serving_size && n['energy-kcal_serving'] == null) {
+          setBarcodeErr('Product found but serving info is missing. Try search or Quick Add.')
         } else {
-          setPendingFood({
-            food_name: p.product_name || 'Unknown product',
-            calories: r(n['energy-kcal_serving']),
-            protein_g: r(n.proteins_serving),
-            carbs_g: r(n.carbohydrates_serving),
-            fat_g: r(n.fat_serving),
-            serving_size: p.serving_size || '1 serving',
-          })
+          setPendingFood({ food_name: p.product_name || 'Unknown product', calories: r(n['energy-kcal_serving']), protein_g: r(n.proteins_serving), carbs_g: r(n.carbohydrates_serving), fat_g: r(n.fat_serving), serving_size: p.serving_size || '1 serving' })
           setBarcodeVal(''); setAddMode('none')
         }
-      } else {
-        setBarcodeErr('Product not found. Try searching by name or use Quick Add.')
-      }
-    } catch { setBarcodeErr('Lookup failed. Check your connection and try again.') }
+      } else { setBarcodeErr('Product not found. Try searching by name or Quick Add.') }
+    } catch { setBarcodeErr('Lookup failed. Check connection and try again.') }
     setBarcodeLoading(false)
   }
 
-  const totals = entries.reduce((acc, entry) => ({
-    calories: acc.calories + (entry.calories || 0),
-    protein: acc.protein + (entry.protein_g || 0),
-    carbs: acc.carbs + (entry.carbs_g || 0),
-    fat: acc.fat + (entry.fat_g || 0),
-  }), {
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fat: 0,
-  })
+  // â”€â”€ Image food recognition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  async function handleImageFile(file: File) {
+    setImageLoading(true); setImageErr(''); setImageResults([])
+    try {
+      const base64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res((r.result as string).split(',')[1])
+        r.onerror = () => rej(new Error('Read failed'))
+        r.readAsDataURL(file)
+      })
+      const fsRes  = await fetch(`${FS_API}?image=${encodeURIComponent(base64)}`)
+      const fsData = await fsRes.json()
+      const items  = fsData?.food_response
+      if (items && items.length > 0) {
+        setImageResults(items.map((item: any) => item.food).filter(Boolean))
+      } else {
+        setImageErr('No foods recognized. Try a clearer photo or search manually.')
+      }
+    } catch { setImageErr('Recognition failed. Try search or Quick Add.') }
+    setImageLoading(false)
+  }
+
+  // â”€â”€ Derived state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const totals = entries.reduce((acc, e) => ({
+    calories: acc.calories + (e.calories || 0),
+    protein:  acc.protein  + (e.protein_g || 0),
+    carbs:    acc.carbs    + (e.carbs_g   || 0),
+    fat:      acc.fat      + (e.fat_g     || 0),
+  }), { calories:0, protein:0, carbs:0, fat:0 })
   const pct = (val: number, target: number) => target > 0 ? Math.min(100, Math.round((val/target)*100)) : 0
   const macros = [
     { label:'Calories', val:Math.round(totals.calories), target:plan?.calories_target, unit:'kcal', color:'#c8f545' },
@@ -359,13 +393,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     { label:'Carbs',    val:Math.round(totals.carbs),    target:plan?.carbs_g,         unit:'g',    color:'#f5a623' },
     { label:'Fat',      val:Math.round(totals.fat),      target:plan?.fat_g,           unit:'g',    color:'#f472b6' },
   ]
-  const remainingMacros = macros.map(m => ({
-    ...m,
-    remaining: typeof m.target === 'number' ? Math.max(0, Math.round(m.target - m.val)) : null,
-  }))
-  const leadMacro = remainingMacros
-    .filter(m => typeof m.target === 'number')
-    .sort((a, b) => pct(a.val, a.target as number) - pct(b.val, b.target as number))[0]
   const byMeal: Record<string, FoodEntry[]> = {}
   for (const e of entries) { const k = e.meal_time||'snack'; if (!byMeal[k]) byMeal[k]=[]; byMeal[k].push(e) }
   const mealOrder = MEAL_LABELS.map(m => m.id)
@@ -375,9 +402,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   if (!clientRecord) return null
 
+  const resetAdd = () => { setAddMode('none'); setSearchQ(''); setSearchResults([]); setSearchError(''); setBarcodeVal(''); setBarcodeErr(''); setImageResults([]); setImageErr('') }
+
   return (
     <div style={{ paddingBottom:80 }}>
-
       {/* Date bar */}
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
         <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}
@@ -401,7 +429,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           </div>
         )}
 
-
         {/* Macro rings */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(88px,1fr))', gap:10, marginBottom:20 }}>
           {macros.map(m => {
@@ -414,7 +441,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   <text x="28" y="33" textAnchor="middle" fontSize="10" fontWeight="700" fill={m.color}>{p}%</text>
                 </svg>
                 <div style={{ fontSize:14, fontWeight:800 }}>{m.val}<span style={{ fontSize:10, color:t.textMuted, fontWeight:400 }}>{m.unit}</span></div>
-                {m.target ? <div style={{ fontSize:10, color:t.textMuted }}>/{m.target}{m.unit}</div> : <div style={{ fontSize:10, color:t.textMuted }}>—</div>}
+                {m.target ? <div style={{ fontSize:10, color:t.textMuted }}>/{m.target}{m.unit}</div> : <div style={{ fontSize:10, color:t.textMuted }}>&mdash;</div>}
                 <div style={{ fontSize:10, color:t.textMuted, marginTop:2 }}>{m.label}</div>
               </div>
             )
@@ -425,11 +452,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {addMode === 'none' && !pendingFood && (
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:13, fontWeight:800, color:t.textDim, marginBottom:10 }}>Add food to {selectedDate===today?'Today':selectedDate}</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:8 }}>
-              {([{mode:'search' as AddMode,icon:'🔍',label:'Search Foods'},{mode:'quick' as AddMode,icon:'➕',label:'Quick Add'},{mode:'barcode' as AddMode,icon:'📷',label:'Barcode'},{mode:'saved' as AddMode,icon:'⭐',label:'Saved Foods'}]).map(({mode,icon,label})=>(
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:8 }}>
+              {([
+                {mode:'search' as AddMode, icon:'🔍', label:'Search'},
+                {mode:'quick'  as AddMode, icon:'➕',  label:'Quick Add'},
+                {mode:'saved'  as AddMode, icon:'⭐',  label:'Saved'},
+              ]).map(({mode,icon,label})=>(
                 <button key={mode} onClick={()=>setAddMode(mode)} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
                   <span style={{ fontSize:22 }}>{icon}</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:t.textDim, textAlign:'center', lineHeight:1.2 }}>{label}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:t.textDim }}>{label}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8 }}>
+              {([
+                {mode:'barcode' as AddMode, icon:'📷', label:'Scan Barcode'},
+                {mode:'image'   as AddMode, icon:'📸', label:'Photo'},
+              ]).map(({mode,icon,label})=>(
+                <button key={mode} onClick={()=>setAddMode(mode)} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:22 }}>{icon}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:t.textDim }}>{label}</span>
                 </button>
               ))}
             </div>
@@ -441,13 +483,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
               <span style={{ fontSize:15, fontWeight:800 }}>🔍 Search Foods</span>
-              <button onClick={()=>{setAddMode('none');setSearchQ('');setSearchResults([]);setSearchError('')}} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
+              <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
             <input value={searchQ} onChange={e=>handleSearchInput(e.target.value)} placeholder="e.g. chicken breast, greek yogurt..." autoFocus style={{ ...inp, marginBottom:10 }}/>
-            {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching foods by serving...</div>}
+            {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching...</div>}
             {searchError && <div style={{ fontSize:12, color:t.orange, marginBottom:8 }}>{searchError}</div>}
             {searchResults.map((food:any) => {
-              // Handle both FatSecret and USDA formats
               const isFS = !!food.food_id
               if (isFS) {
                 const { cal, pro, servingLabel } = parseFSDescription(food.food_description || '')
@@ -460,13 +501,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                     } catch { pickFSFood(food) }
                   }} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                     <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.food_name}</div>
-                    <div style={{ fontSize:11, color:t.textMuted }}>
-                      {cal != null ? Math.round(cal)+' kcal' : '—'} · {pro != null ? pro+'g protein' : '—'} · per {servingLabel}
-                    </div>
+                    <div style={{ fontSize:11, color:t.textMuted }}>{cal != null ? Math.round(cal)+' kcal' : '—'} · {pro != null ? pro+'g protein' : '—'} · per {servingLabel}</div>
                   </button>
                 )
               } else {
-                // USDA fallback format
                 const n = food.foodNutrients || []
                 const cal = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value
                 const pro = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
@@ -474,14 +512,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 return (
                   <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                     <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{food.description}</div>
-                    <div style={{ fontSize:11, color:t.textMuted }}>
-                      {cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {serving ? `per ${serving.label}` : 'tap to check serving'}
-                    </div>
+                    <div style={{ fontSize:11, color:t.textMuted }}>{cal ? Math.round(cal)+' kcal' : '—'} · {pro ? Math.round(pro)+'g protein' : '—'} · {serving ? `per ${serving.label}` : 'tap to check serving'}</div>
                   </button>
                 )
               }
             })}
-            {!searching && searchQ.length>1 && searchResults.length===0 && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'8px 0' }}>No results — try Quick Add to enter manually</div>}
+            {!searching && searchQ.length>1 && searchResults.length===0 && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'8px 0' }}>No results — try Quick Add</div>}
           </div>
         )}
 
@@ -490,7 +526,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
               <span style={{ fontSize:15, fontWeight:800 }}>➕ Quick Add</span>
-              <button onClick={()=>setAddMode('none')} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
+              <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
             <input value={quick.food_name} onChange={e=>setQuick(p=>({...p,food_name:e.target.value}))} placeholder="Food name..." autoFocus style={{ ...inp, marginBottom:8 }}/>
             <div style={{ ...macroRow, marginBottom:8 }}>
@@ -513,12 +549,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {addMode==='barcode' && !pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>🔢 Barcode Lookup</span>
-              <button onClick={()=>{ setAddMode('none'); setBarcodeVal(''); setBarcodeErr('') }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>×</button>
+              <span style={{ fontSize:15, fontWeight:800 }}>📷 Scan Barcode</span>
+              <button onClick={()=>{ resetAdd(); stopCamera() }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
+            {!cameraActive && !barcodeLoading && (
+              <button onClick={startCamera} style={{ width:'100%', background:t.teal+'20', border:`1px solid ${t.teal}40`, borderRadius:12, padding:'16px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', marginBottom:12 }}>
+                📹 Open Camera
+              </button>
+            )}
+            {cameraActive && (
+              <div style={{ position:'relative', borderRadius:12, overflow:'hidden', marginBottom:12 }}>
+                <video ref={videoRef} style={{ width:'100%', display:'block', borderRadius:12 }} playsInline muted/>
+                <div style={{ position:'absolute', inset:0, border:'2px solid '+t.teal, borderRadius:12, pointerEvents:'none' }}>
+                  <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:'60%', height:2, background:t.teal+'80' }}/>
+                </div>
+                <button onClick={stopCamera} style={{ position:'absolute', top:8, right:8, background:'#00000080', border:'none', borderRadius:8, padding:'4px 10px', fontSize:12, color:'#fff', cursor:'pointer' }}>Stop</button>
+              </div>
+            )}
             <div style={{ display:'flex', gap:8 }}>
               <input value={barcodeVal} onChange={e=>setBarcodeVal(e.target.value.replace(/\D/g,''))}
-                placeholder="Type barcode number..." inputMode="numeric" autoFocus
+                placeholder="Or type barcode number..." inputMode="numeric"
                 onKeyDown={e=>{ if(e.key==='Enter' && barcodeVal.length>5) lookupBarcode(barcodeVal) }}
                 style={{ ...inp, flex:1 }}/>
               <button onClick={()=>{ if(barcodeVal.length>5) lookupBarcode(barcodeVal) }}
@@ -527,16 +577,70 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 {barcodeLoading ? '...' : 'Look Up'}
               </button>
             </div>
-            {barcodeErr && <div style={{ fontSize:12, color:t.red, marginTop:8 }}>{barcodeErr}</div>}
+            {barcodeErr && <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>{barcodeErr}</div>}
             {barcodeLoading && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'10px 0' }}>Looking up product...</div>}
           </div>
         )}
 
+        {/* IMAGE RECOGNITION MODE */}
+        {addMode==='image' && !pendingFood && (
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <span style={{ fontSize:15, fontWeight:800 }}>📸 Photo Recognition</span>
+              <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
+            </div>
+            <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }}
+              onChange={e=>{ const f = e.target.files?.[0]; if(f) handleImageFile(f) }}/>
+            {!imageLoading && imageResults.length === 0 && (
+              <>
+                <button onClick={()=>imageInputRef.current?.click()} style={{ width:'100%', background:t.teal+'20', border:`1px solid ${t.teal}40`, borderRadius:12, padding:'18px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', marginBottom:8 }}>
+                  📷 Take a Photo of Your Food
+                </button>
+                <div style={{ fontSize:11, color:t.textMuted, textAlign:'center' }}>AI will recognize the foods in your photo</div>
+              </>
+            )}
+            {imageLoading && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Recognizing food...</div>}
+            {imageErr && <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>{imageErr}</div>}
+            {imageResults.map((food:any) => (
+              <button key={food.food_id} onClick={async () => {
+                try {
+                  const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
+                  const data = await res.json()
+                  pickFSFood(data?.food || food)
+                } catch { pickFSFood(food) }
+              }} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                <div style={{ fontSize:13, fontWeight:700 }}>{food.food_name}</div>
+                <div style={{ fontSize:11, color:t.textMuted }}>{food.food_type || ''} · Tap to add</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* SAVED FOODS MODE */}
+        {addMode==='saved' && !pendingFood && (
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <span style={{ fontSize:15, fontWeight:800 }}>⭐ Saved Foods</span>
+              <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
+            </div>
+            {savedFoods.length === 0 && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>No saved foods yet. Foods you log will appear here.</div>}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+              {savedFoods.map((f:any) => (
+                <button key={f.food_name} onClick={()=>setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size })}
+                  style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'center' as const }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:t.text, marginBottom:3, lineHeight:1.3 }}>{f.food_name.length>18?f.food_name.slice(0,16)+'…':f.food_name}</div>
+                  {f.calories != null && <div style={{ fontSize:10, color:t.orange }}>{Math.round(f.calories)} kcal</div>}
+                  {f.protein_g != null && <div style={{ fontSize:10, color:'#60a5fa' }}>{f.protein_g}g P</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PENDING FOOD - servings + meal picker */}
         {pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.teal}40`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>Adding: {pendingFood.food_name}</div>
-
-            {/* Servings stepper */}
             <div style={{ display:'flex', alignItems:'center', gap:12, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>SERVINGS</div>
@@ -544,11 +648,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   {pendingFood.calories != null ? `${Math.round(pendingFood.calories * pendingServings)} kcal` : '—'}
                   {pendingFood.protein_g != null ? ` · ${Math.round(pendingFood.protein_g * pendingServings * 10)/10}g P` : ''}
                 </div>
-                <div style={{ fontSize:11, color:t.textMuted }}>
-                  {`${pendingServings}x ${pendingFood.serving_size}`}
-                </div>
+                <div style={{ fontSize:11, color:t.textMuted }}>{pendingServings}x {pendingFood.serving_size}</div>
               </div>
-              <div style={{ display:'flex', alignItems:'center', gap:0, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
+              <div style={{ display:'flex', alignItems:'center', background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
                 <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s - 0.5)*10)/10))}
                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
                 <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>{pendingServings}</div>
@@ -556,7 +658,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
               </div>
             </div>
-
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(92px,1fr))', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
@@ -579,7 +680,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             <div style={{ fontSize:12, color:t.textMuted }}>{entries.length} item{entries.length!==1?'s':''}</div>
           </div>
           {entries.length===0 && (
-            <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'32px 16px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Nothing logged yet — tap "Add food to Today" above.</div>
+            <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'32px 16px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Nothing logged yet — tap Add above.</div>
           )}
           {usedMeals.map(mealId=>{
             const meal = MEAL_LABELS.find(m=>m.id===mealId)||{ label:mealId, icon:'🍴' }
@@ -593,7 +694,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                   <span style={{ fontSize:11, color:t.orange, marginLeft:'auto', fontWeight:700 }}>{Math.round(mealCals)} kcal</span>
                 </div>
                 {mealEntries.map((e:FoodEntry)=>(
-                  <div key={e.id} style={{ background:t.surface, border:`1px solid ${editingEntry===e.id?t.teal+'60':t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:5, transition:'border-color 0.15s' }}>
+                  <div key={e.id} style={{ background:t.surface, border:`1px solid ${editingEntry===e.id?t.teal+'60':t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:5 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings((e as any).serving_qty||1) }}>
                         <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
@@ -601,12 +702,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                           {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}
                         </div>
                       </div>
-                      <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>×</button>
+                      <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>x</button>
                     </div>
                     {editingEntry === e.id && (
                       <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
                         <div style={{ fontSize:11, color:t.textMuted, flex:1 }}>Adjust servings:</div>
-                        <div style={{ display:'flex', alignItems:'center', gap:0, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
+                        <div style={{ display:'flex', alignItems:'center', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
                           <button onClick={()=>setEditServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
                             style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>−</button>
                           <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:28, textAlign:'center' }}>{editServings}</div>
