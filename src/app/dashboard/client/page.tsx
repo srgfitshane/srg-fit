@@ -1273,8 +1273,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         placeholder="00"
                         value={(logPopup.draft||'').split(':')[1] || ''}
                         onChange={e => {
+                          const val = e.target.value.slice(0,2)
                           const hh = (logPopup.draft||'').split(':')[0] || '0'
-                          setLogPopup(p=>p?{...p, draft: hh+':'+e.target.value}:null)
+                          setLogPopup(p=>p?{...p, draft: hh+':'+val}:null)
                         }}
                         style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
                       />
