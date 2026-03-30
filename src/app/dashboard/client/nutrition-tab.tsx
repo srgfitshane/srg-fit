@@ -151,7 +151,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
       if (error) { console.error('food_entries insert error:', error.message); return }
-      if (saved) { const next = [...entries, saved]; setEntries(next); await recalcTotals(currentLog.id, next) }
+      if (saved) { await loadData() }
     } catch (e) { console.error('commitEntry exception:', e) }
     finally {
       setPendingFood(null); setPendingServings(1); setAddMode('none')
@@ -163,9 +163,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   async function removeEntry(id: string) {
     await supabase.from('food_entries').delete().eq('id', id)
-    const updated = entries.filter(e => e.id !== id)
-    setEntries(updated)
-    if (log) await recalcTotals(log.id, updated)
+    await loadData()
   }
 
   async function updateEntryServings(entry: FoodEntry, newServings: number) {
@@ -180,10 +178,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       fat_g:     entry.fat_g     != null ? Math.round(entry.fat_g     * scale * 10) / 10 : null,
     }
     await supabase.from('food_entries').update(updated).eq('id', entry.id)
-    const next = entries.map(e => e.id === entry.id ? { ...e, ...updated } : e)
-    setEntries(next)
-    if (log) await recalcTotals(log.id, next)
     setEditingEntry(null)
+    await loadData()
   }
 
   async function recalcTotals(logId: string, ents: any[]) {
