@@ -201,6 +201,39 @@ export default function ProgramsList() {
       setDuping(false)
     }
 
+    const handleSaveToLibrary = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: blocks } = await supabase
+        .from('workout_blocks').select(`*, block_exercises(*, exercise:exercises(name))`)
+        .eq('program_id', p.id).order('week_number').order('order_index')
+      if (!blocks || blocks.length === 0) { alert('No exercises to save.'); return }
+      for (const block of blocks) {
+        const exes = (block.block_exercises || []).sort((a:any,b:any) => a.order_index - b.order_index)
+        if (exes.length === 0) continue
+        const { data: tmpl } = await supabase.from('workout_templates').insert({
+          coach_id: user?.id,
+          title: block.day_label || block.name || p.name,
+          notes_coach: `Saved from: ${p.name}`,
+        }).select().single()
+        if (!tmpl) continue
+        await supabase.from('workout_template_exercises').insert(
+          exes.map((ex:any, i:number) => ({
+            template_id: tmpl.id,
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise?.name || '',
+            sets_prescribed: ex.sets || 3,
+            reps_prescribed: ex.reps || '8-12',
+            weight_prescribed: ex.target_weight || '',
+            rest_seconds: ex.rest_seconds || 90,
+            notes: ex.notes || null,
+            order_index: i,
+          }))
+        )
+      }
+      alert(`${blocks.length} day${blocks.length !== 1 ? 's' : ''} from "${p.name}" saved to Workout Library ✓`)
+    }
+
     const handleDelete = async (e: React.MouseEvent) => {
       e.stopPropagation()
       setDeleting(true)
@@ -308,6 +341,12 @@ export default function ProgramsList() {
                   <button onClick={handleDuplicate} disabled={duping}
                     style={{ ...btnBase, background:t.orange+'18', border:'1px solid '+t.orange+'40', color:t.orange, opacity:duping?0.5:1 }}>
                     {duping ? '⏳' : '📋'}
+                  </button>
+                  {/* Save to Workout Library */}
+                  <button onClick={handleSaveToLibrary}
+                    title="Save days to Workout Library"
+                    style={{ ...btnBase, background:t.tealDim, border:'1px solid '+t.teal+'40', color:t.teal }}>
+                    💾 Save to Library
                   </button>
                   {/* Assign to client */}
                   <button onClick={e=>{ e.stopPropagation(); setAssignClient(''); setAssignStart(''); setShowAssign(p) }}

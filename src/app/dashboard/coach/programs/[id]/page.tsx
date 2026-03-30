@@ -182,6 +182,33 @@ export default function ProgramBuilder() {
     setTmplLoading(false)
   }
 
+  // Save a day/block as a reusable workout template
+  const saveBlockAsTemplate = async (block: any) => {
+    const exes = (block.block_exercises || []).sort((a:any,b:any) => a.order_index - b.order_index)
+    if (exes.length === 0) return
+    const name = block.day_label || block.name || 'Workout'
+    const { data: tmpl, error } = await supabase.from('workout_templates').insert({
+      coach_id: program?.coach_id,
+      title: name,
+      notes_coach: `Saved from program: ${program?.name || ''}`,
+    }).select().single()
+    if (error || !tmpl) { console.error('saveBlockAsTemplate error:', error?.message); return }
+    const templateExes = exes.map((ex:any, i:number) => ({
+      template_id: tmpl.id,
+      exercise_id: ex.exercise_id,
+      exercise_name: ex.exercise?.name || ex.exercise_name || '',
+      sets_prescribed: ex.sets || ex.sets_prescribed || 3,
+      reps_prescribed: ex.reps || ex.reps_prescribed || '8-12',
+      weight_prescribed: ex.target_weight || ex.weight_prescribed || '',
+      rest_seconds: ex.rest_seconds || 90,
+      notes: ex.notes || null,
+      order_index: i,
+    }))
+    await supabase.from('workout_template_exercises').insert(templateExes)
+    setTemplates(prev => [{ ...tmpl, workout_template_exercises: templateExes }, ...prev])
+    alert(`"${name}" saved to Workout Library ✓`)
+  }
+
   // Import all exercises from a workout template into an existing block
   const importTemplateIntoBlock = async (blockId: string, template: any) => {
     const block = blocks.find(b => b.id === blockId)
@@ -452,6 +479,11 @@ export default function ProgramBuilder() {
                           <div style={{ fontSize:10, color:t.textMuted, marginTop:2 }}>{exes.length} exercise{exes.length!==1?'s':''} · click to rename</div>
                         </div>
                         {saving===block.id && <span style={{ fontSize:10, color:t.teal }}>saving...</span>}
+                        <button onClick={()=>saveBlockAsTemplate(block)}
+                          title="Save to Workout Library"
+                          style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          📋 Save
+                        </button>
                         <button onClick={()=>deleteBlock(block.id)}
                           style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕</button>
                       </div>
