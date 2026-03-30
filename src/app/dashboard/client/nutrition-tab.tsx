@@ -7,12 +7,12 @@ const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-s
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
 
 const MEAL_LABELS = [
-  { id:'breakfast',    label:'Breakfast',    icon:'🌅' },
-  { id:'lunch',        label:'Lunch',        icon:'🥙' },
-  { id:'dinner',       label:'Dinner',       icon:'🍽️' },
-  { id:'snack',        label:'Snack',        icon:'🍎' },
-  { id:'pre_workout',  label:'Pre-Workout',  icon:'⚡' },
-  { id:'post_workout', label:'Post-Workout', icon:'💪' },
+  { id:'breakfast',   label:'Breakfast',   icon:'🌅' },
+  { id:'lunch',       label:'Lunch',       icon:'🥙' },
+  { id:'dinner',      label:'Dinner',      icon:'🍽️' },
+  { id:'snack',       label:'Snack',       icon:'🍎' },
+  { id:'pre_workout', label:'Pre-Workout', icon:'⚡' },
+  { id:'post_workout',label:'Post-Workout',icon:'💪' },
 ]
 
 type FoodEntry = {

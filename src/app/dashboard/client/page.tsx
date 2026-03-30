@@ -866,6 +866,59 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           </div>
           )}
 
+          {/* ── 5.5 ACTIVE GOALS ── */}
+          {activeGoals.length > 0 && (
+            <div style={{ marginBottom:14 }} className="fade">
+              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>My Goals</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {activeGoals.map((goal:any) => {
+                  const pct = goal.target_value && goal.current_value != null
+                    ? Math.min(100, Math.round((goal.current_value / goal.target_value) * 100))
+                    : null
+                  const isComplete = goal.status === 'completed'
+                  const color = isComplete ? t.teal : t.orange
+                  const daysLeft = goal.target_date
+                    ? Math.ceil((new Date(goal.target_date).getTime() - Date.now()) / 86400000)
+                    : null
+                  return (
+                    <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : t.border}`, borderRadius:13, padding:'12px 14px' }}>
+                      <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom: pct !== null ? 10 : 0 }}>
+                        <div style={{ width:32, height:32, borderRadius:9, background: isComplete ? t.teal+'20' : t.orangeDim, border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                          {isComplete ? '🏆' : '🎯'}
+                        </div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color: isComplete ? t.teal : t.text }}>{goal.title}</div>
+                          <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                            {goal.target_value != null && goal.unit
+                              ? `${goal.current_value ?? 0} / ${goal.target_value} ${goal.unit}`
+                              : goal.description || ''}
+                            {daysLeft !== null && !isComplete && (
+                              <span style={{ marginLeft:6, color: daysLeft <= 7 ? t.red : t.textMuted }}>
+                                · {daysLeft > 0 ? `${daysLeft}d left` : 'Due today'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {isComplete && <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Done ✓</span>}
+                      </div>
+                      {pct !== null && (
+                        <div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginBottom:4 }}>
+                            <span>Progress</span>
+                            <span style={{ fontWeight:700, color: pct >= 100 ? t.teal : t.orange }}>{pct}%</span>
+                          </div>
+                          <div style={{ height:6, borderRadius:4, background:t.surfaceHigh, overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:`${pct}%`, borderRadius:4, background: pct >= 100 ? t.teal : `linear-gradient(90deg,${t.orange},${t.yellow})`, transition:'width 0.4s ease' }}/>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ── 6. TASKS / HABITS ── */}
           {habits.length > 0 && (
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
