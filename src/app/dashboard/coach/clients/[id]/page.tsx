@@ -85,6 +85,7 @@ export default function ClientDetail() {
   const [notesSaved, setNotesSaved] = useState(false)
   const [clientGender, setClientGender] = useState('')
   const [genderSaved, setGenderSaved] = useState(false)
+  const [perms, setPerms] = useState({ show_nutrition:true, show_macros:true, show_body_metrics:true, show_progress_photos:true })
   const [forms,        setForms]        = useState<any[]>([])
   const [showAssignForm, setShowAssignForm] = useState(false)
   const [assignFormId,   setAssignFormId]   = useState('')
@@ -122,6 +123,7 @@ export default function ClientDetail() {
       setClient(clientData)
       if (clientData?.coach_notes) setCoachNotes(clientData.coach_notes)
       if (clientData?.gender) setClientGender(clientData.gender)
+      setPerms({ show_nutrition: clientData?.show_nutrition ?? true, show_macros: clientData?.show_macros ?? true, show_body_metrics: clientData?.show_body_metrics ?? true, show_progress_photos: clientData?.show_progress_photos ?? true })
 
       // Fire all secondary queries in parallel
       const [
@@ -555,6 +557,31 @@ export default function ClientDetail() {
                   style={{ marginTop:10, background:notesSaved?t.green:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
                   {notesSaved ? '✓ Saved!' : 'Save Note'}
                 </button>
+              </div>
+              {/* Client Permissions */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginTop:16 }}>
+                <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>Client Permissions</div>
+                <div style={{ fontSize:11, color:t.textMuted, marginBottom:16 }}>Toggle what this client can see in their dashboard</div>
+                {([
+                  { key:'show_nutrition',       label:'Nutrition tab',           desc:'Access to food logging & macros' },
+                  { key:'show_macros',           label:'Macro targets',           desc:'See macro rings and targets' },
+                  { key:'show_body_metrics',     label:'Body metrics',            desc:'Weight, body fat & measurements' },
+                  { key:'show_progress_photos',  label:'Progress photos',         desc:'Upload and view progress photos' },
+                ] as const).map(({ key, label, desc }) => (
+                  <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', paddingBottom:14, marginBottom:14, borderBottom:'1px solid '+t.border }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700 }}>{label}</div>
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{desc}</div>
+                    </div>
+                    <div onClick={async () => {
+                      const next = { ...perms, [key]: !perms[key] }
+                      setPerms(next)
+                      await supabase.from('clients').update({ [key]: next[key] }).eq('id', clientId)
+                    }} style={{ width:44, height:24, borderRadius:12, background: perms[key] ? t.teal : t.surfaceHigh, border:'1px solid '+(perms[key] ? t.teal : t.border), cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                      <div style={{ position:'absolute', top:3, left: perms[key] ? 22 : 3, width:16, height:16, borderRadius:8, background: perms[key] ? '#000' : t.textMuted, transition:'left 0.2s' }}/>
+                    </div>
+                  </div>
+                ))}
               </div>
 
             </div>

@@ -403,7 +403,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
           </div>
         )}
 
-        {/* Macro rings */}
+        {/* Macro rings — hidden if coach disabled macros */}
+        {clientRecord?.show_macros !== false && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:20 }}>
           {macros.map(m => {
             const p = pct(m.val, m.target); const r=22, circ=2*Math.PI*r
@@ -421,6 +422,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             )
           })}
         </div>
+        )}
 
         {/* Add food buttons */}
         {addMode === 'none' && !pendingFood && (

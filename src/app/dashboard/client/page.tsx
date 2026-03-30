@@ -944,7 +944,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   )
 
                   return (
-                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft: h.unit==='hrs' ? (val ? (() => { const v=Number(val); const hh=Math.floor(v); const mm=Math.round((v-hh)*60); return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0') })() : '00:00') : String(val||'') })}
+                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft: h.unit==='hrs' ? (val ? (() => { const v=Number(val); const hh=Math.floor(v); const mm=Math.round((v-hh)*60); return hh+':'+(mm<10?'0':'')+mm })() : '') : String(val||'') })}
                       style={{ padding:'12px 14px', background:done?color+'12':t.surface, border:'1px solid '+(done?color+'40':t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                         <span style={{ fontSize:18 }}>{h.icon||'📊'}</span>
@@ -1028,9 +1028,13 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           )}
 
           {/* ── NUTRITION TAB ── */}
-          {activeNav === 'nutrition' && (
+          {activeNav === 'nutrition' && (clientRecord?.show_nutrition !== false ? (
             <NutritionTab clientRecord={clientRecord} supabase={supabase} t={t} />
-          )}
+          ) : (
+            <div style={{ padding:'40px 20px', textAlign:'center' as const, color:'#5a5a78', fontSize:14 }}>
+              Nutrition tracking is not enabled for your account. Contact your coach to enable it.
+            </div>
+          ))}
 
           {/* ── MESSAGES TAB ── */}
           {activeNav === 'messages' && messagesView === 'hub' && (
@@ -1248,10 +1252,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </div>
               <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:20 }}>
                 <input
-                  type={logPopup.habit.unit==='hrs' ? 'time' : 'number'}
+                  type={logPopup.habit.unit==='hrs' ? 'text' : 'number'}
                   autoFocus
-                  inputMode={logPopup.habit.unit==='hrs' ? undefined : 'numeric'}
-                  placeholder={logPopup.habit.unit==='hrs' ? undefined : '0'}
+                  inputMode={logPopup.habit.unit==='hrs' ? 'decimal' : 'numeric'}
+                  placeholder={logPopup.habit.unit==='hrs' ? 'e.g. 6:57' : '0'}
                   value={logPopup.draft}
                   onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
                   onKeyDown={e=>{ if(e.key==='Enter'){
@@ -1494,7 +1498,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         {/* ── Bottom Nav ── */}
         <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, display:'flex', alignItems:'stretch', height:'calc(60px + env(safe-area-inset-bottom))', zIndex:20, paddingBottom:'env(safe-area-inset-bottom)' }}>
-          {NAV.map(n => (
+          {NAV.filter(n => n.id !== 'nutrition' || clientRecord?.show_nutrition !== false).map(n => (
             <button key={n.id} onClick={()=>openTab(n.id as DashboardTab)}
               aria-label={`Open ${n.label}`}
               aria-pressed={activeNav === n.id}
