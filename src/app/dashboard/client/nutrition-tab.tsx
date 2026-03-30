@@ -74,11 +74,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       const { data: ents } = await supabase.from('food_entries').select('*').eq('daily_log_id', dailyLog.id).order('logged_at')
       setEntries(ents || [])
     } else { setLog(null); setEntries([]) }
-    const { data: prev } = await supabase.from('food_entries').select('food_name,calories,protein_g,carbs_g,fat_g,serving_size')
-      .eq('client_id', clientRecord.id).order('logged_at', { ascending: false }).limit(60)
+    const { data: prev } = await supabase.from('food_entries').select('food_name,calories,protein_g,carbs_g,fat_g,serving_size,serving_qty,logged_at')
+      .eq('client_id', clientRecord.id).order('logged_at', { ascending: false }).limit(30)
     if (prev) {
       const seen = new Set<string>()
-      setSavedFoods(prev.filter((f:any) => { if (seen.has(f.food_name)) return false; seen.add(f.food_name); return true }).slice(0,20))
+      setSavedFoods(prev.filter((f:any) => { if (seen.has(f.food_name)) return false; seen.add(f.food_name); return true }))
     }
     setLoading(false)
   }
@@ -96,22 +96,22 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   useEffect(() => () => stopCamera(), [stopCamera])
 
   async function startCamera() {
-    if (!('BarcodeDetector' in window)) { setBarcodeErr('Camera scanning not supported on this browser. Enter the barcode number manually below.'); return }
+    if (!('BarcodeDetector' in window)) { setCameraActive(false); setBarcodeErr('Camera barcode scanning is not supported on this browser. Type the barcode number below instead.'); return }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       cameraStream.current = stream
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
       setCameraActive(true)
       setBarcodeErr('')
-      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] })
+      let detector: any
+      try { detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] }) } catch {
+        stopCamera(); setBarcodeErr('Barcode scanning not supported. Type the number below.'); return
+      }
       barcodeInterval.current = setInterval(async () => {
         if (!videoRef.current) return
         try {
           const codes = await detector.detect(videoRef.current)
-          if (codes.length > 0) {
-            stopCamera()
-            lookupBarcode(codes[0].rawValue)
-          }
+          if (codes.length > 0) { stopCamera(); lookupBarcode(codes[0].rawValue) }
         } catch { /* ignore frame errors */ }
       }, 400)
     } catch (err: any) {
@@ -456,7 +456,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
               {([
                 {mode:'search' as AddMode, icon:'🔍', label:'Search'},
                 {mode:'quick'  as AddMode, icon:'➕',  label:'Quick Add'},
-                {mode:'saved'  as AddMode, icon:'⭐',  label:'Saved'},
+                {mode:'saved'  as AddMode, icon:'🕑', label:'Recent'},
               ]).map(({mode,icon,label})=>(
                 <button key={mode} onClick={()=>setAddMode(mode)} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
                   <span style={{ fontSize:22 }}>{icon}</span>
@@ -620,10 +620,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {addMode==='saved' && !pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>⭐ Saved Foods</span>
+              <span style={{ fontSize:15, fontWeight:800 }}>🕑 Recent Foods</span>
               <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
-            {savedFoods.length === 0 && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>No saved foods yet. Foods you log will appear here.</div>}
+            {savedFoods.length === 0 && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Foods you log will appear here for quick re-adding.</div>}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
               {savedFoods.map((f:any) => (
                 <button key={f.food_name} onClick={()=>setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size })}
@@ -659,7 +659,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
               </div>
             </div>
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(92px,1fr))', gap:8, marginBottom:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
                 <button key={m.id} onClick={()=>commitEntry(m.id)} disabled={saving}
                   style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'12px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4, opacity:saving?0.6:1 }}>
