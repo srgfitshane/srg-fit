@@ -96,17 +96,20 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   useEffect(() => () => stopCamera(), [stopCamera])
 
   async function startCamera() {
-    if (!('BarcodeDetector' in window)) { setCameraActive(false); setBarcodeErr('Camera barcode scanning is not supported on this browser. Type the barcode number below instead.'); return }
+    // Check support before touching getUserMedia â€” avoids black camera on unsupported browsers
+    if (!('BarcodeDetector' in window)) {
+      setBarcodeErr('Camera scanning not supported on this browser. Type the barcode number below.')
+      return
+    }
+    let detector: any
+    try { detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] }) }
+    catch { setBarcodeErr('Barcode scanning not supported. Type the number below.'); return }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       cameraStream.current = stream
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
       setCameraActive(true)
       setBarcodeErr('')
-      let detector: any
-      try { detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] }) } catch {
-        stopCamera(); setBarcodeErr('Barcode scanning not supported. Type the number below.'); return
-      }
       barcodeInterval.current = setInterval(async () => {
         if (!videoRef.current) return
         try {
@@ -115,8 +118,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         } catch { /* ignore frame errors */ }
       }, 400)
     } catch (err: any) {
-      if (err.name === 'NotAllowedError') { setBarcodeErr('Camera permission denied. Enter the barcode number manually below.') }
-      else { setBarcodeErr('Camera not available. Enter the barcode number manually below.') }
+      if (err.name === 'NotAllowedError') { setBarcodeErr('Camera permission denied. Type the barcode number below.') }
+      else { setBarcodeErr('Camera unavailable. Type the barcode number below.') }
     }
   }
 
@@ -136,7 +139,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     try {
       const s = pendingServings
       const currentLog = await ensureLog()
-      if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); setSaving(false); return }
+      if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); return }
       const { data: saved, error } = await supabase.from('food_entries').insert({
         daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
         food_name:    pendingFood.food_name || '',
@@ -147,13 +150,15 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         carbs_g:   pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
         fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
-      if (error) { console.error('food_entries insert error:', error.message); setSaving(false); return }
+      if (error) { console.error('food_entries insert error:', error.message); return }
       if (saved) { const next = [...entries, saved]; setEntries(next); await recalcTotals(currentLog.id, next) }
     } catch (e) { console.error('commitEntry exception:', e) }
-    setPendingFood(null); setPendingServings(1); setAddMode('none')
-    setSearchQ(''); setSearchResults([]); setImageResults([])
-    setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
-    setSaving(false)
+    finally {
+      setPendingFood(null); setPendingServings(1); setAddMode('none')
+      setSearchQ(''); setSearchResults([]); setImageResults([])
+      setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
+      setSaving(false)
+    }
   }
 
   async function removeEntry(id: string) {
