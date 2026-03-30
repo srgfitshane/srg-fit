@@ -158,17 +158,18 @@ export default function ClientProgressPage() {
           <p style={{ color:t.textMuted, margin:'4px 0 0', fontSize:13 }}>Track your transformation over time</p>
         </div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          <button onClick={()=>setPhotoOpen(true)} style={{ background:t.purple+'22', color:t.purple, border:'1px solid '+t.purple+'44',
+          {clientRecord?.show_progress_photos !== false && <button onClick={()=>setPhotoOpen(true)} style={{ background:t.purple+'22', color:t.purple, border:'1px solid '+t.purple+'44',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
-          </button>
-          <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
+          </button>}
+          {clientRecord?.show_body_metrics !== false && <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             + Log Metrics
-          </button>
+          </button>}
         </div>
       </div>
 
+      {clientRecord?.show_body_metrics !== false && (<>
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'16px 18px', marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'flex-start' }}>
           <div style={{ flex:'1 1 240px' }}>
@@ -332,8 +333,10 @@ export default function ClientProgressPage() {
           })()}
         </div>
       )}
+      </>)}
 
       {/* Progress Photos */}
+      {clientRecord?.show_progress_photos !== false && (
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:8 }}>
           <div style={{ fontSize:13, fontWeight:700, color:t.textMuted }}>PROGRESS PHOTOS ({photos.length})</div>
@@ -400,6 +403,7 @@ export default function ClientProgressPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Log Metrics Modal */}
       {logOpen && (

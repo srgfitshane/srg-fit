@@ -1251,23 +1251,51 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </div>
               </div>
               <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:20 }}>
-                <input
-                  type={logPopup.habit.unit==='hrs' ? 'text' : 'number'}
-                  autoFocus
-                  inputMode={logPopup.habit.unit==='hrs' ? 'decimal' : 'numeric'}
-                  placeholder={logPopup.habit.unit==='hrs' ? 'e.g. 6:57' : '0'}
-                  value={logPopup.draft}
-                  onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
-                  onKeyDown={e=>{ if(e.key==='Enter'){
-                    const v = logPopup.habit.unit==='hrs' ? (() => { const [hh,mm]=(logPopup.draft||'00:00').split(':').map(Number); return hh+(mm/60) })() : (+logPopup.draft||0)
-                    logHabit(logPopup.habit.id, v); setLogPopup(null)
-                  }}}
-                  style={{ flex:1, background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
-                />
-                <div style={{ fontSize:16, fontWeight:700, color:t.textMuted, flexShrink:0 }}>{logPopup.habit.unit}</div>
+                {logPopup.habit.unit==='hrs' ? (
+                  <div style={{ flex:1, display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ flex:1, textAlign:'center' as const }}>
+                      <input
+                        type="number" autoFocus inputMode="numeric" min="0" max="23"
+                        placeholder="0"
+                        value={(logPopup.draft||'').split(':')[0] || ''}
+                        onChange={e => {
+                          const mm = (logPopup.draft||'').split(':')[1] || '00'
+                          setLogPopup(p=>p?{...p, draft: e.target.value+':'+mm}:null)
+                        }}
+                        style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                      />
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:4, fontWeight:700 }}>HRS</div>
+                    </div>
+                    <div style={{ fontSize:28, fontWeight:800, color:t.textMuted, paddingBottom:20 }}>:</div>
+                    <div style={{ flex:1, textAlign:'center' as const }}>
+                      <input
+                        type="number" inputMode="numeric" min="0" max="59"
+                        placeholder="00"
+                        value={(logPopup.draft||'').split(':')[1] || ''}
+                        onChange={e => {
+                          const hh = (logPopup.draft||'').split(':')[0] || '0'
+                          setLogPopup(p=>p?{...p, draft: hh+':'+e.target.value}:null)
+                        }}
+                        style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                      />
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:4, fontWeight:700 }}>MIN</div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="number" autoFocus inputMode="numeric" placeholder="0"
+                      value={logPopup.draft}
+                      onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
+                      onKeyDown={e=>{ if(e.key==='Enter'){ logHabit(logPopup.habit.id, +logPopup.draft||0); setLogPopup(null) }}}
+                      style={{ flex:1, background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                    />
+                    <div style={{ fontSize:16, fontWeight:700, color:t.textMuted, flexShrink:0 }}>{logPopup.habit.unit}</div>
+                  </>
+                )}
               </div>
               <button
-                onClick={()=>{ const v = logPopup.habit.unit==='hrs' ? (() => { const [hh,mm]=(logPopup.draft||'00:00').split(':').map(Number); return hh+(mm/60) })() : (+logPopup.draft||0); logHabit(logPopup.habit.id, v); setLogPopup(null) }}
+                onClick={()=>{ const v = logPopup.habit.unit==='hrs' ? (() => { const parts=(logPopup.draft||'0:0').split(':'); const hh=parseInt(parts[0]||'0'); const mm=parseInt(parts[1]||'0'); return hh+(mm/60) })() : (+logPopup.draft||0); logHabit(logPopup.habit.id, v); setLogPopup(null) }}
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Save ✓
               </button>
