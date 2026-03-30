@@ -426,7 +426,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8 }}>
               {([
-                {mode:'barcode' as AddMode, icon:'📷', label:'Scan Barcode'},
+                {mode:'barcode' as AddMode, icon:'🔢', label:'Barcode'},
                 {mode:'image'   as AddMode, icon:'📸', label:'Photo'},
               ]).map(({mode,icon,label})=>(
                 <button key={mode} onClick={()=>setAddMode(mode)} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 8px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
@@ -509,7 +509,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {addMode==='barcode' && !pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>📷 Barcode Lookup</span>
+              <span style={{ fontSize:15, fontWeight:800 }}>🔢 Barcode Lookup</span>
               <button onClick={()=>{ resetAdd(); setBarcodeVal(''); setBarcodeErr('') }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
             <div style={{ display:'flex', gap:8 }}>
