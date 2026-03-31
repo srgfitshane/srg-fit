@@ -858,58 +858,49 @@ export default function ActiveWorkoutPage() {
           const setsArr = setData[ex.id] || []
           return (
             <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
-              <div style={{marginBottom:16}}>
-                {/* Name + action buttons row */}
-                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:6}}>
-                  <div style={{flex:1}}>
-                    <h2 style={{fontSize:20,fontWeight:900,marginBottom:4}}>{ex.exercise_name || ex.exercise?.name || 'Exercise'}</h2>
-                    <div style={{fontSize:13,color:t.textDim}}>
-                      Target: {ex.sets_prescribed} × {ex.reps_prescribed}
-                      {ex.weight_prescribed && ` @ ${ex.weight_prescribed}`}
+            <div style={{marginBottom:12}}>
+                {/* Name row */}
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:4}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <h2 style={{fontSize:17,fontWeight:900,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ex.exercise_name || ex.exercise?.name || 'Exercise'}</h2>
+                    <div style={{fontSize:12,color:t.textDim}}>
+                      {ex.sets_prescribed} × {ex.reps_prescribed}{ex.weight_prescribed ? ` @ ${ex.weight_prescribed}` : ''}
                     </div>
-                    {ex.original_exercise_name && (
-                      <div style={{ fontSize:11, color:t.teal, marginTop:6 }}>
-                        Smart swap from {ex.original_exercise_name}
-                        {ex.swap_reason ? ` · ${ex.swap_reason}` : ''}
-                      </div>
-                    )}
                   </div>
-                  <div className="workout-action-row">
+                  <div style={{display:'flex',gap:6,flexShrink:0}}>
                     {!skipped[ex.id] && (
                       <button onClick={()=>setSwapOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                        aria-label={`Toggle smart swap options for ${ex.exercise_name}`}
-                        aria-expanded={!!swapOpen[ex.id]}
-                        style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?t.teal+'50':t.border),borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                        style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?t.teal+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                         Swap
                       </button>
                     )}
                     {!skipped[ex.id] && (
                       <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                        aria-label={`Toggle skip exercise panel for ${ex.exercise_name}`}
-                        aria-expanded={!!skipOpen[ex.id]}
-                        style={{background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?t.red+'50':t.border),borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                        style={{background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?t.red+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                         ⏭ Skip
                       </button>
                     )}
                     {skipped[ex.id] && (
-                      <span style={{fontSize:12,fontWeight:700,color:t.textMuted,background:t.surfaceHigh,borderRadius:9,padding:'6px 12px'}}>⏭ Skipped</span>
+                      <span style={{fontSize:11,fontWeight:700,color:t.textMuted,background:t.surfaceHigh,borderRadius:8,padding:'5px 10px'}}>⏭ Skipped</span>
                     )}
                   </div>
                 </div>
 
-                {ex.notes_coach && <div style={{fontSize:12,color:t.orange,marginBottom:10}}>📌 {ex.notes_coach}</div>}
+                {ex.notes_coach && <div style={{fontSize:11,color:t.orange,marginBottom:8}}>📌 {ex.notes_coach}</div>}
+                {ex.original_exercise_name && (
+                  <div style={{fontSize:11,color:t.teal,marginBottom:8}}>↔ Swapped from {ex.original_exercise_name}{ex.swap_reason ? ` · ${ex.swap_reason}` : ''}</div>
+                )}
 
-                <div className="workout-exercise-nav" style={{marginBottom:12}}>
+                {/* Prev / Next inline */}
+                <div style={{display:'flex',gap:8,marginBottom:4}}>
                   <button onClick={()=>setActiveExIdx(Math.max(0, activeExIdx - 1))}
-                    aria-label="Go to previous exercise"
                     disabled={activeExIdx === 0}
-                    style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'8px 12px',fontSize:12,fontWeight:700,color:activeExIdx===0?t.textMuted:t.textDim,cursor:activeExIdx===0?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:activeExIdx===0?0.5:1}}>
-                    ← Previous
+                    style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'6px 10px',fontSize:12,fontWeight:700,color:activeExIdx===0?t.textMuted:t.textDim,cursor:activeExIdx===0?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:activeExIdx===0?0.4:1}}>
+                    ← Prev
                   </button>
                   <button onClick={()=>setActiveExIdx(Math.min(exercises.length - 1, activeExIdx + 1))}
-                    aria-label="Go to next exercise"
                     disabled={activeExIdx >= exercises.length - 1}
-                    style={{flex:1,background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:9,padding:'8px 12px',fontSize:12,fontWeight:700,color:activeExIdx>=exercises.length - 1?t.textMuted:t.teal,cursor:activeExIdx>=exercises.length - 1?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:activeExIdx>=exercises.length - 1?0.5:1}}>
+                    style={{flex:1,background:activeExIdx>=exercises.length-1?'transparent':t.tealDim,border:'1px solid '+(activeExIdx>=exercises.length-1?t.border:t.teal+'40'),borderRadius:8,padding:'6px 10px',fontSize:12,fontWeight:700,color:activeExIdx>=exercises.length-1?t.textMuted:t.teal,cursor:activeExIdx>=exercises.length-1?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:activeExIdx>=exercises.length-1?0.4:1}}>
                     Next →
                   </button>
                 </div>
