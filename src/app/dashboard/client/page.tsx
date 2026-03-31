@@ -1168,7 +1168,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                           <div style={{ fontSize:11, color:t.textMuted }}>Target: {h.target}{h.unit}</div>
                         </div>
                         <div style={{ textAlign:'right' as const }}>
-                          <div style={{ fontSize:15, fontWeight:800, color:done?color:t.textDim }}>{val||0}<span style={{ fontSize:10, color:t.textMuted }}>{h.unit}</span></div>
+                          <div style={{ fontSize:15, fontWeight:800, color:done?color:t.textDim }}>
+                            {h.unit === 'hrs' && val
+                              ? (() => { const hh = Math.floor(Number(val)); const mm = Math.round((Number(val)-hh)*60); return mm > 0 ? `${hh}h ${mm}m` : `${hh}h` })()
+                              : val||0}
+                            <span style={{ fontSize:10, color:t.textMuted }}>{h.unit === 'hrs' ? '' : h.unit}</span>
+                          </div>
                           <div style={{ fontSize:10, color:t.textMuted }}>Tap to log</div>
                         </div>
                       </div>
