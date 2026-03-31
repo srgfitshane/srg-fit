@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 
+const localDateStr = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+
+
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
   teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', orangeDim:'#f5a62315',
@@ -158,7 +162,7 @@ export default function ClientCalendarPage() {
   while (cells.length % 7 !== 0) cells.push(null)
 
   const itemsForDay = (d: Date) =>
-    items.filter(e => e.date === d.toISOString().split('T')[0])
+    items.filter(e => e.date === localDateStr(d))
 
   const upcomingItems = items
     .filter(e => new Date(e.date+'T23:59:59') >= today)
@@ -252,7 +256,7 @@ export default function ClientCalendarPage() {
                 {cells.map((d, i) => {
                   const isToday  = d ? isSameDay(d, today) : false
                   const dayItems = d ? itemsForDay(d) : []
-                  const dateStr  = d ? d.toISOString().split('T')[0] : ''
+                  const dateStr  = d ? localDateStr(d) : ''
                   const hasJournal = d ? journalDates.has(dateStr) : false
                   return (
                     <div key={i}

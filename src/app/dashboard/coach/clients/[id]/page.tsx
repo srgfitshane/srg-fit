@@ -2573,8 +2573,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                     <>
                       {!isActive && (
                         <button onClick={async ()=>{
-                          await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId).neq('id', p.id)
-                          await supabase.from('programs').update({ client_id: clientId }).eq('id', p.id)
+                          await supabase.from('programs').update({ active: false }).eq('client_id', clientId).neq('id', p.id)
+                          await supabase.from('programs').update({ active: true }).eq('id', p.id)
                           const { data: newProg } = await supabase.from('programs').select('*').eq('id', p.id).single()
                           onProgramChange(newProg)
                           await load()

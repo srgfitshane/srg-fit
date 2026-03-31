@@ -7,6 +7,9 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts'
 
+const localDateStr = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+
 const t = {
   bg:'#0f0f0f', surface:'#1a1a1a', surfaceHigh:'#242424', border:'#2a2a2a',
   text:'#f0f0f0', textMuted:'#888', textDim:'#aaa',
@@ -71,7 +74,7 @@ export default function ClientProgressPage() {
     if (!user) return
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - timeframe.days)
-    const dateStr = timeframe.days===9999 ? '2000-01-01' : cutoff.toISOString().split('T')[0]
+    const dateStr = timeframe.days===9999 ? '2000-01-01' : localDateStr(cutoff)
 
     const [{ data: mData }, { data: pData }, { data: pulseData }] = await Promise.all([
       supabase.from('metrics').select('*').eq('client_id', clientRecord.id)
@@ -110,7 +113,7 @@ export default function ClientProgressPage() {
   async function saveMetric() {
     if (!clientRecord) return
     setSaving(true)
-    const payload:any = { client_id: clientRecord.id, logged_date: logForm.date||new Date().toISOString().split('T')[0] }
+    const payload:any = { client_id: clientRecord.id, logged_date: logForm.date||localDateStr() }
     ;['weight','body_fat','waist','hips','chest','left_arm','right_arm','neck','shoulders','calves']
       .forEach(f => { if (logForm[f]) payload[f]=parseFloat(logForm[f]) })
     if (logForm.notes) payload.notes = logForm.notes
@@ -129,7 +132,7 @@ export default function ClientProgressPage() {
     if (!upErr) {
       await supabase.from('progress_photos').insert({
         client_id: user.id, storage_path: path,
-        photo_date: new Date().toISOString().split('T')[0],
+        photo_date: localDateStr(),
         angle: photoForm.angle, caption: photoForm.caption||null,
         weight_at_time: photoForm.weight_at_time ? parseFloat(photoForm.weight_at_time) : null,
       })
@@ -425,7 +428,7 @@ export default function ClientProgressPage() {
                 <div key={f.key} style={{ gridColumn: f.full?'1/-1':'auto' }}>
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>{f.label}</label>
                   <input type={f.type||'number'} step="0.1"
-                    defaultValue={f.key==='date' ? new Date().toISOString().split('T')[0] : ''}
+                    defaultValue={f.key==='date' ? localDateStr() : ''}
                     onChange={e => setLogForm(p => ({ ...p, [f.key]: e.target.value }))}
                     style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
                       borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' }} />
