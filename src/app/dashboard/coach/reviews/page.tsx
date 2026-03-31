@@ -25,7 +25,7 @@ type Review = {
   review_due_at: string; session_rpe: number | null; energy_level: number | null
   mood: string | null; notes_client: string | null; duration_seconds: number | null
   coach_reviewed_at: string | null; coach_review_video_url: string | null
-  client: { full_name: string | null; id: string } | null
+  client: { full_name: string | null; id: string; profile_id?: string | null } | null
   exercises: Exercise[]
 }
 type Exercise = {
@@ -505,7 +505,7 @@ export default function ReviewsPage() {
         session_rpe, energy_level, mood, notes_client, duration_seconds,
         coach_reviewed_at, coach_review_video_url,
         client:clients!workout_sessions_client_id_fkey(
-          id, profile:profiles!clients_profile_id_fkey(full_name)
+          id, profile:profiles!clients_profile_id_fkey(id, full_name)
         )`)
       .eq('coach_id', user.id).eq('status', 'completed')
       .is('coach_reviewed_at', null).not('review_due_at', 'is', null)
@@ -532,7 +532,7 @@ export default function ReviewsPage() {
       return {
         ...s,
         coach_review_video_url: await resolveSignedMediaUrl(supabase, 'workout-reviews', s.coach_review_video_url),
-        client: s.client ? { id:s.client.id, full_name:s.client.profile?.full_name??null } : null,
+        client: s.client ? { id:s.client.id, full_name:s.client.profile?.full_name??null, profile_id:s.client.profile?.id??null } : null,
         exercises,
       }
     }))
@@ -567,6 +567,22 @@ export default function ReviewsPage() {
       coach_review_notes: reviewNote || null,
       coach_review_video_url: reviewVideoPath || null,
     }).eq('id', sessionId)
+
+    // Notify client — fire-and-forget
+    const profileId = selected?.client?.profile_id
+    if (profileId) {
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: profileId,
+          notification_type: 'workout_review',
+          title: '💬 Coach reviewed your workout',
+          body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
+          link_url: '/dashboard/client',
+        })
+      }).catch(() => {})
+    }
+
     setReviews(prev => prev.filter(r => r.id !== sessionId))
     setSelected(null); setReviewNote(''); setReviewVideoUrl(''); setReviewVideoPath('')
     setSaving(false)

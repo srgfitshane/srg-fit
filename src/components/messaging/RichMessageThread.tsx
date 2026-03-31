@@ -77,6 +77,20 @@ interface TenorGif {
 
 export default function RichMessageThread({ myId, otherId, otherName, tenorKey, height = '100%', quickReplies = [] }: Props) {
   const supabase = useMemo(() => createClient(), [])
+
+  // Fire-and-forget push notification to the recipient
+  const notifyRecipient = (body: string) => {
+    fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: otherId,
+        notification_type: 'new_message',
+        title: `Message from ${otherName || 'your coach'}`,
+        body: body.slice(0, 100),
+        link_url: '/dashboard/client/messages',
+      })
+    }).catch(() => {})
+  }
   const [thread,       setThread]       = useState<Message[]>([])
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
@@ -180,6 +194,7 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
     if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
     setDraft('')
     setSending(false)
+    notifyRecipient(draft.trim())
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
@@ -201,6 +216,7 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
       media_url: path, media_type: file.type, read: false,
     }).select().single()
     if (data) setThread(prev => [...prev, { ...data, media_url: signedUrl, reactions: [] }])
+    notifyRecipient(msgType === 'image' ? '📷 Image' : msgType === 'video' ? '🎥 Video' : '📎 File')
     setPreviewFile(null)
     setUploading(false)
     setMode('text')
@@ -289,6 +305,7 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
       message_type: 'gif', gif_url: full, gif_preview: tiny, read: false,
     }).select().single()
     if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
+    notifyRecipient('🎬 GIF')
     setMode('text'); setGifs([]); setGifQuery('')
   }
 
