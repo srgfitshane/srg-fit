@@ -35,6 +35,10 @@ function MessagesInner() {
   const [macroBody, setMacroBody] = useState('')
   const [savingMacro, setSavingMacro] = useState(false)
   const [filter, setFilter] = useState<'all'|'priority'|'unread'|'stale'>('all')
+  const [showBroadcast, setShowBroadcast] = useState(false)
+  const [broadcastText, setBroadcastText] = useState('')
+  const [broadcasting, setBroadcasting] = useState(false)
+  const [broadcastDone, setBroadcastDone] = useState(false)
   const router    = useRouter()
   const params    = useSearchParams()
   const supabase  = createClient()
@@ -274,6 +278,37 @@ function MessagesInner() {
     })
     .sort((a, b) => clientPriorityScore(b) - clientPriorityScore(a))
 
+  // ── Broadcast ─────────────────────────────────────────────────────────────
+  const sendBroadcast = async () => {
+    if (!broadcastText.trim() || !coachId) return
+    setBroadcasting(true)
+    const activeClients = clients.filter(c => c.profile?.id)
+    for (const client of activeClients) {
+      await supabase.from('messages').insert({
+        sender_id: coachId,
+        recipient_id: client.profile.id,
+        body: broadcastText.trim(),
+        read: false,
+        message_type: 'text',
+      })
+      // Fire-and-forget push notification
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: client.profile.id,
+          notification_type: 'new_message',
+          title: 'Message from Coach Shane',
+          body: broadcastText.trim().slice(0, 100),
+          link_url: '/dashboard/client/messages',
+        })
+      }).catch(() => {})
+    }
+    setBroadcasting(false)
+    setBroadcastDone(true)
+    setBroadcastText('')
+    setTimeout(() => { setShowBroadcast(false); setBroadcastDone(false) }, 2000)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
@@ -306,8 +341,13 @@ function MessagesInner() {
               style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", padding:0 }}>←</button>
             <div style={{ fontSize:14, fontWeight:800 }}>Messages</div>
             {totalUnread > 0 && (
-              <span style={{ background:t.teal, color:'#000', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:900, marginLeft:'auto' }}>{totalUnread}</span>
+              <span style={{ background:t.teal, color:'#000', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:900 }}>{totalUnread}</span>
             )}
+            <button onClick={()=>setShowBroadcast(true)}
+              title="Message all clients"
+              style={{ marginLeft:'auto', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              📣 All
+            </button>
           </div>
 
           <div style={{ display:'flex', gap:6, padding:'10px 12px', borderBottom:'1px solid '+t.border, flexWrap:'wrap' }}>
@@ -503,6 +543,44 @@ function MessagesInner() {
           </div>
         )}
       </div>
+
+      {/* ── BROADCAST MODAL ── */}
+      {showBroadcast && (
+        <div onClick={()=>{ setShowBroadcast(false); setBroadcastDone(false) }}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:480, padding:24 }}>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>📣 Message All Clients</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:16 }}>
+              Sends to {clients.filter(c=>c.profile?.id).length} active client{clients.filter(c=>c.profile?.id).length !== 1 ? 's' : ''} — appears as a direct message from you
+            </div>
+            {broadcastDone ? (
+              <div style={{ textAlign:'center', padding:'24px 0', fontSize:15, fontWeight:800, color:t.teal }}>✓ Sent to all clients!</div>
+            ) : (
+              <>
+                <textarea
+                  autoFocus
+                  value={broadcastText}
+                  onChange={e=>setBroadcastText(e.target.value)}
+                  placeholder="Type your message..."
+                  rows={4}
+                  style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', marginBottom:12 }}
+                />
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={()=>setShowBroadcast(false)}
+                    style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    Cancel
+                  </button>
+                  <button onClick={sendBroadcast} disabled={!broadcastText.trim() || broadcasting}
+                    style={{ flex:2, background:broadcastText.trim()?t.teal:'#333', border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:broadcastText.trim()?'#000':t.textMuted, cursor:broadcastText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
+                    {broadcasting ? 'Sending...' : `Send to All Clients`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }
