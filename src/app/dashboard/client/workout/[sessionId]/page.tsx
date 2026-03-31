@@ -139,6 +139,7 @@ export default function ActiveWorkoutPage() {
   const withSignedMedia = useCallback(async (exs: SessionExercise[]) => {
     const signedExercises = await Promise.all((exs || []).map(async (exerciseRow) => ({
       ...exerciseRow,
+      exercise_name: exerciseRow.exercise_name || exerciseRow.exercise?.name || '',
       client_video_url: await resolveSignedMediaUrl(supabase, 'form-checks', exerciseRow.client_video_url),
     })))
 
@@ -845,7 +846,7 @@ export default function ActiveWorkoutPage() {
                 aria-label={`Open exercise ${i + 1}: ${ex.exercise_name}`}
                 aria-pressed={activeExIdx===i}
                 style={{flexShrink:0,background:activeExIdx===i?t.tealDim:(isSkipped?'#1a1a1a':(complete?t.greenDim:t.surfaceHigh)),border:`1px solid ${activeExIdx===i?t.teal:isSkipped?t.border:(complete?t.green:t.border)}`,borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:700,color:activeExIdx===i?t.teal:isSkipped?t.textMuted:(complete?t.green:t.textDim),cursor:'pointer',whiteSpace:'nowrap',textDecoration:isSkipped?'line-through':'none'}}>
-                {isSkipped ? '⏭ ' : complete ? '✓ ' : ''}{i+1}. {ex.exercise_name.split(' ').slice(0,2).join(' ')}
+                {isSkipped ? '⏭ ' : complete ? '✓ ' : ''}{i+1}. {(ex.exercise_name || ex.exercise?.name || 'Exercise').split(' ').slice(0,2).join(' ')}
               </button>
             )
           })}
@@ -861,7 +862,7 @@ export default function ActiveWorkoutPage() {
                 {/* Name + action buttons row */}
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:6}}>
                   <div style={{flex:1}}>
-                    <h2 style={{fontSize:20,fontWeight:900,marginBottom:4}}>{ex.exercise_name}</h2>
+                    <h2 style={{fontSize:20,fontWeight:900,marginBottom:4}}>{ex.exercise_name || ex.exercise?.name || 'Exercise'}</h2>
                     <div style={{fontSize:13,color:t.textDim}}>
                       Target: {ex.sets_prescribed} × {ex.reps_prescribed}
                       {ex.weight_prescribed && ` @ ${ex.weight_prescribed}`}
