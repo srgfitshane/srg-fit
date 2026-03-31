@@ -324,6 +324,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [milestones,   setMilestones]   = useState<MilestoneRecord[]>([])
   const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
+  const [workoutsThisWeek, setWorkoutsThisWeek] = useState<number>(0)
   const [nextSession,  setNextSession]  = useState<NextSessionRecord | null>(null)
   const [pendingReviews, setPendingReviews] = useState<PendingReviewRecord[]>([])
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
@@ -528,6 +529,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             else if (i > 0) break // gap — stop counting
           }
           setWorkoutStreak(streak)
+          // Count workouts completed this week for day-level display
+          const thisWeekKey = `${getYear(now)}-${getWeek(now)}`
+          const thisWeekCount = (completedSessions as WorkoutSessionCompletionRecord[]).filter((s) => {
+            if (!s.scheduled_date) return false
+            const d = new Date(s.scheduled_date + 'T12:00:00')
+            return `${getYear(d)}-${getWeek(d)}` === thisWeekKey
+          }).length
+          setWorkoutsThisWeek(thisWeekCount)
         }
     } // end loadClientData
 
@@ -842,10 +851,20 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <span style={{ fontSize:22 }}>🔥</span>
               <div>
                 <div style={{ fontSize:13, fontWeight:800, color:t.orange }}>
-                  {workoutStreak === 1 ? '1 week strong' : `${workoutStreak} week streak`}
+                  {workoutStreak === 1 && workoutsThisWeek === 1
+                    ? 'Day 1 in the books 💪'
+                    : workoutStreak === 1
+                    ? `${workoutsThisWeek} workout${workoutsThisWeek !== 1 ? 's' : ''} this week`
+                    : `🔥 ${workoutStreak} week streak`}
                 </div>
                 <div style={{ fontSize:11, color:t.textMuted }}>
-                  {workoutStreak === 1 ? 'Keep showing up' : workoutStreak >= 4 ? 'Consistency is your superpower' : 'Keep the momentum going'}
+                  {workoutStreak === 1 && workoutsThisWeek === 1
+                    ? 'The first one is always the hardest'
+                    : workoutStreak === 1
+                    ? 'Keep showing up this week'
+                    : workoutStreak >= 4
+                    ? 'Consistency is your superpower'
+                    : 'Keep the momentum going'}
                 </div>
               </div>
             </div>
