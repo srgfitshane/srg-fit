@@ -2313,7 +2313,12 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     const sessionsToInsert: any[] = []
 
     for (const block of (blocks || [])) {
-      if (!block.day_of_week || !(block.day_of_week in DAY_OFFSETS)) continue
+      if (!block.day_of_week || !(block.day_of_week in DAY_OFFSETS)) {
+        // Fall back to same day pattern as week 1 block at same order_index
+        const week1Block = (blocks || []).find((b:any) => b.week_number === 1 && b.order_index === block.order_index)
+        if (!week1Block?.day_of_week || !(week1Block.day_of_week in DAY_OFFSETS)) continue
+        block.day_of_week = week1Block.day_of_week
+      }
       const weekOffset = (block.week_number - 1) * 7
       const dayOffset = DAY_OFFSETS[block.day_of_week]
       const sessionDate = new Date(weekStart)
