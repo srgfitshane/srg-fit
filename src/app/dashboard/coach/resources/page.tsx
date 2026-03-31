@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -55,8 +56,13 @@ export default function CoachResourcesPage() {
       supabase.from('content_groups').select('*').eq('coach_id',user.id).order('order_index'),
       supabase.from('content_items').select('*').eq('coach_id',user.id).order('created_at'),
     ])
+    const resolvedItems = await Promise.all((is || []).map(async (item:any) => ({
+      ...item,
+      file_path: item.file_url || null,
+      file_url: await resolveSignedMediaUrl(supabase, 'resources', item.file_url),
+    })))
     setGroups(gs||[])
-    setItems(is||[])
+    setItems(resolvedItems)
     setActiveGroup(ag => ag || gs?.[0]?.id || null)
     setLoading(false)
   }
@@ -158,14 +164,13 @@ export default function CoachResourcesPage() {
     const path = `${coachId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
     const { data, error } = await supabase.storage.from('resources').upload(path, file, { upsert: false })
     if (!error && data) {
-      const { data: urlData } = supabase.storage.from('resources').getPublicUrl(path)
-      setIForm(p => ({ ...p, file_url: urlData.publicUrl }))
+      setIForm(p => ({ ...p, file_url: path }))
     }
     setUploading(false)
   }
   const openNewItem   = () => { setIForm({title:'',description:'',content_type:'article',file_url:'',duration:'',difficulty:'beginner',tags:'',workout_exercises:'',estimated_duration:''}); setItemModal({group_id:activeGroup}) }
   const openEditItem  = (item:any) => {
-    setIForm({title:item.title,description:item.description||'',content_type:item.content_type,file_url:item.file_url||'',duration:item.duration||'',difficulty:item.difficulty||'beginner',tags:(item.tags||[]).join(', '),workout_exercises:item.workout_exercises?item.workout_exercises.map((e:any)=>e.name+(e.prescription?' - '+e.prescription:'')).join('\n'):'',estimated_duration:item.estimated_duration||''})
+    setIForm({title:item.title,description:item.description||'',content_type:item.content_type,file_url:item.file_path||item.file_url||'',duration:item.duration||'',difficulty:item.difficulty||'beginner',tags:(item.tags||[]).join(', '),workout_exercises:item.workout_exercises?item.workout_exercises.map((e:any)=>e.name+(e.prescription?' - '+e.prescription:'')).join('\n'):'',estimated_duration:item.estimated_duration||''})
     setItemModal(item)
   }
 

@@ -1,6 +1,6 @@
 'use client'
 import React from 'react'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { triggerAiInsight } from '@/lib/ai-insights'
@@ -22,7 +22,53 @@ const STEPS = [
   { id:'reflect',label:'Reflection', icon:'✍️'  },
 ]
 
-const SliderRow = ({ label, value, onChange, color, min=1, max=10, lowLabel='Low', highLabel='High', invertColor=false }: any) => {
+type ClientRecord = {
+  id: string
+  coach_id: string | null
+  profile_id: string
+}
+
+type CheckinAssignment = {
+  id: string
+  status: string
+  note?: string | null
+  response?: Record<string, unknown> | null
+}
+
+type SliderRowProps = {
+  label: string
+  value: number
+  onChange: (value: number) => void
+  color: string
+  min?: number
+  max?: number
+  lowLabel?: string
+  highLabel?: string
+  invertColor?: boolean
+}
+
+const inputStyle: React.CSSProperties = {
+  width:'100%',
+  background:t.surfaceUp,
+  border:`1px solid ${t.border}`,
+  borderRadius:10,
+  padding:'11px 14px',
+  fontSize:14,
+  color:t.text,
+  outline:'none',
+  fontFamily:"'DM Sans',sans-serif",
+  colorScheme:'dark',
+  boxSizing:'border-box',
+}
+
+const textareaStyle: React.CSSProperties = {
+  ...inputStyle,
+  fontSize:13,
+  resize:'none',
+  lineHeight:1.5,
+}
+
+const SliderRow = ({ label, value, onChange, color, min=1, max=10, lowLabel='Low', highLabel='High', invertColor=false }: SliderRowProps) => {
   const pct = ((value - min) / (max - min)) * 100
   // For inverted sliders (stress, pain): green at low, red at high
   const fillColor = invertColor
@@ -52,8 +98,8 @@ const SliderRow = ({ label, value, onChange, color, min=1, max=10, lowLabel='Low
 }
 
 export default function CheckinForm() {
-  const [clientRecord, setClientRecord] = useState<any>(null)
-  const [assignment,   setAssignment]   = useState<any>(null)  // pending check-in assignment
+  const [clientRecord, setClientRecord] = useState<ClientRecord | null>(null)
+  const [assignment,   setAssignment]   = useState<CheckinAssignment | null>(null)  // pending check-in assignment
   const [alreadyDone,  setAlreadyDone]  = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [submitting,   setSubmitting]   = useState(false)
@@ -61,7 +107,6 @@ export default function CheckinForm() {
   const [done,         setDone]         = useState(false)
   const [step,         setStep]         = useState(0)
   const router   = useRouter()
-  const supabase = createClient()
 
   // Body
   const [weight,     setWeight]     = useState('')
@@ -84,43 +129,47 @@ export default function CheckinForm() {
   const [struggles,    setStruggles]    = useState('')
   const [goalsNext,    setGoalsNext]    = useState('')
   const [coachMessage, setCoachMessage] = useState('')
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      const { data: clientData } = await supabase
-        .from('clients').select('id, coach_id, profile_id')
-        .eq('profile_id', user.id).single()
-      setClientRecord(clientData)
-      if (clientData) {
-        // Find the most recent pending check-in assignment (not snoozed past now)
-        const { data: pending } = await supabase
-          .from('client_form_assignments')
-          .select('*, form:onboarding_forms(title, form_type, is_checkin_type)')
-          .eq('client_id', clientData.id)
-          .eq('status', 'pending')
-          .not('checkin_schedule_id', 'is', null)
-          .or(`snoozed_until.is.null,snoozed_until.lte.${new Date().toISOString()}`)
-          .order('assigned_at', { ascending: false })
-          .limit(1).single()
-        if (pending) {
-          setAssignment(pending)
-        } else {
-          // Fall back: check if already done recently (legacy path)
-          const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6)
-          const { data: recent } = await supabase
-            .from('client_form_assignments').select('id')
-            .eq('client_id', clientData.id).eq('status', 'completed')
+    const timer = setTimeout(() => {
+      void (async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
+        const { data: clientData } = await supabase
+          .from('clients').select('id, coach_id, profile_id')
+          .eq('profile_id', user.id).single<ClientRecord>()
+        setClientRecord(clientData)
+        if (clientData) {
+          // Find the most recent pending check-in assignment (not snoozed past now)
+          const { data: pending } = await supabase
+            .from('client_form_assignments')
+            .select('id, status, note, response')
+            .eq('client_id', clientData.id)
+            .eq('status', 'pending')
             .not('checkin_schedule_id', 'is', null)
-            .gte('completed_at', weekAgo.toISOString()).limit(1)
-          if (recent && recent.length > 0) setAlreadyDone(true)
+            .or(`snoozed_until.is.null,snoozed_until.lte.${new Date().toISOString()}`)
+            .order('assigned_at', { ascending: false })
+            .limit(1).single<CheckinAssignment>()
+          if (pending) {
+            setAssignment(pending)
+          } else {
+            // Fall back: check if already done recently (legacy path)
+            const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6)
+            const { data: recent } = await supabase
+              .from('client_form_assignments').select('id')
+              .eq('client_id', clientData.id).eq('status', 'completed')
+              .not('checkin_schedule_id', 'is', null)
+              .gte('completed_at', weekAgo.toISOString()).limit(1)
+            if (recent && recent.length > 0) setAlreadyDone(true)
+          }
         }
-      }
-      setLoading(false)
-    }
-    load()
-  }, [])
+        setLoading(false)
+      })()
+    }, 0)
+
+    return () => clearTimeout(timer)
+  }, [router, supabase])
 
   const handleSnooze = async () => {
     if (!assignment) return
@@ -246,14 +295,14 @@ export default function CheckinForm() {
         <div style={{ marginBottom:20 }}>
           <label style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:8 }}>Weight (lbs) — optional</label>
           <input type="number" value={weight} onChange={e=>setWeight(e.target.value)} placeholder="e.g. 172.5"
-            style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' as any }} />
+            style={inputStyle} />
         </div>
         <SliderRow label="Pain Level" value={painScore} onChange={setPainScore} color={t.red} lowLabel="None" highLabel="Severe" invertColor />
         {painScore >= 4 && (
           <div style={{ marginBottom:20 }}>
             <label style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:8 }}>Where / what kind of pain?</label>
             <textarea value={painNotes} onChange={e=>setPainNotes(e.target.value)} rows={2} placeholder="e.g. lower back tightness after deadlifts..."
-              style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.5 }} />
+              style={textareaStyle} />
           </div>
         )}
       </div>
@@ -271,7 +320,7 @@ export default function CheckinForm() {
         <div style={{ marginBottom:20 }}>
           <label style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:8 }}>Average sleep this week (hours)</label>
           <input type="number" value={sleepHours} onChange={e=>setSleepHours(e.target.value)} placeholder="e.g. 7.5" step="0.5" min="0" max="24"
-            style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' as any }} />
+            style={inputStyle} />
         </div>
         <SliderRow label="🌙 Sleep Quality" value={sleepQual} onChange={setSleepQual} color={t.purple} lowLabel="Terrible" highLabel="Perfect" />
       </div>
@@ -290,11 +339,11 @@ export default function CheckinForm() {
           { label:'⚡ Struggles', val:struggles, set:setStruggles, placeholder:"What was tough? Don't hold back — your coach needs the real picture." },
           { label:'🎯 Goals for next week', val:goalsNext, set:setGoalsNext, placeholder:'What do you want to focus on or accomplish next week?' },
           { label:'💬 Message to coach', val:coachMessage, set:setCoachMessage, placeholder:'Anything specific you want your coach to know or address?' },
-        ].map(f => (
+        ].map((f: { label: string; val: string; set: React.Dispatch<React.SetStateAction<string>>; placeholder: string }) => (
           <div key={f.label} style={{ marginBottom:20 }}>
             <label style={{ fontSize:12, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:8 }}>{f.label}</label>
             <textarea value={f.val} onChange={e=>f.set(e.target.value)} rows={3} placeholder={f.placeholder}
-              style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.6 }} />
+              style={{ ...textareaStyle, lineHeight:1.6 }} />
           </div>
         ))}
       </div>

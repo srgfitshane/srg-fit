@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -14,6 +14,16 @@ const t = {
 
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
+type HabitRecord = {
+  id: string
+  label: string
+  description?: string | null
+  target?: number | null
+  unit?: string | null
+  color?: string | null
+  icon?: string | null
+}
+
 function getWeekDates() {
   const today = new Date()
   const day = today.getDay()
@@ -25,44 +35,46 @@ function getWeekDates() {
 }
 
 export default function ClientHabits() {
-  const [habits,   setHabits]   = useState<any[]>([])
+  const [habits,   setHabits]   = useState<HabitRecord[]>([])
   const [logs,     setLogs]     = useState<Record<string,boolean>>({})
   const [loading,  setLoading]  = useState(true)
   const [clientId, setClientId] = useState<string|null>(null)
   const router   = useRouter()
   const supabase = createClient()
-  const weekDates = getWeekDates()
+  const weekDates = useMemo(() => getWeekDates(), [])
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
+        const { data: clientData } = await supabase
+          .from('clients').select('id').eq('profile_id', user.id).single()
+        if (!clientData) { setLoading(false); return }
+        setClientId(clientData.id)
 
-  const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-    const { data: clientData } = await supabase
-      .from('clients').select('id').eq('profile_id', user.id).single()
-    if (!clientData) { setLoading(false); return }
-    setClientId(clientData.id)
+        const { data: habitList } = await supabase
+          .from('habits').select('*')
+          .eq('client_id', clientData.id).eq('active', true)
+          .order('created_at')
+        setHabits((habitList || []) as HabitRecord[])
 
-    const { data: habitList } = await supabase
-      .from('habits').select('*')
-      .eq('client_id', clientData.id).eq('active', true)
-      .order('created_at')
-    setHabits(habitList || [])
-
-    // Load logs for this week
-    const { data: logList } = await supabase
-      .from('habit_logs').select('habit_id, logged_date, completed')
-      .eq('client_id', clientData.id)
-      .in('logged_date', weekDates)
-    const map: Record<string,boolean> = {}
-    for (const l of logList || []) {
-      map[`${l.habit_id}::${l.logged_date}`] = l.completed
-    }
-    setLogs(map)
-    setLoading(false)
-  }
+        const { data: logList } = await supabase
+          .from('habit_logs').select('habit_id, logged_date, completed')
+          .eq('client_id', clientData.id)
+          .in('logged_date', weekDates)
+        const map: Record<string,boolean> = {}
+        for (const l of logList || []) {
+          map[`${l.habit_id}::${l.logged_date}`] = l.completed
+        }
+        setLogs(map)
+        setLoading(false)
+      })()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [router, supabase, weekDates])
 
   const toggleLog = async (habitId: string, date: string) => {
     if (!clientId) return
@@ -163,7 +175,6 @@ export default function ClientHabits() {
                   {weekDates.map((date, i) => {
                     const done = logs[`${habit.id}::${date}`] || false
                     const isToday = date === todayStr
-                    const isPast = date < todayStr
                     const isFuture = date > todayStr
                     return (
                       <button key={date} onClick={()=>!isFuture && toggleLog(habit.id, date)}

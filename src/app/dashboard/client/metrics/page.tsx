@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -26,6 +26,12 @@ const METRICS = [
   { key:'neck',        label:'Neck',         unit:'in',  icon:'🔲',  color:'#fb923c' },
   { key:'calves',      label:'Calves',       unit:'in',  icon:'🦵',  color:'#84cc16' },
 ]
+
+type MetricEntry = {
+  id: string
+  logged_date: string
+  [key: string]: string | number | null | undefined
+}
 
 // Mini sparkline chart using Recharts
 function MiniChart({ data, color }: { data: number[], color: string }) {
@@ -56,7 +62,7 @@ function MiniChart({ data, color }: { data: number[], color: string }) {
 export default function ClientMetrics() {
   const [clientId,  setClientId]  = useState<string|null>(null)
   const [coachId,   setCoachId]   = useState<string|null>(null)
-  const [history,   setHistory]   = useState<any[]>([])
+  const [history,   setHistory]   = useState<MetricEntry[]>([])
   const [values,    setValues]    = useState<Record<string,string>>({})
   const [logDate,   setLogDate]   = useState(new Date().toISOString().split('T')[0])
   const [loading,   setLoading]   = useState(true)
@@ -65,34 +71,37 @@ export default function ClientMetrics() {
   const router   = useRouter()
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
-
-  const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-    const { data: clientData } = await supabase
-      .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
-    if (!clientData) { setLoading(false); return }
-    setClientId(clientData.id)
-    setCoachId(clientData.coach_id)
-    const { data: hist } = await supabase
-      .from('metrics').select('*').eq('client_id', clientData.id)
-      .order('logged_date', { ascending: true }).limit(12)
-    setHistory(hist || [])
-    setLoading(false)
-  }
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
+        const { data: clientData } = await supabase
+          .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
+        if (!clientData) { setLoading(false); return }
+        setClientId(clientData.id)
+        setCoachId(clientData.coach_id)
+        const { data: hist } = await supabase
+          .from('metrics').select('*').eq('client_id', clientData.id)
+          .order('logged_date', { ascending: true }).limit(12)
+        setHistory((hist || []) as MetricEntry[])
+        setLoading(false)
+      })()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [router, supabase])
 
   const handleSave = async () => {
     if (!clientId) return
     setSaving(true)
-    const payload: any = { client_id: clientId, logged_date: logDate }
+    const payload: Record<string, string | number | null> = { client_id: clientId, logged_date: logDate }
     if (coachId) payload.coach_id = coachId
     METRICS.forEach(m => { if (values[m.key]) payload[m.key] = parseFloat(values[m.key]) })
     await supabase.from('metrics').upsert(payload, { onConflict: 'client_id,logged_date' })
     const { data: hist } = await supabase
       .from('metrics').select('*').eq('client_id', clientId)
       .order('logged_date', { ascending: true }).limit(12)
-    setHistory(hist || [])
+    setHistory((hist || []) as MetricEntry[])
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -156,7 +165,7 @@ export default function ClientMetrics() {
               const prev = latestFor(m.key)
               const prev2 = prevFor(m.key)
               const spark = sparkFor(m.key)
-              const delta = prev != null && prev2 != null ? +(prev - prev2).toFixed(1) : null
+              const delta = prev != null && prev2 != null ? +(Number(prev) - Number(prev2)).toFixed(1) : null
               return (
                 <div key={m.key} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>

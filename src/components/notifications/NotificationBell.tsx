@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
 interface Notification {
@@ -10,7 +10,7 @@ interface Notification {
   link_url: string | null
   is_read: boolean
   created_at: string
-  data: Record<string, any>
+  data: Record<string, unknown>
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -27,10 +27,11 @@ const TYPE_ICONS: Record<string, string> = {
 }
 
 export default function NotificationBell({ userId, accentColor = '#c8f545' }: { userId: string, accentColor?: string }) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const panelRef = useRef<HTMLDivElement>(null)
 
   const unreadCount = notifications.filter(n => !n.is_read).length
@@ -41,8 +42,21 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
     accent: accentColor
   }
 
+  const fetchNotifications = useCallback(async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(30)
+    setNotifications(data || [])
+    setLoading(false)
+  }, [supabase, userId])
+
   useEffect(() => {
-    fetchNotifications()
+    const timeoutId = window.setTimeout(() => {
+      void fetchNotifications()
+    }, 0)
 
     // Realtime subscription
     const channel = supabase
@@ -66,21 +80,18 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
     document.addEventListener('mousedown', handleClick)
 
     return () => {
+      window.clearTimeout(timeoutId)
       supabase.removeChannel(channel)
       document.removeEventListener('mousedown', handleClick)
     }
-  }, [userId])
+  }, [fetchNotifications, supabase, userId])
 
-  async function fetchNotifications() {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(30)
-    setNotifications(data || [])
-    setLoading(false)
-  }
+  useEffect(() => {
+    if (!open) return
+
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(intervalId)
+  }, [open])
 
   async function markRead(id: string) {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
@@ -96,12 +107,12 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
 
   async function handleNotifClick(n: Notification) {
     if (!n.is_read) await markRead(n.id)
-    if (n.link_url) window.location.href = n.link_url
+    if (n.link_url) window.location.assign(n.link_url)
     else setOpen(false)
   }
 
   const fmtTime = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime()
+    const diff = nowMs - new Date(iso).getTime()
     const mins = Math.floor(diff / 60000)
     if (mins < 1) return 'just now'
     if (mins < 60) return `${mins}m ago`
@@ -192,7 +203,7 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.accent, flexShrink: 0, marginTop: 4 }} />
                       )}
                     </div>
-                    {n.body && <p style={{ margin: '0 0 4px', fontSize: 12, color: t.textDim, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>{n.body}</p>}
+                    {n.body && <p style={{ margin: '0 0 4px', fontSize: 12, color: t.textDim, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{n.body}</p>}
                     <span style={{ fontSize: 11, color: t.textMuted }}>{fmtTime(n.created_at)}</span>
                   </div>
                 </div>

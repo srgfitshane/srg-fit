@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -35,7 +35,11 @@ type CalItem = {
   source_id?: string  // workout session id for linking
 }
 
-const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+type JournalEntrySummary = {
+  entry_date: string
+  is_private: boolean
+}
+
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const SHORT_DAYS = ['S','M','T','W','T','F','S']
 
@@ -74,83 +78,80 @@ export default function ClientCalendarPage() {
   const [viewYear,  setViewYear]  = useState(today.getFullYear())
   const [selected,  setSelected]  = useState<CalItem|null>(null)
   const [selectedDate, setSelectedDate] = useState<string|null>(null)
-  const [mobile,    setMobile]    = useState(false)
+  const [mobile,    setMobile]    = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 600 : false))
 
   useEffect(() => {
-    setMobile(window.innerWidth < 600)
     const handleResize = () => setMobile(window.innerWidth < 600)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        const { data:{ user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
 
-  const load = async () => {
-    const { data:{ user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+        const { data: clientData } = await supabase
+          .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
+        if (!clientData) { setLoading(false); return }
 
-    const { data: clientData } = await supabase
-      .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
-    if (!clientData) { setLoading(false); return }
+        const [{ data: calEvts }, { data: sessions }, { data: journals }] = await Promise.all([
+          supabase.from('calendar_events').select('*')
+            .eq('coach_id', clientData.coach_id)
+            .eq('client_id', clientData.id)
+            .order('start_at'),
+          supabase.from('workout_sessions').select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client')
+            .eq('client_id', clientData.id)
+            .order('scheduled_date'),
+          supabase.from('journal_entries').select('entry_date, is_private')
+            .eq('client_id', clientData.id)
+            .order('entry_date', { ascending: false })
+            .limit(365),
+        ])
 
-    // Load calendar events, workout sessions, and journal entries in parallel
-    const [{ data: calEvts }, { data: sessions }, { data: journals }] = await Promise.all([
-      supabase.from('calendar_events').select('*')
-        .eq('coach_id', clientData.coach_id)
-        .eq('client_id', clientData.id)
-        .order('start_at'),
-      supabase.from('workout_sessions').select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client')
-        .eq('client_id', clientData.id)
-        .order('scheduled_date'),
-      supabase.from('journal_entries').select('entry_date, is_private')
-        .eq('client_id', clientData.id)
-        .order('entry_date', { ascending: false })
-        .limit(365),
-    ])
+        setJournalDates(new Set(((journals || []) as JournalEntrySummary[]).map((journal) => journal.entry_date)))
 
-    // Store journal dates for dot indicators
-    setJournalDates(new Set((journals || []).map((j:any) => j.entry_date)))
+        const merged: CalItem[] = []
 
-    const merged: CalItem[] = []
+        for (const e of calEvts || []) {
+          const meta = EVENT_TYPE_META[e.event_type] || EVENT_TYPE_META.other
+          merged.push({
+            id: e.id, title: e.title,
+            date: e.start_at.split('T')[0],
+            start_at: e.start_at, end_at: e.end_at,
+            color: e.color || meta.color,
+            icon: meta.icon, label: meta.label,
+            type: 'calendar',
+            description: e.description,
+          })
+        }
 
-    // Calendar events from coach
-    for (const e of calEvts || []) {
-      const meta = EVENT_TYPE_META[e.event_type] || EVENT_TYPE_META.other
-      merged.push({
-        id: e.id, title: e.title,
-        date: e.start_at.split('T')[0],
-        start_at: e.start_at, end_at: e.end_at,
-        color: e.color || meta.color,
-        icon: meta.icon, label: meta.label,
-        type: 'calendar',
-        description: e.description,
-      })
-    }
+        for (const s of sessions || []) {
+          if (!s.scheduled_date) continue
+          const done = s.status === 'completed'
+          const inProg = s.status === 'in_progress'
+          merged.push({
+            id: 'ws_'+s.id, title: s.title || 'Workout',
+            date: s.scheduled_date,
+            color: done ? '#22c55e' : inProg ? '#00c9b1' : '#f5a623',
+            icon: done ? '✅' : inProg ? '▶️' : '💪',
+            label: done ? 'Completed' : inProg ? 'In Progress' : 'Workout',
+            type: 'workout', status: s.status,
+            session_rpe: s.session_rpe, mood: s.mood,
+            duration_seconds: s.duration_seconds,
+            description: s.notes_coach || undefined,
+            source_id: s.id,
+          })
+        }
 
-    // Workout sessions from program
-    for (const s of sessions || []) {
-      if (!s.scheduled_date) continue
-      const done = s.status === 'completed'
-      const inProg = s.status === 'in_progress'
-      merged.push({
-        id: 'ws_'+s.id, title: s.title || 'Workout',
-        date: s.scheduled_date,
-        color: done ? '#22c55e' : inProg ? '#00c9b1' : '#f5a623',
-        icon: done ? '✅' : inProg ? '▶️' : '💪',
-        label: done ? 'Completed' : inProg ? 'In Progress' : 'Workout',
-        type: 'workout', status: s.status,
-        session_rpe: s.session_rpe, mood: s.mood,
-        duration_seconds: s.duration_seconds,
-        description: s.notes_coach || undefined,
-        source_id: s.id,
-      })
-    }
-
-    // Sort by date
-    merged.sort((a,b) => a.date.localeCompare(b.date))
-    setItems(merged)
-    setLoading(false)
-  }
+        merged.sort((a,b) => a.date.localeCompare(b.date))
+        setItems(merged)
+        setLoading(false)
+      })()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [router, supabase])
 
   // Build calendar grid
   const firstDay = new Date(viewYear, viewMonth, 1)

@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
+import type { CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -19,52 +20,85 @@ type Question = {
   scale_min_label?: string; scale_max_label?: string; maps_to?: string
 }
 
+type AssignmentForm = {
+  id: string
+  title: string
+  description?: string | null
+  form_type?: string | null
+  is_checkin_type?: boolean | null
+}
+
+type FormAssignment = {
+  id: string
+  client_id: string
+  form_id: string
+  status: string
+  note?: string | null
+  response?: Record<string, AnswerValue> | null
+  form?: AssignmentForm | null
+}
+
+type AnswerValue = string | number | string[] | null
+
+type CheckinRow = {
+  client_id: string
+  coach_id?: string | null
+  submitted_at: string
+  week_start: string
+  week_end: string
+  response_data: Record<string, AnswerValue>
+  [key: string]: string | number | boolean | string[] | null | Record<string, AnswerValue> | undefined
+}
+
 export default function ClientFormPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
   const { formAssignmentId } = useParams<{ formAssignmentId: string }>()
 
   const [loading,    setLoading]    = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [submitted,  setSubmitted]  = useState(false)
-  const [assignment, setAssignment] = useState<any>(null)
-  const [form,       setForm]       = useState<any>(null)
+  const [assignment, setAssignment] = useState<FormAssignment | null>(null)
+  const [form,       setForm]       = useState<AssignmentForm | null>(null)
   const [questions,  setQuestions]  = useState<Question[]>([])
-  const [answers,    setAnswers]    = useState<Record<string, any>>({})
+  const [answers,    setAnswers]    = useState<Record<string, AnswerValue>>({})
   const [errors,     setErrors]     = useState<Record<string, string>>({})
 
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+    const timer = setTimeout(() => {
+      void (async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
 
-      const { data: asgn } = await supabase
-        .from('client_form_assignments')
-        .select('*, form:onboarding_forms(*)')
-        .eq('id', formAssignmentId)
-        .single()
+        const { data: asgn } = await supabase
+          .from('client_form_assignments')
+          .select('id, client_id, form_id, status, note, response, form:onboarding_forms(*)')
+          .eq('id', formAssignmentId)
+          .single<FormAssignment>()
 
-      if (!asgn) { setLoading(false); return }
-      if (asgn.status === 'completed') { setSubmitted(true) }
+        if (!asgn) { setLoading(false); return }
+        if (asgn.status === 'completed') { setSubmitted(true) }
 
-      setAssignment(asgn)
-      setForm(asgn.form)
+        setAssignment(asgn)
+        setForm(asgn.form ?? null)
 
-      const { data: qs } = await supabase
-        .from('onboarding_questions')
-        .select('*')
-        .eq('form_id', asgn.form_id)
-        .order('sort_order')
+        const { data: qs } = await supabase
+          .from('onboarding_questions')
+          .select('*')
+          .eq('form_id', asgn.form_id)
+          .order('sort_order')
 
-      setQuestions(qs || [])
-      // Pre-fill if already answered
-      if (asgn.response) setAnswers(asgn.response)
-      setLoading(false)
-    }
-    load()
-  }, [formAssignmentId])
+        setQuestions(qs || [])
+        // Pre-fill if already answered
+        if (asgn.response) setAnswers(asgn.response)
+        setLoading(false)
+      })()
+    }, 0)
 
-  const setAnswer = (qId: string, val: any) => {
+    return () => clearTimeout(timer)
+  }, [formAssignmentId, router, supabase])
+
+  const setAnswer = (qId: string, val: AnswerValue) => {
     setAnswers(p => ({ ...p, [qId]: val }))
     if (errors[qId]) setErrors(p => { const n = { ...p }; delete n[qId]; return n })
   }
@@ -92,7 +126,7 @@ export default function ClientFormPage() {
       status: 'completed',
       completed_at: new Date().toISOString(),
       response: answers,
-    }).eq('id', formAssignmentId).select('*, form:onboarding_forms(form_type, is_checkin_type, id), client_id').single()
+    }).eq('id', formAssignmentId).select('client_id, form:onboarding_forms(form_type, is_checkin_type, id)').single<{ client_id: string; form: AssignmentForm | null }>()
 
     // Mirror mapped fields into checkins table if this is a check_in type form
     const isCheckin = asgn?.form?.form_type === 'check_in' || asgn?.form?.is_checkin_type
@@ -102,7 +136,7 @@ export default function ClientFormPage() {
       const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)
 
       // Build checkin row from mapped fields
-      const checkinRow: any = {
+      const checkinRow: CheckinRow = {
         client_id: asgn.client_id,
         submitted_at: now.toISOString(),
         week_start: weekStart.toISOString().split('T')[0],
@@ -135,7 +169,7 @@ export default function ClientFormPage() {
             const { triggerAiInsight } = await import('@/lib/ai-insights')
             triggerAiInsight(asgn.client_id, clientRec.coach_id, 'checkin_brief')
             triggerAiInsight(asgn.client_id, clientRec.coach_id, 'red_flag')
-          } catch (_) { /* non-blocking */ }
+          } catch { /* non-blocking */ }
         }
       }
     }
@@ -144,7 +178,7 @@ export default function ClientFormPage() {
     setSubmitting(false)
   }
 
-  const inp = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 13px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as any }
+  const inp: CSSProperties = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 13px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' }
 
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.textMuted }}>
@@ -270,7 +304,8 @@ export default function ClientFormPage() {
                 {q.question_type === 'checkbox' && (
                   <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     {(q.options||[]).map(opt => {
-                      const sel: string[] = answers[q.id] || []
+                      const answer = answers[q.id]
+                      const sel: string[] = Array.isArray(answer) ? answer.filter((value): value is string => typeof value === 'string') : []
                       const checked = sel.includes(opt)
                       const toggle = () => setAnswer(q.id, checked ? sel.filter(x=>x!==opt) : [...sel, opt])
                       return (

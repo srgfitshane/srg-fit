@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -24,11 +24,37 @@ const DIFF_META: Record<string,{label:string,color:string}> = {
   advanced:    {label:'Advanced',    color:'#f87171'},
 }
 
+type ContentGroup = {
+  id: string
+  name: string
+  color: string
+  icon?: string | null
+}
+
+type WorkoutExercise = {
+  name: string
+  prescription?: string | null
+}
+
+type ContentItem = {
+  id: string
+  group_id: string | null
+  title: string
+  description?: string | null
+  content_type: string
+  difficulty?: string | null
+  duration?: string | null
+  estimated_duration?: string | null
+  file_url?: string | null
+  tags?: string[] | null
+  workout_exercises?: WorkoutExercise[] | null
+}
+
 export default function ClientResourcesPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
-  const [groups,      setGroups]      = useState<any[]>([])
-  const [items,       setItems]       = useState<any[]>([])
+  const [groups,      setGroups]      = useState<ContentGroup[]>([])
+  const [items,       setItems]       = useState<ContentItem[]>([])
   const [loading,     setLoading]     = useState(true)
   const [activeGroup, setActiveGroup] = useState<string|null>(null)
   const [search,      setSearch]      = useState('')
@@ -37,38 +63,42 @@ export default function ClientResourcesPage() {
   const [addingCal,   setAddingCal]   = useState<string|null>(null)
   const [calDone,     setCalDone]     = useState<Set<string>>(new Set())
 
-  useEffect(()=>{ load() },[])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void (async () => {
+        const { data:{ user } } = await supabase.auth.getUser()
+        if (!user){ router.push('/login'); return }
+        const { data:clientData } = await supabase.from('clients').select('coach_id').eq('profile_id',user.id).single<{ coach_id: string | null }>()
+        if (!clientData?.coach_id){ setLoading(false); return }
+        setCoachId(clientData.coach_id)
+        const [{ data:gs },{ data:is }] = await Promise.all([
+          supabase.from('content_groups').select('id, name, color, icon').eq('coach_id',clientData.coach_id).order('order_index'),
+          supabase.from('content_items').select('id, group_id, title, description, content_type, difficulty, duration, estimated_duration, file_url, tags, workout_exercises').eq('coach_id',clientData.coach_id).order('created_at'),
+        ])
+        setGroups(gs || [])
+        setItems(is || [])
+        setActiveGroup(gs?.[0]?.id || null)
+        setLoading(false)
+      })()
+    }, 0)
 
-  const load = async () => {
-    const { data:{ user } } = await supabase.auth.getUser()
-    if (!user){ router.push('/login'); return }
-    const { data:clientData } = await supabase.from('clients').select('coach_id').eq('profile_id',user.id).single()
-    if (!clientData){ setLoading(false); return }
-    setCoachId(clientData.coach_id)
-    const [{ data:gs },{ data:is }] = await Promise.all([
-      supabase.from('content_groups').select('*').eq('coach_id',clientData.coach_id).order('order_index'),
-      supabase.from('content_items').select('*').eq('coach_id',clientData.coach_id).order('created_at'),
-    ])
-    setGroups(gs||[])
-    setItems(is||[])
-    setActiveGroup(gs?.[0]?.id||null)
-    setLoading(false)
-  }
+    return () => clearTimeout(timer)
+  }, [router, supabase])
 
-  const addToCalendar = async (item: any) => {
+  const addToCalendar = async (item: ContentItem) => {
     setAddingCal(item.id)
     const { data:{ user } } = await supabase.auth.getUser()
     if (!user){ setAddingCal(null); return }
     const start = new Date()
     start.setDate(start.getDate() + 1)
     start.setHours(9, 0, 0, 0)
-    const durationMin = parseInt(item.estimated_duration) || 60
+    const durationMin = parseInt(item.estimated_duration || item.duration || '60', 10) || 60
     const end = new Date(start.getTime() + durationMin * 60000)
 
     const desc = [
       item.description,
       item.workout_exercises?.length
-        ? 'Exercises:\n' + item.workout_exercises.map((e:any) => `• ${e.name}${e.prescription?' - '+e.prescription:''}`).join('\n')
+        ? 'Exercises:\n' + item.workout_exercises.map((e: WorkoutExercise) => `• ${e.name}${e.prescription?' - '+e.prescription:''}`).join('\n')
         : null
     ].filter(Boolean).join('\n\n')
 
@@ -168,9 +198,11 @@ export default function ClientResourcesPage() {
               <div style={{display:'grid',gap:12}}>
                 {filteredItems.map(item=>{
                   const tm = TYPE_META[item.content_type]||TYPE_META.article
-                  const dm = DIFF_META[item.difficulty]||DIFF_META.beginner
+                  const dm = item.difficulty ? (DIFF_META[item.difficulty] || DIFF_META.beginner) : DIFF_META.beginner
                   const isWorkout = item.content_type === 'workout'
                   const done = calDone.has(item.id)
+                  const itemTags = item.tags || []
+                  const workoutExercises = item.workout_exercises || []
                   return (
                     <div key={item.id} style={{background:t.surface,border:'1px solid '+(isWorkout?t.teal+'30':t.border),borderRadius:14,overflow:'hidden'}}>
                       <div style={{padding:'16px 18px',display:'flex',gap:14,alignItems:'flex-start'}}>
@@ -185,9 +217,9 @@ export default function ClientResourcesPage() {
                             {(item.duration||item.estimated_duration) && <span style={{fontSize:10,color:t.textMuted,background:t.surfaceHigh,padding:'2px 7px',borderRadius:20}}>⏱ {item.estimated_duration||item.duration}</span>}
                           </div>
                           {item.description && <div style={{fontSize:12,color:t.textDim,lineHeight:1.5,marginBottom:6}}>{item.description}</div>}
-                          {item.tags?.length>0 && (
+                          {itemTags.length > 0 && (
                             <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}}>
-                              {item.tags.map((tag:string)=>(
+                              {itemTags.map((tag:string)=>(
                                 <span key={tag} style={{fontSize:10,background:t.surfaceHigh,color:t.textMuted,padding:'2px 7px',borderRadius:20}}>{tag}</span>
                               ))}
                             </div>
@@ -210,11 +242,11 @@ export default function ClientResourcesPage() {
                       </div>
 
                       {/* Workout exercises list */}
-                      {isWorkout && item.workout_exercises?.length > 0 && (
+                      {isWorkout && workoutExercises.length > 0 && (
                         <div style={{borderTop:'1px solid '+t.border,background:t.surfaceUp,padding:'12px 18px'}}>
                           <div style={{fontSize:11,fontWeight:800,color:t.teal,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>Exercises</div>
                           <div style={{display:'flex',flexDirection:'column',gap:5}}>
-                            {item.workout_exercises.map((ex:any,i:number) => (
+                            {workoutExercises.map((ex: WorkoutExercise, i:number) => (
                               <div key={i} style={{display:'flex',alignItems:'center',gap:10,fontSize:13}}>
                                 <div style={{width:22,height:22,borderRadius:6,background:t.teal+'22',border:'1px solid '+t.teal+'30',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:t.teal,flexShrink:0}}>{i+1}</div>
                                 <span style={{fontWeight:600}}>{ex.name}</span>
