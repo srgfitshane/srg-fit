@@ -226,14 +226,14 @@ export default function ClientProgressPage() {
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
           </button>}
-          {clientRecord?.show_body_metrics !== false && <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
+          {!(clientRecord != null && !clientRecord.show_body_metrics) && <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             + Log Metrics
           </button>}
         </div>
       </div>
 
-      {clientRecord?.show_body_metrics !== false && (<>
+      {!(clientRecord != null && !clientRecord.show_body_metrics) && (<>
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'16px 18px', marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'flex-start' }}>
           <div style={{ flex:'1 1 240px' }}>
@@ -273,11 +273,11 @@ export default function ClientProgressPage() {
             { label:'Current Weight', val: last?.weight ? `${last.weight} lbs` : '—', color:t.teal },
             { label:'Change', val: weightChange ? `${+weightChange>0?'+':''}${weightChange} lbs` : '—',
               color: weightChange ? (+weightChange<0?t.green:t.red) : t.textMuted },
-            { label:'Body Fat', val: last?.body_fat ? `${last.body_fat}%` : '—', color:t.orange },
+            { label:'Body Fat', val: last?.body_fat ? `${last.body_fat}%` : '—', color:t.orange, hidden: clientRecord != null && !clientRecord.show_body_metrics },
             { label:'BF% Change', val: bfChange ? `${+bfChange>0?'+':''}${bfChange}%` : '—',
-              color: bfChange ? (+bfChange<0?t.green:t.red) : t.textMuted },
+              color: bfChange ? (+bfChange<0?t.green:t.red) : t.textMuted, hidden: clientRecord != null && !clientRecord.show_body_metrics },
             { label:'Entries', val: metrics.length, color:t.purple },
-          ].map(s => (
+          ].filter((s:any) => !s.hidden).map(s => (
             <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
               <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:3 }}>{s.label}</div>
               <div style={{ fontSize:18, fontWeight:800, color:s.color }}>{s.val}</div>
@@ -290,7 +290,7 @@ export default function ClientProgressPage() {
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
           <div style={{ display:'flex', gap:6 }}>
-            {METRIC_GROUPS.map((g,i) => (
+            {(!(clientRecord != null && !clientRecord.show_body_metrics) ? METRIC_GROUPS : METRIC_GROUPS.filter(g => g.key === 'weight')).map((g,i) => (
               <button key={g.key} onClick={()=>setActiveGroup(i)}
                 style={{ padding:'6px 12px', borderRadius:20, border:'1px solid',
                   borderColor: activeGroup===i?g.color:t.border,

@@ -326,6 +326,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
   const [workoutsThisWeek, setWorkoutsThisWeek] = useState<number>(0)
   const [nextSession,  setNextSession]  = useState<NextSessionRecord | null>(null)
+  const [completedToday, setCompletedToday] = useState<{id:string,title:string} | null>(null)
   const [pendingReviews, setPendingReviews] = useState<PendingReviewRecord[]>([])
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckinRecord[]>([])
@@ -429,6 +430,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: pastData },
           { data: goalsData },
           { data: activityData },
+          { data: completedTodayData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
@@ -458,6 +460,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('journal_entries').select('*').eq('client_id', cid).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
           supabase.from('client_activities').select('*').eq('client_id', cid).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(5),
+          supabase.from('workout_sessions').select('id, title').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
         ])
 
         setHabits((habitData || []) as HabitRecord[])
@@ -489,6 +492,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setPastEntries((pastData || []) as JournalEntryRecord[])
         setActiveGoals((goalsData || []) as ClientGoalRecord[])
         setRecentActivities((activityData || []) as ClientActivityRecord[])
+        setCompletedToday(completedTodayData ? { id: completedTodayData.id, title: completedTodayData.title } : null)
 
         // Workout streak — consecutive weeks with at least 1 completed session
         const { data: completedSessions } = await supabase
@@ -1010,6 +1014,18 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     </button>
                   )}
                 </>
+              ) : completedToday ? (
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>✅</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:800, color:t.green }}>Workout Complete!</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedToday.title} — great work today 💪</div>
+                  </div>
+                  <button onClick={()=>router.push(`/dashboard/client/workout/${completedToday.id}`)}
+                    style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                    Review
+                  </button>
+                </div>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>🛏️</div>
