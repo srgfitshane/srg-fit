@@ -32,6 +32,11 @@ export async function GET(req: NextRequest) {
     const barcode = searchParams.get('barcode')
     const foodId  = searchParams.get('food_id')
 
+    // Basic abuse prevention — reject oversized inputs
+    if (query && query.length > 200) return NextResponse.json({ error: 'Query too long' }, { status: 400 })
+    if (barcode && !/^\d{6,14}$/.test(barcode)) return NextResponse.json({ error: 'Invalid barcode' }, { status: 400 })
+    if (foodId && !/^\d+$/.test(foodId)) return NextResponse.json({ error: 'Invalid food_id' }, { status: 400 })
+
     if (!FS_CLIENT_ID || !FS_CLIENT_SECRET) {
       return NextResponse.json({ error: 'FatSecret not configured' }, { status: 503 })
     }
