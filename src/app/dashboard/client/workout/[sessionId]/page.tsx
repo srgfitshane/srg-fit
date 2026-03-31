@@ -195,7 +195,7 @@ export default function ActiveWorkoutPage() {
 
     const { data: sess, error: sessError } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
     const safeSession = sess as WorkoutSession | null
-    console.log('DEBUG session:', { id: safeSession?.id, status: safeSession?.status, program_id: safeSession?.program_id, error: sessError?.message })
+    
 
     // Fetch client gender to serve correct demo video
     if (safeSession?.client_id) {
@@ -259,7 +259,7 @@ export default function ActiveWorkoutPage() {
       .eq('session_id', sessionId)
       .order('order_index')
 
-    console.log('DEBUG session_exercises query:', { sessionId, count: exs?.length, error: exsError?.message, rows: exs })
+    
 
     const { data: exerciseLibrary } = await supabase
       .from('exercises')
@@ -832,43 +832,6 @@ export default function ActiveWorkoutPage() {
             <p style={{fontSize:13,color:t.orange,lineHeight:1.5}}>{session.notes_coach}</p>
           </div>
         )}
-
-        <div style={{margin:'12px 16px 0',background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)',border:'1px solid '+t.teal+'24',borderRadius:14,padding:'14px 16px'}}>
-          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
-            <div>
-              <div style={{fontSize:11,fontWeight:800,color:t.teal,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>Workout Snapshot</div>
-              <div style={{fontSize:16,fontWeight:900,lineHeight:1.3}}>
-                {activeExercise ? `Exercise ${activeExIdx + 1} of ${exercises.length}: ${activeExercise.exercise_name}` : 'Workout in progress'}
-              </div>
-              <div style={{fontSize:12,color:t.textDim,marginTop:4,lineHeight:1.5}}>
-                {activeExercise
-                  ? `${activeLoggedSets}/${activeSets.length || activeExercise.sets_prescribed || 0} sets logged here. Keep moving and finish strong.`
-                  : 'Stay focused and log each set as you go.'}
-              </div>
-            </div>
-            <div style={{fontSize:12,fontWeight:800,color:t.teal,background:t.tealDim,border:'1px solid '+t.teal+'34',borderRadius:999,padding:'6px 10px',whiteSpace:'nowrap' as const}}>
-              {totalLoggedSets}/{totalPlannedSets || 0} sets
-            </div>
-          </div>
-          <div className="workout-summary-grid">
-            <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'10px 12px'}}>
-              <div style={{fontSize:10,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Done</div>
-              <div style={{fontSize:18,fontWeight:900,color:t.green}}>{completedExerciseCount}</div>
-            </div>
-            <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'10px 12px'}}>
-              <div style={{fontSize:10,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Remaining</div>
-              <div style={{fontSize:18,fontWeight:900,color:t.orange}}>{remainingExerciseCount}</div>
-            </div>
-            <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'10px 12px'}}>
-              <div style={{fontSize:10,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Skipped</div>
-              <div style={{fontSize:18,fontWeight:900,color:t.red}}>{skippedExerciseCount}</div>
-            </div>
-            <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'10px 12px'}}>
-              <div style={{fontSize:10,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Timer</div>
-              <div style={{fontSize:18,fontWeight:900,color:t.teal,fontVariantNumeric:'tabular-nums'}}>{fmtTime(elapsedSeconds)}</div>
-            </div>
-          </div>
-        </div>
 
         {/* Exercise tabs */}
         <div style={{display:'flex',overflowX:'auto',padding:'12px 16px 0',gap:8,flexShrink:0}}>
