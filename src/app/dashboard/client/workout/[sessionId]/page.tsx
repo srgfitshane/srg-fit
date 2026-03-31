@@ -131,6 +131,7 @@ export default function ActiveWorkoutPage() {
   const [skipNote, setSkipNote] = useState<Record<string,string>>({})
   const [skipped, setSkipped] = useState<Record<string,boolean>>({})
   const [swapOpen, setSwapOpen] = useState<Record<string,boolean>>({})
+  const [swapSearch, setSwapSearch] = useState<Record<string,string>>({})
   const [swapReason, setSwapReason] = useState<Record<string,string>>({})
   const [swapNote, setSwapNote] = useState<Record<string,string>>({})
   const [swapLibrary, setSwapLibrary] = useState<ExerciseLibraryItem[]>([])
@@ -155,6 +156,13 @@ export default function ActiveWorkoutPage() {
 
   function getSwapOptions(exercise: SessionExercise) {
     const primaryMuscles = exercise.exercise?.muscles || []
+    const search = (swapSearch[exercise.id] || '').toLowerCase().trim()
+    if (search) {
+      return swapLibrary
+        .filter(option => option.id !== exercise.exercise_id)
+        .filter(option => option.name?.toLowerCase().includes(search))
+        .slice(0, 8)
+    }
     return swapLibrary
       .filter(option => option.id !== exercise.exercise_id)
       .filter(option => {
@@ -215,7 +223,7 @@ export default function ActiveWorkoutPage() {
       const { data: exerciseLibrary } = await supabase
         .from('exercises')
         .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url')
-        .limit(250)
+        .limit(1200)
 
       // Fetch already-logged sets so re-open shows real data
       const { data: loggedSets } = await supabase
@@ -910,6 +918,12 @@ export default function ActiveWorkoutPage() {
                 {swapOpen[ex.id] && !skipped[ex.id] && (
                   <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
                     <div style={{fontSize:13,fontWeight:700,color:t.teal,marginBottom:8}}>Need a smart swap?</div>
+                    <input
+                      value={swapSearch[ex.id]||''}
+                      onChange={e=>setSwapSearch(prev=>({...prev,[ex.id]:e.target.value}))}
+                      placeholder="Search exercises..."
+                      style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8,boxSizing:'border-box' as const,colorScheme:'dark'}}
+                    />
                     <select
                       value={swapReason[ex.id] || ''}
                       onChange={e=>setSwapReason(prev=>({...prev,[ex.id]:e.target.value}))}
