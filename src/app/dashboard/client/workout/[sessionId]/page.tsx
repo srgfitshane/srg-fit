@@ -195,6 +195,7 @@ export default function ActiveWorkoutPage() {
 
     const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
     const safeSession = sess as WorkoutSession | null
+    console.log('DEBUG session:', { id: safeSession?.id, status: safeSession?.status, program_id: safeSession?.program_id })
 
     // Fetch client gender to serve correct demo video
     if (safeSession?.client_id) {
@@ -252,11 +253,13 @@ export default function ActiveWorkoutPage() {
       return
     }
     // Join exercise detail for preview
-    const { data: exs } = await supabase
+    const { data: exs, error: exsError } = await supabase
       .from('session_exercises')
       .select('*, exercise:exercises(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
       .eq('session_id', sessionId)
       .order('order_index')
+
+    console.log('DEBUG session_exercises query:', { sessionId, count: exs?.length, error: exsError?.message, rows: exs })
 
     const { data: exerciseLibrary } = await supabase
       .from('exercises')
