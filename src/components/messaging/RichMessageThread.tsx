@@ -60,7 +60,7 @@ interface Props {
   otherName: string
   otherAvatar?: string | null
   height?: string
-  tenorKey?: string
+
   quickReplies?: Array<{ id: string; title: string; body: string }>
 }
 

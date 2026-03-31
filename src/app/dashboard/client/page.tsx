@@ -18,7 +18,6 @@ import {
   type ClientActivityIntensity,
 } from '@/lib/client-activities'
 
-const TENOR_KEY = process.env.NEXT_PUBLIC_TENOR_KEY || ''
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -1309,7 +1308,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     myId={profile.id}
                     otherId={coachProfileId}
                     otherName="Coach Shane"
-                    tenorKey={TENOR_KEY}
                     height="100%"
                   />
                 ) : (

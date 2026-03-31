@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import RichMessageThread from '@/components/messaging/RichMessageThread'
 import { resolveSignedMediaUrl } from '@/lib/media'
 
-const TENOR_KEY = process.env.NEXT_PUBLIC_TENOR_KEY || ''
+
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -441,7 +441,6 @@ function MessagesInner() {
                     otherId={activeClient.profile.id}
                     otherName={activeClient.profile.full_name || 'Client'}
                     otherAvatar={activeClient.profile.avatar_url}
-                    tenorKey={TENOR_KEY}
                     height="100%"
                     quickReplies={macros}
                   />
