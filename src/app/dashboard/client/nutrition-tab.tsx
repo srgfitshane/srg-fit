@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-
-// BarcodeDetector is experimental - declare types locally
-declare const BarcodeDetector: any
+import { createClient } from '@/lib/supabase-browser'
 
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
@@ -24,30 +22,135 @@ type FoodEntry = {
   carbs_g: number | null
   fat_g: number | null
   serving_size: string
+  serving_qty?: number | null
   logged_at: string
 }
 type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved' | 'image'
 
-export default function NutritionTab({ clientRecord, supabase, t }: any) {
+type NutritionPlan = {
+  id: string
+  name?: string | null
+  notes?: string | null
+  calories_target?: number | null
+  protein_g?: number | null
+  carbs_g?: number | null
+  fat_g?: number | null
+}
+
+type NutritionDailyLog = {
+  id: string
+  total_calories?: number | null
+  total_protein?: number | null
+  total_carbs?: number | null
+  total_fat?: number | null
+}
+
+type SavedFood = {
+  food_name: string
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  serving_size: string
+  serving_qty?: number | null
+  logged_at?: string
+}
+
+type SearchResult = FatSecretSearchFood | USDAFoodSearchResult
+
+type FatSecretServing = {
+  calories?: string | number | null
+  protein?: string | number | null
+  carbohydrate?: string | number | null
+  fat?: string | number | null
+  serving_description?: string | null
+  metric_serving_amount?: string | number | null
+}
+
+type FatSecretFoodDetail = {
+  food_name: string
+  servings?: {
+    serving?: FatSecretServing | FatSecretServing[]
+  }
+}
+
+type FatSecretSearchFood = {
+  food_id: string
+  food_name: string
+  food_description?: string | null
+  food_type?: string | null
+}
+
+type USDANutrient = {
+  nutrientName?: string | null
+  value?: number | null
+}
+
+type USDAFoodPortion = {
+  gramWeight?: number | string | null
+  amount?: number | string | null
+  modifier?: string | null
+  portionDescription?: string | null
+  measureUnit?: {
+    name?: string | null
+  } | null
+}
+
+type USDAFoodSearchResult = {
+  fdcId?: number
+  description?: string | null
+  dataType?: string | null
+  foodNutrients?: USDANutrient[]
+  servingSize?: number | string | null
+  servingSizeUnit?: string | null
+  householdServingFullText?: string | null
+  foodPortions?: USDAFoodPortion[]
+  foodMeasures?: USDAFoodPortion[]
+}
+
+type NutritionTabProps = {
+  clientRecord: {
+    id: string
+    coach_id?: string | null
+    show_macros?: boolean | null
+  } | null
+  supabase: ReturnType<typeof createClient>
+  t: {
+    surface: string
+    surfaceHigh: string
+    border: string
+    text: string
+    textDim: string
+    textMuted: string
+    teal: string
+    orange: string
+  }
+}
+
+function isFatSecretFood(food: SearchResult): food is FatSecretSearchFood {
+  return 'food_id' in food
+}
+
+export default function NutritionTab({ clientRecord, supabase, t }: NutritionTabProps) {
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
-  const [plan,            setPlan]            = useState<any>(null)
-  const [log,             setLog]             = useState<any>(null)
+  const [plan,            setPlan]            = useState<NutritionPlan | null>(null)
+  const [log,             setLog]             = useState<NutritionDailyLog | null>(null)
   const [entries,         setEntries]         = useState<FoodEntry[]>([])
   const [loading,         setLoading]         = useState(true)
   const [addMode,         setAddMode]         = useState<AddMode>('none')
   const [selectedDate,    setSelectedDate]    = useState(today)
   const [searchQ,         setSearchQ]         = useState('')
-  const [searchResults,   setSearchResults]   = useState<any[]>([])
+  const [searchResults,   setSearchResults]   = useState<SearchResult[]>([])
   const [searching,       setSearching]       = useState(false)
   const [searchError,     setSearchError]     = useState('')
-  const searchTimer = useRef<any>(null)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
   const [pendingFood,     setPendingFood]     = useState<Partial<FoodEntry> | null>(null)
   const [pendingServings, setPendingServings] = useState(1)
   const [saving,          setSaving]          = useState(false)
   const [editingEntry,    setEditingEntry]    = useState<string|null>(null)
   const [editServings,    setEditServings]    = useState(1)
-  const [savedFoods,      setSavedFoods]      = useState<any[]>([])
+  const [savedFoods,      setSavedFoods]      = useState<SavedFood[]>([])
   // Barcode
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
@@ -55,10 +158,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   // Image recognition
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [imageLoading,    setImageLoading]    = useState(false)
-  const [imageResults,    setImageResults]    = useState<any[]>([])
+  const [imageResults,    setImageResults]    = useState<FatSecretSearchFood[]>([])
   const [imageErr,        setImageErr]        = useState('')
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
+    if (!clientRecord?.id) return
     setLoading(true)
     const [{ data: activePlan }, { data: dailyLog }] = await Promise.all([
       supabase.from('nutrition_plans').select('*').eq('client_id', clientRecord.id).eq('is_active', true).single(),
@@ -74,15 +178,16 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       .eq('client_id', clientRecord.id).order('logged_at', { ascending: false }).limit(30)
     if (prev) {
       const seen = new Set<string>()
-      setSavedFoods(prev.filter((f:any) => { if (seen.has(f.food_name)) return false; seen.add(f.food_name); return true }))
+      setSavedFoods((prev as SavedFood[]).filter((food) => { if (seen.has(food.food_name)) return false; seen.add(food.food_name); return true }))
     }
     setLoading(false)
-  }
+  }, [clientRecord?.id, selectedDate, supabase])
 
-  useEffect(() => { if (clientRecord?.id) loadData() }, [clientRecord?.id, selectedDate])
+  useEffect(() => { if (clientRecord?.id) void loadData() }, [clientRecord?.id, loadData, selectedDate])
 
 
   async function ensureLog() {
+    if (!clientRecord) return null
     if (log) return log
     const { data: newLog, error } = await supabase.from('nutrition_daily_logs').upsert({
       client_id: clientRecord.id, coach_id: clientRecord.coach_id,
@@ -94,6 +199,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   async function commitEntry(meal_time: string) {
     if (!pendingFood) return
+    if (!clientRecord) return
     setSaving(true)
     try {
       const s = pendingServings
@@ -136,7 +242,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   }
 
   async function updateEntryServings(entry: FoodEntry, newServings: number) {
-    const oldQty = (entry as any).serving_qty || 1
+    const oldQty = ('serving_qty' in entry ? (entry as FoodEntry & { serving_qty?: number | null }).serving_qty : null) || 1
     const scale  = newServings / oldQty
     const updated = {
       serving_qty:  newServings,
@@ -155,7 +261,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     await loadData()
   }
 
-  async function recalcTotals(logId: string, ents: any[]) {
+  async function recalcTotals(logId: string, ents: Array<Pick<FoodEntry, 'calories' | 'protein_g' | 'carbs_g' | 'fat_g'>>) {
     const totals = ents.reduce((acc, e) => ({
       total_calories: acc.total_calories + (e.calories  || 0),
       total_protein:  acc.total_protein  + (e.protein_g || 0),
@@ -169,7 +275,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   // â”€â”€ Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function handleSearchInput(val: string) {
     setSearchQ(val); setSearchError('')
-    clearTimeout(searchTimer.current)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
     if (!val.trim()) { setSearchResults([]); return }
     searchTimer.current = setTimeout(() => doSearch(val), 350)
   }
@@ -197,7 +303,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
   // â”€â”€ USDA serving resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // USDA: Foundation/SR Legacy nutrients are per 100g; Branded are per serving.
   // We always want to present per-serving, so we scale Foundation/SR by actual serving grams.
-  function getUSDAServing(food: any): { grams: number; label: string } | null {
+  function getUSDAServing(food: USDAFoodSearchResult): { grams: number; label: string } | null {
     // servingSize field (present on some Branded)
     const sSize = Number(food?.servingSize)
     const sUnit = typeof food?.servingSizeUnit === 'string' ? food.servingSizeUnit.toLowerCase() : ''
@@ -209,7 +315,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     // foodPortions / foodMeasures
     const portions = Array.isArray(food?.foodPortions) ? food.foodPortions
       : Array.isArray(food?.foodMeasures) ? food.foodMeasures : []
-    const portion = portions.find((p: any) => Number(p?.gramWeight) > 0)
+    const portion = portions.find((p) => Number(p?.gramWeight) > 0)
     if (portion) {
       const amt = Number(portion.amount || 1)
       const parts = [amt !== 1 ? amt : '', portion.modifier || portion.measureUnit?.name || portion.portionDescription].filter(Boolean)
@@ -223,9 +329,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
     return null
   }
 
-  async function pickUSDAFood(food: any) {
+  async function pickUSDAFood(food: USDAFoodSearchResult) {
     const nutrients  = food.foodNutrients || []
-    const get = (name: string) => { const n = nutrients.find((x:any) => x.nutrientName?.toLowerCase().includes(name)); return n?.value ?? null }
+    const get = (name: string) => { const nutrient = nutrients.find((item) => item.nutrientName?.toLowerCase().includes(name)); return nutrient?.value ?? null }
     const isBranded  = food.dataType === 'Branded'
     // Branded: nutrients already per serving. Foundation/SR: per 100g, need serving scale.
     let cal = get('energy'); let pro = get('protein')
@@ -251,7 +357,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         serving = getUSDAServing(detFood)
         // Merge nutrient data from detail response too
         const dn = detFood.foodNutrients || []
-        const dget = (n: string) => { const x = dn.find((v:any) => v.nutrient?.name?.toLowerCase().includes(n)); return x?.amount ?? null }
+        const dget = (name: string) => {
+          const nutrient = (dn as Array<{ nutrient?: { name?: string | null } | null; amount?: number | null }>).find((value) => value.nutrient?.name?.toLowerCase().includes(name))
+          return nutrient?.amount ?? null
+        }
         if (cal == null) cal = dget('energy')
         if (pro == null) pro = dget('protein')
         if (carb == null) carb = dget('carbohydrat')
@@ -266,22 +375,22 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
 
   // â”€â”€ FatSecret food picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // FatSecret v4 returns all servings. Prefer the first non-100g serving.
-  function pickBestFSServing(food: any): any {
+  function pickBestFSServing(food: FatSecretFoodDetail): FatSecretServing | null {
     const raw = food.servings?.serving
     if (!raw) return null
     const all = Array.isArray(raw) ? raw : [raw]
     // Prefer a serving where metric_serving_amount != 100 (actual portion) 
-    const realServing = all.find((s: any) => {
-      const amt = parseFloat(s.metric_serving_amount || '0')
+    const realServing = all.find((serving) => {
+      const amt = parseFloat(String(serving.metric_serving_amount || '0'))
       return amt > 0 && Math.round(amt) !== 100
     })
     return realServing || all[0]
   }
 
-  function pickFSFood(food: any) {
+  function pickFSFood(food: FatSecretFoodDetail | FatSecretSearchFood) {
     const serving = pickBestFSServing(food)
     if (!serving) return
-    const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
+    const r = (v: string | number | null | undefined) => v != null ? Math.round(parseFloat(String(v)) * 10) / 10 : null
     setPendingFood({
       food_name:    food.food_name,
       calories:     r(serving.calories),
@@ -319,7 +428,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       const offData = await offRes.json()
       if (offData?.status === 1) {
         const p = offData.product; const n = p.nutriments || {}
-        const r = (v: any) => v != null ? Math.round(parseFloat(v) * 10) / 10 : null
+        const r = (v: string | number | null | undefined) => v != null ? Math.round(parseFloat(String(v)) * 10) / 10 : null
         if (!p.serving_size && n['energy-kcal_serving'] == null) {
           setBarcodeErr('Product found but serving info is missing. Try search or Quick Add.')
         } else {
@@ -345,7 +454,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
       const fsData = await fsRes.json()
       const items  = fsData?.food_response
       if (items && items.length > 0) {
-        setImageResults(items.map((item: any) => item.food).filter(Boolean))
+        setImageResults((items as Array<{ food?: FatSecretSearchFood | null }>).map((item) => item.food).filter((food): food is FatSecretSearchFood => Boolean(food)))
       } else {
         setImageErr('No foods recognized. Try a clearer photo or search manually.')
       }
@@ -407,7 +516,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
         {clientRecord?.show_macros !== false && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:20 }}>
           {macros.map(m => {
-            const p = pct(m.val, m.target); const r=22, circ=2*Math.PI*r
+            const p = pct(m.val, m.target ?? 0); const r=22, circ=2*Math.PI*r
             return (
               <div key={m.label} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'12px 8px', textAlign:'center' }}>
                 <svg width="56" height="56" style={{ display:'block', margin:'0 auto 6px' }}>
@@ -464,9 +573,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             <input value={searchQ} onChange={e=>handleSearchInput(e.target.value)} placeholder="e.g. chicken breast, greek yogurt..." autoFocus style={{ ...inp, marginBottom:10 }}/>
             {searching && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'8px 0' }}>Searching...</div>}
             {searchError && <div style={{ fontSize:12, color:t.orange, marginBottom:8 }}>{searchError}</div>}
-            {searchResults.map((food:any) => {
-              const isFS = !!food.food_id
-              if (isFS) {
+            {searchResults.map((food) => {
+              if (isFatSecretFood(food)) {
                 const { cal, pro, servingLabel } = parseFSDescription(food.food_description || '')
                 return (
                   <button key={food.food_id} onClick={async () => {
@@ -482,8 +590,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 )
               } else {
                 const n = food.foodNutrients || []
-                const cal = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('energy'))?.value
-                const pro = n.find((x:any)=>x.nutrientName?.toLowerCase().includes('protein'))?.value
+                const cal = n.find((nutrient: USDANutrient) => nutrient.nutrientName?.toLowerCase().includes('energy'))?.value
+                const pro = n.find((nutrient: USDANutrient) => nutrient.nutrientName?.toLowerCase().includes('protein'))?.value
                 const serving = getUSDAServing(food)
                 return (
                   <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
@@ -509,7 +617,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
               {([{f:'calories',p:'kcal',l:'Calories'},{f:'protein_g',p:'g',l:'Protein'},{f:'carbs_g',p:'g',l:'Carbs'},{f:'fat_g',p:'g',l:'Fat'}] as const).map(field=>(
                 <div key={field.f}>
                   <div style={{ fontSize:10, color:t.textMuted, marginBottom:3 }}>{field.l}</div>
-                  <input type="number" placeholder={field.p} value={(quick as any)[field.f]} onChange={e=>setQuick(p=>({...p,[field.f]:e.target.value}))} style={{ ...inp, padding:'8px', textAlign:'center', fontSize:14 }}/>
+                  <input type="number" placeholder={field.p} value={quick[field.f]} onChange={e=>setQuick(p=>({...p,[field.f]:e.target.value}))} style={{ ...inp, padding:'8px', textAlign:'center', fontSize:14 }}/>
                 </div>
               ))}
             </div>
@@ -563,7 +671,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             )}
             {imageLoading && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Recognizing food...</div>}
             {imageErr && <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>{imageErr}</div>}
-            {imageResults.map((food:any) => (
+            {imageResults.map((food) => (
               <button key={food.food_id} onClick={async () => {
                 try {
                   const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
@@ -587,7 +695,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
             </div>
             {savedFoods.length === 0 && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Foods you log will appear here for quick re-adding.</div>}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-              {savedFoods.map((f:any) => (
+              {savedFoods.map((f) => (
                 <button key={f.food_name} onClick={()=>setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size })}
                   style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'center' as const }}>
                   <div style={{ fontSize:12, fontWeight:700, color:t.text, marginBottom:3, lineHeight:1.3 }}>{f.food_name.length>18?f.food_name.slice(0,16)+'…':f.food_name}</div>
@@ -658,7 +766,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: any) {
                 {mealEntries.map((e:FoodEntry)=>(
                   <div key={e.id} style={{ background:t.surface, border:`1px solid ${editingEntry===e.id?t.teal+'60':t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:5 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings((e as any).serving_qty||1) }}>
+                      <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings(e.serving_qty || 1) }}>
                         <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
                         <div style={{ fontSize:11, color:t.textMuted }}>
                           {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}

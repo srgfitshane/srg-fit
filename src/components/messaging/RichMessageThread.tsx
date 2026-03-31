@@ -12,6 +12,7 @@
  *   height      — container height (default '100%')
  */
 
+import Image from 'next/image'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { resolveSignedMediaUrl } from '@/lib/media'
@@ -321,10 +322,17 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
     const isMe = msg.sender_id === myId
 
     if (msg.message_type === 'image' && msg.media_url) {
+      const mediaUrl = msg.media_url
       return (
-        <img src={msg.media_url} alt="image"
-          style={{ maxWidth:'100%', width:'100%', borderRadius:10, display:'block', cursor:'pointer' }}
-          onClick={()=>window.open(msg.media_url!,'_blank')} />
+        <Image
+          src={mediaUrl}
+          alt="Message image"
+          width={640}
+          height={640}
+          unoptimized
+          style={{ maxWidth:'100%', width:'100%', height:'auto', borderRadius:10, display:'block', cursor:'pointer' }}
+          onClick={()=>window.open(mediaUrl,'_blank')}
+        />
       )
     }
     if (msg.message_type === 'audio' && msg.media_url) {

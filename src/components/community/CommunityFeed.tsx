@@ -6,7 +6,8 @@
  * Rule: all UI/logic changes happen HERE only.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -41,13 +42,53 @@ interface Props {
   showBottomNav?: boolean
 }
 
+type ProfileRecord = {
+  id: string
+  full_name?: string | null
+}
+
+type ClientMembershipRow = {
+  profile_id: string
+  profiles: ProfileRecord | ProfileRecord[] | null
+}
+
+type CommunityReaction = {
+  id: string
+  post_id: string
+  user_id: string
+  emoji: string
+}
+
+type CommunityPost = {
+  id: string
+  coach_id: string
+  author_id: string
+  author_role: 'coach' | 'client'
+  body: string | null
+  image_url: string | null
+  video_url: string | null
+  pinned?: boolean | null
+  created_at: string
+  reactions?: CommunityReaction[]
+}
+
+type CommunityReply = {
+  id: string
+  post_id: string
+  coach_id: string
+  author_id: string
+  author_role: 'coach' | 'client'
+  body: string
+  created_at: string
+}
+
 export default function CommunityFeed({ role, backPath, showBottomNav = false }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
-  const [posts,        setPosts]        = useState<any[]>([])
-  const [replies,      setReplies]      = useState<Record<string,any[]>>({})
-  const [profiles,     setProfiles]     = useState<Record<string,any>>({})
-  const [me,           setMe]           = useState<any>(null)
+  const [posts,        setPosts]        = useState<CommunityPost[]>([])
+  const [replies,      setReplies]      = useState<Record<string,CommunityReply[]>>({})
+  const [profiles,     setProfiles]     = useState<Record<string,ProfileRecord>>({})
+  const [me,           setMe]           = useState<ProfileRecord | null>(null)
   const [coachId,      setCoachId]      = useState('')
   const [loading,      setLoading]      = useState(true)
   const [draft,        setDraft]        = useState('')
@@ -62,42 +103,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [mediaType,    setMediaType]    = useState<'image'|'video'|null>(null)
   const [uploading,    setUploading]    = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [nowMs,        setNowMs]        = useState(() => Date.now())
 
-  useEffect(() => { load() }, [])
-
-  const load = async () => {
-    const { data:{ user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    setMe(prof)
-    let resolvedCoachId = ''
-    if (role === 'coach') {
-      resolvedCoachId = user.id
-    } else {
-      const { data: clientData } = await supabase
-        .from('clients').select('coach_id').eq('profile_id', user.id).single()
-      if (!clientData) { setLoading(false); return }
-      resolvedCoachId = clientData.coach_id
-    }
-    setCoachId(resolvedCoachId)
-    const { data: cls } = await supabase.from('clients')
-      .select('profile_id, profiles!profile_id(id, full_name)')
-      .eq('coach_id', resolvedCoachId)
-    const { data: coachProf } = await supabase.from('profiles').select('id, full_name').eq('id', resolvedCoachId).single()
-    const profMap: Record<string,any> = {}
-    if (coachProf) profMap[coachProf.id] = coachProf
-    if (prof) profMap[user.id] = prof
-    cls?.forEach((c:any) => {
-      const p = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles
-      if (p) profMap[p.id] = p
-    })
-    setProfiles(profMap)
-    await loadPosts(resolvedCoachId)
-    setLoading(false)
-  }
-
-  const loadPosts = async (cid?: string) => {
+  const loadPosts = useCallback(async (cid?: string) => {
     const id = cid || coachId
+    if (!id) return
     const { data: postData } = await supabase
       .from('community_posts')
       .select('*, reactions:community_reactions(*)')
@@ -105,7 +115,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
-    const resolvedPosts = await Promise.all((postData || []).map(async (post: any) => ({
+    const resolvedPosts = await Promise.all(((postData || []) as CommunityPost[]).map(async (post) => ({
       ...post,
       image_url: await resolveSignedMediaUrl(supabase, 'community-media', post.image_url),
       video_url: await resolveSignedMediaUrl(supabase, 'community-media', post.video_url),
@@ -114,16 +124,55 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     if (resolvedPosts.length) {
       const { data: replyData } = await supabase
         .from('community_replies').select('*').eq('coach_id', id)
-        .in('post_id', resolvedPosts.map((p:any) => p.id))
+        .in('post_id', resolvedPosts.map((post) => post.id))
         .order('created_at', { ascending: true })
-      const grouped: Record<string,any[]> = {}
-      replyData?.forEach((r:any) => {
-        if (!grouped[r.post_id]) grouped[r.post_id] = []
-        grouped[r.post_id].push(r)
+      const grouped: Record<string,CommunityReply[]> = {}
+      ;((replyData || []) as CommunityReply[]).forEach((reply) => {
+        if (!grouped[reply.post_id]) grouped[reply.post_id] = []
+        grouped[reply.post_id].push(reply)
       })
       setReplies(grouped)
+    } else {
+      setReplies({})
     }
-  }
+  }, [coachId, supabase])
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      void (async () => {
+        const { data:{ user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
+        const { data: prof } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single<ProfileRecord>()
+        setMe(prof)
+        let resolvedCoachId = ''
+        if (role === 'coach') {
+          resolvedCoachId = user.id
+        } else {
+          const { data: clientData } = await supabase
+            .from('clients').select('coach_id').eq('profile_id', user.id).single<{ coach_id: string | null }>()
+          if (!clientData?.coach_id) { setLoading(false); return }
+          resolvedCoachId = clientData.coach_id
+        }
+        setCoachId(resolvedCoachId)
+        const { data: cls } = await supabase.from('clients')
+          .select('profile_id, profiles!profile_id(id, full_name)')
+          .eq('coach_id', resolvedCoachId)
+        const { data: coachProf } = await supabase.from('profiles').select('id, full_name').eq('id', resolvedCoachId).single<ProfileRecord>()
+        const profMap: Record<string,ProfileRecord> = {}
+        if (coachProf) profMap[coachProf.id] = coachProf
+        if (prof) profMap[user.id] = prof
+        ;((cls || []) as ClientMembershipRow[]).forEach((client) => {
+          const profile = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles
+          if (profile) profMap[profile.id] = profile
+        })
+        setProfiles(profMap)
+        await loadPosts(resolvedCoachId)
+        setLoading(false)
+      })()
+    }, 0)
+
+    return () => clearTimeout(timeoutId)
+  }, [loadPosts, role, router, supabase])
 
   useEffect(() => {
     if (!coachId) return
@@ -135,7 +184,12 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'community_reactions' }, () => loadPosts())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [coachId])
+  }, [coachId, loadPosts, supabase])
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setNowMs(Date.now()), 60000)
+    return () => clearInterval(intervalId)
+  }, [])
 
   const attachMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -193,14 +247,14 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
 
   const toggleReaction = async (postId:string, emoji:string) => {
     if (!me) return
-    const p = posts.find((p:any) => p.id === postId)
-    const existing = p?.reactions?.find((r:any) => r.user_id === me.id && r.emoji === emoji)
+    const selectedPost = posts.find((post) => post.id === postId)
+    const existing = selectedPost?.reactions?.find((reaction) => reaction.user_id === me.id && reaction.emoji === emoji)
     if (existing) await supabase.from('community_reactions').delete().eq('id', existing.id)
     else await supabase.from('community_reactions').insert({ post_id: postId, user_id: me.id, emoji })
     setReactOpen(null); await loadPosts()
   }
 
-  const groupReactions = (reactions:any[] = []) => {
+  const groupReactions = (reactions:CommunityReaction[] = []) => {
     const map: Record<string,{ count:number, mine:boolean }> = {}
     for (const r of reactions) {
       if (!map[r.emoji]) map[r.emoji] = { count:0, mine:false }
@@ -211,7 +265,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   }
 
   const fmt = (ts:string) => {
-    const diff = Date.now() - new Date(ts).getTime()
+    const diff = nowMs - new Date(ts).getTime()
     if (diff < 60000)    return 'just now'
     if (diff < 3600000)  return `${Math.floor(diff/60000)}m ago`
     if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`
@@ -247,7 +301,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           {/* Compose */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:14 }}>
             <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-              <Avatar name={me?.full_name||'You'} role={role} color={clientColors[me?.id]} size={32}/>
+              <Avatar name={me?.full_name||'You'} role={role} color={me?.id ? clientColors[me.id] : undefined} size={32}/>
               <div style={{ flex:1 }}>
                 <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
                   placeholder="Share a win, ask a question, hype someone up... 🔥"
@@ -256,7 +310,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                 {mediaPreview && (
                   <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
                     {mediaType === 'image'
-                      ? <img src={mediaPreview} alt="attach" style={{ width:'100%', maxHeight:240, objectFit:'cover', display:'block' }}/>
+                      ? <Image src={mediaPreview} alt="Attachment preview" width={600} height={240} unoptimized style={{ width:'100%', maxHeight:240, height:'auto', objectFit:'cover', display:'block' }}/>
                       : <video src={mediaPreview} controls style={{ width:'100%', maxHeight:240, display:'block' }}/>
                     }
                     <button onClick={clearMedia} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
@@ -284,7 +338,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
             </div>
           )}
 
-          {posts.map((p:any) => {
+          {posts.map((p) => {
             const author      = profiles[p.author_id]
             const isCoach     = p.author_role === 'coach'
             const color       = getColor(p.author_id, p.author_role)
@@ -308,7 +362,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   {p.body && <div style={{ fontSize:13, lineHeight:1.65, marginBottom:10 }}>{p.body}</div>}
                   {p.image_url && (
                     <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
-                      <img src={p.image_url} alt="" style={{ width:'100%', maxHeight:320, objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url,'_blank')}/>
+                      <Image src={p.image_url} alt="Community post image" width={640} height={320} unoptimized style={{ width:'100%', maxHeight:320, height:'auto', objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url || undefined,'_blank')}/>
                     </div>
                   )}
                   {p.video_url && (
@@ -317,7 +371,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     </div>
                   )}
                   <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
-                    {grouped.map(([emoji, { count, mine }]:any) => (
+                    {grouped.map(([emoji, { count, mine }]) => (
                       <button key={emoji} onClick={()=>toggleReaction(p.id, emoji)}
                         style={{ padding:'3px 8px', borderRadius:20, border:'1px solid '+(mine?t.teal+'60':t.border), background:mine?t.tealDim:'transparent', cursor:'pointer', fontSize:12, fontFamily:"'DM Sans',sans-serif", color:mine?t.teal:t.textDim }}>
                         {emoji}{count > 1 ? ` ${count}` : ''}
@@ -343,7 +397,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
 
                 {(postReplies.length > 0 || showReplyBox) && (
                   <div style={{ borderTop:'1px solid '+t.border, background:t.surfaceUp }}>
-                    {postReplies.map((r:any, i:number) => {
+                    {postReplies.map((r, i:number) => {
                       const rAuthor = profiles[r.author_id]
                       const rColor  = getColor(r.author_id, r.author_role)
                       return (
@@ -367,7 +421,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       <div style={{ display:'flex', gap:8, padding:'9px 14px', alignItems:'flex-start' }}>
                         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
                           <div style={{ width:2, height:5, background:t.border+'88' }}/>
-                          <Avatar name={me?.full_name||'You'} role={role} color={clientColors[me?.id]} size={22}/>
+                          <Avatar name={me?.full_name||'You'} role={role} color={me?.id ? clientColors[me.id] : undefined} size={22}/>
                         </div>
                         <div style={{ flex:1 }}>
                           <textarea ref={replyInputRef} className="reply-input"

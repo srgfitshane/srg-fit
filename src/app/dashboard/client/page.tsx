@@ -29,6 +29,8 @@ const t = {
   text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
 }
 
+type Theme = typeof t
+
 const RichMessageThread = dynamic(() => import('@/components/messaging/RichMessageThread'), {
   ssr: false,
   loading: () => <InlineLoader label="Loading messages..." />,
@@ -102,6 +104,162 @@ function InlineLoader({ label }: { label: string }) {
   )
 }
 
+type DashboardClientRecord = {
+  id: string
+  profile_id?: string | null
+  coach_id?: string | null
+  show_nutrition?: boolean | null
+  subscription_status?: string | null
+}
+
+type DashboardProfile = {
+  id: string
+  full_name?: string | null
+}
+
+type ProgramRecord = {
+  id: string
+  name: string
+  description?: string | null
+  duration_weeks?: number | null
+  days_per_week?: number | null
+  goal?: string | null
+  level?: string | null
+  active?: boolean | null
+  start_date?: string | null
+}
+
+type ExerciseRecord = {
+  id: string
+  name: string
+  muscle_group?: string | null
+  exercise_type?: string | null
+  description?: string | null
+  instructions?: string | null
+  video_url?: string | null
+}
+
+type TrainingProgramRecord = {
+  id: string
+  name: string
+  description?: string | null
+  goal?: string | null
+  duration_weeks?: number | null
+  difficulty?: string | null
+}
+
+type WorkoutSessionRecord = {
+  id: string
+  title: string
+  status: 'assigned' | 'in_progress' | 'completed' | string
+  scheduled_date?: string | null
+  day_label?: string | null
+  session_rpe?: number | null
+  mood?: 'great' | 'good' | 'okay' | 'tired' | 'awful' | string | null
+  completed_at?: string | null
+  duration_seconds?: number | null
+  notes_coach?: string | null
+  coach_review_notes?: string | null
+  coach_review_video_url?: string | null
+  coach_reviewed_at?: string | null
+}
+
+type HabitRecord = {
+  id: string
+  label: string
+  habit_type: 'check' | string
+  target?: number | null
+  unit?: string | null
+  color?: string | null
+  icon?: string | null
+}
+
+type HabitLogRecord = {
+  habit_id: string
+  value: number
+}
+
+type MilestoneRecord = {
+  id: string
+  message: string
+}
+
+type PersonalRecordSummary = {
+  id: string
+  weight_pr?: number | null
+  exercise?: {
+    name?: string | null
+  } | null
+}
+
+type NextSessionRecord = Pick<WorkoutSessionRecord, 'id' | 'title' | 'scheduled_date' | 'status'> & {
+  isToday: boolean
+}
+
+type PendingReviewRecord = Pick<WorkoutSessionRecord, 'id' | 'title' | 'coach_review_notes' | 'coach_review_video_url' | 'coach_reviewed_at'> & {
+  _seen?: boolean
+}
+
+type PendingCheckinRecord = {
+  id: string
+  note?: string | null
+  form?: {
+    title?: string | null
+    form_type?: string | null
+    is_checkin_type?: boolean | null
+  } | null
+}
+
+type DailyCheckinRecord = {
+  id?: string
+  body?: string | null
+  is_private?: boolean | null
+  sleep_quality?: number | null
+  energy_score?: number | null
+  stress_score?: number | null
+  mood_score?: number | null
+}
+
+type JournalEntryRecord = {
+  id: string
+  entry_date: string
+  body?: string | null
+  is_private?: boolean | null
+}
+
+type ClientGoalRecord = {
+  id: string
+  title: string
+  description?: string | null
+  target_value?: number | null
+  current_value?: number | null
+  unit?: string | null
+  status?: string | null
+  target_date?: string | null
+}
+
+type WorkoutSessionCompletionRecord = {
+  scheduled_date?: string | null
+}
+
+type LogPopupState = {
+  habit: HabitRecord
+  draft: string
+}
+
+type SubscriptionRecord = {
+  stripe_price_id?: string | null
+  plan_name?: string | null
+  trial_end?: string | null
+  current_period_end?: string | null
+  cancel_at_period_end?: boolean | null
+}
+
+type CallSlot = {
+  date: string
+  time: string
+}
+
 const NAV = [
   { id:'today',     icon:'home',      label:'Home'      },
   { id:'nutrition', icon:'nutrition', label:'Nutrition' },
@@ -159,19 +317,18 @@ export function ClientDashboardPreview({ overrideClientId }: { overrideClientId:
 }
 
 function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string } = {}) {
-  const [profile,      setProfile]      = useState<any>(null)
-  const [clientRecord, setClientRecord] = useState<any>(null)
+  const [profile,      setProfile]      = useState<DashboardProfile | null>(null)
+  const [clientRecord, setClientRecord] = useState<DashboardClientRecord | null>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
-  const [habits,       setHabits]       = useState<any[]>([])
+  const [habits,       setHabits]       = useState<HabitRecord[]>([])
   const [habitLogs,    setHabitLogs]    = useState<Record<string,number>>({})
-  const [milestones,   setMilestones]   = useState<any[]>([])
-  const [recentPRs,    setRecentPRs]    = useState<any[]>([])
+  const [milestones,   setMilestones]   = useState<MilestoneRecord[]>([])
+  const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
-  const [workoutLogs,  setWorkoutLogs]  = useState<any[]>([])
-  const [nextSession,  setNextSession]  = useState<any>(null)
-  const [pendingReviews, setPendingReviews] = useState<any[]>([])
+  const [nextSession,  setNextSession]  = useState<NextSessionRecord | null>(null)
+  const [pendingReviews, setPendingReviews] = useState<PendingReviewRecord[]>([])
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
-  const [pendingCheckins, setPendingCheckins] = useState<any[]>([])
+  const [pendingCheckins, setPendingCheckins] = useState<PendingCheckinRecord[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState<DashboardTab>(() => {
     // Allow deep-linking via ?tab=billing etc from profile page
@@ -182,10 +339,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     return 'today'
   })
   const [plusOpen,     setPlusOpen]     = useState(false)
-  const [logPopup,     setLogPopup]     = useState<{ habit: any, draft: string } | null>(null)
+  const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
   const [showCallRequest, setShowCallRequest] = useState(false)
-  const [callSlots, setCallSlots] = useState([{date:'',time:''},{date:'',time:''},{date:'',time:''}])
+  const [callSlots, setCallSlots] = useState<CallSlot[]>([{date:'',time:''},{date:'',time:''},{date:'',time:''}])
   const [callNote, setCallNote] = useState('')
   const [callSubmitting, setCallSubmitting] = useState(false)
   const [callSubmitted, setCallSubmitted] = useState(false)
@@ -201,83 +358,30 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   // Habit daily refresh tracking
   const [habitLoadDate, setHabitLoadDate] = useState('')
   // Morning Pulse check-in
-  const [pulseData, setPulseData] = useState<any>(null)
+  const [pulseData, setPulseData] = useState<DailyCheckinRecord | null>(null)
   // Journal
   const [journalText,      setJournalText]      = useState('')
   const [journalPrivate,   setJournalPrivate]   = useState(true)
   const [journalSaved,     setJournalSaved]     = useState(false)
   const [journalSaving,    setJournalSaving]    = useState(false)
   const [journalDate,      setJournalDate]      = useState('')
-  const [pastEntries,      setPastEntries]      = useState<any[]>([])
+  const [pastEntries,      setPastEntries]      = useState<JournalEntryRecord[]>([])
   const [pastEntriesOpen,  setPastEntriesOpen]  = useState(false)
-  const [activeGoals,      setActiveGoals]      = useState<any[]>([])
+  const [activeGoals,      setActiveGoals]      = useState<ClientGoalRecord[]>([])
   const router       = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
   const [today, setToday] = useState(() => getLocalDateString())
+  const todayStartMs = useMemo(() => new Date(`${today}T00:00:00`).getTime(), [today])
+  const clientId = clientRecord?.id ?? null
 
   const incompleteHabits = useMemo(() => (
-    habits.filter((habit: any) => {
+    habits.filter((habit) => {
       const value = habitLogs[habit.id] || 0
       if (habit.habit_type === 'check') return !value
       return value < (habit.target || 0)
     }).length
   ), [habitLogs, habits])
-
-  const todayPriorities = useMemo(() => ([
-    !pulseData ? {
-      id: 'pulse',
-      title: 'Log your morning pulse',
-      detail: 'Quick recovery feedback keeps your coach loop sharp.',
-      accent: t.teal,
-      background: t.tealDim,
-      action: 'Check in',
-      onClick: () => document.getElementById('morning-pulse-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-    } : null,
-    pendingReviews.length > 0 ? {
-      id: 'reviews',
-      title: `${pendingReviews.length} coach review${pendingReviews.length !== 1 ? 's' : ''} waiting`,
-      detail: 'Open your feedback before your next session.',
-      accent: t.green,
-      background: t.greenDim,
-      action: 'View review',
-      onClick: () => document.getElementById('coach-review-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-    } : null,
-    nextSession ? {
-      id: 'workout',
-      title: nextSession.status === 'in_progress' ? 'Resume your workout' : nextSession.isToday ? 'Today\'s workout is ready' : `Next workout: ${formatSessionDate(nextSession.scheduled_date)}`,
-      detail: nextSession.title,
-      accent: t.orange,
-      background: t.orangeDim,
-      action: nextSession.status === 'in_progress' ? 'Resume' : 'Start',
-      onClick: () => router.push(`/dashboard/client/workout/${nextSession.id}`),
-    } : null,
-    pendingCheckins.length > 0 ? {
-      id: 'forms',
-      title: `${pendingCheckins.length} form${pendingCheckins.length !== 1 ? 's' : ''} needs attention`,
-      detail: 'Stay current so coaching adjustments happen faster.',
-      accent: t.purple,
-      background: t.purpleDim,
-      action: 'Open forms',
-      onClick: () => router.push(`/dashboard/client/forms/${pendingCheckins[0].id}`),
-    } : null,
-    incompleteHabits > 0 ? {
-      id: 'habits',
-      title: `${incompleteHabits} habit${incompleteHabits !== 1 ? 's' : ''} left today`,
-      detail: 'Small daily consistency compounds quickly.',
-      accent: t.yellow,
-      background: t.yellowDim,
-      action: 'Review habits',
-      onClick: () => document.getElementById('daily-habits-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-    } : null,
-  ].filter(Boolean) as Array<{ id: string; title: string; detail: string; accent: string; background: string; action: string; onClick: () => void }>), [incompleteHabits, nextSession, pendingCheckins, pendingReviews.length, pulseData, router])
-
-  const prioritySummary = useMemo(() => ([
-    { label: 'Coach feedback', value: pendingReviews.length, color: t.green },
-    { label: 'Open forms', value: pendingCheckins.length, color: t.purple },
-    { label: 'Habits left', value: incompleteHabits, color: t.orange },
-    { label: 'Messages', value: activeNav === 'messages' ? 1 : 0, color: t.teal },
-  ]), [activeNav, incompleteHabits, pendingCheckins.length, pendingReviews.length])
 
   const openTab = (tab: DashboardTab) => {
     if (tab !== 'messages') setMessagesView('hub')
@@ -309,7 +413,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   }, [today])
 
   useEffect(() => {
-    const loadClientData = async (clientData: any, todayStr: string) => {
+    const loadClientData = async (clientData: DashboardClientRecord, todayStr: string) => {
         // Fire all queries in parallel — was 11 sequential round trips, now 1 batch
         const cid = clientData.id
         const [
@@ -356,23 +460,23 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('client_activities').select('*').eq('client_id', cid).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(5),
         ])
 
-        setHabits(habitData || [])
+        setHabits((habitData || []) as HabitRecord[])
 
         const logMap: Record<string,number> = {}
-        habitLogData?.forEach((l:any) => { logMap[l.habit_id] = l.value })
+        ;((habitLogData || []) as HabitLogRecord[]).forEach((log) => { logMap[log.habit_id] = log.value })
         setHabitLogs(logMap)
         setHabitLoadDate(todayStr)
 
-        setMilestones(milestoneData || [])
-        setRecentPRs(prData || [])
+        setMilestones((milestoneData || []) as MilestoneRecord[])
+        setRecentPRs((prData || []) as PersonalRecordSummary[])
 
         const isToday = nextSess?.scheduled_date === todayStr || nextSess?.status === 'in_progress'
-        setNextSession(nextSess ? { ...nextSess, isToday } : null)
+        setNextSession(nextSess ? ({ ...nextSess, isToday } as NextSessionRecord) : null)
 
-        setPendingReviews(reviewData || [])
-        setPendingCheckins((pendingCI || []).filter((a: any) => a.form?.is_checkin_type || a.form?.form_type === 'check_in'))
+        setPendingReviews((reviewData || []) as PendingReviewRecord[])
+        setPendingCheckins(((pendingCI || []) as PendingCheckinRecord[]).filter((assignment) => assignment.form?.is_checkin_type || assignment.form?.form_type === 'check_in'))
 
-        setPulseData(todayCheckin || null)
+        setPulseData((todayCheckin as DailyCheckinRecord | null) || null)
 
         // Journal: today's entry (pulse body or dedicated entry)
         const journalEntry = todayJournal || (todayCheckin?.body ? todayCheckin : null)
@@ -382,8 +486,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           setJournalDate(todayStr)
         }
 
-        setPastEntries(pastData || [])
-        setActiveGoals(goalsData || [])
+        setPastEntries((pastData || []) as JournalEntryRecord[])
+        setActiveGoals((goalsData || []) as ClientGoalRecord[])
         setRecentActivities((activityData || []) as ClientActivityRecord[])
 
         // Workout streak — consecutive weeks with at least 1 completed session
@@ -409,8 +513,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             return date.getFullYear()
           }
           // Build set of "YYYY-WW" weeks that have completed sessions
-          const completedWeeks = new Set(completedSessions.map((s: any) => {
-            const d = new Date(s.scheduled_date + 'T12:00:00')
+          const completedWeeks = new Set((completedSessions as WorkoutSessionCompletionRecord[]).flatMap((session) => {
+            if (!session.scheduled_date) return []
+            const d = new Date(session.scheduled_date + 'T12:00:00')
             return `${getYear(d)}-${getWeek(d)}`
           }))
           // Count consecutive weeks back from current week
@@ -433,12 +538,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         const { data: clientData } = await supabase
           .from('clients').select('*').eq('id', overrideClientId).single()
         if (!clientData) { setLoading(false); return }
-        setClientRecord(clientData)
+        setClientRecord(clientData as DashboardClientRecord)
         const { data: prof } = await supabase
           .from('profiles').select('*').eq('id', clientData.profile_id).single()
-        setProfile(prof)
+        setProfile(prof as DashboardProfile | null)
         setCoachProfileId(clientData.coach_id || null)
-        await loadClientData(clientData, today)
+        await loadClientData(clientData as DashboardClientRecord, today)
         setLoading(false)
         return
       }
@@ -456,12 +561,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           .eq('active', true)
           .single(),
       ])
-      setProfile(prof)
-      setClientRecord(clientData)
+      setProfile(prof as DashboardProfile | null)
+      setClientRecord((clientData as DashboardClientRecord | null) || null)
       setCoachProfileId(clientData?.coach_id || null)
 
       if (clientData) {
-        await loadClientData(clientData, today)
+        await loadClientData(clientData as DashboardClientRecord, today)
       }
 
       setLoading(false)
@@ -471,25 +576,32 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
   useEffect(() => {
     if (overrideClientId) return
-    setActiveNav(coerceDashboardTab(searchParams.get('tab')))
+    const nextNav = coerceDashboardTab(searchParams.get('tab'))
+    const timer = setTimeout(() => {
+      setActiveNav(nextNav)
+    }, 0)
+    return () => clearTimeout(timer)
   }, [overrideClientId, searchParams])
 
   useEffect(() => {
     if (activeNav !== 'messages' && messagesView !== 'hub') {
-      setMessagesView('hub')
+      const timer = setTimeout(() => {
+        setMessagesView('hub')
+      }, 0)
+      return () => clearTimeout(timer)
     }
   }, [activeNav, messagesView])
 
   const refreshPulseData = useCallback(() => {
-    if (!clientRecord?.id) return
+    if (!clientId) return
     void supabase
       .from('daily_checkins')
       .select('*')
-      .eq('client_id', clientRecord.id)
+      .eq('client_id', clientId)
       .eq('checkin_date', today)
       .single()
-      .then(({ data }) => setPulseData(data))
-  }, [clientRecord?.id, supabase, today])
+      .then(({ data }) => setPulseData((data as DailyCheckinRecord | null) || null))
+  }, [clientId, supabase, today])
 
 
   const logHabit = async (habitId: string, value: number) => {
@@ -511,7 +623,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     }
 
     // Mirror trackable numeric habits into daily_checkins for coach trend view
-    const habit = habits.find((h:any) => h.id === habitId)
+    const habit = habits.find((h) => h.id === habitId)
     if (habit && habit.habit_type !== 'check' && value > 0) {
       const labelKey = habit.label?.toLowerCase().trim()
       const columnMap: Record<string, string> = {
@@ -560,7 +672,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       .neq('entry_date', today)
       .order('entry_date', { ascending: false })
       .limit(30)
-    setPastEntries(pastData || [])
+    setPastEntries((pastData || []) as JournalEntryRecord[])
   }
 
   const openActivityLog = () => {
@@ -602,30 +714,34 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     setActivitySaving(false)
   }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
   // Reset journal if the client keeps the app open past midnight
   useEffect(() => {
     if (journalDate && journalDate !== today) {
-      setJournalText('')
-      setJournalPrivate(true)
-      setJournalSaved(false)
-      setJournalDate(today)
+      const timer = setTimeout(() => {
+        setJournalText('')
+        setJournalPrivate(true)
+        setJournalSaved(false)
+        setJournalDate(today)
+      }, 0)
+      return () => clearTimeout(timer)
     }
   }, [today, journalDate])
 
   useEffect(() => {
-    setActivityDraft((prev) => prev.activity_date === today ? prev : { ...prev, activity_date: today })
+    const timer = setTimeout(() => {
+      setActivityDraft((prev) => prev.activity_date === today ? prev : { ...prev, activity_date: today })
+    }, 0)
+    return () => clearTimeout(timer)
   }, [today])
 
   // Reset habit logs if the client keeps the app open past midnight
   useEffect(() => {
     if (habitLoadDate && habitLoadDate !== today) {
-      setHabitLogs({})
-      setHabitLoadDate(today)
+      const timer = setTimeout(() => {
+        setHabitLogs({})
+        setHabitLoadDate(today)
+      }, 0)
+      return () => clearTimeout(timer)
     }
   }, [today, habitLoadDate])
 
@@ -743,7 +859,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 clientId={clientRecord.id}
                 today={today}
                 supabase={supabase}
-                existing={pulseData}
+                existing={pulseData ? {
+                  ...pulseData,
+                  body: pulseData.body ?? undefined,
+                  is_private: pulseData.is_private ?? undefined,
+                  sleep_quality: pulseData.sleep_quality ?? undefined,
+                  energy_score: pulseData.energy_score ?? undefined,
+                  stress_score: pulseData.stress_score ?? undefined,
+                  mood_score: pulseData.mood_score ?? undefined,
+                } : null}
                 onSaved={refreshPulseData}
               />
             </div>
@@ -823,14 +947,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>🏆</div>
               <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>🏆 Recent Wins</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                {recentPRs.map((pr:any) => (
+                {recentPRs.map((pr) => (
                   <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ width:6, height:6, borderRadius:'50%', background:t.yellow, flexShrink:0 }}/>
                     <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR — {pr.exercise?.name}</div>
                     <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs 💪</div>
                   </div>
                 ))}
-                {milestones.map((m:any) => (
+                {milestones.map((m) => (
                   <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ width:6, height:6, borderRadius:'50%', background:t.orange, flexShrink:0 }}/>
                     <div style={{ fontSize:13, color:t.text, flex:1, lineHeight:1.4 }}>{m.message}</div>
@@ -927,14 +1051,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ marginBottom:14 }} className="fade">
               <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>My Goals</div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {activeGoals.map((goal:any) => {
+                {activeGoals.map((goal) => {
                   const pct = goal.target_value && goal.current_value != null
                     ? Math.min(100, Math.round((goal.current_value / goal.target_value) * 100))
                     : null
                   const isComplete = goal.status === 'completed'
                   const color = isComplete ? t.teal : t.orange
                   const daysLeft = goal.target_date
-                    ? Math.ceil((new Date(goal.target_date).getTime() - Date.now()) / 86400000)
+                    ? Math.ceil((new Date(goal.target_date).getTime() - todayStartMs) / 86400000)
                     : null
                   return (
                     <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : t.border}`, borderRadius:13, padding:'12px 14px' }}>
@@ -980,9 +1104,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {habits.map((h:any) => {
+                {habits.map((h) => {
                   const val = habitLogs[h.id] || 0
-                  const pct = h.habit_type==='check' ? (val?100:0) : Math.min(100, Math.round((val/h.target)*100))
+                  const target = h.target || 0
+                  const pct = h.habit_type==='check' ? (val?100:0) : target > 0 ? Math.min(100, Math.round((val / target) * 100)) : 0
                   const done = pct >= 100
                   const color = h.color || t.teal
 
@@ -1071,8 +1196,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {habits.length === 0 && !nextSession && (
             <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+t.teal+'25', borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
               <div style={{ fontSize:32, marginBottom:10 }}>🚀</div>
-              <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>You're all set!</div>
-              <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Shane is setting up your program. Check back soon and let's get to work.</div>
+              <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>You&apos;re all set!</div>
+              <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Shane is setting up your program. Check back soon and let&apos;s get to work.</div>
             </div>
           )}
 
@@ -1230,7 +1355,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </svg>
                 Log Activity
               </button>
-              <button onClick={()=>{ setPlusOpen(false); nextSession ? router.push(`/dashboard/client/workout/${nextSession.id}`) : openTab('training') }}
+              <button onClick={() => {
+                setPlusOpen(false)
+                if (nextSession) {
+                  router.push(`/dashboard/client/workout/${nextSession.id}`)
+                  return
+                }
+                openTab('training')
+              }}
                 style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
@@ -1265,7 +1397,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <div style={{ overflowY:'auto', padding:'0 18px 32px', flex:1 }}>
                 {pastEntries.length === 0 ? (
                   <div style={{ textAlign:'center', padding:'40px 0', color:t.textMuted, fontSize:13 }}>No previous entries yet</div>
-                ) : pastEntries.map((entry:any) => (
+                ) : pastEntries.map((entry) => (
                   <div key={entry.id} style={{ borderBottom:'1px solid '+t.border, paddingBottom:14, marginBottom:14 }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:t.teal }}>
@@ -1511,7 +1643,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   <div style={{fontSize:40,marginBottom:12}}>✓</div>
                   <div style={{fontSize:17,fontWeight:800,marginBottom:8,color:t.text}}>Request sent!</div>
                   <div style={{fontSize:13,color:t.textMuted,lineHeight:1.7,marginBottom:24}}>
-                    Shane will review your availability and confirm a time. You'll get a message with the Zoom link once it's set.
+                    Shane will review your availability and confirm a time. You&apos;ll get a message with the Zoom link once it&apos;s set.
                   </div>
                   <button onClick={()=>{setShowCallRequest(false);setCallSubmitted(false);setCallSlots([{date:'',time:''},{date:'',time:''},{date:'',time:''}]);setCallNote('')}}
                     style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
@@ -1530,9 +1662,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       <div key={i} style={{display:'flex',gap:8,alignItems:'center'}}>
                         <div style={{fontSize:11,fontWeight:700,color:t.textMuted,width:16,flexShrink:0}}>{i+1}.</div>
                         <input type="date" value={slot.date} onChange={e=>setCallSlots(s=>s.map((x,j)=>j===i?{...x,date:e.target.value}:x))}
-                          style={{flex:1,background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as any}}/>
+                          style={{flex:1,background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as const}}/>
                         <input type="time" value={slot.time} onChange={e=>setCallSlots(s=>s.map((x,j)=>j===i?{...x,time:e.target.value}:x))}
-                          style={{width:110,background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as any}}/>
+                          style={{width:110,background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",colorScheme:'dark' as const}}/>
                       </div>
                     ))}
                   </div>
@@ -1541,7 +1673,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>What do you want to talk about? (optional)</div>
                     <textarea value={callNote} onChange={e=>setCallNote(e.target.value)} rows={3}
                       placeholder="Program questions, check-in, nutrition, anything on your mind..."
-                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 13px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",resize:'none' as any,outline:'none',lineHeight:1.6,boxSizing:'border-box' as any,colorScheme:'dark' as any}}/>
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 13px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",resize:'none' as const,outline:'none',lineHeight:1.6,boxSizing:'border-box' as const,colorScheme:'dark' as const}}/>
                   </div>
 
                   <div style={{display:'flex',gap:10}}>
@@ -1614,8 +1746,8 @@ const CANCEL_REASONS = [
   { id: 'other',     label: 'Something else'              },
 ]
 
-function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: any }) {
-  const [sub, setSub] = useState<any>(null)
+function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient> }) {
+  const [sub, setSub] = useState<SubscriptionRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [portalLoading, setPortalLoading] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
@@ -1636,8 +1768,8 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
       .eq('client_id', clientRecord.id)
       .order('created_at', { ascending: false })
       .limit(1).single()
-      .then(({ data }: any) => { setSub(data); setLoading(false) })
-  }, [clientRecord])
+      .then(({ data }) => { setSub((data as SubscriptionRecord | null) || null); setLoading(false) })
+  }, [clientRecord?.id, supabase])
 
   const openPortal = async () => {
     setPortalLoading(true)
@@ -1651,7 +1783,10 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
       const data = await res.json()
       if (data.url) window.location.href = data.url
       else throw new Error(data.error || 'Could not open billing portal')
-    } catch (err: any) { alert(err.message) }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not open billing portal'
+      alert(message)
+    }
     setPortalLoading(false)
   }
 
@@ -1665,7 +1800,7 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
     })
     setCanceling(false)
     setCancelStep('done')
-    setSub((prev: any) => prev ? { ...prev, cancel_at_period_end: true } : prev)
+    setSub((prev) => prev ? { ...prev, cancel_at_period_end: true } : prev)
   }
 
   const statusColors: Record<string,string> = {
@@ -1709,7 +1844,7 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: any, supabase: a
             )}
             {isCanceling && (
               <div style={{background:`${tc.warn}15`,border:`1px solid ${tc.warn}30`,borderRadius:9,padding:'10px 14px'}}>
-                <p style={{fontSize:12,color:tc.warn,margin:0,fontWeight:700}}>Cancels {fmtDate(sub.current_period_end)} — access continues until then</p>
+                <p style={{fontSize:12,color:tc.warn,margin:0,fontWeight:700}}>Cancels {fmtDate(sub.current_period_end ?? null)} — access continues until then</p>
               </div>
             )}
             {sub.current_period_end && !isCanceling && status==='active' && (
@@ -1835,35 +1970,37 @@ function CoachReviewVideo({ url }: { url: string }) {
 }
 
 // ── TrainingTab ───────────────────────────────────────────────────────────
-function TrainingTab({ clientRecord, supabase, router, t }: any) {
-  const [program, setProgram] = useState<any>(null)
-  const [sessions, setSessions] = useState<any[]>([])
+function TrainingTab({ clientRecord, supabase, router, t }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; router: ReturnType<typeof useRouter>; t: Theme }) {
+  const [program, setProgram] = useState<TrainingProgramRecord | null>(null)
+  const [sessions, setSessions] = useState<WorkoutSessionRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'program'|'workouts'>('program')
 
   useEffect(() => {
-    if (!clientRecord?.id) { setLoading(false); return }
-    const load = async () => {
-      const [{ data: prog }, { data: sess }] = await Promise.all([
-        supabase.from('programs').select('id, name, description, goal, duration_weeks, difficulty')
-          .eq('client_id', clientRecord.id).eq('is_template', false)
-          .order('created_at', { ascending: false }).limit(1).single(),
-        supabase.from('workout_sessions')
-          .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach, coach_review_notes, coach_review_video_url, coach_reviewed_at')
-          .eq('client_id', clientRecord.id)
-          .order('scheduled_date', { ascending: true })
-          .limit(50),
-      ])
-      setProgram(prog || null)
-      setSessions(sess || [])
-      setLoading(false)
-    }
-    load()
-  }, [clientRecord?.id])
+    const timeoutId = setTimeout(() => {
+      if (!clientRecord?.id) { setLoading(false); return }
+      void (async () => {
+        const [{ data: prog }, { data: sess }] = await Promise.all([
+          supabase.from('programs').select('id, name, description, goal, duration_weeks, difficulty')
+            .eq('client_id', clientRecord.id).eq('is_template', false)
+            .order('created_at', { ascending: false }).limit(1).single<TrainingProgramRecord>(),
+          supabase.from('workout_sessions')
+            .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach, coach_review_notes, coach_review_video_url, coach_reviewed_at')
+            .eq('client_id', clientRecord.id)
+            .order('scheduled_date', { ascending: true })
+            .limit(50),
+        ])
+        setProgram(prog || null)
+        setSessions((sess || []) as WorkoutSessionRecord[])
+        setLoading(false)
+      })()
+    }, 0)
+
+    return () => clearTimeout(timeoutId)
+  }, [clientRecord?.id, supabase])
 
   const upcoming = sessions.filter(s => s.status === 'assigned' || s.status === 'in_progress')
   const completed = sessions.filter(s => s.status === 'completed')
-  const fmtDur = (s: number) => s ? `${Math.floor(s/60)}m` : null
 
   if (loading) return <div style={{ padding:'40px 0', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading training...</div>
 
@@ -2038,19 +2175,23 @@ function TrainingTab({ clientRecord, supabase, router, t }: any) {
 
 
 // ── WorkoutsTab ───────────────────────────────────────────────────────────
-function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
-  const [sessions, setSessions] = useState<any[]>([])
+function WorkoutsTab({ clientRecord, supabase, router, t }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; router: ReturnType<typeof useRouter>; t: Theme }) {
+  const [sessions, setSessions] = useState<WorkoutSessionRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!clientRecord?.id) return
-    supabase.from('workout_sessions')
-      .select('id, title, status, scheduled_date, day_label, mood, session_rpe, completed_at, duration_seconds, notes_coach')
-      .eq('client_id', clientRecord.id)
-      .order('scheduled_date', { ascending: false })
-      .limit(30)
-      .then(({ data }: any) => { setSessions(data || []); setLoading(false) })
-  }, [clientRecord?.id])
+    const timeoutId = setTimeout(() => {
+      if (!clientRecord?.id) return
+      void supabase.from('workout_sessions')
+        .select('id, title, status, scheduled_date, day_label, mood, session_rpe, completed_at, duration_seconds, notes_coach')
+        .eq('client_id', clientRecord.id)
+        .order('scheduled_date', { ascending: false })
+        .limit(30)
+        .then(({ data }) => { setSessions((data || []) as WorkoutSessionRecord[]); setLoading(false) })
+    }, 0)
+
+    return () => clearTimeout(timeoutId)
+  }, [clientRecord?.id, supabase])
 
   const upcoming = sessions.filter(s => s.status === 'assigned' || s.status === 'in_progress')
   const completed = sessions.filter(s => s.status === 'completed')
@@ -2124,7 +2265,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
                       <div style={{ fontSize:11, color:t.textDim }}>{s.completed_at ? new Date(s.completed_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : s.scheduled_date}</div>
                     </div>
                     <div style={{ textAlign:'right' }}>
-                      {fmtDur(s.duration_seconds) && <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{fmtDur(s.duration_seconds)}</div>}
+                      {s.duration_seconds != null && <div style={{ fontSize:12, fontWeight:700, color:t.orange }}>{fmtDur(s.duration_seconds)}</div>}
                       {s.session_rpe && <div style={{ fontSize:11, color:t.textMuted }}>RPE {s.session_rpe}</div>}
                       {s.mood && <div style={{ fontSize:14 }}>{{ great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }[s.mood as 'great'|'good'|'okay'|'tired'|'awful']}</div>}
                     </div>
@@ -2140,23 +2281,33 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: any) {
 }
 
 // ── ProgramsTab ───────────────────────────────────────────────────────────
-function ProgramsTab({ clientRecord, supabase, router, t }: any) {
-  const [programs, setPrograms] = useState<any[]>([])
+function ProgramsTab({ clientRecord, supabase, t }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; t: Theme }) {
+  const [programs, setPrograms] = useState<ProgramRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!clientRecord?.id) { setLoading(false); return }
-    supabase.from('programs')
-      .select('id, name, description, duration_weeks, days_per_week, goal, level, active, start_date')
-      .eq('client_id', clientRecord.id)
-      .eq('is_template', false)
-      .order('created_at', { ascending: false })
-      .then(({ data }: any) => { setPrograms(data || []); setLoading(false) })
-  }, [clientRecord?.id])
+    const timeoutId = setTimeout(() => {
+      if (!clientRecord?.id) { setLoading(false); return }
+      void supabase.from('programs')
+        .select('id, name, description, duration_weeks, days_per_week, goal, level, active, start_date')
+        .eq('client_id', clientRecord.id)
+        .eq('is_template', false)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => { setPrograms((data || []) as ProgramRecord[]); setLoading(false) })
+    }, 0)
 
-  const levelColor = (l: string) => ({
-    beginner: t.green, intermediate: t.orange, advanced: t.red
-  }[l?.toLowerCase()] || t.textDim)
+    return () => clearTimeout(timeoutId)
+  }, [clientRecord?.id, supabase])
+
+  const levelColor = (l?: string | null) => {
+    const key = l?.toLowerCase()
+    const colors: Record<string, string> = {
+      beginner: t.green,
+      intermediate: t.orange,
+      advanced: t.red,
+    }
+    return key ? (colors[key] || t.textDim) : t.textDim
+  }
 
   if (loading) return <div style={{ padding:'40px 0', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading...</div>
 
@@ -2168,7 +2319,7 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
           <p style={{ fontSize:13, color:t.textDim, fontWeight:600 }}>No program assigned yet</p>
           <p style={{ fontSize:12, color:t.textMuted, marginTop:4 }}>Your coach will assign your program here</p>
         </div>
-      ) : programs.map((p: any) => (
+      ) : programs.map((p) => (
         <div key={p.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'18px 20px' }}>
           <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:12 }}>
             <div style={{ fontSize:32 }}>📋</div>
@@ -2184,7 +2335,7 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
               { label:'Level', value: p.level || '—', color: levelColor(p.level) },
             ].map(stat => (
               <div key={stat.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', textAlign:'center' }}>
-                <div style={{ fontSize:14, fontWeight:800, color:(stat as any).color || t.accent }}>{stat.value}</div>
+                <div style={{ fontSize:14, fontWeight:800, color:stat.color || t.text }}>{stat.value}</div>
                 <div style={{ fontSize:11, color:t.textMuted }}>{stat.label}</div>
               </div>
             ))}
@@ -2201,8 +2352,8 @@ function ProgramsTab({ clientRecord, supabase, router, t }: any) {
 }
 
 // ── ExercisesTab ──────────────────────────────────────────────────────────
-function ExercisesTab({ supabase, t }: any) {
-  const [exercises, setExercises] = useState<any[]>([])
+function ExercisesTab({ supabase, t }: { supabase: ReturnType<typeof createClient>; t: Theme }) {
+  const [exercises, setExercises] = useState<ExerciseRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterGroup, setFilterGroup] = useState('all')
@@ -2210,16 +2361,21 @@ function ExercisesTab({ supabase, t }: any) {
   const [groups, setGroups] = useState<string[]>([])
 
   useEffect(() => {
-    supabase.from('exercises')
-      .select('id, name, muscle_group, exercise_type, description, instructions, video_url')
-      .order('name')
-      .then(({ data }: any) => {
-        setExercises(data || [])
-        const g = [...new Set((data || []).map((e: any) => e.muscle_group).filter(Boolean))] as string[]
-        setGroups(g.sort())
-        setLoading(false)
-      })
-  }, [])
+    const timeoutId = setTimeout(() => {
+      void supabase.from('exercises')
+        .select('id, name, muscle_group, exercise_type, description, instructions, video_url')
+        .order('name')
+        .then(({ data }) => {
+          const resolved = (data || []) as ExerciseRecord[]
+          setExercises(resolved)
+          const g = [...new Set(resolved.map((exercise) => exercise.muscle_group).filter((group): group is string => Boolean(group)))]
+          setGroups(g.sort())
+          setLoading(false)
+        })
+    }, 0)
+
+    return () => clearTimeout(timeoutId)
+  }, [supabase])
 
   const filtered = exercises.filter(e => {
     const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.muscle_group?.toLowerCase().includes(search.toLowerCase())

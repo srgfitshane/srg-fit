@@ -1,4 +1,5 @@
 'use client'
+import Image from 'next/image'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
@@ -194,7 +195,7 @@ export default function ActiveWorkoutPage() {
     await supabase.from('workout_sessions').update({ status:'in_progress', started_at: new Date().toISOString() })
       .eq('id', sessionId).eq('status','assigned').not('program_id', 'is', null)
 
-    const { data: sess, error: sessError } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
+    const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
     const safeSession = sess as WorkoutSession | null
     
 
@@ -254,7 +255,7 @@ export default function ActiveWorkoutPage() {
       return
     }
     // Join exercise detail for preview
-    const { data: exs, error: exsError } = await supabase
+    const { data: exs } = await supabase
       .from('session_exercises')
       .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
       .eq('session_id', sessionId)
@@ -719,7 +720,6 @@ export default function ActiveWorkoutPage() {
   }
 
   const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
-  const totalPlannedSets = exercises.reduce((sum, ex) => sum + (setData[ex.id]?.length || ex.sets_prescribed || 0), 0)
   const totalLoggedSets = exercises.reduce((sum, ex) => sum + (setData[ex.id] || []).filter(setRow => setRow.logged).length, 0)
   const skippedExerciseCount = exercises.filter(ex => skipped[ex.id]).length
   const completedExerciseCount = exercises.filter(ex => {
@@ -727,10 +727,6 @@ export default function ActiveWorkoutPage() {
     const done = (setData[ex.id] || []).filter(setRow => setRow.logged).length
     return skipped[ex.id] || (total > 0 && done >= total)
   }).length
-  const activeExercise = exercises[activeExIdx]
-  const activeSets = activeExercise ? (setData[activeExercise.id] || []) : []
-  const activeLoggedSets = activeSets.filter(setRow => setRow.logged).length
-  const remainingExerciseCount = Math.max(0, exercises.length - completedExerciseCount)
   const allLogged = exercises.length > 0 && exercises.every(ex =>
     skipped[ex.id] || (setData[ex.id]||[]).some(s=>s.logged)
   )
@@ -1001,8 +997,15 @@ export default function ActiveWorkoutPage() {
                   <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'14px',marginTop:8}}>
                     {/* Thumbnail / video */}
                     {ex.exercise?.thumbnail_url && (
-                      <img src={ex.exercise.thumbnail_url} alt={ex.exercise_name}
-                        style={{width:'100%',borderRadius:8,marginBottom:10,maxHeight:180,objectFit:'cover'}}/>
+                      <div style={{ position:'relative', width:'100%', height:180, marginBottom:10, overflow:'hidden', borderRadius:8 }}>
+                        <Image
+                          src={ex.exercise.thumbnail_url}
+                          alt={ex.exercise_name || ex.exercise?.name || 'Exercise preview'}
+                          fill
+                          sizes="(max-width: 480px) 100vw, 448px"
+                          style={{ objectFit:'cover' }}
+                        />
+                      </div>
                     )}
 
                     {/* Muscles */}

@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense, createContext as _cc, useContext as _uc } from 'react'
+import Image from 'next/image'
+import type { CSSProperties, ReactNode } from 'react'
+import { useState, useEffect, useRef, Suspense, createContext as _cc, useContext as _uc, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -31,6 +33,22 @@ const INTAKE_SECTIONS = ['personal','stats','training','goals','lifestyle','nutr
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 const EQUIPMENT = ['Barbell','Dumbbells','Cables','Machines','Bodyweight','Resistance Bands','Kettlebells','Pull-up Bar']
 
+type IntakeFieldValue = string | number | boolean | string[] | null | undefined
+type IntakeProfile = Record<string, IntakeFieldValue> & {
+  profile_photo_url?: string | null
+}
+
+type ProfileRecord = {
+  id: string
+  full_name?: string | null
+  email?: string | null
+  avatar_url?: string | null
+}
+
+type ClientRecord = {
+  id: string
+}
+
 export default function ClientProfilePage() {
   return (
     <Suspense fallback={null}>
@@ -40,24 +58,73 @@ export default function ClientProfilePage() {
 }
 
 // ── Form context (stable component identity — fixes input focus loss) ──────
-type _PCtx = { intake:any; set:(f:string,v:any)=>void; toggleArray:(f:string,v:string)=>void; t:any }
-const _Ctx = _cc<_PCtx>({} as _PCtx)
-const Label = ({children}:{children:React.ReactNode}) => { const {t}=_uc(_Ctx); return <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:5}}>{children}</div> }
-const Input = ({field,placeholder,type='text',...rest}:any) => { const {intake,set,t}=_uc(_Ctx); return <input value={intake[field]??''} onChange={e=>set(field,e.target.value)} placeholder={placeholder} type={type} {...rest} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const,colorScheme:'dark' as any}} /> }
-const TextArea = ({field,placeholder,rows=3}:any) => { const {intake,set,t}=_uc(_Ctx); return <textarea value={intake[field]??''} onChange={e=>set(field,e.target.value)} placeholder={placeholder} rows={rows} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",resize:'vertical' as const,boxSizing:'border-box' as const,lineHeight:1.5,colorScheme:'dark' as any}} /> }
-const Select = ({field,options,placeholder}:{field:string,options:{val:string,label:string}[],placeholder?:string}) => { const {intake,set,t}=_uc(_Ctx); return <select value={intake[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:9,padding:'10px 12px',fontSize:13,color:intake[field]?t.text:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif",appearance:'none' as any,boxSizing:'border-box' as const,colorScheme:'dark' as any}}><option value="">{placeholder||'Select...'}</option>{options.map((o:any)=><option key={o.val} value={o.val} style={{background:t.surfaceHigh}}>{o.label}</option>)}</select> }
-const ChipGroup = ({field,options}:{field:string,options:string[]}) => { const {intake,toggleArray,t}=_uc(_Ctx); return <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{options.map(o=>{const on=(intake[field]||[]).includes(o);return <button key={o} onClick={()=>toggleArray(field,o)} style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid '+(on?t.teal+'60':t.border),background:on?t.tealDim:'transparent',color:on?t.teal:t.textDim,fontFamily:"'DM Sans',sans-serif",transition:'all .1s'}}>{o}</button>})}</div> }
-const SliderField = ({field,min,max,label}:{field:string,min:number,max:number,label:string}) => { const {intake,set,t}=_uc(_Ctx); return <div><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em'}}>{label}</span><span style={{fontSize:13,fontWeight:800,color:t.teal}}>{intake[field]??'—'}</span></div><input type="range" min={min} max={max} value={intake[field]||min} onChange={e=>set(field,parseInt(e.target.value))} style={{width:'100%',accentColor:t.teal}}/><div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:t.textMuted,marginTop:2}}><span>{min}</span><span>{max}</span></div></div> }
-const FieldRow = ({children}:{children:React.ReactNode}) => <div className="profile-field-row" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{children}</div>
-const Field = ({label,children}:{label:string,children:React.ReactNode}) => <div><Label>{label}</Label>{children}</div>
+type ProfileContextValue = {
+  intake: IntakeProfile
+  set: (f: string, v: IntakeFieldValue) => void
+  toggleArray: (f: string, v: string) => void
+  t: typeof t
+}
+
+type BaseFieldProps = {
+  field: string
+  placeholder?: string
+}
+
+type SelectOption = {
+  val: string
+  label: string
+}
+
+const sharedInputStyle: CSSProperties = {
+  width:'100%',
+  background:t.surfaceUp,
+  border:'1px solid '+t.border,
+  borderRadius:9,
+  padding:'10px 12px',
+  fontSize:13,
+  color:t.text,
+  outline:'none',
+  fontFamily:"'DM Sans',sans-serif",
+  boxSizing:'border-box',
+  colorScheme:'dark',
+}
+
+const _Ctx = _cc<ProfileContextValue>({} as ProfileContextValue)
+const Label = ({children}:{children:ReactNode}) => { const {t}=_uc(_Ctx); return <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:5}}>{children}</div> }
+const Input = ({field,placeholder,type='text',...rest}: BaseFieldProps & { type?: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'placeholder'>) => {
+  const {intake,set,t}=_uc(_Ctx)
+  const value = typeof intake[field] === 'boolean' ? '' : String(intake[field] ?? '')
+  return <input value={value} onChange={e=>set(field,e.target.value)} placeholder={placeholder} type={type} {...rest} style={{...sharedInputStyle, color:t.text}} />
+}
+const TextArea = ({field,placeholder,rows=3}: BaseFieldProps & { rows?: number }) => {
+  const {intake,set,t}=_uc(_Ctx)
+  return <textarea value={String(intake[field]??'')} onChange={e=>set(field,e.target.value)} placeholder={placeholder} rows={rows} style={{...sharedInputStyle, color:t.text, resize:'vertical', lineHeight:1.5}} />
+}
+const Select = ({field,options,placeholder}:{field:string,options:SelectOption[],placeholder?:string}) => {
+  const {intake,set,t}=_uc(_Ctx)
+  const value = String(intake[field] || '')
+  return <select value={value} onChange={e=>set(field,e.target.value)} style={{...sharedInputStyle, color:value?t.text:t.textMuted, appearance:'none'}}><option value="">{placeholder||'Select...'}</option>{options.map((o)=><option key={o.val} value={o.val} style={{background:t.surfaceHigh}}>{o.label}</option>)}</select>
+}
+const ChipGroup = ({field,options}:{field:string,options:string[]}) => {
+  const {intake,toggleArray,t}=_uc(_Ctx)
+  const selected: string[] = Array.isArray(intake[field]) ? intake[field].filter((value): value is string => typeof value === 'string') : []
+  return <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{options.map(o=>{const on=selected.includes(o);return <button key={o} onClick={()=>toggleArray(field,o)} style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid '+(on?t.teal+'60':t.border),background:on?t.tealDim:'transparent',color:on?t.teal:t.textDim,fontFamily:"'DM Sans',sans-serif",transition:'all .1s'}}>{o}</button>})}</div>
+}
+const SliderField = ({field,min,max,label}:{field:string,min:number,max:number,label:string}) => {
+  const {intake,set,t}=_uc(_Ctx)
+  const value = typeof intake[field] === 'number' ? intake[field] : min
+  return <div><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em'}}>{label}</span><span style={{fontSize:13,fontWeight:800,color:t.teal}}>{typeof intake[field] === 'number' ? intake[field] : '—'}</span></div><input type="range" min={min} max={max} value={value} onChange={e=>set(field,parseInt(e.target.value))} style={{width:'100%',accentColor:t.teal}}/><div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:t.textMuted,marginTop:2}}><span>{min}</span><span>{max}</span></div></div>
+}
+const FieldRow = ({children}:{children:ReactNode}) => <div className="profile-field-row" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{children}</div>
+const Field = ({label,children}:{label:string,children:ReactNode}) => <div><Label>{label}</Label>{children}</div>
 
 function ProfilePageInner() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
   const searchParams = useSearchParams()
   const [clientId,  setClientId]  = useState<string|null>(null)
-  const [profile,   setProfile]   = useState<any>(null)
-  const [intake,    setIntake]    = useState<any>({})
+  const [profile,   setProfile]   = useState<ProfileRecord | null>(null)
+  const [intake,    setIntake]    = useState<IntakeProfile>({})
   const [section,   setSection]   = useState(searchParams.get('section') || 'personal')
   const [saving,    setSaving]    = useState(false)
   const [saved,     setSaved]     = useState(false)
@@ -70,11 +137,11 @@ function ProfilePageInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data: prof } = await supabase.from('profiles').select('id, full_name, email, avatar_url').eq('id', user.id).single<ProfileRecord>()
       const signedAvatar = await resolveSignedMediaUrl(supabase, 'avatars', prof?.avatar_url)
       setProfile(prof ? { ...prof, avatar_url: signedAvatar } : null)
 
-      const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).eq('active', true).single()
+      const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).eq('active', true).single<ClientRecord>()
       if (!cl) { router.push('/dashboard/client'); return }
       setClientId(cl.id)
 
@@ -86,12 +153,12 @@ function ProfilePageInner() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [router, supabase])
 
-  const set = (field: string, val: any) => setIntake((p: any) => ({ ...p, [field]: val }))
+  const set = (field: string, val: IntakeFieldValue) => setIntake((p) => ({ ...p, [field]: val }))
 
   const toggleArray = (field: string, val: string) => {
-    const arr: string[] = intake[field] || []
+    const arr: string[] = Array.isArray(intake[field]) ? intake[field].filter((item): item is string => typeof item === 'string') : []
     set(field, arr.includes(val) ? arr.filter((x: string) => x !== val) : [...arr, val])
   }
 
@@ -113,8 +180,10 @@ function ProfilePageInner() {
       const signedUrl = await resolveSignedMediaUrl(supabase, 'avatars', path)
       set('profile_photo_url', signedUrl)
       await supabase.from('client_intake_profiles').upsert({ client_id: clientId, profile_photo_url: path }, { onConflict: 'client_id' })
-      await supabase.from('profiles').update({ avatar_url: path }).eq('id', profile.id)
-      setProfile((prev: any) => prev ? { ...prev, avatar_url: signedUrl } : prev)
+      if (profile?.id) {
+        await supabase.from('profiles').update({ avatar_url: path }).eq('id', profile.id)
+      }
+      setProfile((prev) => prev ? { ...prev, avatar_url: signedUrl } : prev)
     }
     setPhotoUploading(false)
   }
@@ -207,7 +276,7 @@ function ProfilePageInner() {
                   onClick={()=>photoRef.current?.click()}
                   onKeyDown={e=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); photoRef.current?.click() } }}>
                   {intake.profile_photo_url || profile?.avatar_url
-                    ? <img src={intake.profile_photo_url || profile?.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
+                    ? <Image src={String(intake.profile_photo_url || profile?.avatar_url)} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" width={72} height={72} />
                     : <span style={{ fontSize:28 }}>👤</span>}
                 </div>
                 <div>
@@ -247,12 +316,12 @@ function ProfilePageInner() {
           {section === 'stats' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:12, padding:'10px 14px', fontSize:12, color:t.teal }}>
-                📏 These are your <strong>starting</strong> numbers — a baseline to measure your progress. Be honest, nobody's judging.
+                📏 These are your <strong>starting</strong> numbers — a baseline to measure your progress. Be honest, nobody&apos;s judging.
               </div>
               <FieldRow>
                 <Field label={`Height (e.g. 5'10")`}>
                   <input
-                    defaultValue={intake.height_inches ? fmtHeight(intake.height_inches) : ''}
+                    defaultValue={typeof intake.height_inches === 'number' ? fmtHeight(intake.height_inches) : ''}
                     onBlur={e=>{ const v=parseHeight(e.target.value); if(v) set('height_inches', v) }}
                     placeholder={`5'10"`}
                     style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
@@ -457,7 +526,7 @@ function ProfilePageInner() {
                   onChange={e=>set('menstrual_cycle_tracking', e.target.checked)}
                   style={{ width:18, height:18, accentColor:t.teal }} />
                 <label htmlFor="cycle" style={{ fontSize:13, cursor:'pointer', lineHeight:1.5 }}>
-                  I'd like to incorporate <strong>menstrual cycle tracking</strong> into my programming and nutrition recommendations
+                  I&apos;d like to incorporate <strong>menstrual cycle tracking</strong> into my programming and nutrition recommendations
                 </label>
               </div>
 
@@ -465,7 +534,7 @@ function ProfilePageInner() {
               <div style={{ background:'linear-gradient(135deg,'+t.teal+'15,'+t.green+'08)', border:'1px solid '+t.teal+'30', borderRadius:16, padding:20, textAlign:'center', marginTop:8 }}>
                 <div style={{ fontSize:18, marginBottom:8 }}>🎯</div>
                 <div style={{ fontSize:14, fontWeight:800, marginBottom:6 }}>Ready to submit your intake?</div>
-                <div style={{ fontSize:12, color:t.textMuted, marginBottom:14 }}>Make sure you've filled out what you can across all sections, then hit Save above.</div>
+                <div style={{ fontSize:12, color:t.textMuted, marginBottom:14 }}>Make sure you&apos;ve filled out what you can across all sections, then hit Save above.</div>
                 <button onClick={save} disabled={saving}
                   style={{ background:'linear-gradient(135deg,'+t.teal+','+t.green+')', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   {saving ? 'Saving...' : saved ? '✓ All Saved!' : '💾 Save Everything'}
@@ -484,7 +553,7 @@ function ProfilePageInner() {
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ width:44, height:44, borderRadius:'50%', background:t.tealDim, border:'1px solid '+t.teal+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
                     {profile?.avatar_url
-                      ? <img src={profile.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />
+                      ? <Image src={profile.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" width={44} height={44} />
                       : profile?.full_name?.charAt(0) || '?'}
                   </div>
                   <div>

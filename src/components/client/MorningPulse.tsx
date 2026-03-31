@@ -6,6 +6,7 @@
  * Step 3: Sliders — Stress / Mood / Energy (1-10)
  * Step 4: Optional journal
  */
+import { createClient } from '@/lib/supabase-browser'
 import { useState } from 'react'
 
 const t = {
@@ -18,7 +19,7 @@ const t = {
 interface Props {
   clientId: string
   today: string
-  supabase: any
+  supabase: ReturnType<typeof createClient>
   existing?: {
     sleep_quality?: number
     energy_score?: number
@@ -129,7 +130,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               <button onClick={()=>{ setStep('sleep'); setCollapsed(false) }}
                 style={{ background:'none', border:'1px solid '+t.border, borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                Edit today's check-in
+                Edit today&apos;s check-in
               </button>
               <a href="/dashboard/client/progress" style={{ background:'none', border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textDecoration:'none', display:'inline-block' }}>
                 View Trends →
@@ -143,7 +144,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
 
   // ── Active check-in ──────────────────────────────────────────────────────
   const STEPS = ['sleep','energy','sliders','journal'] as const
-  const stepIdx = STEPS.indexOf(step as any)
+  const stepIdx = STEPS.indexOf(step)
 
   return (
     <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
