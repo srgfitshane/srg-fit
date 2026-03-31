@@ -166,6 +166,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [habitLogs,    setHabitLogs]    = useState<Record<string,number>>({})
   const [milestones,   setMilestones]   = useState<any[]>([])
   const [recentPRs,    setRecentPRs]    = useState<any[]>([])
+  const [workoutStreak, setWorkoutStreak] = useState<number>(0)
   const [workoutLogs,  setWorkoutLogs]  = useState<any[]>([])
   const [nextSession,  setNextSession]  = useState<any>(null)
   const [pendingReviews, setPendingReviews] = useState<any[]>([])
@@ -384,6 +385,46 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setPastEntries(pastData || [])
         setActiveGoals(goalsData || [])
         setRecentActivities((activityData || []) as ClientActivityRecord[])
+
+        // Workout streak — consecutive weeks with at least 1 completed session
+        const { data: completedSessions } = await supabase
+          .from('workout_sessions')
+          .select('scheduled_date')
+          .eq('client_id', cid)
+          .eq('status', 'completed')
+          .order('scheduled_date', { ascending: false })
+          .limit(52) // max 52 weeks lookback
+        if (completedSessions && completedSessions.length > 0) {
+          // Get ISO week number for a date
+          const getWeek = (d: Date) => {
+            const date = new Date(d.getTime())
+            date.setHours(0,0,0,0)
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7)
+            const week1 = new Date(date.getFullYear(), 0, 4)
+            return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+          }
+          const getYear = (d: Date) => {
+            const date = new Date(d.getTime())
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7)
+            return date.getFullYear()
+          }
+          // Build set of "YYYY-WW" weeks that have completed sessions
+          const completedWeeks = new Set(completedSessions.map((s: any) => {
+            const d = new Date(s.scheduled_date + 'T12:00:00')
+            return `${getYear(d)}-${getWeek(d)}`
+          }))
+          // Count consecutive weeks back from current week
+          const now = new Date()
+          let streak = 0
+          for (let i = 0; i < 52; i++) {
+            const check = new Date(now)
+            check.setDate(check.getDate() - i * 7)
+            const key = `${getYear(check)}-${getWeek(check)}`
+            if (completedWeeks.has(key)) streak++
+            else if (i > 0) break // gap — stop counting
+          }
+          setWorkoutStreak(streak)
+        }
     } // end loadClientData
 
     const load = async () => {
@@ -679,6 +720,21 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
             <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
+
+          {/* ── STREAK ── */}
+          {workoutStreak > 0 && (
+            <div className="fade" style={{ marginBottom:14, background:t.surfaceUp, border:'1px solid '+t.orange+'30', borderRadius:14, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:22 }}>🔥</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:800, color:t.orange }}>
+                  {workoutStreak === 1 ? '1 week strong' : `${workoutStreak} week streak`}
+                </div>
+                <div style={{ fontSize:11, color:t.textMuted }}>
+                  {workoutStreak === 1 ? 'Keep showing up' : workoutStreak >= 4 ? 'Consistency is your superpower' : 'Keep the momentum going'}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── 2. MORNING PULSE ── */}
           {clientRecord && (
