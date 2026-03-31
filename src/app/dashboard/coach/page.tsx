@@ -422,7 +422,7 @@ export default function CoachDashboard() {
 
   const NavBtn = ({ item }: { item: { label:string, icon:string, path:string } }) => (
     <button onClick={()=>router.push(item.path)}
-      style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 11px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%', minWidth:0 }}
+      style={{ display:'flex', alignItems:'center', gap:7, padding:'11px 12px', borderRadius:10, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%', minWidth:0 }}
       onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceHigh)}
       onMouseLeave={e=>(e.currentTarget.style.background=t.surfaceUp)}>
       <span style={{ fontSize:15, flexShrink:0 }}>{item.icon}</span>
@@ -494,45 +494,42 @@ export default function CoachDashboard() {
         button{-webkit-tap-highlight-color:transparent;}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
         .coach-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
-        /* coach-main: right col wide enough to hold 2-col nav comfortably */
         .coach-main{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
         .coach-sidebar{display:flex;flex-direction:column;gap:14px;position:sticky;top:18px;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
-        .coach-topbar-label{display:block;}
-        /* nav grid: 2 cols by default inside the right sidebar */
         .nav-grid-essential{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
         .nav-grid-expanded{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
-        /* wider screens: go 3 cols in the nav sidebar */
+        .coach-mobile-nav{display:none;}
         @media(min-width:1400px){
           .coach-main{grid-template-columns:1fr 420px;}
           .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
           .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
         }
-        /* below 1100px: stack main layout */
         @media(max-width:1100px){
           .coach-main{grid-template-columns:1fr;}
           .coach-flow{grid-template-columns:1fr;}
-          .coach-sidebar{position:static;}
-          .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
-          .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
+          .coach-sidebar{display:none;}
+          .coach-mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;}
         }
         @media(max-width:900px){
           .coach-stats{grid-template-columns:repeat(2,1fr);}
+          .coach-mobile-nav{grid-template-columns:repeat(5,1fr);}
         }
         @media(max-width:700px){
           .coach-topbar-name{display:none;}
-          .coach-topbar-label{display:none;}
-          .coach-pad{padding:14px!important;}
+          .coach-pad{padding:12px!important;}
+          .coach-mobile-nav{grid-template-columns:repeat(4,1fr);}
+          .coach-stats{grid-template-columns:repeat(2,1fr);gap:8px;}
         }
         @media(max-width:600px){
           .client-row{flex-wrap:wrap;gap:8px;}
           .client-actions{width:100%;justify-content:flex-end;}
           .client-since{display:none;}
-          .coach-stats{grid-template-columns:repeat(2,1fr);gap:8px;}
-          .nav-grid-essential{grid-template-columns:repeat(2,1fr);}
+          .coach-mobile-nav{grid-template-columns:repeat(4,1fr);}
         }
         @media(max-width:420px){
           .client-actions button .btn-label{display:none;}
+          .coach-mobile-nav{grid-template-columns:repeat(3,1fr);}
         }
       `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
@@ -558,9 +555,20 @@ export default function CoachDashboard() {
         <div style={{ padding:28, maxWidth:1200, margin:'0 auto' }} className="coach-pad">
 
           {/* Greeting */}
-          <div style={{ marginBottom:28 }}>
+          <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:26, fontWeight:900, marginBottom:4 }}>{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</div>
             <div style={{ fontSize:13, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
+          </div>
+
+          {/* Mobile-only quick nav — hidden on desktop where sidebar handles this */}
+          <div className="coach-mobile-nav">
+            {NAV_ESSENTIALS.map(item => (
+              <button key={item.label} onClick={()=>router.push(item.path)}
+                style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'10px 6px', borderRadius:12, border:'1px solid '+t.border, background:t.surfaceUp, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", width:'100%' }}>
+                <span style={{ fontSize:20 }}>{item.icon}</span>
+                <span style={{ fontSize:10, fontWeight:700, color:t.textDim, whiteSpace:'nowrap' as const }}>{item.label}</span>
+              </button>
+            ))}
           </div>
 
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, padding:'20px 20px 18px', marginBottom:24 }}>
