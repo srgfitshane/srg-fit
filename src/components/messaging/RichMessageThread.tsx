@@ -16,6 +16,7 @@ import Image from 'next/image'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import { GiphyFetch } from '@giphy/js-fetch-api'
 
 const c = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -35,6 +36,7 @@ interface Message {
   media_url: string | null
   media_type: string | null
   duration_sec: number | null
+  gif_url: string | null
   read: boolean
   created_at: string
   reactions?: Reaction[]
@@ -86,10 +88,42 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
       })
     }).catch(() => {})
   }
+
+  const [gifQuery,     setGifQuery]     = useState('')
+  const [gifs,         setGifs]         = useState<any[]>([])
+  const [gifLoading,   setGifLoading]   = useState(false)
+  const gf = useMemo(() => new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || ''), [])
+
+  // GIF search and send
+  const searchGifs = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      const { data } = await gf.trending({ limit: 18, rating: 'g' })
+      setGifs(data)
+      return
+    }
+    setGifLoading(true)
+    const { data } = await gf.search(q, { limit: 18, rating: 'g' })
+    setGifs(data)
+    setGifLoading(false)
+  }, [gf])
+
+  const sendGif = async (gif: any) => {
+    const url = gif.images?.fixed_height?.url || gif.images?.original?.url || ''
+    if (!url) return
+    const { data } = await supabase.from('messages').insert({
+      sender_id: myId, recipient_id: otherId,
+      body: gif.title || 'GIF', message_type: 'gif',
+      gif_url: url, read: false,
+    }).select().single()
+    if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
+    notifyRecipient('🎬 GIF')
+    setMode('text'); setGifs([]); setGifQuery('')
+  }
   const [thread,       setThread]       = useState<Message[]>([])
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
-  const [mode,         setMode]         = useState<'text'|'audio'|'video'>('text')
+  const [mode,         setMode]         = useState<'text'|'audio'|'video'|'gif'>('text')
+
   const [recording,    setRecording]    = useState(false)
   const [recSeconds,   setRecSeconds]   = useState(0)
   const [reactTarget,  setReactTarget]  = useState<string|null>(null)
@@ -357,10 +391,16 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
         </a>
       )
     }
+    if (msg.message_type === 'gif' && msg.gif_url) {
+      return (
+        <img src={msg.gif_url} alt={msg.body || 'GIF'}
+          style={{ maxWidth:'100%', width:'240px', borderRadius:10, display:'block', cursor:'pointer' }}
+          onClick={()=>window.open(msg.gif_url ?? undefined,'_blank')}
+        />
+      )
+    }
     return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word' }}>{msg.body}</span>
   }
-
-  // Group reactions by emoji for display
   const groupReactions = (reactions: Reaction[] = []) => {
     const map: Record<string, { count: number, mine: boolean }> = {}
     for (const r of reactions) {
@@ -547,7 +587,54 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
                   style={{ ...btnBase, padding:'7px 10px', background:'transparent', color:c.textMuted, border:'1px solid transparent' }}>
                   📎
                 </button>
+                <button title="Send a GIF" aria-label="Open GIF picker" onClick={()=>{ setMode(m=>m==='gif'?'text':'gif'); if(gifs.length===0) searchGifs('') }}
+                  style={{ ...btnBase, padding:'7px 10px', background:mode==='gif'?c.tealDim:'transparent', color:mode==='gif'?c.teal:c.textMuted, border:'1px solid '+(mode==='gif'?c.teal+'40':'transparent') }}>
+                  GIF
+                </button>
               </div>
+
+              {showMacros && quickReplies.length > 0 && (
+                <div className="rmt-macro-row">
+                  {quickReplies.map((macro) => (
+                    <button
+                      key={macro.id}
+                      aria-label={`Insert saved reply ${macro.title}`}
+                      onClick={()=>applyMacro(macro.body)}
+                      style={{ ...btnBase, padding:'5px 10px', background:c.surfaceHigh, color:c.text, border:'1px solid '+c.border, fontSize:11 }}
+                    >
+                      {macro.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* GIF picker */}
+              {mode === 'gif' && (
+                <div style={{ borderTop:'1px solid '+c.border, background:c.surfaceUp, padding:'10px' }}>
+                  <input
+                    autoFocus
+                    value={gifQuery}
+                    onChange={e=>{ setGifQuery(e.target.value); searchGifs(e.target.value) }}
+                    placeholder="Search GIPHY..."
+                    style={{ width:'100%', background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:10, padding:'8px 12px', fontSize:13, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", marginBottom:8, colorScheme:'dark', boxSizing:'border-box' as const }}
+                  />
+                  {gifLoading ? (
+                    <div style={{ textAlign:'center', padding:'12px', fontSize:12, color:c.textMuted }}>Searching...</div>
+                  ) : (
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:4, maxHeight:220, overflowY:'auto' }}>
+                      {gifs.map((gif:any) => (
+                        <img key={gif.id}
+                          src={gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url}
+                          alt={gif.title || 'GIF'}
+                          onClick={()=>sendGif(gif)}
+                          style={{ width:'100%', borderRadius:6, cursor:'pointer', objectFit:'cover' as const, aspectRatio:'1', display:'block' }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize:9, color:c.textMuted, textAlign:'right' as const, marginTop:4 }}>Powered by GIPHY</div>
+                </div>
+              )}
 
               {showMacros && quickReplies.length > 0 && (
                 <div className="rmt-macro-row">

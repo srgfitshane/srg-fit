@@ -11,6 +11,8 @@
     "test": "node --experimental-strip-types tests/invite-utils.smoke.ts && node --experimental-strip-types tests/client-activities.smoke.ts"
   },
   "dependencies": {
+    "@giphy/js-fetch-api": "^5.7.0",
+    "@giphy/react-components": "^10.1.1",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.2",
     "next": "^16.1.6",
@@ -28,6 +30,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "5.9.3"
+    "typescript": "^5.9.3"
   }
 }
