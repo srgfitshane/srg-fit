@@ -193,9 +193,9 @@ export default function ActiveWorkoutPage() {
     await supabase.from('workout_sessions').update({ status:'in_progress', started_at: new Date().toISOString() })
       .eq('id', sessionId).eq('status','assigned').not('program_id', 'is', null)
 
-    const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
+    const { data: sess, error: sessError } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
     const safeSession = sess as WorkoutSession | null
-    console.log('DEBUG session:', { id: safeSession?.id, status: safeSession?.status, program_id: safeSession?.program_id })
+    console.log('DEBUG session:', { id: safeSession?.id, status: safeSession?.status, program_id: safeSession?.program_id, error: sessError?.message })
 
     // Fetch client gender to serve correct demo video
     if (safeSession?.client_id) {
@@ -208,7 +208,7 @@ export default function ActiveWorkoutPage() {
       setSession(safeSession)
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('*, exercise:exercises(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
+        .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
         .eq('session_id', sessionId).order('order_index')
       const { data: exerciseLibrary } = await supabase
         .from('exercises')
@@ -255,7 +255,7 @@ export default function ActiveWorkoutPage() {
     // Join exercise detail for preview
     const { data: exs, error: exsError } = await supabase
       .from('session_exercises')
-      .select('*, exercise:exercises(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
+      .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
       .eq('session_id', sessionId)
       .order('order_index')
 
