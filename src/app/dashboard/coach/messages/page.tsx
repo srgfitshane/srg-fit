@@ -292,16 +292,22 @@ function MessagesInner() {
         message_type: 'text',
       })
       // Fire-and-forget push notification
-      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: client.profile.id,
-          notification_type: 'new_message',
-          title: 'Message from Coach Shane',
-          body: broadcastText.trim().slice(0, 100),
-          link_url: '/dashboard/client/messages',
-        })
-      }).catch(() => {})
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST', headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            user_id: client.profile.id,
+            notification_type: 'new_message',
+            title: 'Message from Coach Shane',
+            body: broadcastText.trim().slice(0, 100),
+            link_url: '/dashboard/client/messages',
+          })
+        }).catch(() => {})
+      }
     }
     setBroadcasting(false)
     setBroadcastDone(true)

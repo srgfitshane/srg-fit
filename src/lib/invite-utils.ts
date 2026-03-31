@@ -7,6 +7,16 @@ export type InviteRecordLike = {
 
 export type InviteAvailability = 'valid' | 'expired' | 'already_accepted' | 'invalid'
 
+export type InviteClaimIdentity = {
+  email?: string | null
+  id?: string | null
+}
+
+export type InviteClaimRecord = {
+  email?: string | null
+  profile_id?: string | null
+}
+
 export function isCoachRole(role: string | null | undefined) {
   return role === 'coach'
 }
@@ -22,4 +32,19 @@ export function getInviteAvailability(invite: InviteRecordLike | null | undefine
 
 export function buildInviteUrl(siteUrl: string, token: string) {
   return `${siteUrl.replace(/\/+$/, '')}/invite/${token}`
+}
+
+export function isInviteClaimAllowed(invite: InviteClaimRecord, user: InviteClaimIdentity) {
+  const normalizedInviteEmail = typeof invite.email === 'string' ? invite.email.trim().toLowerCase() : ''
+  const normalizedUserEmail = typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''
+
+  if (invite.profile_id && user.id && invite.profile_id !== user.id) {
+    return false
+  }
+
+  if (normalizedInviteEmail && normalizedUserEmail && normalizedInviteEmail !== normalizedUserEmail) {
+    return false
+  }
+
+  return true
 }

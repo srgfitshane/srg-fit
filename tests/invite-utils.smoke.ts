@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildInviteUrl, getInviteAvailability, isCoachRole } from '../src/lib/invite-utils.ts'
+import { buildInviteUrl, getInviteAvailability, isCoachRole, isInviteClaimAllowed } from '../src/lib/invite-utils.ts'
 
 assert.equal(
   getInviteAvailability({ status: 'pending', expires_at: '2099-01-01T00:00:00.000Z' }, new Date('2026-01-01T00:00:00.000Z')),
@@ -26,5 +26,29 @@ assert.equal(buildInviteUrl('https://srgfit.app/', 'abc123'), 'https://srgfit.ap
 assert.equal(isCoachRole('coach'), true)
 assert.equal(isCoachRole('client'), false)
 assert.equal(isCoachRole(null), false)
+
+assert.equal(
+  isInviteClaimAllowed(
+    { email: 'client@example.com', profile_id: 'user-1' },
+    { email: 'client@example.com', id: 'user-1' }
+  ),
+  true
+)
+
+assert.equal(
+  isInviteClaimAllowed(
+    { email: 'client@example.com', profile_id: 'user-1' },
+    { email: 'other@example.com', id: 'user-1' }
+  ),
+  false
+)
+
+assert.equal(
+  isInviteClaimAllowed(
+    { email: 'client@example.com', profile_id: 'user-1' },
+    { email: 'client@example.com', id: 'user-2' }
+  ),
+  false
+)
 
 console.log('invite-utils smoke test passed')

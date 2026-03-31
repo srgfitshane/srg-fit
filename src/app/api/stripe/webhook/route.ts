@@ -200,14 +200,13 @@ async function handleTrialWillEnd(sub: Stripe.Subscription) {
     .from('clients').select('id, profile_id').eq('stripe_customer_id', stripeCustomerId).single()
   if (!client) return
 
-  await supabase.functions.invoke('send-notification', {
-    body: {
-      user_id: client.profile_id,
-      notification_type: 'trial_ending',
-      title: 'Your free trial ends in 3 days',
-      body: 'Keep your momentum going — your subscription starts soon.',
-      link_url: '/dashboard/client?tab=billing',
-    }
+  await supabase.from('notifications').insert({
+    user_id: client.profile_id,
+    notification_type: 'trial_ending',
+    title: 'Your free trial ends in 3 days',
+    body: 'Keep your momentum going — your subscription starts soon.',
+    link_url: '/dashboard/client?tab=billing',
+    is_read: false,
   })
   console.log(`⚠️ Trial ending reminder sent for customer ${stripeCustomerId}`)
 }

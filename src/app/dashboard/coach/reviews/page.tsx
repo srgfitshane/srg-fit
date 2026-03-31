@@ -571,16 +571,22 @@ export default function ReviewsPage() {
     // Notify client — fire-and-forget
     const profileId = selected?.client?.profile_id
     if (profileId) {
-      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: profileId,
-          notification_type: 'workout_review',
-          title: '💬 Coach reviewed your workout',
-          body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
-          link_url: '/dashboard/client',
-        })
-      }).catch(() => {})
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST', headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            user_id: profileId,
+            notification_type: 'workout_review',
+            title: '💬 Coach reviewed your workout',
+            body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
+            link_url: '/dashboard/client',
+          })
+        }).catch(() => {})
+      }
     }
 
     setReviews(prev => prev.filter(r => r.id !== sessionId))

@@ -110,6 +110,29 @@ type InsightResponse = {
   coaching_note?: string
 }
 
+async function getAuthenticatedUser(req: Request) {
+  const authorization = req.headers.get('Authorization')
+  if (!authorization) return null
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    {
+      global: {
+        headers: {
+          Authorization: authorization,
+        },
+      },
+    }
+  )
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  return user
+}
+
 function mapLegacyTypeToCategory(type: string) {
   if (type === 'red_flag') return 'recovery_risk'
   if (type === 'progression') return 'plateau'
@@ -364,6 +387,35 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+
+    const user = await getAuthenticatedUser(req)
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
+    }
+
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const { data: clientOwnership } = await supabase
+      .from('clients')
+      .select('id, coach_id, profile_id')
+      .eq('id', client_id)
+      .maybeSingle()
+
+    if (!clientOwnership || clientOwnership.coach_id !== coach_id) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders })
+    }
+
+    const isCoachCaller = callerProfile?.role === 'coach'
+    const isAllowedCoach = isCoachCaller && user.id === coach_id
+    const isAllowedClient = !isCoachCaller && clientOwnership.profile_id === user.id
+
+    if (!isAllowedCoach && !isAllowedClient) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders })
+    }
 
     const [
       { data: client },

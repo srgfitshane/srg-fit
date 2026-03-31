@@ -246,16 +246,22 @@ export default function CoachWorkoutsPage() {
           }))
         )
         if (client?.profile_id) {
-          fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_id: client.profile_id,
-              notification_type: 'program_assigned',
-              title: `New workout assigned: ${template.title}`,
-              body: actionForm.date ? `Scheduled for ${actionForm.date}` : 'Ready when you are!',
-              link_url: '/dashboard/client',
-            })
-          }).catch(()=>{})
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.access_token) {
+            fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+              method: 'POST', headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                user_id: client.profile_id,
+                notification_type: 'program_assigned',
+                title: `New workout assigned: ${template.title}`,
+                body: actionForm.date ? `Scheduled for ${actionForm.date}` : 'Ready when you are!',
+                link_url: '/dashboard/client',
+              })
+            }).catch(()=>{})
+          }
         }
       }
     }

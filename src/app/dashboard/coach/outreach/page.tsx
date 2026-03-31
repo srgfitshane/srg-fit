@@ -144,16 +144,22 @@ export default function OutreachPage() {
       read: false,
     })
     // Notify the client
-    await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: composing.client.profile_id,
-        notification_type: 'message',
-        title: 'New message from your coach',
-        body: msgBody.trim().slice(0, 80) + (msgBody.length > 80 ? '...' : ''),
-        link_url: '/dashboard/client'
-      })
-    }).catch(() => {})
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+        method: 'POST', headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          user_id: composing.client.profile_id,
+          notification_type: 'message',
+          title: 'New message from your coach',
+          body: msgBody.trim().slice(0, 80) + (msgBody.length > 80 ? '...' : ''),
+          link_url: '/dashboard/client'
+        })
+      }).catch(() => {})
+    }
     const key = `${composing.type}-${composing.client.id}`
     setSentIds(prev => new Set([...prev, key]))
     setSending(false)

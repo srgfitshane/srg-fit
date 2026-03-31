@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createServerSupabaseClient } from '@/lib/supabase-server'
-import { getInviteAvailability } from '@/lib/invite-utils'
+import { getInviteAvailability, isInviteClaimAllowed } from '@/lib/invite-utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,6 +38,13 @@ export async function POST(request: NextRequest) {
     }
     if (availability === 'invalid') {
       return NextResponse.json({ error: 'Invite invalid' }, { status: 400 })
+    }
+
+    if (!isInviteClaimAllowed(invite, user)) {
+      return NextResponse.json(
+        { error: 'This invite belongs to a different account. Please use the email address that received the invite.' },
+        { status: 403 }
+      )
     }
 
     const { data: existingClient } = await admin

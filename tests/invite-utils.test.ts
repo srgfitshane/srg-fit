@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildInviteUrl, getInviteAvailability, isCoachRole } from '../src/lib/invite-utils'
+import { buildInviteUrl, getInviteAvailability, isCoachRole, isInviteClaimAllowed } from '../src/lib/invite-utils'
 
 test('getInviteAvailability marks active pending invites as valid', () => {
   assert.equal(
@@ -35,4 +35,30 @@ test('isCoachRole only accepts coach', () => {
   assert.equal(isCoachRole('coach'), true)
   assert.equal(isCoachRole('client'), false)
   assert.equal(isCoachRole(null), false)
+})
+
+test('isInviteClaimAllowed requires the invited account identity', () => {
+  assert.equal(
+    isInviteClaimAllowed(
+      { email: 'client@example.com', profile_id: 'user-1' },
+      { email: 'client@example.com', id: 'user-1' }
+    ),
+    true
+  )
+
+  assert.equal(
+    isInviteClaimAllowed(
+      { email: 'client@example.com', profile_id: 'user-1' },
+      { email: 'other@example.com', id: 'user-1' }
+    ),
+    false
+  )
+
+  assert.equal(
+    isInviteClaimAllowed(
+      { email: 'client@example.com', profile_id: 'user-1' },
+      { email: 'client@example.com', id: 'user-2' }
+    ),
+    false
+  )
 })

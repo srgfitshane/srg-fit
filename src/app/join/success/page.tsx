@@ -1,6 +1,5 @@
 'use client'
-import { useEffect, useState, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', border:'#252538',
@@ -14,33 +13,17 @@ export default function JoinSuccess() {
 }
 
 function SuccessInner() {
-  const searchParams  = useSearchParams()
-  const sessionId     = searchParams.get('session_id')
-  const [email, setEmail]   = useState<string|null>(null)
-  const [name,  setName]    = useState<string|null>(null)
-
-  useEffect(() => {
-    if (!sessionId) return
-    fetch(`/api/stripe/session?id=${sessionId}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.email) setEmail(d.email)
-        if (d.name)  setName(d.name)
-      })
-      .catch(() => {})
-  }, [sessionId])
-
   return (
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
       <div style={{ minHeight:'100vh', background:t.bg, fontFamily:"'DM Sans',sans-serif", color:t.text, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
         <div style={{ maxWidth:480, width:'100%', textAlign:'center' }}>
           <div style={{ fontSize:64, marginBottom:20 }}>🎉</div>
           <div style={{ fontSize:28, fontWeight:900, background:'linear-gradient(135deg,#00c9b1,#f5a623)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:12, lineHeight:1.2 }}>
-            {name ? `Welcome, ${name.split(' ')[0]}!` : "You're in!"}
+            {"You're in!"}
           </div>
           <div style={{ fontSize:15, color:t.textMuted, lineHeight:1.7, marginBottom:32 }}>
-            {email ? `We sent a setup link to ${email}.` : 'Check your email for a setup link.'}{' '}
-            Click it to create your password and access your SRG Fit account. Your 7-day free trial starts now.
+            Check your email for a setup link. Click it to create your password and access your SRG Fit account.
+            Your 7-day free trial starts now.
           </div>
 
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:24, marginBottom:24, textAlign:'left' }}>

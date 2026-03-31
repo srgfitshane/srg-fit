@@ -141,16 +141,22 @@ export default function CoachNutritionPage() {
       const { data: newPlan } = await supabase.from('nutrition_plans').insert(payload).select().single()
       const client = clients.find(c => c.id === form.client_id)
       if (client && newPlan) {
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: client.profile_id,
-            notification_type: 'program_assigned',
-            title: `New nutrition plan: ${form.name}`,
-            body: `Your coach has assigned you a new nutrition plan`,
-            link_url: '/dashboard/client'
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+            method: 'POST', headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              user_id: client.profile_id,
+              notification_type: 'program_assigned',
+              title: `New nutrition plan: ${form.name}`,
+              body: `Your coach has assigned you a new nutrition plan`,
+              link_url: '/dashboard/client'
+            })
           })
-        })
+        }
       }
     }
     setSaving(false); setView('plans'); setEditing(null)

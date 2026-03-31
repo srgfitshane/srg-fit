@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -104,11 +105,16 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
-    setPosts(postData || [])
-    if (postData?.length) {
+    const resolvedPosts = await Promise.all((postData || []).map(async (post: any) => ({
+      ...post,
+      image_url: await resolveSignedMediaUrl(supabase, 'community-media', post.image_url),
+      video_url: await resolveSignedMediaUrl(supabase, 'community-media', post.video_url),
+    })))
+    setPosts(resolvedPosts)
+    if (resolvedPosts.length) {
       const { data: replyData } = await supabase
         .from('community_replies').select('*').eq('coach_id', id)
-        .in('post_id', postData.map((p:any) => p.id))
+        .in('post_id', resolvedPosts.map((p:any) => p.id))
         .order('created_at', { ascending: true })
       const grouped: Record<string,any[]> = {}
       replyData?.forEach((r:any) => {
@@ -159,9 +165,9 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       const { error } = await supabase.storage
         .from('community-media').upload(path, mediaFile, { upsert: false })
       if (!error) {
-        const { data: urlData } = supabase.storage.from('community-media').getPublicUrl(path)
-        if (mediaType === 'image') imageUrl = urlData.publicUrl
-        else videoUrl = urlData.publicUrl
+        const signedUrl = await resolveSignedMediaUrl(supabase, 'community-media', path)
+        if (mediaType === 'image') imageUrl = signedUrl ? path : null
+        else videoUrl = signedUrl ? path : null
       }
       setUploading(false)
     }

@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
+function getAllowedPriceIds() {
+  return [
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_MONTHLY,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_WEEKLY,
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+}
+
 export async function POST(req: NextRequest) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as Stripe.LatestApiVersion })
   try {
     const { priceId, email, name } = await req.json() as { priceId?: string; email?: string; name?: string }
     if (!priceId) return NextResponse.json({ error: 'Missing priceId' }, { status: 400 })
+
+    const allowedPriceIds = getAllowedPriceIds()
+    if (!allowedPriceIds.includes(priceId)) {
+      return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 })
+    }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin
 

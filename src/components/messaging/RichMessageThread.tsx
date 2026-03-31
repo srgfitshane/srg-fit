@@ -2,14 +2,13 @@
 
 /**
  * RichMessageThread — shared component used by coach & client dashboards
- * Features: text, audio recording, video recording, image/video upload, GIF search, reactions
+ * Features: text, audio recording, video recording, image/video upload, reactions
  *
  * Props:
  *   myId        — auth.users UUID of the current user
  *   otherId     — profile UUID of the person we're talking to  (profiles.id)
  *   otherName   — display name
  *   otherAvatar — avatar URL (optional)
- *   tenorKey    — Tenor API key for GIF search (optional; GIF button hidden if omitted)
  *   height      — container height (default '100%')
  */
 
@@ -34,8 +33,6 @@ interface Message {
   message_type: string
   media_url: string | null
   media_type: string | null
-  gif_url: string | null
-  gif_preview: string | null
   duration_sec: number | null
   read: boolean
   created_at: string
@@ -61,27 +58,24 @@ interface Props {
   otherId: string
   otherName: string
   otherAvatar?: string | null
-  tenorKey?: string
   height?: string
+  tenorKey?: string
   quickReplies?: Array<{ id: string; title: string; body: string }>
 }
 
-interface TenorGif {
-  url?: string
-  content_description?: string
-  media_formats?: {
-    gif?: { url?: string }
-    tinygif?: { url?: string }
-  }
-}
-
-export default function RichMessageThread({ myId, otherId, otherName, tenorKey, height = '100%', quickReplies = [] }: Props) {
+export default function RichMessageThread({ myId, otherId, otherName, height = '100%', quickReplies = [] }: Props) {
   const supabase = useMemo(() => createClient(), [])
 
   // Fire-and-forget push notification to the recipient
-  const notifyRecipient = (body: string) => {
+  const notifyRecipient = async (body: string) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+
     fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({
         user_id: otherId,
         notification_type: 'new_message',
@@ -94,12 +88,9 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
   const [thread,       setThread]       = useState<Message[]>([])
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
-  const [mode,         setMode]         = useState<'text'|'audio'|'video'|'gif'>('text')
+  const [mode,         setMode]         = useState<'text'|'audio'|'video'>('text')
   const [recording,    setRecording]    = useState(false)
   const [recSeconds,   setRecSeconds]   = useState(0)
-  const [gifQuery,     setGifQuery]     = useState('')
-  const [gifs,         setGifs]         = useState<TenorGif[]>([])
-  const [gifLoading,   setGifLoading]   = useState(false)
   const [reactTarget,  setReactTarget]  = useState<string|null>(null)
   const [reactPos,     setReactPos]     = useState<{x:number,y:number}>({x:0,y:0})
   const longPressRef = useRef<ReturnType<typeof setTimeout>|null>(null)
@@ -284,31 +275,6 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
     setRecording(false)
   }
 
-  // ── GIF search ────────────────────────────────────────────────────────────
-  const searchGifs = async (q: string) => {
-    if (!q.trim() || !tenorKey) return
-    setGifLoading(true)
-    try {
-      const res = await fetch(`https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${tenorKey}&limit=20&media_filter=gif,tinygif`)
-      const data = await res.json()
-      setGifs(data.results || [])
-    } catch { setGifs([]) }
-    setGifLoading(false)
-  }
-
-  const sendGif = async (gif: TenorGif) => {
-    const full  = gif.media_formats?.gif?.url || gif.url
-    const tiny  = gif.media_formats?.tinygif?.url || full
-    const { data } = await supabase.from('messages').insert({
-      sender_id: myId, recipient_id: otherId,
-      body: gif.content_description || 'GIF',
-      message_type: 'gif', gif_url: full, gif_preview: tiny, read: false,
-    }).select().single()
-    if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
-    notifyRecipient('🎬 GIF')
-    setMode('text'); setGifs([]); setGifQuery('')
-  }
-
   // ── Reactions ─────────────────────────────────────────────────────────────
   const toggleReaction = async (msgId: string, emoji: string) => {
     const msg = thread.find(m => m.id === msgId)
@@ -353,9 +319,7 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
   // ── Render bubble content ─────────────────────────────────────────────────
   const BubbleContent = ({ msg }: { msg: Message }) => {
     const isMe = msg.sender_id === myId
-    if (msg.message_type === 'gif' && msg.gif_url) {
-      return <img src={msg.gif_url} alt={msg.body || 'GIF'} style={{ maxWidth:'100%', width:'100%', borderRadius:10, display:'block' }} />
-    }
+
     if (msg.message_type === 'image' && msg.media_url) {
       return (
         <img src={msg.media_url} alt="image"
@@ -406,18 +370,15 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         .rmt-scroll::-webkit-scrollbar{width:4px}
         .rmt-scroll::-webkit-scrollbar-thumb{background:${c.border};border-radius:4px}
-        .rmt-gif:hover{opacity:.85;transform:scale(1.02);cursor:pointer}
-        .rmt-reaction-pill:hover{opacity:.8}
+.rmt-reaction-pill:hover{opacity:.8}
         .rmt-input-area{display:flex;flex-direction:column;gap:6px;}
         .rmt-toolbar{display:flex;gap:4px;align-items:center;}
         .rmt-input-row{display:flex;gap:8px;align-items:flex-end;}
         .rmt-macro-row{display:flex;gap:6px;flex-wrap:wrap;}
-        .rmt-gif-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-        .rmt-picker{animation:scaleIn .15s ease;transform-origin:bottom center;}
+.rmt-picker{animation:scaleIn .15s ease;transform-origin:bottom center;}
         .rmt-bubble{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
         @media(max-width:400px){
-          .rmt-gif-grid{grid-template-columns:repeat(3,1fr);}
-          .rmt-input-row{align-items:stretch;}
+.rmt-input-row{align-items:stretch;}
         }
       `}</style>
 
@@ -467,7 +428,7 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
           {thread.map((msg) => {
             const isMe = msg.sender_id === myId
             const grouped = groupReactions(msg.reactions)
-            const isMedia = ['image','video','gif'].includes(msg.message_type)
+            const isMedia = ['image','video'].includes(msg.message_type)
             return (
               <div key={msg.id} style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation:'fadeUp .15s ease' }}>
                 <div style={{ position:'relative', maxWidth: isMedia ? '80%' : '74%', width: isMedia ? '80%' : 'auto' }}>
@@ -516,38 +477,6 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
           })}
           <div ref={bottomRef} />
         </div>
-
-        {/* ── GIF search panel ── */}
-        {mode === 'gif' && (
-          <div style={{ borderTop:'1px solid '+c.border, padding:'12px 16px', background:c.surfaceUp }}>
-            <div style={{ display:'flex', gap:8, marginBottom:10 }}>
-              <input value={gifQuery} onChange={e=>setGifQuery(e.target.value)}
-                onKeyDown={e=>{ if(e.key==='Enter') searchGifs(gifQuery) }}
-                placeholder="Search GIFs and memes..."
-                style={{ flex:1, background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:9, padding:'8px 12px', fontSize:13, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
-              <button onClick={()=>searchGifs(gifQuery)} disabled={gifLoading}
-                style={{ ...btnBase, background:c.teal, color:'#000', opacity:gifLoading?.6:1 }}>
-                {gifLoading ? '...' : '🔍'}
-              </button>
-              <button onClick={()=>{ setMode('text'); setGifs([]) }}
-                style={{ ...btnBase, background:c.surfaceHigh, color:c.textMuted, border:'1px solid '+c.border }}>
-                ✕
-              </button>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, maxHeight:200, overflowY:'auto' }}>
-              {gifs.map((g, i) => (
-                <img key={i} className="rmt-gif" src={g.media_formats?.tinygif?.url || g.url} alt={g.content_description}
-                  style={{ width:'100%', borderRadius:8, transition:'opacity .1s, transform .1s' }}
-                  onClick={()=>sendGif(g)} />
-              ))}
-              {gifs.length === 0 && !gifLoading && (
-                <div style={{ gridColumn:'1/-1', color:c.textMuted, fontSize:12, textAlign:'center', padding:16 }}>
-                  Search for a GIF or meme to send 🎭
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* ── Video preview ── */}
         {mode === 'video' && recording && (
@@ -610,12 +539,6 @@ export default function RichMessageThread({ myId, otherId, otherName, tenorKey, 
                   style={{ ...btnBase, padding:'7px 10px', background:'transparent', color:c.textMuted, border:'1px solid transparent' }}>
                   📎
                 </button>
-                {tenorKey && (
-                  <button title="Send GIF or meme" aria-label="Toggle GIF search" aria-expanded={mode==='gif'} onClick={()=>setMode(mode==='gif'?'text':'gif')}
-                    style={{ ...btnBase, padding:'5px 10px', background: mode==='gif'?c.orange+'22':'transparent', color:mode==='gif'?c.orange:c.textMuted, border:'1px solid '+(mode==='gif'?c.orange+'40':'transparent'), fontSize:11, fontWeight:900 }}>
-                    GIF
-                  </button>
-                )}
               </div>
 
               {showMacros && quickReplies.length > 0 && (

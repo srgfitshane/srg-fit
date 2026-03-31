@@ -570,17 +570,23 @@ export default function ActiveWorkoutPage() {
 
     // Fire-and-forget push notification — never block completion on this
     if (session?.coach_id) {
-      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          user_id: session.coach_id,
-          notification_type: 'checkin_submitted',
-          title: `Workout completed: ${session.title}`,
-          body: `Session logged in ${Math.floor(elapsedSeconds/60)} min${finishForm.session_rpe ? ` · RPE ${finishForm.session_rpe}` : ''}`,
-          link_url: `/dashboard/coach/reviews`,
-          data: { session_id: sessionId }
-        })
-      }).catch(() => {}) // intentionally swallowed — never block on this
+      const { data: { session: authSession } } = await supabase.auth.getSession()
+      if (authSession?.access_token) {
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST', headers: {
+            'Content-Type':'application/json',
+            'Authorization': `Bearer ${authSession.access_token}`,
+          },
+          body: JSON.stringify({
+            user_id: session.coach_id,
+            notification_type: 'checkin_submitted',
+            title: `Workout completed: ${session.title}`,
+            body: `Session logged in ${Math.floor(elapsedSeconds/60)} min${finishForm.session_rpe ? ` · RPE ${finishForm.session_rpe}` : ''}`,
+            link_url: `/dashboard/coach/reviews`,
+            data: { session_id: sessionId }
+          })
+        }).catch(() => {}) // intentionally swallowed — never block on this
+      }
     }
 
     setSaving(false)
