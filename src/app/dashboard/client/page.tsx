@@ -185,6 +185,7 @@ type MilestoneRecord = {
 
 type PersonalRecordSummary = {
   id: string
+  exercise_id?: string | null
   weight_pr?: number | null
   rep_pr_reps?: number | null
   rep_pr_weight?: number | null
@@ -236,6 +237,7 @@ type ClientGoalRecord = {
   title: string
   description?: string | null
   type?: string | null
+  exercise_id?: string | null
   target_value?: number | null
   current_value?: number | null
   unit?: string | null
@@ -441,6 +443,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: goalsData },
           { data: activityData },
           { data: completedTodayData },
+          { data: latestMetric },
+          { data: allPRData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
@@ -471,6 +475,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
           supabase.from('client_activities').select('*').eq('client_id', cid).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(5),
           supabase.from('workout_sessions').select('id, title').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
+          supabase.from('metrics').select('weight').eq('client_id', clientData.id).not('weight', 'is', null).order('logged_date', { ascending: false }).limit(1).single(),
+          supabase.from('personal_records').select('exercise_id, weight_pr').eq('client_id', cid),
         ])
 
         setHabits((habitData || []) as HabitRecord[])
@@ -500,9 +506,33 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         }
 
         setPastEntries((pastData || []) as JournalEntryRecord[])
-        setActiveGoals((goalsData || []) as ClientGoalRecord[])
         setRecentActivities((activityData || []) as ClientActivityRecord[])
         setCompletedToday(completedTodayData ? { id: completedTodayData.id, title: completedTodayData.title } : null)
+
+        // Auto-update goal current_value from live metrics + PRs
+        const latestWeight = latestMetric?.weight ? Number(latestMetric.weight) : null
+        const prMap: Record<string, number> = {}
+        ;(allPRData || []).forEach((pr: { exercise_id: string | null, weight_pr: number | null }) => {
+          if (pr.exercise_id && pr.weight_pr) prMap[pr.exercise_id] = Number(pr.weight_pr)
+        })
+
+        const goalsWithProgress = ((goalsData || []) as ClientGoalRecord[]).map(goal => {
+          let current = goal.current_value ?? 0
+          if (goal.type === 'bodyweight' && latestWeight !== null) current = latestWeight
+          if (goal.type === 'weight_lifted' && goal.exercise_id && prMap[goal.exercise_id]) {
+            current = prMap[goal.exercise_id]
+          }
+          return { ...goal, current_value: current }
+        })
+        setActiveGoals(goalsWithProgress)
+
+        // Fire-and-forget: persist current_value updates to DB
+        goalsWithProgress.forEach(goal => {
+          if (goal.current_value !== (goalsData as ClientGoalRecord[])?.find(g => g.id === goal.id)?.current_value) {
+            supabase.from('client_goals').update({ current_value: goal.current_value })
+              .eq('id', goal.id).then(() => {})
+          }
+        })
 
         // Workout streak — consecutive weeks with at least 1 completed session
         const { data: completedSessions } = await supabase
@@ -1156,22 +1186,23 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   const pct = goal.target_value && goal.current_value != null
                     ? Math.min(100, Math.round((goal.current_value / goal.target_value) * 100))
                     : null
-                  const isComplete = goal.status === 'completed'
-                  const color = isComplete ? t.teal : t.orange
+                  const isComplete = goal.status === 'completed' || (pct !== null && pct >= 100)
+                  const color = isComplete ? t.teal : goal.type === 'consistency' ? t.orange : goal.type === 'bodyweight' ? t.purple : t.yellow
+                  const icon = isComplete ? '🏆' : goal.type === 'consistency' ? '🔥' : goal.type === 'bodyweight' ? '⚖️' : '🏋️'
                   const daysLeft = goal.deadline
                     ? Math.ceil((new Date(goal.deadline).getTime() - todayStartMs) / 86400000)
                     : null
                   return (
-                    <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : t.border}`, borderRadius:13, padding:'12px 14px' }}>
-                      <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom: pct !== null ? 10 : 0 }}>
-                        <div style={{ width:32, height:32, borderRadius:9, background: isComplete ? t.teal+'20' : t.orangeDim, border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
-                          {isComplete ? '🏆' : '🎯'}
+                    <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : color+'30'}`, borderRadius:13, padding:'12px 14px' }}>
+                      <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom: pct !== null ? 8 : 0 }}>
+                        <div style={{ width:32, height:32, borderRadius:9, background:color+'18', border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                          {icon}
                         </div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:13, fontWeight:700, color: isComplete ? t.teal : t.text }}>{goal.title}</div>
                           <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
                             {goal.target_value != null && goal.unit
-                              ? `${goal.current_value ?? 0} / ${goal.target_value} ${goal.unit}`
+                              ? `${Number(goal.current_value ?? 0).toFixed(goal.type === 'bodyweight' ? 1 : 0)} / ${goal.target_value} ${goal.unit}`
                               : goal.description || ''}
                             {daysLeft !== null && !isComplete && (
                               <span style={{ marginLeft:6, color: daysLeft <= 7 ? t.red : t.textMuted }}>
@@ -1186,10 +1217,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         <div>
                           <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginBottom:4 }}>
                             <span>Progress</span>
-                            <span style={{ fontWeight:700, color: pct >= 100 ? t.teal : t.orange }}>{pct}%</span>
+                            <span style={{ fontWeight:700, color: pct >= 100 ? t.teal : color }}>{pct}%</span>
                           </div>
                           <div style={{ height:6, borderRadius:4, background:t.surfaceHigh, overflow:'hidden' }}>
-                            <div style={{ height:'100%', width:`${pct}%`, borderRadius:4, background: pct >= 100 ? t.teal : `linear-gradient(90deg,${t.orange},${t.yellow})`, transition:'width 0.4s ease' }}/>
+                            <div style={{ height:'100%', width:`${pct}%`, borderRadius:4, background: pct >= 100 ? t.teal : `linear-gradient(90deg,${color},${color}aa)`, transition:'width 0.6s ease' }}/>
                           </div>
                         </div>
                       )}
