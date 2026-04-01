@@ -8,28 +8,34 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 }
 
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SERVICE_ROLE  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+// Dedicated service-role client — never touched by user JWTs
+const adminDb = createClient(SUPABASE_URL, SERVICE_ROLE, {
+  auth: { persistSession: false, autoRefreshToken: false }
+})
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
     const authHeader = req.headers.get('Authorization') || ''
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
-
-    // Validate the user JWT via service role (can verify any token)
+    // Validate user JWT using a SEPARATE client so adminDb stays clean
     let callerId: string | null = null
     if (authHeader.startsWith('Bearer ')) {
       const token = authHeader.replace('Bearer ', '')
-      const { data: { user }, error } = await supabase.auth.getUser(token)
+      const authClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${token}` } }
+      })
+      const { data: { user }, error } = await authClient.auth.getUser()
       if (!error && user) callerId = user.id
       else console.error('Auth error:', error?.message)
     }
 
     if (!callerId) {
-      console.error('No valid caller - auth header:', authHeader.slice(0, 30))
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401
       })
@@ -37,13 +43,13 @@ serve(async (req: Request) => {
 
     const { user_id, notification_type, title, body, link_url, url } = await req.json()
     if (!user_id || !notification_type) {
-      return new Response(JSON.stringify({ error: 'Missing user_id or notification_type' }), {
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400
       })
     }
 
-    // 1. Insert in-app notification
-    const { error: dbErr } = await supabase.from('notifications').insert({
+    // 1. Insert using clean adminDb (service_role context preserved)
+    const { error: dbErr } = await adminDb.from('notifications').insert({
       user_id,
       notification_type,
       title: title || 'New Notification',
@@ -52,6 +58,7 @@ serve(async (req: Request) => {
       is_read: false,
     })
     if (dbErr) console.error('DB insert error:', JSON.stringify(dbErr))
+    else console.log('Notification inserted for', user_id)
 
     // 2. Fire Web Push
     const vapidPublic  = Deno.env.get('VAPID_PUBLIC_KEY')  || ''
@@ -60,7 +67,7 @@ serve(async (req: Request) => {
 
     if (vapidPublic && vapidPrivate) {
       webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate)
-      const { data: subs } = await supabase
+      const { data: subs } = await adminDb
         .from('push_subscriptions').select('endpoint, p256dh, auth').eq('user_id', user_id)
 
       console.log(`Push subs for ${user_id}: ${subs?.length || 0}`)
@@ -68,10 +75,10 @@ serve(async (req: Request) => {
       if (subs && subs.length > 0) {
         const payload = JSON.stringify({
           title: title || 'SRG Fit',
-          body: body || '',
-          icon: '/icon-192.png',
+          body:  body  || '',
+          icon:  '/icon-192.png',
           badge: '/icon-32.png',
-          url: link_url || url || '/dashboard/client',
+          url:   link_url || url || '/dashboard/client',
         })
         const expiredEndpoints: string[] = []
         await Promise.allSettled(subs.map(async (sub) => {
@@ -80,7 +87,7 @@ serve(async (req: Request) => {
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
               payload, { TTL: 86400 }
             )
-            console.log('Push sent ok')
+            console.log('Push sent ok to', sub.endpoint.slice(0, 40))
           } catch (e: unknown) {
             const status = (e as { statusCode?: number }).statusCode
             console.error('Push error:', status, (e as Error).message?.slice(0, 100))
@@ -88,11 +95,11 @@ serve(async (req: Request) => {
           }
         }))
         if (expiredEndpoints.length > 0) {
-          await supabase.from('push_subscriptions').delete().in('endpoint', expiredEndpoints)
+          await adminDb.from('push_subscriptions').delete().in('endpoint', expiredEndpoints)
         }
       }
     } else {
-      console.warn('VAPID keys missing')
+      console.warn('VAPID keys not set')
     }
 
     return new Response(JSON.stringify({ success: true }), {
