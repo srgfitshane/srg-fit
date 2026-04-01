@@ -51,6 +51,7 @@ export default function ClientDetail() {
   const [nutritionEdit, setNutritionEdit] = useState(false)
   const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
   const [nutritionSaving, setNutritionSaving] = useState(false)
+  const [monthlyMacros, setMonthlyMacros] = useState<any[]>([])
   const [program,       setProgram]       = useState<any>(null)
   const [dailyPulse,    setDailyPulse]    = useState<any[]>([])
   const [journalEntries,setJournalEntries]= useState<any[]>([])
@@ -153,6 +154,7 @@ export default function ClientDetail() {
         { data: schedData },
         { data: assignData },
         { data: activityData },
+        { data: macroData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
         supabase.from('checkins').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(10),
@@ -166,6 +168,7 @@ export default function ClientDetail() {
         supabase.from('check_in_schedules').select('*').eq('client_id', clientId).eq('coach_id', user.id).order('created_at', { ascending: false }).limit(1).single(),
         supabase.from('client_form_assignments').select('*, form:onboarding_forms(title)').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).order('assigned_at', { ascending: false }).limit(20),
         supabase.from('client_activities').select('*').eq('client_id', clientId).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(8),
+        supabase.from('food_entries').select('logged_at,calories,protein_g,carbs_g,fat_g').eq('client_id', clientId).gte('logged_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).order('logged_at', { ascending: true }),
       ])
 
       setForms(formData || [])
@@ -189,6 +192,18 @@ export default function ClientDetail() {
       setIntake(intakeData || null)
       setCheckinSchedule(schedData || null)
       setActivities((activityData || []) as ClientActivityRecord[])
+
+      // Aggregate food_entries by day for monthly macro log
+      const byDay: Record<string, {date:string,calories:number,protein:number,carbs:number,fat:number}> = {}
+      for (const entry of (macroData || []) as any[]) {
+        const date = entry.logged_at.slice(0, 10)
+        if (!byDay[date]) byDay[date] = { date, calories:0, protein:0, carbs:0, fat:0 }
+        byDay[date].calories += Number(entry.calories || 0)
+        byDay[date].protein  += Number(entry.protein_g || 0)
+        byDay[date].carbs    += Number(entry.carbs_g || 0)
+        byDay[date].fat      += Number(entry.fat_g || 0)
+      }
+      setMonthlyMacros(Object.values(byDay).sort((a,b) => a.date.localeCompare(b.date)))
       if (schedData) {
         setScheduleForm({
           send_day:  schedData.send_day  ?? 0,
@@ -473,66 +488,56 @@ export default function ClientDetail() {
                 )}
               </div>
 
-              {/* Recent workouts */}
+              {/* Upcoming workouts */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Workouts</div>
-                {workouts.length > 0 ? workouts.map((w:any, i:number) => (
-                  <div key={w.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom: i < workouts.length-1 ? '1px solid '+t.border : 'none' }}>
-                    <div style={{ width:32, height:32, borderRadius:9, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>💪</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{w.name || 'Workout Session'}</div>
-                      <div style={{ fontSize:11, color:t.textMuted }}>{new Date(w.scheduled_date || w.completed_at || w.created_at).toLocaleDateString()}</div>
+                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Upcoming Workouts</div>
+                {workouts.filter((w:any) => w.status !== 'completed').sort((a:any,b:any) => (a.scheduled_date||'').localeCompare(b.scheduled_date||'')).slice(0,5).length > 0
+                  ? workouts.filter((w:any) => w.status !== 'completed').sort((a:any,b:any) => (a.scheduled_date||'').localeCompare(b.scheduled_date||'')).slice(0,5).map((w:any, i:number, arr:any[]) => (
+                  <div key={w.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom: i < arr.length-1 ? '1px solid '+t.border : 'none' }}>
+                    <div style={{ width:32, height:32, borderRadius:9, background: w.status==='in_progress' ? t.orangeDim : t.tealDim, border:'1px solid '+(w.status==='in_progress'?t.orange:t.teal)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
+                      {w.status==='in_progress' ? '🔄' : '📅'}
                     </div>
-                    {w.status && <div style={{ fontSize:11, color: w.status==='completed' ? t.green : t.orange, fontWeight:700, textTransform:'capitalize' }}>
-                      {w.status}
-                    </div>}
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{w.title || w.name || 'Workout Session'}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>{w.scheduled_date ? new Date(w.scheduled_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'}</div>
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:700, color: w.status==='in_progress' ? t.orange : t.textMuted, textTransform:'capitalize' as const }}>{w.status}</div>
                   </div>
                 )) : (
-                  <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No workouts logged yet</div>
+                  <div style={{ textAlign:'center' as const, padding:'20px 0', color:t.textMuted, fontSize:13 }}>No upcoming workouts</div>
                 )}
               </div>
 
-              {/* Recent activity */}
+              {/* Recent activity — completed workouts + logged activities */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:14 }}>
-                  <div style={{ fontSize:13, fontWeight:800 }}>Recent Activity</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>
-                    Outside formal training
-                  </div>
-                </div>
-                {activities.length > 0 ? (
-                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    {activities.slice(0, 5).map((activity) => {
-                      const config = getClientActivityConfig(activity.activity_type)
-                      const summary = summarizeClientActivity(activity)
-                      return (
-                        <div key={activity.id} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
-                          <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
-                            <div style={{ width:34, height:34, borderRadius:10, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>
-                              {config.icon}
-                            </div>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:4 }}>
-                                <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{getClientActivityTitle(activity)}</div>
-                                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, whiteSpace:'nowrap' as const }}>
-                                  {formatClientActivityDate(activity.activity_date)}
-                                </div>
-                              </div>
-                              <div style={{ fontSize:11, color:t.green, fontWeight:700, marginBottom:4 }}>{config.label}</div>
-                              <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.55 }}>
-                                {summary.length > 0 ? summary.join(' • ') : 'Logged extra movement'}
-                              </div>
-                            </div>
+                <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Activity</div>
+                {(() => {
+                  const completedW = workouts.filter((w:any) => w.status === 'completed').slice(0, 5).map((w:any) => ({
+                    id: w.id, type:'workout', label: w.title || w.name || 'Workout', date: w.scheduled_date || w.created_at,
+                    sub: w.duration_seconds ? Math.floor(w.duration_seconds/60)+'m' : null, icon:'💪', color:t.green,
+                  }))
+                  const activityItems = activities.slice(0, 5).map((a:any) => {
+                    const config = getClientActivityConfig(a.activity_type)
+                    return { id: a.id, type:'activity', label: getClientActivityTitle(a), date: a.activity_date, sub: config.label, icon: config.icon, color:t.teal }
+                  })
+                  const merged = [...completedW, ...activityItems]
+                    .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+                    .slice(0, 8)
+                  if (!merged.length) return <div style={{ textAlign:'center' as const, padding:'20px 0', color:t.textMuted, fontSize:13 }}>No activity yet</div>
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {merged.map((item:any) => (
+                        <div key={item.id+item.type} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                          <div style={{ width:32, height:32, borderRadius:9, background:item.color+'18', border:'1px solid '+item.color+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>{item.icon}</div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:600 }}>{item.label}</div>
+                            <div style={{ fontSize:11, color:t.textMuted }}>{item.sub} · {item.date ? new Date(item.date+'T12:00:00').toLocaleDateString([],{month:'short',day:'numeric'}) : '—'}</div>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>
-                    No extra activity logged yet.
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Coach notes */}
@@ -605,13 +610,38 @@ export default function ClientDetail() {
           {/* ── WORKOUTS TAB ── */}
           {activeTab === 'training' && (
             <div>
-              <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Workout Sessions</div>
-              <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap any session to see the full set-by-set log.</div>
-              {workouts.length === 0 ? (
+              {/* Upcoming sessions */}
+              {(() => {
+                const upcoming = workouts.filter((w:any) => w.status !== 'completed').sort((a:any,b:any) => (a.scheduled_date||'').localeCompare(b.scheduled_date||''))
+                return upcoming.length > 0 ? (
+                  <div style={{ marginBottom:24 }}>
+                    <div style={{ fontSize:13, fontWeight:800, color:t.teal, marginBottom:12 }}>Upcoming</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {upcoming.map((w:any) => (
+                        <div key={w.id} style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+                          <div style={{ width:36, height:36, borderRadius:10, background:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                            {w.status==='in_progress' ? '🔄' : '📅'}
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:700 }}>{w.title || w.name || 'Workout Session'}</div>
+                            <div style={{ fontSize:11, color:t.textMuted }}>{w.scheduled_date ? new Date(w.scheduled_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'}</div>
+                          </div>
+                          <div style={{ fontSize:11, fontWeight:700, color: w.status==='in_progress' ? t.orange : t.teal, textTransform:'capitalize' as const }}>{w.status}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              })()}
+
+              {/* Completed sessions */}
+              <div style={{ fontSize:13, fontWeight:800, marginBottom:6, color:t.textMuted }}>Completed</div>
+              <div style={{ fontSize:12, color:t.textMuted, marginBottom:16 }}>Tap any session to see the full set-by-set log.</div>
+              {workouts.filter((w:any) => w.status === 'completed').length === 0 ? (
                 <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
-                  No workout sessions yet.
+                  No completed sessions yet.
                 </div>
-              ) : workouts.map((w:any) => {
+              ) : workouts.filter((w:any) => w.status === 'completed').map((w:any) => {
                 const isExpanded = expandedWorkout === w.id
                 const detail = workoutDetails[w.id]
                 const statusColor = w.status === 'completed' ? t.green : w.status === 'in_progress' ? t.orange : t.textMuted
@@ -1130,6 +1160,53 @@ export default function ClientDetail() {
                       style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:nutritionSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:nutritionSaving?0.6:1 }}>
                       {nutritionSaving ? 'Saving...' : '✓ Save Nutrition Plan'}
                     </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Monthly macro log */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
+                <div style={{ fontSize:15, fontWeight:800, marginBottom:4 }}>
+                  {new Date().toLocaleString('default',{month:'long'})} Food Log
+                </div>
+                <div style={{ fontSize:12, color:t.textMuted, marginBottom:16 }}>Daily totals from tracked entries this month</div>
+                {monthlyMacros.length === 0 ? (
+                  <div style={{ textAlign:'center' as const, padding:'20px 0', color:t.textMuted, fontSize:13 }}>No entries logged this month</div>
+                ) : (
+                  <div style={{ overflowX:'auto' as const }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+                      <thead>
+                        <tr style={{ color:t.textMuted, textTransform:'uppercase' as const, fontSize:10, letterSpacing:'0.06em' }}>
+                          <th style={{ textAlign:'left' as const, padding:'6px 8px', borderBottom:'1px solid '+t.border }}>Date</th>
+                          <th style={{ textAlign:'right' as const, padding:'6px 8px', borderBottom:'1px solid '+t.border }}>Cal</th>
+                          <th style={{ textAlign:'right' as const, padding:'6px 8px', borderBottom:'1px solid '+t.border }}>Protein</th>
+                          <th style={{ textAlign:'right' as const, padding:'6px 8px', borderBottom:'1px solid '+t.border }}>Carbs</th>
+                          <th style={{ textAlign:'right' as const, padding:'6px 8px', borderBottom:'1px solid '+t.border }}>Fat</th>
+                          {nutritionPlan && <th style={{ textAlign:'right' as const, padding:'6px 8px', borderBottom:'1px solid '+t.border }}>vs Target</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyMacros.map((day:any) => {
+                          const calTarget = nutritionPlan?.calories_target
+                          const diff = calTarget ? Math.round(day.calories - calTarget) : null
+                          const onTrack = diff !== null && Math.abs(diff) <= 150
+                          return (
+                            <tr key={day.date} style={{ borderBottom:'1px solid '+t.border+'60' }}>
+                              <td style={{ padding:'8px 8px', color:t.textMuted }}>{new Date(day.date+'T12:00:00').toLocaleDateString([],{month:'short',day:'numeric'})}</td>
+                              <td style={{ padding:'8px 8px', textAlign:'right' as const, fontWeight:700, color:t.text }}>{Math.round(day.calories)}</td>
+                              <td style={{ padding:'8px 8px', textAlign:'right' as const, color:t.teal }}>{Math.round(day.protein)}g</td>
+                              <td style={{ padding:'8px 8px', textAlign:'right' as const, color:t.orange }}>{Math.round(day.carbs)}g</td>
+                              <td style={{ padding:'8px 8px', textAlign:'right' as const, color:t.yellow }}>{Math.round(day.fat)}g</td>
+                              {nutritionPlan && (
+                                <td style={{ padding:'8px 8px', textAlign:'right' as const, fontWeight:700, color: onTrack ? t.green : diff! > 0 ? t.red : t.textMuted }}>
+                                  {diff !== null ? (diff > 0 ? '+' : '') + diff : '—'}
+                                </td>
+                              )}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
