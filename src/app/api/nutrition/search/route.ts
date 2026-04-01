@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 // FatSecret Platform API — server-side to keep client_secret safe
 const FS_CLIENT_ID     = process.env.FATSECRET_CLIENT_ID || ''
@@ -27,6 +28,11 @@ async function getToken(): Promise<string> {
 
 export async function GET(req: NextRequest) {
   try {
+    // Require authenticated user — prevents unauthenticated API quota abuse
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { searchParams } = new URL(req.url)
     const query   = searchParams.get('q')
     const barcode = searchParams.get('barcode')
