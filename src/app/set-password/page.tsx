@@ -27,6 +27,7 @@ function SetPasswordInner() {
   const [error,     setError]     = useState('')
   const [done,      setDone]      = useState(false)
   const [sessionOk, setSessionOk] = useState(false)
+  const [checking,  setChecking]  = useState(true)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -40,7 +41,7 @@ function SetPasswordInner() {
         const refresh_token = hashParams.get('refresh_token')
         if (access_token && refresh_token) {
           const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
-          if (!setErr) { setSessionOk(true); window.location.hash = ''; return }
+          if (!setErr) { setSessionOk(true); setChecking(false); window.location.hash = ''; return }
         }
       }
 
@@ -48,22 +49,24 @@ function SetPasswordInner() {
       const code = searchParams.get('code')
       if (code) {
         const { data, error: codeErr } = await supabase.auth.exchangeCodeForSession(code)
-        if (!codeErr && data.session) { setSessionOk(true); return }
+        if (!codeErr && data.session) { setSessionOk(true); setChecking(false); return }
       }
 
-      // 3. Session already exists
+      // 3. Session already exists (set by /auth/callback server-side)
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) { setSessionOk(true); return }
+      if (session) { setSessionOk(true); setChecking(false); return }
 
-      // 4. Pre-fill email from query param if provided (e.g. ?email=...)
+      // 4. No session — show OTP fallback
       const emailParam = searchParams.get('email')
       if (emailParam) setOtpEmail(emailParam)
+      setChecking(false)
     }
-    checkSession()
+    void checkSession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         setSessionOk(true)
+        setChecking(false)
       }
     })
     return () => subscription.unsubscribe()
@@ -133,7 +136,11 @@ function SetPasswordInner() {
           </div>
 
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:20, padding:32 }}>
-            {done ? (
+            {checking ? (
+              <div style={{ textAlign:'center', padding:'20px 0' }}>
+                <div style={{ fontSize:13, color:t.textMuted }}>Verifying your invite link...</div>
+              </div>
+            ) : done ? (
               <div style={{ textAlign:'center' }}>
                 <div style={{ fontSize:40, marginBottom:16 }}>🎉</div>
                 <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Password set!</div>
