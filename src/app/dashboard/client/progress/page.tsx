@@ -145,7 +145,8 @@ export default function ClientProgressPage() {
     setPulseHistory((pulseData || []) as PulseEntry[])
     if (pData?.length) {
       const withUrls = await Promise.all((pData as ProgressPhoto[]).map(async (p) => {
-        const { data: url } = await supabase.storage.from('progress-photos').createSignedUrl(p.storage_path, 3600)
+        const { data: url, error: urlErr } = await supabase.storage.from('progress-photos').createSignedUrl(p.storage_path, 3600)
+        if (urlErr) console.error('signedUrl error', p.storage_path, urlErr)
         return { ...p, signedUrl: url?.signedUrl }
       }))
       setPhotos(withUrls)
