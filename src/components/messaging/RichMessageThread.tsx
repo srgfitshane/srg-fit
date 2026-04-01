@@ -135,6 +135,7 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
   const [showMacros,   setShowMacros]   = useState(false)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
+  const scrollRef    = useRef<HTMLDivElement>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mediaRecRef  = useRef<MediaRecorder|null>(null)
@@ -182,14 +183,11 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!bottomRef.current) return
-    if (initialLoadRef.current) {
-      // Jump immediately — no animation
-      bottomRef.current.scrollIntoView({ behavior: 'auto' })
-      initialLoadRef.current = false
-    } else {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
-    }
+    const el = scrollRef.current
+    if (!el) return
+    // Always jump to bottom — instant on load, instant on new message
+    // scrollTop = scrollHeight is reliable regardless of scrollIntoView container issues
+    el.scrollTop = el.scrollHeight
   }, [thread])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
@@ -478,7 +476,7 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
         )}
 
         {/* ── Thread ── */}
-        <div className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+        <div ref={scrollRef} className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           {thread.length === 0 && (
             <div style={{ textAlign:'center', marginTop:48, color:c.textMuted, fontSize:13 }}>No messages yet — say something! 👋</div>
           )}
