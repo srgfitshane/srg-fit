@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 import MorningPulse from '@/components/client/MorningPulse'
 import {
   CLIENT_ACTIVITY_INTENSITIES,
@@ -326,6 +327,8 @@ export function ClientDashboardPreview({ overrideClientId }: { overrideClientId:
 
 function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string } = {}) {
   const [profile,      setProfile]      = useState<DashboardProfile | null>(null)
+  // Register for push notifications once profile is loaded
+  usePushNotifications(profile?.id ?? null)
   const [clientRecord, setClientRecord] = useState<DashboardClientRecord | null>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])

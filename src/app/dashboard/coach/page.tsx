@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { getUnreadInsights } from '@/lib/ai-insights'
 import AiInsightsPanel from '@/components/AiInsightsPanel'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -154,6 +155,7 @@ const queueTypeColor = (type: QueueItem['type']) => {
 
 export default function CoachDashboard() {
   const [profile,  setProfile]  = useState<CoachProfile | null>(null)
+  usePushNotifications(profile?.id ?? null)
   const [clients,  setClients]  = useState<CoachClient[]>([])
   const [loading,  setLoading]  = useState(true)
   const [aiInsights, setAiInsights] = useState<DashboardInsight[]>([])
