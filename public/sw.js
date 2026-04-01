@@ -37,11 +37,13 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = event.notification.data?.url || '/'
+  const path = event.notification.data?.url || '/dashboard/client'
+  // openWindow requires an absolute URL — prepend origin if path is relative
+  const url = path.startsWith('http') ? path : self.location.origin + path
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // If app is already open, focus it
+      // If app is already open, focus and navigate it
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.focus()
