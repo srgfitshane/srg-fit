@@ -35,7 +35,7 @@ export default function LoginPage() {
       return
     }
     // For clients — check if onboarding is complete
-    const { data: clientRow } = await supabase.from('clients').select('id').eq('profile_id', data.user.id).eq('active', true).single()
+    const { data: clientRow } = await supabase.from('clients').select('id').eq('profile_id', data.user.id).single()
     if (clientRow) {
       const { data: intake } = await supabase.from('client_intake_profiles').select('intake_completed_at').eq('client_id', clientRow.id).single()
       if (!intake?.intake_completed_at) {

@@ -52,7 +52,6 @@ export default function OnboardingPage() {
         .from('clients')
         .select('id')
         .eq('profile_id', user.id)
-        .eq('active', true)
         .single<ActiveClientRecord>()
       if (!cl) { router.push('/dashboard/client'); return }
       setClientId(cl.id)

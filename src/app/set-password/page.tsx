@@ -102,7 +102,7 @@ function SetPasswordInner() {
       setLoading(false)
       return
     }
-    // Activate client record now that password is set
+    // Activate client record — await so onboarding page finds it immediately
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       await supabase.from('clients')
@@ -111,7 +111,8 @@ function SetPasswordInner() {
         .eq('active', false)
     }
     setDone(true)
-    setTimeout(() => router.push('/onboarding'), 2000)
+    // Small delay just to show the success state, then go straight to onboarding
+    setTimeout(() => router.push('/onboarding'), 800)
   }
 
   const inp = {
