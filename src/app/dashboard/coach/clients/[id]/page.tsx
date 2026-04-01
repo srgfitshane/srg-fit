@@ -132,7 +132,7 @@ export default function ClientDetail() {
 
       const { data: clientData } = await supabase
         .from('clients')
-        .select('*, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)')
+        .select('*, display_name, client_type, contact_email, contact_phone, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)')
         .eq('id', clientId)
         .single()
       setClient(clientData)
@@ -326,7 +326,7 @@ export default function ClientDetail() {
     </div>
   )
 
-  const initials = client.profile?.full_name?.split(' ').map((n:string)=>n[0]).join('') || '?'
+  const initials = (client.profile?.full_name || client.display_name || '?').split(' ').map((n:string)=>n[0]).join('')
   const latestMetric = metrics[0]
   const latestCheckin = checkins[0]
 
@@ -364,10 +364,12 @@ export default function ClientDetail() {
             ? <button onClick={handleUnflag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Unflag</button>
             : <button onClick={()=>setShowFlag(true)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Flag Client</button>
           }
-          <button onClick={resendInvite} disabled={resending || resendDone}
-            style={{ background:resendDone?t.greenDim:t.orangeDim, border:'1px solid '+(resendDone?t.green:t.orange)+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:resendDone?t.green:t.orange, cursor:resending||resendDone?'default':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            {resendDone ? '✓ Sent!' : resending ? 'Sending...' : '📨 Resend Invite'}
-          </button>
+          {client.client_type !== 'offline' && (
+            <button onClick={resendInvite} disabled={resending || resendDone}
+              style={{ background:resendDone?t.greenDim:t.orangeDim, border:'1px solid '+(resendDone?t.green:t.orange)+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:resendDone?t.green:t.orange, cursor:resending||resendDone?'default':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              {resendDone ? '✓ Sent!' : resending ? 'Sending...' : '📨 Resend Invite'}
+            </button>
+          )}
           <button onClick={()=>setShowAssignForm(true)}
             style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             📝 Send Form
@@ -395,7 +397,8 @@ export default function ClientDetail() {
             </div>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
-                <div style={{ fontSize:22, fontWeight:900 }}>{client.profile?.full_name}</div>
+                <div style={{ fontSize:22, fontWeight:900 }}>{client.profile?.full_name || client.display_name || 'Unnamed Client'}</div>
+                {client.client_type === 'offline' && <div style={{ fontSize:12, color:'#8b5cf6', fontWeight:700, marginTop:2 }}>In-Person Client{client.contact_email ? ' · '+client.contact_email : ''}{client.contact_phone ? ' · '+client.contact_phone : ''}</div>}
                 {client.flagged && <div style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'2px 10px', fontSize:11, fontWeight:700, color:t.red }}>🚩 Flagged</div>}
               </div>
               <div style={{ fontSize:13, color:t.textMuted }}>{client.profile?.email} · Client since {new Date(client.start_date).toLocaleDateString([], { month:'long', day:'numeric', year:'numeric' })}</div>
@@ -1417,7 +1420,7 @@ export default function ClientDetail() {
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>
               <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>📝 Send a Form</div>
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>
-                Assign a form to {client?.profile?.full_name} — they'll see it in their client dashboard.
+                Assign a form to {client?.profile?.full_name || client?.display_name}
               </div>
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Choose Form *</div>
@@ -1539,7 +1542,7 @@ export default function ClientDetail() {
         {/* Sticky save & back bar */}
         <div className="sticky-bar" style={{ position:'fixed', bottom:0, left:0, right:0, background:t.surface, borderTop:'1px solid '+t.border, padding:'12px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:50, backdropFilter:'blur(10px)', gap:10, flexWrap:'wrap' as const }}>
           <div style={{ fontSize:12, color:t.textMuted }}>
-            Viewing {client?.profile?.full_name}'s profile
+            Viewing {client?.profile?.full_name || client?.display_name}'s profile
           </div>
           <div style={{ display:'flex', gap:10 }}>
             <button onClick={()=>router.push('/dashboard/preview/'+clientId)}

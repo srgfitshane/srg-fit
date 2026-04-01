@@ -47,6 +47,10 @@ const NAV_EXPANDED = [
 ]
 
 type CoachClient = {
+  display_name?: string | null
+  client_type?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
   id: string
   profile_id?: string | null
   paused?: boolean | null
@@ -176,7 +180,7 @@ export default function CoachDashboard() {
       setProfile(prof)
       const { data: clientList } = await supabase
         .from('clients')
-        .select(`*, profile:profiles!profile_id(full_name, email, avatar_url)`)
+        .select(`*, display_name, client_type, contact_email, contact_phone, profile:profiles!profile_id(full_name, email, avatar_url)`)
         .eq('coach_id', user.id)
         .neq('archived', true)
       const safeClientList = (clientList || []) as CoachClient[]
@@ -697,7 +701,7 @@ export default function CoachDashboard() {
                       <div style={{ fontSize:12, color:t.textMuted }}>Try a different filter or search term.</div>
                     </div>
                   ) : filteredClients.map((client, i) => {
-                    const initials = client.profile?.full_name?.split(' ').map((n) => n[0]).join('') || '?'
+                    const initials = (client.profile?.full_name || client.display_name || '?').split(' ').map((n: string) => n[0]).join('')
                     const color = CLIENT_COLORS[i % CLIENT_COLORS.length]
                     return (
                       <div key={client.id}
@@ -710,7 +714,8 @@ export default function CoachDashboard() {
                         </div>
                         <div onClick={()=>router.push('/dashboard/coach/clients/'+client.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2, flexWrap:'wrap' }}>
-                            <span style={{ fontSize:14, fontWeight:700 }}>{client.profile?.full_name || 'Unknown'}</span>
+                            <span style={{ fontSize:14, fontWeight:700 }}>{client.profile?.full_name || client.display_name || 'Unknown'}</span>
+                            {client.client_type === 'offline' && <span style={{ fontSize:10, fontWeight:800, color:'#8b5cf6', background:'#8b5cf615', border:'1px solid #8b5cf640', borderRadius:4, padding:'1px 6px' }}>In-Person</span>}
                             {client.paused   && <span style={{ fontSize:10, fontWeight:800, color:t.orange, background:t.orangeDim, borderRadius:6, padding:'2px 7px' }}>⏸ PAUSED</span>}
                             {client.flagged  && <span style={{ fontSize:10, fontWeight:800, color:t.red, background:t.redDim, borderRadius:6, padding:'2px 7px' }}>🚩</span>}
                           </div>
@@ -808,7 +813,7 @@ export default function CoachDashboard() {
 
         {/* Lifecycle confirm modal */}
         {lifecycleAction && lifecycleClient && (() => {
-          const name = lifecycleClient.profile?.full_name || lifecycleClient.profile?.email || 'this client'
+          const name = lifecycleClient.profile?.full_name || lifecycleClient.display_name || lifecycleClient.profile?.email || 'this client'
           const cfg: Record<string, { icon:string; title:string; desc:string; confirmLabel:string; confirmColor:string; showReason:boolean }> = {
             pause:   { icon:'⏸', title:`Pause ${name}?`, desc:"They won't lose any data. You can resume them any time.", confirmLabel:'Pause Client', confirmColor:t.orange, showReason:true },
             resume:  { icon:'▶', title:`Resume ${name}?`, desc:'Their access will be restored immediately.', confirmLabel:'Resume Client', confirmColor:t.green, showReason:false },
