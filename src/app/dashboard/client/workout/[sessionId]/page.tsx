@@ -132,6 +132,8 @@ export default function ActiveWorkoutPage() {
   const [skipped, setSkipped] = useState<Record<string,boolean>>({})
   const [swapOpen, setSwapOpen] = useState<Record<string,boolean>>({})
   const [swapSearch, setSwapSearch] = useState<Record<string,string>>({})
+  const [aiSwapLoading, setAiSwapLoading] = useState<Record<string,boolean>>({})
+  const [aiSwapOptions, setAiSwapOptions] = useState<Record<string,ExerciseLibraryItem[]>>({})
   const [swapReason, setSwapReason] = useState<Record<string,string>>({})
   const [swapNote, setSwapNote] = useState<Record<string,string>>({})
   const [swapLibrary, setSwapLibrary] = useState<ExerciseLibraryItem[]>([])
@@ -157,12 +159,18 @@ export default function ActiveWorkoutPage() {
   function getSwapOptions(exercise: SessionExercise) {
     const primaryMuscles = exercise.exercise?.muscles || []
     const search = (swapSearch[exercise.id] || '').toLowerCase().trim()
+    // Search overrides everything
     if (search) {
       return swapLibrary
         .filter(option => option.id !== exercise.exercise_id)
         .filter(option => option.name?.toLowerCase().includes(search))
         .slice(0, 8)
     }
+    // AI suggestions if loaded
+    if (aiSwapOptions[exercise.id]?.length) {
+      return aiSwapOptions[exercise.id]
+    }
+    // Fallback: basic muscle/equipment filter
     return swapLibrary
       .filter(option => option.id !== exercise.exercise_id)
       .filter(option => {
@@ -173,7 +181,64 @@ export default function ActiveWorkoutPage() {
         const sharedMuscle = primaryMuscles.length === 0 || optionMuscles.some((muscle: string) => primaryMuscles.includes(muscle))
         return sameEquipment || sharedMuscle
       })
-      .slice(0, 6)
+      .slice(0, 5)
+  }
+
+  async function getAISwap(exercise: SessionExercise) {
+    const exId = exercise.id
+    if (aiSwapLoading[exId] || aiSwapOptions[exId]?.length) return
+    setAiSwapLoading(prev => ({ ...prev, [exId]: true }))
+    try {
+      // Pre-filter candidates by shared muscle group (max 50 for Claude)
+      const primaryMuscles = exercise.exercise?.muscles || []
+      const candidates = swapLibrary
+        .filter(o => o.id !== exercise.exercise_id)
+        .filter(o => {
+          const sharedMuscle = primaryMuscles.length === 0 ||
+            (o.muscles || []).some((m: string) => primaryMuscles.includes(m))
+          return sharedMuscle
+        })
+        .slice(0, 50)
+
+      if (!candidates.length) {
+        setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
+        return
+      }
+
+      const candidateList = candidates.map(c => `${c.id}|${c.name}|${c.equipment||'bodyweight'}|${(c.muscles||[]).join(',')}`).join('\n')
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 200,
+          messages: [{
+            role: 'user',
+            content: `You are a personal trainer. A client needs to swap this exercise:
+Exercise: ${exercise.exercise_name}
+Muscles: ${primaryMuscles.join(', ') || 'unknown'}
+Equipment: ${exercise.exercise?.equipment || 'unknown'}
+
+From this list, pick the 5 BEST substitutes (same movement pattern, same muscles). Return ONLY the IDs, one per line, no explanation:
+${candidateList}`
+          }]
+        })
+      })
+      const data = await res.json()
+      const text = data.content?.[0]?.text || ''
+      const returnedIds = text.trim().split('\n').map((l: string) => l.trim()).filter(Boolean).slice(0, 5)
+      const matched = returnedIds
+        .map((id: string) => candidates.find(c => c.id === id))
+        .filter(Boolean) as ExerciseLibraryItem[]
+
+      // Fallback to basic filter if Claude returned nothing useful
+      const final = matched.length >= 3 ? matched : candidates.slice(0, 5)
+      setAiSwapOptions(prev => ({ ...prev, [exId]: final }))
+    } catch {
+      // Silently fall back to basic suggestions
+    }
+    setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
   }
 
   // Workout elapsed timer
@@ -977,7 +1042,20 @@ export default function ActiveWorkoutPage() {
 
                 {swapOpen[ex.id] && !skipped[ex.id] && (
                   <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
-                    <div style={{fontSize:13,fontWeight:700,color:t.teal,marginBottom:8}}>Need a smart swap?</div>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                      <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Need a smart swap?</div>
+                      {!aiSwapOptions[ex.id]?.length && (
+                        <button
+                          onClick={()=>getAISwap(ex)}
+                          disabled={aiSwapLoading[ex.id]}
+                          style={{fontSize:11,fontWeight:700,color:'#000',background:aiSwapLoading[ex.id]?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiSwapLoading[ex.id]?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                          {aiSwapLoading[ex.id] ? '✨ Thinking...' : '✨ AI Pick'}
+                        </button>
+                      )}
+                      {aiSwapOptions[ex.id]?.length > 0 && (
+                        <div style={{fontSize:10,color:t.teal,fontWeight:600}}>✨ AI selected</div>
+                      )}
+                    </div>
                     <input
                       value={swapSearch[ex.id]||''}
                       onChange={e=>setSwapSearch(prev=>({...prev,[ex.id]:e.target.value}))}
