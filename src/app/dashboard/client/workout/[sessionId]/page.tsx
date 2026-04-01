@@ -626,64 +626,98 @@ export default function ActiveWorkoutPage() {
       for (const se of sessionExs) {
         if (!se.exercise_id) continue
 
-        // Get best set logged this session (non-warmup, highest weight)
-        const { data: sets } = await supabase
+        // Get best set by weight this session (non-warmup)
+        const { data: allSets } = await supabase
           .from('exercise_sets')
           .select('weight_value, reps_completed')
           .eq('session_exercise_id', se.id)
           .eq('is_warmup', false)
           .not('weight_value', 'is', null)
-          .order('weight_value', { ascending: false })
-          .limit(1)
 
-        if (!sets?.length || !sets[0].weight_value) continue
-        const bestWeight = Number(sets[0].weight_value)
-        const bestReps   = sets[0].reps_completed
+        if (!allSets?.length) continue
+
+        // Best weight set
+        const bestWeightSet = allSets.reduce((best, s) =>
+          Number(s.weight_value) > Number(best.weight_value) ? s : best, allSets[0])
+        const bestWeight = Number(bestWeightSet.weight_value)
+        const bestReps = bestWeightSet.reps_completed || 1
+
+        // Best reps at each weight (for rep PRs)
+        const repsByWeight: Record<number, number> = {}
+        for (const s of allSets) {
+          const w = Number(s.weight_value)
+          const r = s.reps_completed || 1
+          if (!repsByWeight[w] || r > repsByWeight[w]) repsByWeight[w] = r
+        }
 
         // Get existing PR for this exercise
         const { data: existing } = await supabase
           .from('personal_records')
-          .select('weight_pr, rep_pr_reps, rep_pr_weight')
+          .select('weight_pr, rep_pr_reps, rep_pr_weight, rep_count')
           .eq('client_id', clientId)
           .eq('exercise_id', se.exercise_id)
           .single()
 
-        const isWeightPR = !existing || bestWeight > (Number(existing.weight_pr) || 0)
+        const prevWeightPR = Number(existing?.weight_pr || 0)
+        const isWeightPR = bestWeight > prevWeightPR
+
+        // Rep PR: more reps at a weight they've done before, or same weight more reps
+        const prevRepPRWeight = Number(existing?.rep_pr_weight || 0)
+        const prevRepPRReps = Number(existing?.rep_pr_reps || 0)
+        const isRepPR = !isWeightPR && (
+          (bestWeight === prevRepPRWeight && bestReps > prevRepPRReps) ||
+          (bestWeight >= prevRepPRWeight && bestReps > prevRepPRReps)
+        )
+
+        const exerciseName = se.exercise_name || 'exercise'
 
         if (isWeightPR) {
-          // Upsert the PR record
           await supabase.from('personal_records').upsert({
             client_id: clientId,
             exercise_id: se.exercise_id,
             weight_pr: bestWeight,
-            rep_pr_reps: bestReps || null,
+            rep_pr_reps: bestReps,
             rep_pr_weight: bestWeight,
+            rep_count: bestReps,
+            pr_type: 'weight',
             logged_date: today,
           }, { onConflict: 'client_id,exercise_id' })
 
-          const exerciseName = se.exercise_name || 'exercise'
-          newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs!`)
+          newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
 
-          // Check if this PR completes a strength goal
+          // Check if this PR completes a weight_lifted goal
           const { data: matchingGoals } = await supabase
             .from('client_goals')
             .select('id, title, target_value')
             .eq('client_id', clientId)
             .eq('status', 'active')
-            .eq('goal_type', 'strength')
-            .not('target_value', 'is', null)
+            .eq('type', 'weight_lifted')
+            .not('exercise_id', 'is', null)
           if (matchingGoals?.length) {
             for (const goal of matchingGoals) {
               if (bestWeight >= Number(goal.target_value)) {
-                const now = new Date().toISOString()
                 await supabase.from('client_goals').update({
-                  status: 'completed', completed_at: now,
-                  current_value: bestWeight, updated_at: now
+                  status: 'completed',
+                  completed_at: new Date().toISOString(),
+                  current_value: bestWeight,
                 }).eq('id', goal.id)
-                newMilestones.push(`🎯 Goal achieved: ${goal.title}!`)
+                newMilestones.push(`🎯 Goal crushed: ${goal.title}!`)
               }
             }
           }
+        } else if (isRepPR) {
+          await supabase.from('personal_records').upsert({
+            client_id: clientId,
+            exercise_id: se.exercise_id,
+            weight_pr: prevWeightPR || bestWeight,
+            rep_pr_reps: bestReps,
+            rep_pr_weight: bestWeight,
+            rep_count: bestReps,
+            pr_type: 'rep',
+            logged_date: today,
+          }, { onConflict: 'client_id,exercise_id' })
+
+          newMilestones.push(`💪 Rep PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
         }
       }
 
@@ -716,7 +750,7 @@ export default function ActiveWorkoutPage() {
         await supabase.from('milestones').insert(
           newMilestones.map(msg => ({
             client_id: clientId,
-            milestone_type: msg.includes('PR') ? 'pr' : 'consistency',
+            milestone_type: msg.includes('PR') || msg.includes('Rep PR') ? 'pr' : msg.includes('Goal') ? 'goal' : 'consistency',
             message: msg,
             seen: false,
           }))

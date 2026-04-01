@@ -186,6 +186,11 @@ type MilestoneRecord = {
 type PersonalRecordSummary = {
   id: string
   weight_pr?: number | null
+  rep_pr_reps?: number | null
+  rep_pr_weight?: number | null
+  pr_type?: string | null
+  shared_to_community?: boolean | null
+  logged_date?: string | null
   exercise?: {
     name?: string | null
   } | null
@@ -658,6 +663,27 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     }
   }
 
+  const sharePRToCommunity = async (pr: PersonalRecordSummary) => {
+    if (!clientRecord || pr.shared_to_community) return
+    const name = pr.exercise?.name || 'an exercise'
+    const isRepPR = pr.pr_type === 'rep'
+    const content = isRepPR
+      ? `💪 Rep PR! Hit ${pr.rep_pr_weight} lbs x ${pr.rep_pr_reps} reps on ${name}!`
+      : `🏆 New PR! Just lifted ${pr.weight_pr} lbs on ${name}!`
+    const { data: post } = await supabase.from('community_posts').insert({
+      author_id: clientRecord.id,
+      content,
+      post_type: 'pr',
+    }).select('id').single()
+    if (post?.id) {
+      await supabase.from('personal_records').update({
+        shared_to_community: true,
+        community_post_id: post.id,
+      }).eq('id', pr.id)
+      setRecentPRs(prev => prev.map(p => p.id === pr.id ? { ...p, shared_to_community: true } : p))
+    }
+  }
+
   const dismissMilestone = async (id: string) => {
     await supabase.from('milestones').update({ seen: true }).eq('id', id)
     setMilestones(prev => prev.filter(m => m.id !== id))
@@ -972,8 +998,23 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 {recentPRs.map((pr) => (
                   <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ width:6, height:6, borderRadius:'50%', background:t.yellow, flexShrink:0 }}/>
-                    <div style={{ fontSize:13, fontWeight:700, color:t.text }}>New PR — {pr.exercise?.name}</div>
-                    <div style={{ fontSize:12, fontWeight:800, color:t.yellow, marginLeft:'auto' }}>{pr.weight_pr} lbs 💪</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:t.text }}>
+                        {pr.pr_type === 'rep' ? 'Rep PR' : 'New PR'} — {pr.exercise?.name}
+                      </div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>
+                        {pr.pr_type === 'rep'
+                          ? `${pr.rep_pr_weight} lbs × ${pr.rep_pr_reps} reps`
+                          : `${pr.weight_pr} lbs`}
+                      </div>
+                    </div>
+                    {pr.shared_to_community
+                      ? <div style={{ fontSize:10, color:t.textMuted, fontWeight:600 }}>Shared ✓</div>
+                      : <button onClick={()=>sharePRToCommunity(pr)}
+                          style={{ fontSize:10, fontWeight:700, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                          Share 🏆
+                        </button>
+                    }
                   </div>
                 ))}
                 {milestones.map((m) => (

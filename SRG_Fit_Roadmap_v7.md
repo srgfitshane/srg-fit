@@ -2,20 +2,19 @@
 *STRENGTH. COMPASSION. LEGENDARY SUPPORT.*
 
 **App Development Master Roadmap**
-v7.0 • March 2026
+v7.1 • March 2026
 
 ---
 
 # Section 1: Status — Ready to Launch
 
-The app has passed a full security audit, end-to-end test, and code review. All core features are functional.
+The app has passed a full security audit, end-to-end test, and code review. All core features are functional. All known security issues resolved.
 
-## 1.1 Two Items Still Pending (Non-Blocking)
+## 1.1 One Item Pending (Non-Blocking)
 
 | # | Item | Action |
 |---|---|---|
-| 1 | NEXT_PUBLIC_USDA_API_KEY | Rotate exposed key at fdc.nal.usda.gov, add fresh key to Vercel |
-| 2 | FatSecret IP Whitelist | Add 44.199.250.80 at platform.fatsecret.com → API Keys → IP Restrictions |
+| 1 | FatSecret IP Whitelist | Add 44.199.250.80 at platform.fatsecret.com → API Keys → IP Restrictions |
 
 ---
 
@@ -41,6 +40,15 @@ The app has passed a full security audit, end-to-end test, and code review. All 
 - Input validation added to nutrition search and stripe session API routes
 - Stripe session route validates cs_ prefix before hitting Stripe API
 - No hardcoded secrets, no XSS vectors, no eval usage confirmed
+
+## 2.4 Security Hardening Pass 2 — COMPLETED (March 2026)
+- /api/nutrition/search: added auth guard — was fully open to unauthenticated callers
+- nutrition-search Edge Function: same auth guard added (Authorization header check)
+- Content-Security-Policy header added to next.config.ts — covers Supabase, Giphy, FatSecret, fonts, blocks frames
+- All 4 Edge Functions CORS locked from wildcard * to https://srgfit.app: send-notification, generate-ai-insight, nutrition-search, send-weekly-checkins
+- All 4 Edge Functions redeployed to production
+- USDA API key rotated (was in git history) — new key set in Vercel and .env.local
+- Confirmed: zero public DB tables without RLS enabled
 
 ## 2.4 New Features Shipped
 - Workout streak on Today tab (🔥 consecutive weeks with completed sessions)
@@ -141,7 +149,7 @@ The app has passed a full security audit, end-to-end test, and code review. All 
 | ANTHROPIC_API_KEY | ✅ Set |
 | RESEND_API_KEY | ✅ Set (info@srg.fitness) |
 | NEXT_PUBLIC_GIPHY_API_KEY | ✅ Set |
-| NEXT_PUBLIC_USDA_API_KEY | ⚠️ Needs rotation |
+| NEXT_PUBLIC_USDA_API_KEY | ✅ Rotated |
 
 ---
 
