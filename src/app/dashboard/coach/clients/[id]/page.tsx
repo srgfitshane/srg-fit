@@ -78,6 +78,9 @@ export default function ClientDetail() {
   const [showAddGoal,   setShowAddGoal]   = useState(false)
   const [goalForm,      setGoalForm]      = useState({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
   const [goalSaving,    setGoalSaving]    = useState(false)
+  const [exerciseSearch, setExerciseSearch] = useState('')
+  const [exerciseResults, setExerciseResults] = useState<{id:string,name:string}[]>([])
+  const [exerciseSearching, setExerciseSearching] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
   const [showFlag, setShowFlag] = useState(false)
@@ -98,6 +101,17 @@ export default function ClientDetail() {
   const params   = useParams()
   const supabase = createClient()
   const clientId = params.id as string
+
+  async function searchExercises(query: string) {
+    if (!query.trim()) { setExerciseResults([]); return }
+    setExerciseSearching(true)
+    const { data } = await supabase.from('exercises')
+      .select('id, name')
+      .ilike('name', `%${query}%`)
+      .limit(8)
+    setExerciseResults((data || []) as {id:string,name:string}[])
+    setExerciseSearching(false)
+  }
 
   async function loadWorkoutDetail(sessionId: string) {
     if (workoutDetails[sessionId]) { setExpandedWorkout(sessionId); return }
@@ -1234,13 +1248,48 @@ export default function ClientDetail() {
                       { value:'bodyweight',    label:'Body Weight ⚖️' },
                       { value:'consistency',   label:'Consistency 🔥' },
                     ] as const).map(({ value, label }) => (
-                      <button key={value} onClick={()=>setGoalForm(p=>({...p, type:value, unit: value==='bodyweight' ? 'lbs' : value==='consistency' ? 'workouts' : 'lbs'}))}
+                      <button key={value} onClick={()=>setGoalForm(p=>({...p, type:value, unit: value==='bodyweight' ? 'lbs' : value==='consistency' ? 'workouts' : 'lbs', exercise_id:''}))}
                         style={{ padding:'6px 14px', borderRadius:20, border:'1px solid '+(goalForm.type===value?t.teal:t.border), background:goalForm.type===value?t.teal+'20':'transparent', color:goalForm.type===value?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         {label}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Exercise picker — only for strength goals */}
+                {goalForm.type === 'weight_lifted' && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Exercise</div>
+                    {goalForm.exercise_id ? (
+                      <div style={{ display:'flex', alignItems:'center', gap:8, background:t.teal+'15', border:'1px solid '+t.teal+'40', borderRadius:10, padding:'10px 13px' }}>
+                        <span style={{ flex:1, fontSize:13, fontWeight:700, color:t.teal }}>{exerciseResults.find(e=>e.id===goalForm.exercise_id)?.name || 'Selected'}</span>
+                        <button onClick={()=>{ setGoalForm(p=>({...p,exercise_id:''})); setExerciseSearch(''); setExerciseResults([]) }}
+                          style={{ fontSize:11, color:t.textMuted, background:'none', border:'none', cursor:'pointer' }}>✕ Change</button>
+                      </div>
+                    ) : (
+                      <div style={{ position:'relative' as const }}>
+                        <input
+                          value={exerciseSearch}
+                          onChange={e=>{ setExerciseSearch(e.target.value); void searchExercises(e.target.value) }}
+                          placeholder="Search exercises e.g. Squat, Bench..."
+                          style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', boxSizing:'border-box' as const }}
+                        />
+                        {exerciseSearching && <div style={{ position:'absolute' as const, right:12, top:'50%', transform:'translateY(-50%)', fontSize:11, color:t.textMuted }}>...</div>}
+                        {exerciseResults.length > 0 && (
+                          <div style={{ position:'absolute' as const, top:'100%', left:0, right:0, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, marginTop:4, zIndex:10, overflow:'hidden' }}>
+                            {exerciseResults.map(ex => (
+                              <button key={ex.id}
+                                onClick={()=>{ setGoalForm(p=>({...p, exercise_id:ex.id, title: p.title || ex.name})); setExerciseSearch(ex.name); setExerciseResults([]) }}
+                                style={{ width:'100%', textAlign:'left' as const, padding:'10px 13px', fontSize:13, color:t.text, background:'none', border:'none', borderBottom:'1px solid '+t.border, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                {ex.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Target value + unit */}
                 <div style={{ display:'flex', gap:10 }}>
@@ -1274,7 +1323,7 @@ export default function ClientDetail() {
                 </div>
 
                 <div style={{ display:'flex', gap:10, marginTop:4 }}>
-                  <button onClick={()=>setShowAddGoal(false)}
+                  <button onClick={()=>{ setShowAddGoal(false); setExerciseSearch(''); setExerciseResults([]) }}
                     style={{ flex:1, padding:'12px', borderRadius:11, border:'1px solid '+t.border, background:'transparent', color:t.textMuted, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     Cancel
                   </button>
@@ -1298,6 +1347,7 @@ export default function ClientDetail() {
                     setGoalSaving(false)
                     setShowAddGoal(false)
                     setGoalForm({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
+                    setExerciseSearch(''); setExerciseResults([])
                   }}
                     style={{ flex:2, padding:'12px', borderRadius:11, border:'none', background: goalForm.title.trim() ? 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)' : t.surfaceHigh, color: goalForm.title.trim() ? '#000' : t.textMuted, fontSize:13, fontWeight:800, cursor: goalForm.title.trim() ? 'pointer' : 'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
                     {goalSaving ? 'Saving...' : 'Add Goal'}
