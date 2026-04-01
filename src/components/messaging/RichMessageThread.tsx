@@ -129,6 +129,7 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
   const [reactTarget,  setReactTarget]  = useState<string|null>(null)
   const [reactPos,     setReactPos]     = useState<{x:number,y:number}>({x:0,y:0})
   const longPressRef = useRef<ReturnType<typeof setTimeout>|null>(null)
+  const initialLoadRef = useRef(true)
   const [previewFile,  setPreviewFile]  = useState<File|null>(null)
   const [uploading,    setUploading]    = useState(false)
   const [showMacros,   setShowMacros]   = useState(false)
@@ -180,7 +181,16 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
   }, [loadThread])
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [thread])
+  useEffect(() => {
+    if (initialLoadRef.current) {
+      // On initial load scroll instantly (no animation) so user lands at bottom
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior })
+      initialLoadRef.current = false
+    } else {
+      // New message arrived — smooth scroll
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [thread])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {

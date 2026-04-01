@@ -354,6 +354,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0)
   const [showCallRequest, setShowCallRequest] = useState(false)
   const [callSlots, setCallSlots] = useState<CallSlot[]>([{date:'',time:''},{date:'',time:''},{date:'',time:''}])
   const [callNote, setCallNote] = useState('')
@@ -401,6 +402,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
   const openTab = (tab: DashboardTab) => {
     if (tab !== 'messages') setMessagesView('hub')
+    if (tab === 'messages') setUnreadMsgCount(0)
     setPlusOpen(false)
     setActiveNav(tab)
 
@@ -622,6 +624,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
       if (clientData) {
         await loadClientData(clientData as DashboardClientRecord, today)
+        // Fetch unread message count from coach
+        if (clientData.coach_id) {
+          const { count } = await supabase.from('messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('sender_id', clientData.coach_id)
+            .eq('recipient_id', user.id)
+            .eq('read', false)
+          setUnreadMsgCount(count || 0)
+        }
       }
 
       setLoading(false)
@@ -1887,6 +1898,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:20, height:2.5, borderRadius:2, background:t.teal }} />
               )}
               <NavIcon id={n.id} active={activeNav === n.id} />
+              {n.id === 'messages' && unreadMsgCount > 0 && (
+                <div style={{ position:'absolute', top:6, left:'50%', marginLeft:4, width:16, height:16, borderRadius:8, background:'#ef4444', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontSize:9, fontWeight:900, color:'#fff', lineHeight:1 }}>{unreadMsgCount > 9 ? '9+' : unreadMsgCount}</span>
+                </div>
+              )}
               <span style={{ fontSize:9, fontWeight:activeNav===n.id?800:600, color:activeNav===n.id?t.teal:t.textMuted, letterSpacing:'0.02em' }}>{n.label}</span>
             </button>
           ))}
