@@ -43,7 +43,7 @@ const NAV_EXPANDED = [
   { label:'Exercises',   icon:'🏋️', path:'/dashboard/coach/exercises'  },
   { label:'Forms',       icon:'📝', path:'/dashboard/coach/onboarding' },
   { label:'Plans',       icon:'💳', path:'/dashboard/coach/plans'      },
-  { label:'Invites',     icon:'📨', path:'/dashboard/coach/invites'    },
+  { label:'Outreach',    icon:'📨', path:'/dashboard/coach/outreach'   },
 ]
 
 type CoachClient = {
@@ -152,11 +152,6 @@ export default function CoachDashboard() {
   const [profile,  setProfile]  = useState<CoachProfile | null>(null)
   const [clients,  setClients]  = useState<CoachClient[]>([])
   const [loading,  setLoading]  = useState(true)
-  const [showInvite, setShowInvite] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteName,  setInviteName]  = useState('')
-  const [inviting, setInviting] = useState(false)
-  const [inviteMsg, setInviteMsg] = useState('')
   const [aiInsights, setAiInsights] = useState<DashboardInsight[]>([])
   const [showInsights, setShowInsights] = useState(false)
   const [lifecycleClient, setLifecycleClient] = useState<CoachClient | null>(null)
@@ -400,25 +395,6 @@ export default function CoachDashboard() {
     setLifecycleReason('')
   }
 
-  const handleInvite = async () => {
-    if (!inviteEmail || !inviteName) return
-    setInviting(true); setInviteMsg('')
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setInviting(false); setInviteMsg('Please sign in again.'); return }
-    const res = await fetch('/api/invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: inviteEmail, fullName: inviteName, coachId: user?.id }),
-    })
-    const result = await res.json()
-    if (!res.ok) { setInviteMsg('Error: ' + result.error); setInviting(false); return }
-    setInviteMsg(result.message)
-    setInviting(false)
-    const { data: clientList } = await supabase
-      .from('clients').select(`*, profile:profiles!profile_id(full_name, email, avatar_url)`)
-      .eq('coach_id', user.id).neq('archived', true)
-    setClients((clientList || []) as CoachClient[])
-  }
 
   const NavBtn = ({ item }: { item: { label:string, icon:string, path:string } }) => (
     <button onClick={()=>router.push(item.path)}
@@ -821,46 +797,6 @@ export default function CoachDashboard() {
 
           </div>{/* end 2-col */}
         </div>
-
-
-        {/* Invite modal */}
-        {showInvite && (
-          <div onClick={()=>setShowInvite(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-                <div style={{ fontSize:16, fontWeight:800 }}>Invite a Client</div>
-                <span onClick={()=>setShowInvite(false)} style={{ cursor:'pointer', color:t.textMuted, fontSize:24 }}>×</span>
-              </div>
-              {inviteMsg ? (
-                <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:12, padding:16, fontSize:14, color:t.teal, textAlign:'center', marginBottom:16 }}>
-                  {inviteMsg}
-                  <div style={{ marginTop:12 }}>
-                    <button onClick={()=>{ setShowInvite(false); setInviteEmail(''); setInviteName(''); setInviteMsg('') }}
-                      style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Done</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div style={{ marginBottom:14 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Full Name</div>
-                    <input value={inviteName} onChange={e=>setInviteName(e.target.value)} placeholder="Alex Rivera"
-                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' } as CSSProperties} />
-                  </div>
-                  <div style={{ marginBottom:20 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Email Address</div>
-                    <input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} type="email" placeholder="client@email.com"
-                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', boxSizing:'border-box' } as CSSProperties} />
-                  </div>
-                  <button onClick={handleInvite} disabled={inviting||!inviteEmail||!inviteName}
-                    style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:inviting||!inviteEmail||!inviteName?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:inviting||!inviteEmail||!inviteName?0.6:1 }}>
-                    {inviting ? 'Inviting...' : 'Send Invite →'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* AI Insights Panel */}
         {showInsights && (
           <AiInsightsPanel
