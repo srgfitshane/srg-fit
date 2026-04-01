@@ -281,15 +281,34 @@ export default function OnboardingPage() {
           {step === 3 && (
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
               <div>
-                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Primary Goal</label>
+                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Primary Goals <span style={{ color:'#00c9b1', fontSize:10 }}>pick all that apply</span></label>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-                  {['Lose fat','Build muscle','Improve performance','Build strength','General fitness','Rehab / injury recovery'].map(g => chip(g, data.primary_goal===g, ()=>set('primary_goal',g), '#f5a623'))}
+                  {[
+                    'Weight Loss / Fat Loss',
+                    'Weight Gain',
+                    'Body Recomposition',
+                    'Build Strength',
+                    'Build Muscle (Bulk)',
+                    'General Health & Fitness',
+                    'Mental Health & Wellness',
+                    'Athletic Performance',
+                    'Strength Sport (Powerlifting)',
+                  ].map(g => chip(g, (Array.isArray(data.primary_goal) ? data.primary_goal as string[] : []).includes(g), ()=>toggle('primary_goal',g), '#f5a623'))}
                 </div>
               </div>
               <div>
-                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Secondary Goal</label>
+                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Secondary Goals <span style={{ color:'#00c9b1', fontSize:10 }}>pick all that apply</span></label>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-                  {['Lose fat','Build muscle','Improve performance','Build strength','General fitness','Improve flexibility','Better sleep','More energy'].map(g => chip(g, data.secondary_goal===g, ()=>set('secondary_goal',g)))}
+                  {[
+                    'Better Sleep',
+                    'Reduce Stress',
+                    'More Energy',
+                    'Improve Flexibility & Mobility',
+                    'Better Nutrition Habits',
+                    'Mental Clarity & Focus',
+                    'Injury Rehab / Recovery',
+                    'Longevity & Healthy Aging',
+                  ].map(g => chip(g, (Array.isArray(data.secondary_goal) ? data.secondary_goal as string[] : []).includes(g), ()=>toggle('secondary_goal',g)))}
                 </div>
               </div>
               <div>

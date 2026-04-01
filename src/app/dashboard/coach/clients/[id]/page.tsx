@@ -1501,8 +1501,8 @@ export default function ClientDetail() {
 
                   {/* Goals */}
                   <IntakeSection title="Goals" color="#f5a623">
-                    <IntakeRow label="Primary Goal"     value={intake.primary_goal} />
-                    <IntakeRow label="Secondary Goal"   value={intake.secondary_goal} />
+                    <IntakeRow label="Primary Goal"     value={Array.isArray(intake.primary_goal) ? (intake.primary_goal as string[]).join(' • ') : intake.primary_goal} />
+                    <IntakeRow label="Secondary Goal"   value={Array.isArray(intake.secondary_goal) ? (intake.secondary_goal as string[]).join(' • ') : intake.secondary_goal} />
                     <IntakeRow label="Target Date"      value={intake.goal_target_date} />
                     <IntakeRow label="Motivation"       value={intake.motivation_why} long />
                     <IntakeRow label="Biggest Obstacle" value={intake.biggest_obstacle} long />
