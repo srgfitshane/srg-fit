@@ -31,6 +31,8 @@ export async function POST(request: NextRequest) {
 
     // Use NEXT_PUBLIC_SITE_URL env var, fall back to request origin
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin
+    // Always use the coach's ID — hardcoded as the single coach on this platform
+    const coachId = user.id
 
     // Check if user already exists
     const normalizedName = fullName || full_name || null

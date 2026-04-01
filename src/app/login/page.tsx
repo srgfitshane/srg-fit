@@ -30,7 +30,20 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
-    router.push(profile?.role === 'coach' ? '/dashboard/coach' : '/dashboard/client')
+    if (profile?.role === 'coach') {
+      router.push('/dashboard/coach')
+      return
+    }
+    // For clients — check if onboarding is complete
+    const { data: clientRow } = await supabase.from('clients').select('id').eq('profile_id', data.user.id).eq('active', true).single()
+    if (clientRow) {
+      const { data: intake } = await supabase.from('client_intake_profiles').select('intake_completed_at').eq('client_id', clientRow.id).single()
+      if (!intake?.intake_completed_at) {
+        router.push('/onboarding')
+        return
+      }
+    }
+    router.push('/dashboard/client')
   }
 
   const handleForgot = async () => {
