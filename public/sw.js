@@ -1,5 +1,5 @@
 // SRG Fit Service Worker — handles background push notifications
-// v1.0
+// v1.2
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
