@@ -610,30 +610,6 @@ export default function ClientDetail() {
           {/* ── WORKOUTS TAB ── */}
           {activeTab === 'training' && (
             <div>
-              {/* Upcoming sessions */}
-              {(() => {
-                const upcoming = workouts.filter((w:any) => w.status !== 'completed').sort((a:any,b:any) => (a.scheduled_date||'').localeCompare(b.scheduled_date||''))
-                return upcoming.length > 0 ? (
-                  <div style={{ marginBottom:24 }}>
-                    <div style={{ fontSize:13, fontWeight:800, color:t.teal, marginBottom:12 }}>Upcoming</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      {upcoming.map((w:any) => (
-                        <div key={w.id} style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
-                          <div style={{ width:36, height:36, borderRadius:10, background:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
-                            {w.status==='in_progress' ? '🔄' : '📅'}
-                          </div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:13, fontWeight:700 }}>{w.title || w.name || 'Workout Session'}</div>
-                            <div style={{ fontSize:11, color:t.textMuted }}>{w.scheduled_date ? new Date(w.scheduled_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'}</div>
-                          </div>
-                          <div style={{ fontSize:11, fontWeight:700, color: w.status==='in_progress' ? t.orange : t.teal, textTransform:'capitalize' as const }}>{w.status}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null
-              })()}
-
               {/* Completed sessions */}
               <div style={{ fontSize:13, fontWeight:800, marginBottom:6, color:t.textMuted }}>Completed</div>
               <div style={{ fontSize:12, color:t.textMuted, marginBottom:16 }}>Tap any session to see the full set-by-set log.</div>
