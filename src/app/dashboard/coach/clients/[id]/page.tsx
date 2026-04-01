@@ -76,7 +76,7 @@ export default function ClientDetail() {
   const [goals,         setGoals]         = useState<any[]>([])
   const [activities,    setActivities]    = useState<ClientActivityRecord[]>([])
   const [showAddGoal,   setShowAddGoal]   = useState(false)
-  const [goalForm,      setGoalForm]      = useState({ title:'', description:'', goal_type:'custom', target_value:'', unit:'', target_date:'' })
+  const [goalForm,      setGoalForm]      = useState({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
   const [goalSaving,    setGoalSaving]    = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [flagNote, setFlagNote] = useState('')
@@ -1229,10 +1229,14 @@ export default function ClientDetail() {
                 <div>
                   <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Type</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
-                    {(['strength','weight','consistency','custom'] as const).map(type => (
-                      <button key={type} onClick={()=>setGoalForm(p=>({...p,goal_type:type}))}
-                        style={{ padding:'6px 14px', borderRadius:20, border:'1px solid '+(goalForm.goal_type===type?t.teal:t.border), background:goalForm.goal_type===type?t.teal+'20':'transparent', color:goalForm.goal_type===type?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' as const }}>
-                        {type}
+                    {([
+                      { value:'weight_lifted', label:'Strength 🏋️' },
+                      { value:'bodyweight',    label:'Body Weight ⚖️' },
+                      { value:'consistency',   label:'Consistency 🔥' },
+                    ] as const).map(({ value, label }) => (
+                      <button key={value} onClick={()=>setGoalForm(p=>({...p, type:value, unit: value==='bodyweight' ? 'lbs' : value==='consistency' ? 'workouts' : 'lbs'}))}
+                        style={{ padding:'6px 14px', borderRadius:20, border:'1px solid '+(goalForm.type===value?t.teal:t.border), background:goalForm.type===value?t.teal+'20':'transparent', color:goalForm.type===value?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -1282,16 +1286,18 @@ export default function ClientDetail() {
                       coach_id: coachId,
                       title: goalForm.title.trim(),
                       description: goalForm.description || null,
-                      goal_type: goalForm.goal_type,
+                      type: goalForm.type,
                       target_value: goalForm.target_value ? parseFloat(goalForm.target_value) : null,
                       unit: goalForm.unit || null,
-                      target_date: goalForm.target_date || null,
+                      deadline: goalForm.target_date || null,
+                      exercise_id: goalForm.exercise_id || null,
                       status: 'active',
+                      suggested_by: 'coach',
                     }).select().single()
                     if (newGoal) setGoals(p => [newGoal, ...p])
                     setGoalSaving(false)
                     setShowAddGoal(false)
-                    setGoalForm({ title:'', description:'', goal_type:'custom', target_value:'', unit:'', target_date:'' })
+                    setGoalForm({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
                   }}
                     style={{ flex:2, padding:'12px', borderRadius:11, border:'none', background: goalForm.title.trim() ? 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)' : t.surfaceHigh, color: goalForm.title.trim() ? '#000' : t.textMuted, fontSize:13, fontWeight:800, cursor: goalForm.title.trim() ? 'pointer' : 'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
                     {goalSaving ? 'Saving...' : 'Add Goal'}

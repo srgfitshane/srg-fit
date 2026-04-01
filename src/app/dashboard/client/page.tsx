@@ -235,11 +235,13 @@ type ClientGoalRecord = {
   id: string
   title: string
   description?: string | null
+  type?: string | null
   target_value?: number | null
   current_value?: number | null
   unit?: string | null
   status?: string | null
-  target_date?: string | null
+  deadline?: string | null
+  suggested_by?: string | null
 }
 
 type WorkoutSessionCompletionRecord = {
@@ -374,6 +376,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [pastEntries,      setPastEntries]      = useState<JournalEntryRecord[]>([])
   const [pastEntriesOpen,  setPastEntriesOpen]  = useState(false)
   const [activeGoals,      setActiveGoals]      = useState<ClientGoalRecord[]>([])
+  const [suggestGoalOpen,  setSuggestGoalOpen]  = useState(false)
+  const [suggestGoalText,  setSuggestGoalText]  = useState('')
+  const [suggestGoalSaving, setSuggestGoalSaving] = useState(false)
   const router       = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -661,6 +666,27 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         }, { onConflict: 'client_id,checkin_date' })
       }
     }
+  }
+
+
+  const suggestGoal = async () => {
+    if (!clientRecord || !suggestGoalText.trim()) return
+    setSuggestGoalSaving(true)
+    const coachId = '133f93d0-2399-4542-bc57-db4de8b98d79'
+    const { data: newGoal } = await supabase.from('client_goals').insert({
+      client_id: clientRecord.id,
+      coach_id: coachId,
+      title: suggestGoalText.trim(),
+      type: 'weight_lifted',
+      target_value: null,
+      unit: 'lbs',
+      status: 'active',
+      suggested_by: 'client',
+    }).select().single()
+    if (newGoal) setActiveGoals(prev => [...prev, newGoal as ClientGoalRecord])
+    setSuggestGoalText('')
+    setSuggestGoalOpen(false)
+    setSuggestGoalSaving(false)
   }
 
   const sharePRToCommunity = async (pr: PersonalRecordSummary) => {
@@ -1132,8 +1158,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     : null
                   const isComplete = goal.status === 'completed'
                   const color = isComplete ? t.teal : t.orange
-                  const daysLeft = goal.target_date
-                    ? Math.ceil((new Date(goal.target_date).getTime() - todayStartMs) / 86400000)
+                  const daysLeft = goal.deadline
+                    ? Math.ceil((new Date(goal.deadline).getTime() - todayStartMs) / 86400000)
                     : null
                   return (
                     <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : t.border}`, borderRadius:13, padding:'12px 14px' }}>
@@ -1171,6 +1197,30 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   )
                 })}
               </div>
+              {/* Suggest a goal */}
+              {suggestGoalOpen ? (
+                <div style={{ marginTop:10, display:'flex', gap:8 }}>
+                  <input
+                    value={suggestGoalText}
+                    onChange={e=>setSuggestGoalText(e.target.value)}
+                    placeholder="e.g. Hit 225lb squat, Run a 5K..."
+                    style={{ flex:1, background:t.surfaceUp, border:'1px solid '+t.teal+'50', borderRadius:10, padding:'9px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none' }}
+                  />
+                  <button onClick={suggestGoal} disabled={!suggestGoalText.trim()||suggestGoalSaving}
+                    style={{ background:t.teal, border:'none', borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {suggestGoalSaving ? '...' : 'Send'}
+                  </button>
+                  <button onClick={()=>setSuggestGoalOpen(false)}
+                    style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:10, padding:'9px 12px', fontSize:12, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button onClick={()=>setSuggestGoalOpen(true)}
+                  style={{ marginTop:10, width:'100%', background:'transparent', border:'1px dashed '+t.border, borderRadius:10, padding:'9px', fontSize:12, fontWeight:600, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  + Suggest a goal to your coach
+                </button>
+              )}
             </div>
           )}
 

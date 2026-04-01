@@ -721,6 +721,32 @@ export default function ActiveWorkoutPage() {
         }
       }
 
+      // 1b. Update consistency goals
+      const { data: consistencyGoals } = await supabase
+        .from('client_goals')
+        .select('id, target_value')
+        .eq('client_id', clientId)
+        .eq('status', 'active')
+        .eq('type', 'consistency')
+      if (consistencyGoals?.length) {
+        const { count: doneCount } = await supabase
+          .from('workout_sessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', clientId)
+          .eq('status', 'completed')
+        const current = doneCount || 0
+        for (const goal of consistencyGoals) {
+          if (current >= Number(goal.target_value)) {
+            await supabase.from('client_goals').update({
+              status: 'completed', completed_at: new Date().toISOString(), current_value: current,
+            }).eq('id', goal.id)
+            newMilestones.push(`Consistency goal crushed: ${current} workouts done!`)
+          } else {
+            await supabase.from('client_goals').update({ current_value: current }).eq('id', goal.id)
+          }
+        }
+      }
+
       // 2. Check consistency milestones
       const { count: totalDone } = await supabase
         .from('workout_sessions')
