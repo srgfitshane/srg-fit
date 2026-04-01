@@ -1,5 +1,4 @@
 'use client'
-import Image from 'next/image'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
@@ -459,12 +458,10 @@ export default function ClientProgressPage() {
                   )}
                   {p.signedUrl && (
                     <div style={{ position:'relative', width:'100%', aspectRatio:'3 / 4' }}>
-                      <Image
+                      <img
                         src={p.signedUrl}
                         alt={`${p.angle?.replace('_',' ') || 'Progress'} photo from ${fmt(p.photo_date)}`}
-                        fill
-                        sizes="(max-width: 768px) 50vw, 140px"
-                        style={{ objectFit:'cover', display:'block' }}
+                        style={{ objectFit:'cover', display:'block', width:'100%', height:'100%' }}
                       />
                     </div>
                   )}
@@ -573,12 +570,10 @@ export default function ClientProgressPage() {
           <div onClick={e=>e.stopPropagation()} style={{ maxWidth:500, width:'100%' }}>
             {singlePhotoLightbox.signedUrl && (
               <div style={{ position:'relative', width:'100%', aspectRatio:'3 / 4' }}>
-                <Image
+                <img
                   src={singlePhotoLightbox.signedUrl}
                   alt={`${singlePhotoLightbox.angle?.replace('_',' ') || 'Progress'} photo from ${fmt(singlePhotoLightbox.photo_date)}`}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 500px"
-                  style={{ borderRadius:16, display:'block', objectFit:'cover' }}
+                  style={{ objectFit:'cover', display:'block', width:'100%', height:'100%', borderRadius:12 }}
                 />
               </div>
             )}
@@ -608,12 +603,10 @@ export default function ClientProgressPage() {
                   </div>
                   {p.signedUrl && (
                     <div style={{ position:'relative', width:'100%', minHeight:320, maxHeight:500 }}>
-                      <Image
+                      <img
                         src={p.signedUrl}
                         alt={`${p.angle?.replace('_',' ') || 'Progress'} photo from ${fmt(p.photo_date)}`}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 440px"
-                        style={{ display:'block', objectFit:'cover' }}
+                        style={{ objectFit:'cover', display:'block', width:'100%', height:'100%' }}
                       />
                     </div>
                   )}
