@@ -42,7 +42,37 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingProfile) {
-      return NextResponse.json({ error: 'A user with that email already exists' }, { status: 400 })
+      // User already has an auth account — send a password reset so they can set/reset their password
+      // This covers: existing Stripe clients, previously invited users, etc.
+      const { error: resetErr } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: {
+          redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+        }
+      })
+      if (resetErr) {
+        return NextResponse.json({ error: resetErr.message }, { status: 500 })
+      }
+      // Make sure they have an active client record linked to this coach
+      const { data: existingClient } = await admin
+        .from('clients')
+        .select('id')
+        .eq('profile_id', existingProfile.id)
+        .eq('coach_id', user.id)
+        .single()
+      if (!existingClient) {
+        await admin.from('clients').insert({
+          profile_id: existingProfile.id,
+          coach_id: user.id,
+          start_date: new Date().toISOString().split('T')[0],
+          active: true,
+        })
+      }
+      return NextResponse.json({
+        success: true,
+        message: `${email} already has an account — a login link has been sent so they can access the app.`,
+      })
     }
 
     let inviteRow: { id: string; token: string; email: string; full_name: string | null; status: string; created_at: string; expires_at: string; accepted_at: string | null; message: string | null; onboarding_form_id?: string | null; profile_id?: string | null } | null = null

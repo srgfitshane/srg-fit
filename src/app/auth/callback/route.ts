@@ -31,13 +31,16 @@ export async function GET(request: Request) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) return NextResponse.redirect(`${origin}${next}`)
+    console.error('[auth/callback] exchangeCode failed:', error.message)
   }
 
   // Path 2: token_hash exchange (direct invite link — no Supabase domain in chain)
   if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type })
     if (!error) return NextResponse.redirect(`${origin}${next}`)
+    console.error('[auth/callback] verifyOtp failed:', error.message, { token_hash: token_hash?.slice(0,20), type })
   }
 
+  console.error('[auth/callback] falling through to login', { code: !!code, token_hash: !!token_hash, type, next })
   return NextResponse.redirect(`${origin}/login?error=auth-rejected`)
 }
