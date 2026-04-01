@@ -84,7 +84,7 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
         notification_type: 'new_message',
         title: `Message from ${otherName || 'your coach'}`,
         body: body.slice(0, 100),
-        link_url: '/dashboard/client/messages',
+        link_url: '/dashboard/client?tab=messages',
       })
     }).catch(() => {})
   }
@@ -182,13 +182,13 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!bottomRef.current) return
     if (initialLoadRef.current) {
-      // On initial load scroll instantly (no animation) so user lands at bottom
-      bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior })
+      // Jump immediately — no animation
+      bottomRef.current.scrollIntoView({ behavior: 'auto' })
       initialLoadRef.current = false
     } else {
-      // New message arrived — smooth scroll
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [thread])
 
