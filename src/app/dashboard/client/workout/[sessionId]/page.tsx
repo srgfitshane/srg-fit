@@ -701,6 +701,7 @@ ${candidateList}`
 
     if (error) {
       console.error('finishWorkout error:', error)
+      alert('Something went wrong saving your workout. Please try again.')
       setSaving(false)
       return
     }
