@@ -102,13 +102,14 @@ function SetPasswordInner() {
       setLoading(false)
       return
     }
-    // Activate client record — await so onboarding page finds it immediately
+    // Activate client record via server API (service role bypasses RLS race condition)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await supabase.from('clients')
-        .update({ active: true })
-        .eq('profile_id', user.id)
-        .eq('active', false)
+      await fetch('/api/activate-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id }),
+      })
     }
     setDone(true)
     // Small delay just to show the success state, then go straight to onboarding
