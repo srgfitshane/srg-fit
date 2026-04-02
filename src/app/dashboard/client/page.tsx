@@ -404,7 +404,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
   const openTab = (tab: DashboardTab) => {
     if (tab !== 'messages') setMessagesView('hub')
-    if (tab === 'messages') setUnreadMsgCount(0)
     setPlusOpen(false)
     activeNavRef.current = tab
     setActiveNav(tab)
@@ -1436,7 +1435,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:24 }}>Message your coach or check in with the community</div>
 
               {/* Coach message card */}
-              <button onClick={()=>setMessagesView('coach')}
+              <button onClick={()=>{ setUnreadMsgCount(0); setMessagesView('coach') }}
                 style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadMsgCount > 0 ? t.teal+'80' : t.border), borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                 <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
                 <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
