@@ -626,8 +626,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setCoachProfileId(clientData?.coach_id || null)
 
       if (clientData) {
-        await loadClientData(clientData as DashboardClientRecord, today)
-        // Fetch unread message count from coach
+        // Fetch unread count FIRST — before loadClientData and before RichMessageThread
+        // mounts and marks messages read (happens when deep-linking via ?tab=messages)
         if (clientData.coach_id) {
           const { count } = await supabase.from('messages')
             .select('id', { count: 'exact', head: true })
@@ -636,6 +636,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .eq('read', false)
           setUnreadMsgCount(count || 0)
         }
+
+        await loadClientData(clientData as DashboardClientRecord, today)
 
         // Community new posts — compare against last visit stored in localStorage
         try {
