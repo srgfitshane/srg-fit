@@ -17,7 +17,7 @@ import { GiphyFetch } from '@giphy/js-fetch-api'
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
   teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', purple:'#8b5cf6',
-  green:'#22c55e', pink:'#f472b6', yellow:'#facc15',
+  green:'#22c55e', pink:'#f472b6', yellow:'#facc15', red:'#ef4444',
   text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
 }
 const QUICK_REACTIONS = ['💪','🔥','❤️','🎉','👏','😤','🏆','⚡']
@@ -69,6 +69,7 @@ type CommunityPost = {
   image_url: string | null
   video_url: string | null
   pinned?: boolean | null
+  archived?: boolean | null
   created_at: string
   reactions?: CommunityReaction[]
 }
@@ -111,6 +112,8 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [gifLoading,    setGifLoading]    = useState(false)
   const gf = useMemo(() => new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || ''), [])
   const [nowMs,        setNowMs]        = useState(() => Date.now())
+  const [showArchived, setShowArchived] = useState(false)
+  const [coachMenu,    setCoachMenu]    = useState<string|null>(null)
 
   const loadPosts = useCallback(async (cid?: string) => {
     const id = cid || coachId
@@ -119,6 +122,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .from('community_posts')
       .select('*, reactions:community_reactions(*)')
       .eq('coach_id', id)
+      .eq('archived', false)
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
@@ -262,6 +266,29 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     setDraft(''); clearMedia(); setGifUrl(null); setPosting(false); await loadPosts()
   }
 
+  const deletePost = async (postId: string) => {
+    if (!confirm('Delete this post? This cannot be undone.')) return
+    await supabase.from('community_replies').delete().eq('post_id', postId)
+    await supabase.from('community_posts').delete().eq('id', postId)
+    await loadPosts()
+  }
+
+  const archivePost = async (postId: string, currentArchived: boolean) => {
+    await supabase.from('community_posts').update({ archived: !currentArchived }).eq('id', postId)
+    await loadPosts()
+  }
+
+  const pinPost = async (postId: string, currentPinned: boolean | null) => {
+    await supabase.from('community_posts').update({ pinned: !currentPinned }).eq('id', postId)
+    await loadPosts()
+  }
+
+  const deleteReply = async (replyId: string) => {
+    if (!confirm('Delete this reply?')) return
+    await supabase.from('community_replies').delete().eq('id', replyId)
+    await loadPosts()
+  }
+
   const submitReply = async (postId: string) => {
     const body = replyDrafts[postId]?.trim()
     if (!body || !me || !coachId) return
@@ -313,7 +340,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   return (
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}textarea{resize:none;}.reply-input:focus{outline:none;border-color:${t.teal}60 !important;}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:480, margin:'0 auto' }}
-        onClick={() => setReactOpen(null)}>
+        onClick={() => { setReactOpen(null); setCoachMenu(null) }}>
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:56, gap:12 }}>
@@ -414,6 +441,32 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       </div>
                       <div style={{ fontSize:10, color:t.textMuted }}>{fmt(p.created_at)}</div>
                     </div>
+                    {/* Coach moderation menu */}
+                    {role === 'coach' && (
+                      <div style={{ position:'relative' }}>
+                        <button onClick={e=>{ e.stopPropagation(); setCoachMenu(coachMenu===p.id?null:p.id) }}
+                          style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 6px', lineHeight:1, borderRadius:6 }}>
+                          ···
+                        </button>
+                        {coachMenu === p.id && (
+                          <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'4px', zIndex:50, minWidth:150, boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}
+                            onClick={e=>e.stopPropagation()}>
+                            <button onClick={()=>{ pinPost(p.id, p.pinned??false); setCoachMenu(null) }}
+                              style={{ display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px', fontSize:12, fontWeight:700, color:t.text, cursor:'pointer', borderRadius:7 }}>
+                              {p.pinned ? '📌 Unpin' : '📌 Pin to top'}
+                            </button>
+                            <button onClick={()=>{ archivePost(p.id, p.archived??false); setCoachMenu(null) }}
+                              style={{ display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px', fontSize:12, fontWeight:700, color:t.yellow, cursor:'pointer', borderRadius:7 }}>
+                              {p.archived ? '📂 Unarchive' : '📦 Archive'}
+                            </button>
+                            <button onClick={()=>{ deletePost(p.id); setCoachMenu(null) }}
+                              style={{ display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', borderRadius:7 }}>
+                              🗑️ Delete post
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {p.body && <div style={{ fontSize:13, lineHeight:1.65, marginBottom:10 }}>{p.body}</div>}
                   {p.image_url && (
