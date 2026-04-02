@@ -15,7 +15,9 @@ interface Notification {
 
 const TYPE_ICONS: Record<string, string> = {
   message_received:       '💬',
+  new_message:            '💬',
   checkin_submitted:      '📋',
+  checkin_due:            '📋',
   payment_failed:         '⚠️',
   payment_succeeded:      '✅',
   subscription_canceled:  '❌',
@@ -23,16 +25,21 @@ const TYPE_ICONS: Record<string, string> = {
   onboarding_completed:   '🎓',
   client_flagged:         '🚩',
   program_assigned:       '💪',
+  pr_achieved:            '🏆',
+  milestone:              '🎯',
+  call_request:           '📞',
   general:                '🔔',
 }
 
 export default function NotificationBell({ userId, accentColor = '#c8f545' }: { userId: string, accentColor?: string }) {
   const supabase = useMemo(() => createClient(), [])
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]     = useState(false)
   const [loading, setLoading] = useState(true)
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  const panelRef = useRef<HTMLDivElement>(null)
+  const [nowMs, setNowMs]   = useState(() => Date.now())
+  const [panelPos, setPanelPos] = useState({ top: 0, right: 0 })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef  = useRef<HTMLDivElement>(null)
 
   const unreadCount = notifications.filter(n => !n.is_read).length
 
@@ -53,44 +60,44 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
     setLoading(false)
   }, [supabase, userId])
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void fetchNotifications()
-    }, 0)
+  // Calculate fixed position from button rect when opening
+  const handleOpen = () => {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setPanelPos({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setOpen(o => !o)
+  }
 
-    // Realtime subscription
+  useEffect(() => {
+    void fetchNotifications()
     const channel = supabase
       .channel(`notifications:${userId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
+        event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `user_id=eq.${userId}`
       }, (payload) => {
         setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 50))
       })
       .subscribe()
 
-    // Close on outside click
     const handleClick = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-      supabase.removeChannel(channel)
-      document.removeEventListener('mousedown', handleClick)
-    }
+    return () => { supabase.removeChannel(channel); document.removeEventListener('mousedown', handleClick) }
   }, [fetchNotifications, supabase, userId])
 
   useEffect(() => {
     if (!open) return
-
-    const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000)
-    return () => window.clearInterval(intervalId)
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(id)
   }, [open])
 
   async function markRead(id: string) {
@@ -99,10 +106,10 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
   }
 
   async function markAllRead() {
-    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id)
-    if (!unreadIds.length) return
+    const ids = notifications.filter(n => !n.is_read).map(n => n.id)
+    if (!ids.length) return
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-    await supabase.from('notifications').update({ is_read: true, read_at: new Date().toISOString() }).in('id', unreadIds)
+    await supabase.from('notifications').update({ is_read: true, read_at: new Date().toISOString() }).in('id', ids)
   }
 
   async function handleNotifClick(n: Notification) {
@@ -118,21 +125,19 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
     if (mins < 60) return `${mins}m ago`
     const hrs = Math.floor(mins / 60)
     if (hrs < 24) return `${hrs}h ago`
-    const days = Math.floor(hrs / 24)
-    return `${days}d ago`
+    return `${Math.floor(hrs / 24)}d ago`
   }
 
   return (
-    <div ref={panelRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={{ position: 'relative', display: 'inline-block' }}>
       {/* Bell Button */}
-      <button
-        onClick={() => setOpen(o => !o)}
+      <button ref={buttonRef} onClick={handleOpen}
         style={{
           position: 'relative', background: open ? t.surfaceHigh : 'none',
           border: `1px solid ${open ? t.border : 'transparent'}`,
           borderRadius: 8, padding: '6px 10px', fontSize: 18,
           cursor: 'pointer', display: 'flex', alignItems: 'center',
-          transition: 'all 0.15s'
+          transition: 'all 0.15s', WebkitTapHighlightColor: 'transparent',
         }}
         title="Notifications"
       >
@@ -143,22 +148,24 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
             background: t.accent, color: '#0f0f0f',
             borderRadius: '50%', fontSize: 9, fontWeight: 900,
             width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: "'DM Sans',sans-serif"
+            fontFamily: "'DM Sans',sans-serif", pointerEvents: 'none',
           }}>
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown Panel */}
+      {/* Dropdown — fixed positioning escapes all parent stacking contexts */}
       {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+        <div ref={panelRef} style={{
+          position: 'fixed',
+          top: panelPos.top,
+          right: panelPos.right,
           width: 340, maxHeight: 480,
           background: t.surface, border: `1px solid ${t.border}`,
           borderRadius: 14, boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
-          zIndex: 9999, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          fontFamily: "'DM Sans',sans-serif"
+          zIndex: 99999, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          fontFamily: "'DM Sans',sans-serif",
         }}>
           {/* Header */}
           <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -182,15 +189,12 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
               </div>
             ) : (
               notifications.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => handleNotifClick(n)}
+                <div key={n.id} onClick={() => handleNotifClick(n)}
                   style={{
                     padding: '12px 16px', borderBottom: `1px solid ${t.border}`,
                     background: n.is_read ? 'transparent' : t.accent + '0a',
                     cursor: n.link_url ? 'pointer' : 'default',
                     display: 'flex', gap: 10, alignItems: 'flex-start',
-                    transition: 'background 0.1s'
                   }}
                 >
                   <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>
@@ -199,11 +203,9 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
                       <span style={{ fontWeight: n.is_read ? 600 : 800, fontSize: 13, color: t.text, lineHeight: 1.3 }}>{n.title}</span>
-                      {!n.is_read && (
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.accent, flexShrink: 0, marginTop: 4 }} />
-                      )}
+                      {!n.is_read && <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.accent, flexShrink: 0, marginTop: 4 }} />}
                     </div>
-                    {n.body && <p style={{ margin: '0 0 4px', fontSize: 12, color: t.textDim, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{n.body}</p>}
+                    {n.body && <p style={{ margin: '0 0 4px', fontSize: 12, color: t.textDim, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{n.body}</p>}
                     <span style={{ fontSize: 11, color: t.textMuted }}>{fmtTime(n.created_at)}</span>
                   </div>
                 </div>
