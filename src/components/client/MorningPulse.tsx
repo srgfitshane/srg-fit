@@ -1,10 +1,9 @@
-'use client'
 /**
  * MorningPulse — daily check-in
  * Step 1: Sleep quality (1-5 stars)
  * Step 2: Energy level (1-5 bolts)
- * Step 3: Sliders — Stress / Mood / Energy (1-10)
- * Step 4: Optional journal
+ * Step 3: Sliders — Stress / Mood
+ * Step 4: Optional morning note (separate from daily journal)
  */
 import { createClient } from '@/lib/supabase-browser'
 import { useState } from 'react'
@@ -31,17 +30,19 @@ interface Props {
   onSaved?: () => void
 }
 
+const btnBase: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontFamily: "'DM Sans',sans-serif", WebkitTapHighlightColor: 'transparent',
+}
+
 export default function MorningPulse({ clientId, today, supabase, existing, onSaved }: Props) {
   const alreadyDone = !!(existing?.sleep_quality || existing?.energy_score || existing?.stress_score)
 
   const [step,      setStep]      = useState<'sleep'|'energy'|'sliders'|'journal'|'done'>(alreadyDone ? 'done' : 'sleep')
   const [sleep,     setSleep]     = useState(existing?.sleep_quality || 0)
   const [energy,    setEnergy]    = useState(existing?.energy_score  || 0)
-  const [sliders,   setSliders]   = useState({
-    stress: existing?.stress_score || 5,
-    mood:   existing?.mood_score   || 5,
-  })
-  const [journal,   setJournal]   = useState(existing?.body       || '')
+  const [sliders,   setSliders]   = useState({ stress: existing?.stress_score || 5, mood: existing?.mood_score || 5 })
+  const [journal,   setJournal]   = useState(existing?.body || '')
   const [isPrivate, setIsPrivate] = useState(existing?.is_private ?? true)
   const [saving,    setSaving]    = useState(false)
   const [collapsed, setCollapsed] = useState(alreadyDone)
@@ -65,23 +66,17 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
     onSaved?.()
   }
 
-  const stepNext = (val: number, setter: (v: number) => void, next: 'sleep'|'energy'|'sliders'|'journal'|'done') => {
-    setter(val)
-    setTimeout(() => setStep(next), 180)
-  }
-
   // ── Done / collapsed ──────────────────────────────────────────────────────
   if (step === 'done' || collapsed) {
     const summary = [
       sleep  ? '⭐'.repeat(sleep)  : null,
       energy ? '⚡'.repeat(energy) : null,
     ].filter(Boolean).join('  ')
-
     return (
       <div style={{ background:t.surface, border:'1px solid '+t.green+'40', borderRadius:16, overflow:'hidden', marginBottom:14 }}>
         <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
         <button onClick={()=>setCollapsed(c=>!c)}
-          style={{ width:'100%', background:'none', border:'none', padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:10, fontFamily:"'DM Sans',sans-serif" }}>
+          style={{ ...btnBase, width:'100%', padding:'14px 16px', display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🌅</div>
           <div style={{ flex:1, textAlign:'left' as const }}>
             <div style={{ fontSize:14, fontWeight:800, color:t.text }}>Morning Pulse</div>
@@ -92,47 +87,35 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
           </div>
           <span style={{ fontSize:11, color:t.green, fontWeight:700 }}>✓ Done</span>
         </button>
-
         {!collapsed && (
           <div style={{ padding:'0 16px 16px' }}>
             <div style={{ display:'flex', gap:16, marginBottom:14, flexWrap:'wrap' as const }}>
               {sleep > 0 && (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
                   <div style={{ fontSize:11, color:t.textMuted, fontWeight:700 }}>SLEEP</div>
-                  <div style={{ display:'flex', gap:2 }}>
-                    {[1,2,3,4,5].map(n=><span key={n} style={{ fontSize:20, opacity:n<=sleep?1:0.2 }}>⭐</span>)}
-                  </div>
+                  <div style={{ display:'flex', gap:2 }}>{[1,2,3,4,5].map(n=><span key={n} style={{ fontSize:20, opacity:n<=sleep?1:0.2 }}>⭐</span>)}</div>
                 </div>
               )}
               {energy > 0 && (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
                   <div style={{ fontSize:11, color:t.textMuted, fontWeight:700 }}>ENERGY</div>
-                  <div style={{ display:'flex', gap:2 }}>
-                    {[1,2,3,4,5].map(n=><span key={n} style={{ fontSize:20, opacity:n<=energy?1:0.2 }}>⚡</span>)}
-                  </div>
+                  <div style={{ display:'flex', gap:2 }}>{[1,2,3,4,5].map(n=><span key={n} style={{ fontSize:20, opacity:n<=energy?1:0.2 }}>⚡</span>)}</div>
                 </div>
               )}
-              {[
-                { label:'STRESS', val:sliders.stress, color:t.red },
-                { label:'MOOD',   val:sliders.mood,   color:t.pink },
-              ].map(s => (
+              {[{ label:'STRESS', val:sliders.stress, color:t.red },{ label:'MOOD', val:sliders.mood, color:t.pink }].map(s=>(
                 <div key={s.label} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
                   <div style={{ fontSize:11, color:t.textMuted, fontWeight:700 }}>{s.label}</div>
                   <div style={{ fontSize:18, fontWeight:900, color:s.color }}>{s.val}<span style={{ fontSize:10, color:t.textMuted }}>/10</span></div>
                 </div>
               ))}
             </div>
-            {journal && (
-              <div style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.textDim, lineHeight:1.6, marginBottom:12 }}>
-                {journal}
-              </div>
-            )}
+            {journal && <div style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.textDim, lineHeight:1.6, marginBottom:12 }}>{journal}</div>}
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               <button onClick={()=>{ setStep('sleep'); setCollapsed(false) }}
-                style={{ background:'none', border:'1px solid '+t.border, borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                style={{ ...btnBase, border:'1px solid '+t.border, borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted }}>
                 Edit today&apos;s check-in
               </button>
-              <a href="/dashboard/client/progress" style={{ background:'none', border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textDecoration:'none', display:'inline-block' }}>
+              <a href="/dashboard/client/progress" style={{ border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, textDecoration:'none', display:'inline-block' }}>
                 View Trends →
               </a>
             </div>
@@ -145,6 +128,15 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   // ── Active check-in ──────────────────────────────────────────────────────
   const STEPS = ['sleep','energy','sliders','journal'] as const
   const stepIdx = STEPS.indexOf(step)
+
+  const nextBtn = (onClick: () => void, color = t.teal, textColor = '#000') => (
+    <button onClick={onClick}
+      style={{ marginTop:16, width:'100%', padding:'12px', borderRadius:12, border:'none',
+        background:`linear-gradient(135deg,${color},${color}cc)`, color:textColor,
+        fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+      Next →
+    </button>
+  )
 
   return (
     <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
@@ -172,13 +164,14 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap a star</div>
             <div style={{ display:'flex', justifyContent:'center', gap:10 }}>
               {[1,2,3,4,5].map(n => (
-                <button key={n} onClick={()=>stepNext(n, setSleep, 'energy')}
-                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:40, padding:'4px', transform:sleep===n?'scale(1.2)':'scale(1)', transition:'transform 0.1s', WebkitTapHighlightColor:'transparent' }}>
+                <button key={n} onClick={()=>setSleep(n)}
+                  style={{ ...btnBase, fontSize:40, padding:'4px', transform:sleep===n?'scale(1.2)':'scale(1)', transition:'transform 0.1s' }}>
                   {n<=(sleep||0)?'⭐':'☆'}
                 </button>
               ))}
             </div>
             {sleep>0 && <div style={{ marginTop:12, fontSize:12, color:t.teal, fontWeight:700 }}>{['','Rough night 😓','Could be better','Not bad 🙂','Pretty good!','Crushed it! 💪'][sleep]}</div>}
+            {sleep>0 && nextBtn(()=>setStep('energy'))}
           </div>
         )}
 
@@ -189,13 +182,14 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap a bolt</div>
             <div style={{ display:'flex', justifyContent:'center', gap:10 }}>
               {[1,2,3,4,5].map(n => (
-                <button key={n} onClick={()=>stepNext(n, setEnergy, 'sliders')}
-                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:40, padding:'4px', opacity:n<=(energy||0)?1:0.25, transition:'opacity 0.1s, transform 0.1s', transform:energy===n?'scale(1.2)':'scale(1)', WebkitTapHighlightColor:'transparent' }}>
+                <button key={n} onClick={()=>setEnergy(n)}
+                  style={{ ...btnBase, fontSize:40, padding:'4px', opacity:n<=(energy||0)?1:0.25, transition:'opacity 0.1s, transform 0.1s', transform:energy===n?'scale(1.2)':'scale(1)' }}>
                   ⚡
                 </button>
               ))}
             </div>
             {energy>0 && <div style={{ marginTop:12, fontSize:12, color:t.yellow, fontWeight:700 }}>{['','Running on empty','Low tank','Half charged','Feeling good','FULLY CHARGED! 🔋'][energy]}</div>}
+            {energy>0 && nextBtn(()=>setStep('sliders'), t.yellow, '#000')}
           </div>
         )}
 
@@ -205,8 +199,8 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
             <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>How are you feeling?</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:18 }}>Stress & Mood</div>
             {([
-              { key:'stress' as const, label:'😤 Stress', low:'Chill', high:'Maxed',    color:t.red  },
-              { key:'mood'   as const, label:'😊 Mood',   low:'Low',  high:'Great',     color:t.pink },
+              { key:'stress' as const, label:'😤 Stress', low:'Chill', high:'Maxed', color:t.red  },
+              { key:'mood'   as const, label:'😊 Mood',   low:'Low',  high:'Great',  color:t.pink },
             ]).map(({ key, label, low, high, color }) => (
               <div key={key} style={{ marginBottom:18 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
@@ -228,11 +222,11 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
           </div>
         )}
 
-        {/* ── STEP 4: JOURNAL ── */}
+        {/* ── STEP 4: MORNING NOTE (separate from daily journal) ── */}
         {step === 'journal' && (
           <div>
-            <div style={{ fontSize:15, fontWeight:800, marginBottom:4 }}>Anything on your mind?</div>
-            <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Optional — this is your space</div>
+            <div style={{ fontSize:15, fontWeight:800, marginBottom:4 }}>Morning note</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Optional — separate from your daily journal</div>
             <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' as const }}>
               {sleep>0  && <span style={{ fontSize:12, background:t.surfaceHigh, borderRadius:20, padding:'4px 10px', color:t.textDim }}>{'⭐'.repeat(sleep)} sleep</span>}
               {energy>0 && <span style={{ fontSize:12, background:t.surfaceHigh, borderRadius:20, padding:'4px 10px', color:t.textDim }}>{'⚡'.repeat(energy)} energy</span>}
@@ -240,22 +234,22 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
               <span style={{ fontSize:12, background:t.surfaceHigh, borderRadius:20, padding:'4px 10px', color:t.textDim }}>Mood {sliders.mood}/10</span>
             </div>
             <textarea value={journal} onChange={e=>setJournal(e.target.value)} autoFocus rows={3}
-              placeholder="Wins, worries, whatever's on your mind. Shane sees this only if you choose to share it."
+              placeholder="How are you feeling this morning? Shane sees this only if you share it."
               style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' as const, marginBottom:10 }}
             />
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <button onClick={()=>setIsPrivate(p=>!p)}
-                style={{ display:'flex', alignItems:'center', gap:6, background:isPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(isPrivate?t.border:t.teal+'40'), borderRadius:20, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+                style={{ ...btnBase, display:'flex', alignItems:'center', gap:6, background:isPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(isPrivate?t.border:t.teal+'40'), borderRadius:20, padding:'5px 12px', transition:'all 0.2s' }}>
                 <span style={{ fontSize:12 }}>{isPrivate?'🔒':'👁️'}</span>
                 <span style={{ fontSize:11, fontWeight:700, color:isPrivate?t.textMuted:t.teal }}>{isPrivate?'Private':'Share with Coach'}</span>
               </button>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={()=>save('', isPrivate)} disabled={saving}
-                  style={{ background:'none', border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  style={{ ...btnBase, border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.textMuted }}>
                   Skip
                 </button>
                 <button onClick={()=>save(journal, isPrivate)} disabled={saving}
-                  style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
+                  style={{ ...btnBase, background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1 }}>
                   {saving?'Saving...':'Done ✓'}
                 </button>
               </div>
@@ -263,13 +257,13 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
           </div>
         )}
 
-        {/* Back button */}
+        {/* Back button — shown on all steps except journal (which has Skip) */}
         {step !== 'journal' && (
           <div style={{ textAlign:'center' as const, marginTop:16 }}>
             <button onClick={()=>{
               if(step==='energy') setStep('sleep')
               else if(step==='sliders') setStep('energy')
-            }} style={{ background:'none', border:'none', color:t.textMuted, fontSize:12, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", opacity:step==='sleep'?0:1, pointerEvents:step==='sleep'?'none':'auto' }}>
+            }} style={{ ...btnBase, color:t.textMuted, fontSize:12, opacity:step==='sleep'?0:1, pointerEvents:step==='sleep'?'none':'auto' }}>
               ← Back
             </button>
           </div>
