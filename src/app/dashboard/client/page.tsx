@@ -355,6 +355,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
   const [unreadMsgCount, setUnreadMsgCount] = useState(0)
+  const [unreadCommunityCount, setUnreadCommunityCount] = useState(0)
   const [showCallRequest, setShowCallRequest] = useState(false)
   const [callSlots, setCallSlots] = useState<CallSlot[]>([{date:'',time:''},{date:'',time:''},{date:'',time:''}])
   const [callNote, setCallNote] = useState('')
@@ -633,6 +634,18 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .eq('read', false)
           setUnreadMsgCount(count || 0)
         }
+
+        // Community new posts — compare against last visit stored in localStorage
+        try {
+          const lastVisit = localStorage.getItem('srg_community_last_visit')
+          if (lastVisit) {
+            const { count: newPosts } = await supabase
+              .from('community_posts')
+              .select('id', { count: 'exact', head: true })
+              .gt('created_at', lastVisit)
+            setUnreadCommunityCount(newPosts || 0)
+          }
+        } catch { /* localStorage unavailable */ }
       }
 
       setLoading(false)
@@ -1430,8 +1443,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </button>
 
               {/* Community card */}
-              <button onClick={()=>router.push('/dashboard/client/community')}
-                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+              <button onClick={()=>{
+                try { localStorage.setItem('srg_community_last_visit', new Date().toISOString()) } catch {}
+                setUnreadCommunityCount(0)
+                router.push('/dashboard/client/community')
+              }}
+                style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadCommunityCount > 0 ? t.purple+'80' : t.border), borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                 <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }} />
                 <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
                   <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.purple+'30,'+t.pink+'18)', border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
@@ -1443,9 +1460,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>SRG Fit Community</div>
                     <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Share your wins and hype up your crew</div>
                   </div>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
+                  {unreadCommunityCount > 0 ? (
+                    <div style={{ background:t.purple, borderRadius:10, padding:'3px 10px', flexShrink:0 }}>
+                      <span style={{ fontSize:10, fontWeight:900, color:'#fff', letterSpacing:'0.03em' }}>NEW POSTS</span>
+                    </div>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  )}
                 </div>
               </button>
 
