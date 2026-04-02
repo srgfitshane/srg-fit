@@ -436,7 +436,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           setBarcodeVal(''); setAddMode('none')
         }
       } else { setBarcodeErr('Product not found. Try searching by name or Quick Add.') }
-    } catch { setBarcodeErr('Lookup failed. Check connection and try again.') }
+    } catch { setBarcodeErr('Lookup failed. Try Quick Add instead.') }
     setBarcodeLoading(false)
   }
 
@@ -647,7 +647,15 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 {barcodeLoading ? '...' : 'Look Up'}
               </button>
             </div>
-            {barcodeErr && <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>{barcodeErr}</div>}
+            {barcodeErr && (
+                <div style={{ marginTop:8 }}>
+                  <div style={{ fontSize:12, color:t.orange, marginBottom:6 }}>{barcodeErr}</div>
+                  <button onClick={()=>{ setBarcodeErr(''); setAddMode('quick') }}
+                    style={{ fontSize:12, fontWeight:700, color:t.teal, background:'#00c9b115', border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    → Try Quick Add
+                  </button>
+                </div>
+              )}
             {barcodeLoading && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'10px 0' }}>Looking up product...</div>}
           </div>
         )}
