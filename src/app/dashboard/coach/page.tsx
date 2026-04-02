@@ -517,7 +517,7 @@ export default function CoachDashboard() {
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', height:56, gap:8, overflowX:'hidden' }}>
+        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', height:56, gap:8, position:'relative', zIndex:100 }}>
           <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', flexShrink:0 }}>SRG FIT</div>
           <div style={{ width:1, height:28, background:t.border, margin:'0 8px', flexShrink:0 }} />
           <div style={{ fontSize:14, fontWeight:700, flexShrink:0 }} className="coach-topbar-label">Coach</div>
