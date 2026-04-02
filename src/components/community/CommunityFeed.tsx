@@ -388,11 +388,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       />
                       <button onClick={()=>searchGifs(gifQuery)} style={{ background:t.teal, border:'none', borderRadius:7, padding:'6px 10px', fontSize:11, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Go</button>
                     </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:3, padding:'4px 8px 8px', maxHeight:220, overflowY:'auto' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:6, padding:'4px 8px 8px', maxHeight:320, overflowY:'auto' }}>
                       {gifLoading && <div style={{ gridColumn:'1/-1', textAlign:'center', padding:16, color:t.textMuted, fontSize:12 }}>Loading...</div>}
                       {!gifLoading && gifs.map((gif:any) => (
-                        <button key={gif.id} onClick={()=>pickGif(gif)} style={{ background:'none', border:'none', padding:0, cursor:'pointer', borderRadius:6, overflow:'hidden', aspectRatio:'1' }}>
-                          <img src={gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url} alt={gif.title} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+                        <button key={gif.id} onClick={()=>pickGif(gif)} style={{ background:'none', border:'none', padding:0, cursor:'pointer', borderRadius:8, overflow:'hidden' }}>
+                          <img src={gif.images?.fixed_height?.url || gif.images?.original?.url} alt={gif.title} style={{ width:'100%', display:'block' }}/>
                         </button>
                       ))}
                     </div>
