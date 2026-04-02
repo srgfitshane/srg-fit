@@ -1402,17 +1402,26 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
               {/* Coach message card */}
               <button onClick={()=>setMessagesView('coach')}
-                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadMsgCount > 0 ? t.teal+'80' : t.border), borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                 <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
                 <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
-                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.teal+'30,'+t.orange+'18)', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-                    </svg>
+                  <div style={{ position:'relative', flexShrink:0 }}>
+                    <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.teal+'30,'+t.orange+'18)', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                      </svg>
+                    </div>
+                    {unreadMsgCount > 0 && (
+                      <div style={{ position:'absolute', top:-6, right:-6, minWidth:20, height:20, borderRadius:10, background:'#ef4444', display:'flex', alignItems:'center', justifyContent:'center', padding:'0 5px', boxShadow:'0 2px 6px rgba(0,0,0,0.4)' }}>
+                        <span style={{ fontSize:10, fontWeight:900, color:'#fff', lineHeight:1 }}>{unreadMsgCount > 9 ? '9+' : unreadMsgCount}</span>
+                      </div>
+                    )}
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>Message Coach Shane</div>
-                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Direct line to your coach — questions, check-ins, anything</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>
+                      {unreadMsgCount > 0 ? `${unreadMsgCount} new message${unreadMsgCount !== 1 ? 's' : ''} from Coach Shane` : 'Direct line to your coach — questions, check-ins, anything'}
+                    </div>
                   </div>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6"/>
