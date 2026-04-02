@@ -641,13 +641,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         // Community new posts — compare against last visit stored in localStorage
         try {
           const lastVisit = localStorage.getItem('srg_community_last_visit')
-          if (lastVisit) {
-            const { count: newPosts } = await supabase
-              .from('community_posts')
-              .select('id', { count: 'exact', head: true })
-              .gt('created_at', lastVisit)
-            setUnreadCommunityCount(newPosts || 0)
-          }
+          // If no lastVisit, use 48hrs ago as baseline and stamp now so future visits work
+          const since = lastVisit || (() => {
+            const d = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+            localStorage.setItem('srg_community_last_visit', new Date().toISOString())
+            return d
+          })()
+          const { count: newPosts } = await supabase
+            .from('community_posts')
+            .select('id', { count: 'exact', head: true })
+            .gt('created_at', since)
+          setUnreadCommunityCount(newPosts || 0)
         } catch { /* localStorage unavailable */ }
       }
 
