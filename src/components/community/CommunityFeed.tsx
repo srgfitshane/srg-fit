@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import { GiphyFetch } from '@giphy/js-fetch-api'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -103,6 +104,12 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [mediaType,    setMediaType]    = useState<'image'|'video'|null>(null)
   const [uploading,    setUploading]    = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showGifPicker, setShowGifPicker] = useState(false)
+  const [gifUrl,        setGifUrl]        = useState<string|null>(null)
+  const [gifQuery,      setGifQuery]      = useState('')
+  const [gifs,          setGifs]          = useState<any[]>([])
+  const [gifLoading,    setGifLoading]    = useState(false)
+  const gf = useMemo(() => new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || ''), [])
   const [nowMs,        setNowMs]        = useState(() => Date.now())
 
   const loadPosts = useCallback(async (cid?: string) => {
@@ -206,8 +213,28 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     setMediaFile(null); setMediaPreview(null); setMediaType(null)
   }
 
+  const searchGifs = async (q: string) => {
+    setGifLoading(true)
+    try {
+      const { data } = q.trim()
+        ? await gf.search(q, { limit: 18, rating: 'g' })
+        : await gf.trending({ limit: 18, rating: 'g' })
+      setGifs(data)
+    } catch { setGifs([]) }
+    setGifLoading(false)
+  }
+
+  const pickGif = (gif: any) => {
+    const url = gif.images?.fixed_height?.url || gif.images?.original?.url || ''
+    setGifUrl(url)
+    setShowGifPicker(false)
+    setGifQuery('')
+    setGifs([])
+    clearMedia()
+  }
+
   const post = async () => {
-    if (!draft.trim() && !mediaFile) return
+    if (!draft.trim() && !mediaFile && !gifUrl) return
     if (!me || !coachId) return
     setPosting(true)
     let imageUrl: string|null = null
@@ -229,9 +256,10 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       coach_id: coachId, author_id: me.id, author_role: role,
       body: draft.trim(),
       ...(imageUrl && { image_url: imageUrl }),
+      ...(gifUrl && !imageUrl && { image_url: gifUrl }),
       ...(videoUrl && { video_url: videoUrl }),
     })
-    setDraft(''); clearMedia(); setPosting(false); await loadPosts()
+    setDraft(''); clearMedia(); setGifUrl(null); setPosting(false); await loadPosts()
   }
 
   const submitReply = async (postId: string) => {
@@ -316,14 +344,42 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     <button onClick={clearMedia} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
                   </div>
                 )}
+                {gifUrl && !mediaPreview && (
+                  <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
+                    <img src={gifUrl} alt="GIF" style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }}/>
+                    <button onClick={()=>setGifUrl(null)} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
+                  </div>
+                )}
+                {showGifPicker && (
+                  <div style={{ marginTop:8, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, overflow:'hidden' }}>
+                    <div style={{ padding:'8px 8px 4px', display:'flex', gap:6 }}>
+                      <input
+                        value={gifQuery} onChange={e=>setGifQuery(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); searchGifs(gifQuery) } }}
+                        placeholder="Search GIFs..." autoFocus
+                        style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'6px 10px', fontSize:12, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none' }}
+                      />
+                      <button onClick={()=>searchGifs(gifQuery)} style={{ background:t.teal, border:'none', borderRadius:7, padding:'6px 10px', fontSize:11, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Go</button>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:3, padding:'4px 8px 8px', maxHeight:220, overflowY:'auto' }}>
+                      {gifLoading && <div style={{ gridColumn:'1/-1', textAlign:'center', padding:16, color:t.textMuted, fontSize:12 }}>Loading...</div>}
+                      {!gifLoading && gifs.map((gif:any) => (
+                        <button key={gif.id} onClick={()=>pickGif(gif)} style={{ background:'none', border:'none', padding:0, cursor:'pointer', borderRadius:6, overflow:'hidden', aspectRatio:'1' }}>
+                          <img src={gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url} alt={gif.title} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
                   <div style={{ display:'flex', gap:6 }}>
                     <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={attachMedia} style={{ display:'none' }}/>
                     <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','image/*'); fileInputRef.current?.click() }} title="Add photo" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🖼️</button>
                     <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','video/*'); fileInputRef.current?.click() }} title="Add video" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🎥</button>
+                    <button onClick={()=>{ setShowGifPicker(p=>!p); if(!gifs.length) searchGifs('') }} title="Add GIF" style={{ background:showGifPicker?t.tealDim:'none', border:'1px solid '+(showGifPicker?t.teal:t.border), borderRadius:8, padding:'5px 10px', fontSize:12, fontWeight:800, cursor:'pointer', color:showGifPicker?t.teal:t.textMuted, lineHeight:1 }}>GIF</button>
                   </div>
-                  <button onClick={post} disabled={posting||uploading||(!draft.trim()&&!mediaFile)}
-                    style={{ background:(draft.trim()||mediaFile)?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':'transparent', border:'1px solid '+((draft.trim()||mediaFile)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  <button onClick={post} disabled={posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl)}
+                    style={{ background:(draft.trim()||mediaFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':'transparent', border:'1px solid '+((draft.trim()||mediaFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {uploading?'Uploading...':posting?'...':'Post 🔥'}
                   </button>
                 </div>
@@ -362,7 +418,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   {p.body && <div style={{ fontSize:13, lineHeight:1.65, marginBottom:10 }}>{p.body}</div>}
                   {p.image_url && (
                     <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
-                      <Image src={p.image_url} alt="Community post image" width={640} height={320} unoptimized style={{ width:'100%', maxHeight:320, height:'auto', objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url || undefined,'_blank')}/>
+                      {p.image_url?.includes('giphy.com') ? (
+                        <img src={p.image_url} alt="GIF" style={{ width:'100%', maxHeight:320, objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url || undefined,'_blank')}/>
+                      ) : (
+                        <Image src={p.image_url!} alt="Community post image" width={640} height={320} unoptimized style={{ width:'100%', maxHeight:320, height:'auto', objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url || undefined,'_blank')}/>
+                      )}
                     </div>
                   )}
                   {p.video_url && (
