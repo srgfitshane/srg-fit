@@ -163,6 +163,18 @@ export async function POST(request: NextRequest) {
       profile_id: invited?.user?.id || inviteRow?.profile_id || null,
     }).eq('id', inviteRow.id)
 
+    // Notify coach — fire and forget
+    fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-new-client`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: normalizedName || email,
+        client_email: email,
+        plan: 'Coach Invite',
+        source: 'coach_dashboard',
+      }),
+    }).catch(() => {})
+
     return NextResponse.json({
       success: true,
       message: `Invite sent to ${email}.`,

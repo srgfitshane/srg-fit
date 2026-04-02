@@ -84,6 +84,18 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Notify coach — fire and forget
+    fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-new-client`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: name.trim(),
+        client_email: email.trim().toLowerCase(),
+        plan: 'Direct Invite',
+        source: 'direct',
+      }),
+    }).catch(() => {})
+
     return NextResponse.json({ success: true })
 
   } catch (err: unknown) {

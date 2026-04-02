@@ -190,6 +190,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   }
 
   console.log(`✅ Checkout completed: ${email} (${stripeCustomerId})`)
+
+  // Notify coach of new client — fire and forget
+  fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-new-client`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_name: customerName || email,
+      client_email: email,
+      plan: subData?.items?.data?.[0]?.price?.nickname || 'Coaching',
+      source: 'stripe',
+    }),
+  }).catch(() => {})
 }
 
 async function handleTrialWillEnd(sub: Stripe.Subscription) {
