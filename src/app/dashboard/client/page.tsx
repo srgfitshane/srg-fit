@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, Suspense, useMemo, useCallback } from 'react'
+import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import NotificationBell from '@/components/notifications/NotificationBell'
@@ -356,6 +356,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
   const [unreadMsgCount, setUnreadMsgCount] = useState(0)
   const [unreadCommunityCount, setUnreadCommunityCount] = useState(0)
+  const activeNavRef = useRef<DashboardTab>('today')
   const [showCallRequest, setShowCallRequest] = useState(false)
   const [callSlots, setCallSlots] = useState<CallSlot[]>([{date:'',time:''},{date:'',time:''},{date:'',time:''}])
   const [callNote, setCallNote] = useState('')
@@ -405,6 +406,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     if (tab !== 'messages') setMessagesView('hub')
     if (tab === 'messages') setUnreadMsgCount(0)
     setPlusOpen(false)
+    activeNavRef.current = tab
     setActiveNav(tab)
 
     if (overrideClientId) return
@@ -670,6 +672,24 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       return () => clearTimeout(timer)
     }
   }, [activeNav, messagesView])
+
+  // Realtime: increment unread badge when new message arrives and not on messages tab
+  useEffect(() => {
+    if (!profile?.id || !coachProfileId) return
+    const channel = supabase.channel(`client-msg-badge-${profile.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `recipient_id=eq.${profile.id}`,
+      }, (payload) => {
+        const msg = payload.new as { sender_id: string }
+        if (msg.sender_id !== coachProfileId) return
+        if (activeNavRef.current !== 'messages') {
+          setUnreadMsgCount(c => c + 1)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [profile?.id, coachProfileId, supabase])
 
   const refreshPulseData = useCallback(() => {
     if (!clientId) return
