@@ -414,24 +414,32 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
 
   // ── Photo log — upload to storage, then go to meal picker ─────────────────
   async function handlePhotoFile(file: File) {
-    if (!clientRecord) return
+    console.log('[photo] handlePhotoFile called, file:', file?.name, file?.size, file?.type)
+    if (!clientRecord) { console.log('[photo] abort — no clientRecord'); return }
     setPhotoErr(''); setPhotoUploading(true)
-    // Show local preview immediately
     const localUrl = URL.createObjectURL(file)
     setPhotoPreviewUrl(localUrl)
+    console.log('[photo] preview set, uploading to workout-reviews...')
     try {
-      const ext = file.name.split('.').pop() || 'jpg'
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
       const path = `food-photos/${clientRecord.id}/${Date.now()}.${ext}`
+      console.log('[photo] upload path:', path)
       const { error: upErr } = await supabase.storage.from('workout-reviews').upload(path, file, { upsert: false })
-      if (upErr) throw new Error(upErr.message)
+      if (upErr) {
+        console.error('[photo] upload error:', upErr.message, upErr)
+        throw new Error(upErr.message)
+      }
       const { data: urlData } = supabase.storage.from('workout-reviews').getPublicUrl(path)
+      console.log('[photo] public url:', urlData.publicUrl)
       setPhotoStorageUrl(urlData.publicUrl)
+      console.log('[photo] photoStorageUrl state set')
     } catch (e) {
-      setPhotoErr('Upload failed — try again.')
+      console.error('[photo] caught error:', e)
+      setPhotoErr('Upload failed — check console for details.')
       setPhotoPreviewUrl(null)
-      console.error('Photo upload error:', e)
     }
     setPhotoUploading(false)
+    console.log('[photo] done, uploading=false')
   }
 
   function confirmPhoto(storageUrl: string) {
@@ -658,9 +666,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             </div>
             {/* Two hidden file inputs — one for camera, one for gallery */}
             <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }}
-              onChange={e=>{ const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
+              onChange={e=>{ console.log('[photo] camera input changed, files:', e.target.files?.length); const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
             <input ref={imageGalleryRef} type="file" accept="image/*" style={{ display:'none' }}
-              onChange={e=>{ const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
+              onChange={e=>{ console.log('[photo] gallery input changed, files:', e.target.files?.length); const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
 
             {/* No photo yet — show camera + gallery buttons */}
             {!photoPreviewUrl && !photoUploading && (
