@@ -30,6 +30,8 @@ type FoodEntry = {
   serving_size: string
   serving_qty?: number | null
   logged_at: string
+  photo_url?: string | null
+  source?: string | null
 }
 type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved' | 'image'
 
@@ -75,9 +77,7 @@ type FatSecretServing = {
 
 type FatSecretFoodDetail = {
   food_name: string
-  servings?: {
-    serving?: FatSecretServing | FatSecretServing[]
-  }
+  servings?: { serving?: FatSecretServing | FatSecretServing[] }
 }
 
 type FatSecretSearchFood = {
@@ -97,9 +97,7 @@ type USDAFoodPortion = {
   amount?: number | string | null
   modifier?: string | null
   portionDescription?: string | null
-  measureUnit?: {
-    name?: string | null
-  } | null
+  measureUnit?: { name?: string | null } | null
 }
 
 type USDAFoodSearchResult = {
@@ -160,10 +158,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
   const [barcodeErr,      setBarcodeErr]      = useState('')
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const [imageLoading,    setImageLoading]    = useState(false)
-  const [imageResults,    setImageResults]    = useState<FatSecretSearchFood[]>([])
-  const [imageErr,        setImageErr]        = useState('')
+  // Photo log state (replaces old AI recognition)
+  const imageInputRef     = useRef<HTMLInputElement>(null)
+  const [photoCaption,    setPhotoCaption]    = useState('')
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string|null>(null)
+  const [photoStorageUrl, setPhotoStorageUrl] = useState<string|null>(null)
+  const [photoUploading,  setPhotoUploading]  = useState(false)
+  const [photoErr,        setPhotoErr]        = useState('')
 
   const loadData = useCallback(async () => {
     if (!clientRecord?.id) return
@@ -178,8 +179,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       const { data: ents } = await supabase.from('food_entries').select('*').eq('daily_log_id', dailyLog.id).order('logged_at')
       setEntries(ents || [])
     } else { setLog(null); setEntries([]) }
-    const { data: prev } = await supabase.from('food_entries').select('food_name,calories,protein_g,carbs_g,fat_g,serving_size,serving_qty,logged_at')
-      .eq('client_id', clientRecord.id).order('logged_at', { ascending: false }).limit(30)
+    const { data: prev } = await supabase.from('food_entries')
+      .select('food_name,calories,protein_g,carbs_g,fat_g,serving_size,serving_qty,logged_at,source')
+      .eq('client_id', clientRecord.id)
+      .neq('source', 'photo')
+      .order('logged_at', { ascending: false }).limit(30)
     if (prev) {
       const seen = new Set<string>()
       setSavedFoods((prev as SavedFood[]).filter((food) => { if (seen.has(food.food_name)) return false; seen.add(food.food_name); return true }))
@@ -206,17 +210,20 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setSaving(true)
     try {
       const s = pendingServings
+      const isPhoto = pendingFood.source === 'photo'
       const currentLog = await ensureLog()
       if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); return }
       const { data: saved, error } = await supabase.from('food_entries').insert({
         daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
         food_name:    pendingFood.food_name || '',
-        serving_size: `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
-        serving_qty:  s,
-        calories:  pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
-        protein_g: pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
-        carbs_g:   pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
-        fat_g:     pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
+        serving_size: isPhoto ? '1 photo' : `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
+        serving_qty:  isPhoto ? null : s,
+        source:       pendingFood.source || null,
+        photo_url:    pendingFood.photo_url || null,
+        calories:  !isPhoto && pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
+        protein_g: !isPhoto && pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
+        carbs_g:   !isPhoto && pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
+        fat_g:     !isPhoto && pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
       if (error) { console.error('food_entries insert error:', error.message); return }
       if (saved) {
@@ -227,7 +234,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     } catch (e) { console.error('commitEntry exception:', e) }
     finally {
       setPendingFood(null); setPendingServings(1); setAddMode('none')
-      setSearchQ(''); setSearchResults([]); setImageResults([])
+      setSearchQ(''); setSearchResults([])
+      setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null)
       setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
       setSaving(false)
     }
@@ -243,7 +251,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   }
 
   async function updateEntryServings(entry: FoodEntry, newServings: number) {
-    const oldQty = ('serving_qty' in entry ? (entry as FoodEntry & { serving_qty?: number | null }).serving_qty : null) || 1
+    const oldQty = entry.serving_qty || 1
     const scale  = newServings / oldQty
     const updated = {
       serving_qty:  newServings,
@@ -284,7 +292,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   async function doSearch(q: string) {
     setSearching(true)
     try {
-      // FIX: pass fsHeaders so the Edge Function auth check passes
       const res  = await fetch(`${FS_API}?q=${encodeURIComponent(q)}`, { headers: fsHeaders })
       const data = await res.json()
       if (data?.foods?.food) {
@@ -292,7 +299,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         setSearchResults(Array.isArray(raw) ? raw : [raw])
         setSearching(false); return
       }
-      // FatSecret not configured or error — fall back to USDA
       const usda = await fetch(
         `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(q)}&pageSize=12&dataType=Branded,Foundation,SR%20Legacy`
       )
@@ -302,7 +308,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setSearching(false)
   }
 
-  // ── USDA serving resolution ────────────────────────────────────────────────
+  // ── USDA serving resolution ───────────────────────────────────────────────
   function getUSDAServing(food: USDAFoodSearchResult): { grams: number; label: string } | null {
     const sSize = Number(food?.servingSize)
     const sUnit = typeof food?.servingSizeUnit === 'string' ? food.servingSizeUnit.toLowerCase() : ''
@@ -327,14 +333,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   }
 
   async function pickUSDAFood(food: USDAFoodSearchResult) {
-    const nutrients  = food.foodNutrients || []
-    const get = (name: string) => { const nutrient = nutrients.find((item) => item.nutrientName?.toLowerCase().includes(name)); return nutrient?.value ?? null }
-    const isBranded  = food.dataType === 'Branded'
-    let cal = get('energy'); let pro = get('protein')
-    let carb = get('carbohydrate'); let fat = get('total lipid')
+    const nutrients = food.foodNutrients || []
+    const get = (name: string) => { const n = nutrients.find((item) => item.nutrientName?.toLowerCase().includes(name)); return n?.value ?? null }
+    const isBranded = food.dataType === 'Branded'
+    let cal = get('energy'); let pro = get('protein'); let carb = get('carbohydrate'); let fat = get('total lipid')
     const name = food.description || ''
-    const cleaned = name === name.toUpperCase()
-      ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
+    const cleaned = name === name.toUpperCase() ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
     if (isBranded) {
       const sSize = Number(food.servingSize)
       const sLabel = food.householdServingFullText?.trim() || (sSize > 0 ? `${sSize}${food.servingSizeUnit||'g'}` : '1 serving')
@@ -348,14 +352,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         const detFood = await det.json()
         serving = getUSDAServing(detFood)
         const dn = detFood.foodNutrients || []
-        const dget = (name: string) => {
-          const nutrient = (dn as Array<{ nutrient?: { name?: string | null } | null; amount?: number | null }>).find((value) => value.nutrient?.name?.toLowerCase().includes(name))
-          return nutrient?.amount ?? null
-        }
-        if (cal == null) cal = dget('energy')
-        if (pro == null) pro = dget('protein')
-        if (carb == null) carb = dget('carbohydrat')
-        if (fat == null) fat = dget('total lipid')
+        const dget = (name: string) => { const n = (dn as Array<{ nutrient?: { name?: string | null } | null; amount?: number | null }>).find((v) => v.nutrient?.name?.toLowerCase().includes(name)); return n?.amount ?? null }
+        if (cal == null) cal = dget('energy'); if (pro == null) pro = dget('protein')
+        if (carb == null) carb = dget('carbohydrat'); if (fat == null) fat = dget('total lipid')
       } catch { serving = null }
     }
     if (!serving) { setSearchError('No serving size found for this food. Try a branded result or Quick Add.'); return }
@@ -366,35 +365,20 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
 
   // ── FatSecret food picker ─────────────────────────────────────────────────
   function pickBestFSServing(food: FatSecretFoodDetail): FatSecretServing | null {
-    const raw = food.servings?.serving
-    if (!raw) return null
+    const raw = food.servings?.serving; if (!raw) return null
     const all = Array.isArray(raw) ? raw : [raw]
-    const realServing = all.find((serving) => {
-      const amt = parseFloat(String(serving.metric_serving_amount || '0'))
-      return amt > 0 && Math.round(amt) !== 100
-    })
-    return realServing || all[0]
+    return all.find((s) => { const amt = parseFloat(String(s.metric_serving_amount || '0')); return amt > 0 && Math.round(amt) !== 100 }) || all[0]
   }
 
   function pickFSFood(food: FatSecretFoodDetail | FatSecretSearchFood) {
-    const serving = pickBestFSServing(food)
-    if (!serving) return
+    const serving = pickBestFSServing(food); if (!serving) return
     const r = (v: string | number | null | undefined) => v != null ? Math.round(parseFloat(String(v)) * 10) / 10 : null
-    setPendingFood({
-      food_name:    food.food_name,
-      calories:     r(serving.calories),
-      protein_g:    r(serving.protein),
-      carbs_g:      r(serving.carbohydrate),
-      fat_g:        r(serving.fat),
-      serving_size: serving.serving_description || '1 serving',
-    })
+    setPendingFood({ food_name: food.food_name, calories: r(serving.calories), protein_g: r(serving.protein), carbs_g: r(serving.carbohydrate), fat_g: r(serving.fat), serving_size: serving.serving_description || '1 serving' })
   }
 
   function parseFSDescription(desc: string) {
     if (!desc) return { cal: null, pro: null, servingLabel: '1 serving' }
-    const calM = desc.match(/(\d+\.?\d*)\s*Calorie/)
-    const proM = desc.match(/(\d+\.?\d*)g\s*Protein/)
-    const perM = desc.match(/^Per ([^:]+):/)
+    const calM = desc.match(/(\d+\.?\d*)\s*Calorie/); const proM = desc.match(/(\d+\.?\d*)g\s*Protein/); const perM = desc.match(/^Per ([^:]+):/)
     return { cal: calM ? parseFloat(calM[1]) : null, pro: proM ? parseFloat(proM[1]) : null, servingLabel: perM ? perM[1] : '1 serving' }
   }
 
@@ -402,7 +386,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   async function lookupBarcode(code: string) {
     setBarcodeLoading(true); setBarcodeErr('')
     try {
-      // FIX: pass fsHeaders so the Edge Function auth check passes
       const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`, { headers: fsHeaders })
       const fsData = await fsRes.json()
       const foodId = fsData?.food_id?.value || fsData?.food_id
@@ -412,7 +395,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         const food = detData?.food
         if (food) { pickFSFood(food); setBarcodeVal(''); setAddMode('none'); setBarcodeLoading(false); return }
       }
-      // Fallback: Open Food Facts (no auth needed)
       const offRes  = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
       const offData = await offRes.json()
       if (offData?.status === 1) {
@@ -429,27 +411,40 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setBarcodeLoading(false)
   }
 
-  // ── Image food recognition ────────────────────────────────────────────────
-  async function handleImageFile(file: File) {
-    setImageLoading(true); setImageErr(''); setImageResults([])
+  // ── Photo log — upload to storage, then go to meal picker ─────────────────
+  async function handlePhotoFile(file: File) {
+    if (!clientRecord) return
+    setPhotoErr(''); setPhotoUploading(true)
+    // Show local preview immediately
+    const localUrl = URL.createObjectURL(file)
+    setPhotoPreviewUrl(localUrl)
     try {
-      const base64 = await new Promise<string>((res, rej) => {
-        const r = new FileReader()
-        r.onload = () => res((r.result as string).split(',')[1])
-        r.onerror = () => rej(new Error('Read failed'))
-        r.readAsDataURL(file)
-      })
-      // FIX: pass fsHeaders so the Edge Function auth check passes
-      const fsRes  = await fetch(`${FS_API}?image=${encodeURIComponent(base64)}`, { headers: fsHeaders })
-      const fsData = await fsRes.json()
-      const items  = fsData?.food_response
-      if (items && items.length > 0) {
-        setImageResults((items as Array<{ food?: FatSecretSearchFood | null }>).map((item) => item.food).filter((food): food is FatSecretSearchFood => Boolean(food)))
-      } else {
-        setImageErr('No foods recognized. Try a clearer photo or search manually.')
-      }
-    } catch { setImageErr('Recognition failed. Try search or Quick Add.') }
-    setImageLoading(false)
+      const ext = file.name.split('.').pop() || 'jpg'
+      const path = `food-photos/${clientRecord.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('progress-photos').upload(path, file, { upsert: false })
+      if (upErr) throw new Error(upErr.message)
+      const { data: urlData } = supabase.storage.from('progress-photos').getPublicUrl(path)
+      setPhotoStorageUrl(urlData.publicUrl)
+    } catch (e) {
+      setPhotoErr('Upload failed — try again.')
+      setPhotoPreviewUrl(null)
+      console.error('Photo upload error:', e)
+    }
+    setPhotoUploading(false)
+  }
+
+  function confirmPhoto() {
+    if (!photoStorageUrl) return
+    setPendingFood({
+      food_name:   photoCaption.trim() || 'Photo Log',
+      serving_size:'1 photo',
+      calories:    null,
+      protein_g:   null,
+      carbs_g:     null,
+      fat_g:       null,
+      source:      'photo',
+      photo_url:   photoStorageUrl,
+    })
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────
@@ -475,7 +470,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
 
   if (!clientRecord) return null
 
-  const resetAdd = () => { setAddMode('none'); setSearchQ(''); setSearchResults([]); setSearchError(''); setBarcodeVal(''); setBarcodeErr(''); setImageResults([]); setImageErr('') }
+  const resetAdd = () => {
+    setAddMode('none'); setSearchQ(''); setSearchResults([]); setSearchError('')
+    setBarcodeVal(''); setBarcodeErr('')
+    setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null); setPhotoErr('')
+  }
 
   return (
     <div style={{ paddingBottom:80 }}>
@@ -569,7 +568,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 return (
                   <button key={food.food_id} onClick={async () => {
                     try {
-                      // FIX: pass fsHeaders for food detail lookup
                       const res  = await fetch(`${FS_API}?food_id=${food.food_id}`, { headers: fsHeaders })
                       const data = await res.json()
                       pickFSFood(data?.food || food)
@@ -581,8 +579,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 )
               } else {
                 const n = food.foodNutrients || []
-                const cal = n.find((nutrient: USDANutrient) => nutrient.nutrientName?.toLowerCase().includes('energy'))?.value
-                const pro = n.find((nutrient: USDANutrient) => nutrient.nutrientName?.toLowerCase().includes('protein'))?.value
+                const cal = n.find((x: USDANutrient) => x.nutrientName?.toLowerCase().includes('energy'))?.value
+                const pro = n.find((x: USDANutrient) => x.nutrientName?.toLowerCase().includes('protein'))?.value
                 const serving = getUSDAServing(food)
                 return (
                   <button key={food.fdcId} onClick={()=>pickUSDAFood(food)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
@@ -651,38 +649,54 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           </div>
         )}
 
-        {/* IMAGE RECOGNITION MODE */}
+        {/* PHOTO LOG MODE — upload photo, optional caption, then meal picker */}
         {addMode==='image' && !pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>📸 Photo Recognition</span>
+              <span style={{ fontSize:15, fontWeight:800 }}>📸 Photo Log</span>
               <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
+            {/* Hidden file input */}
             <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }}
-              onChange={e=>{ const f = e.target.files?.[0]; if(f) handleImageFile(f) }}/>
-            {!imageLoading && imageResults.length === 0 && (
+              onChange={e=>{ const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
+
+            {/* No photo yet — show camera button */}
+            {!photoPreviewUrl && !photoUploading && (
               <>
-                <button onClick={()=>imageInputRef.current?.click()} style={{ width:'100%', background:t.teal+'20', border:`1px solid ${t.teal}40`, borderRadius:12, padding:'18px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', marginBottom:8 }}>
-                  📷 Take a Photo of Your Food
+                <button onClick={()=>imageInputRef.current?.click()}
+                  style={{ width:'100%', background:t.teal+'20', border:`1px solid ${t.teal}40`, borderRadius:12, padding:'22px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', marginBottom:8 }}>
+                  📷 Take a Photo or Choose from Library
                 </button>
-                <div style={{ fontSize:11, color:t.textMuted, textAlign:'center' }}>AI will recognize the foods in your photo</div>
+                <div style={{ fontSize:11, color:t.textMuted, textAlign:'center' }}>Snap your meal — your coach can see it in your log</div>
               </>
             )}
-            {imageLoading && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Recognizing food...</div>}
-            {imageErr && <div style={{ fontSize:12, color:t.orange, marginTop:8 }}>{imageErr}</div>}
-            {imageResults.map((food) => (
-              <button key={food.food_id} onClick={async () => {
-                try {
-                  // FIX: pass fsHeaders for food detail lookup
-                  const res  = await fetch(`${FS_API}?food_id=${food.food_id}`, { headers: fsHeaders })
-                  const data = await res.json()
-                  pickFSFood(data?.food || food)
-                } catch { pickFSFood(food) }
-              }} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', marginBottom:6, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
-                <div style={{ fontSize:13, fontWeight:700 }}>{food.food_name}</div>
-                <div style={{ fontSize:11, color:t.textMuted }}>{food.food_type || ''} · Tap to add</div>
-              </button>
-            ))}
+
+            {/* Uploading spinner */}
+            {photoUploading && (
+              <div style={{ textAlign:'center', padding:'24px 0', color:t.textMuted, fontSize:13 }}>Uploading photo...</div>
+            )}
+
+            {/* Photo preview + caption + confirm */}
+            {photoPreviewUrl && !photoUploading && (
+              <>
+                <img src={photoPreviewUrl} alt="Food photo preview"
+                  style={{ width:'100%', borderRadius:10, marginBottom:12, maxHeight:260, objectFit:'cover', display:'block' }}/>
+                <input value={photoCaption} onChange={e=>setPhotoCaption(e.target.value)}
+                  placeholder="What did you eat? (optional caption)"
+                  style={{ ...inp, marginBottom:10 }}/>
+                {photoErr && <div style={{ fontSize:12, color:t.orange, marginBottom:8 }}>{photoErr}</div>}
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={()=>{ setPhotoPreviewUrl(null); setPhotoStorageUrl(null); setPhotoCaption(''); setPhotoErr('') }}
+                    style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'10px', fontSize:13, color:t.textMuted, cursor:'pointer' }}>
+                    Retake
+                  </button>
+                  <button onClick={confirmPhoto} disabled={!photoStorageUrl}
+                    style={{ flex:2, background:photoStorageUrl?t.teal:'#333', border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:photoStorageUrl?'pointer':'not-allowed' }}>
+                    {photoStorageUrl ? 'Next: Choose Meal →' : 'Uploading...'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -707,27 +721,39 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           </div>
         )}
 
-        {/* PENDING FOOD - servings + meal picker */}
+        {/* PENDING FOOD — meal picker (shared by all modes) */}
         {pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.teal}40`, borderRadius:16, padding:16, marginBottom:16 }}>
-            <div style={{ fontSize:13, fontWeight:800, marginBottom:4 }}>Adding: {pendingFood.food_name}</div>
-            <div style={{ display:'flex', alignItems:'center', gap:12, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>SERVINGS</div>
-                <div style={{ fontSize:13, fontWeight:700, color:t.teal }}>
-                  {pendingFood.calories != null ? `${Math.round(pendingFood.calories * pendingServings)} kcal` : '—'}
-                  {pendingFood.protein_g != null ? ` · ${Math.round(pendingFood.protein_g * pendingServings * 10)/10}g P` : ''}
-                </div>
-                <div style={{ fontSize:11, color:t.textMuted }}>{pendingServings}x {pendingFood.serving_size}</div>
-              </div>
-              <div style={{ display:'flex', alignItems:'center', background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
-                <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s - 0.5)*10)/10))}
-                  style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
-                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>{pendingServings}</div>
-                <button onClick={()=>setPendingServings(s=>Math.round((s + 0.5)*10)/10)}
-                  style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
-              </div>
+            {/* Photo preview in meal picker */}
+            {pendingFood.source === 'photo' && pendingFood.photo_url && (
+              <img src={pendingFood.photo_url} alt="Food"
+                style={{ width:'100%', borderRadius:10, marginBottom:12, maxHeight:200, objectFit:'cover', display:'block' }}/>
+            )}
+            <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>
+              {pendingFood.source === 'photo' ? (pendingFood.food_name === 'Photo Log' ? '📸 Photo Log' : `📸 ${pendingFood.food_name}`) : `Adding: ${pendingFood.food_name}`}
             </div>
+
+            {/* Servings adjuster — only for non-photo entries */}
+            {pendingFood.source !== 'photo' && (
+              <div style={{ display:'flex', alignItems:'center', gap:12, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:10, color:t.textMuted, marginBottom:2 }}>SERVINGS</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:t.teal }}>
+                    {pendingFood.calories != null ? `${Math.round(pendingFood.calories * pendingServings)} kcal` : '—'}
+                    {pendingFood.protein_g != null ? ` · ${Math.round(pendingFood.protein_g * pendingServings * 10)/10}g P` : ''}
+                  </div>
+                  <div style={{ fontSize:11, color:t.textMuted }}>{pendingServings}x {pendingFood.serving_size}</div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
+                  <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                    style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
+                  <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>{pendingServings}</div>
+                  <button onClick={()=>setPendingServings(s=>Math.round((s+0.5)*10)/10)}
+                    style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
+                </div>
+              </div>
+            )}
+
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
@@ -763,35 +789,56 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                   <span style={{ fontSize:13, fontWeight:800 }}>{meal.label}</span>
                   <span style={{ fontSize:11, color:t.orange, marginLeft:'auto', fontWeight:700 }}>{Math.round(mealCals)} kcal</span>
                 </div>
-                {mealEntries.map((e:FoodEntry)=>(
-                  <div key={e.id} style={{ background:t.surface, border:`1px solid ${editingEntry===e.id?t.teal+'60':t.border}`, borderRadius:10, padding:'10px 12px', marginBottom:5 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings(e.serving_qty || 1) }}>
-                        <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
-                        <div style={{ fontSize:11, color:t.textMuted }}>
-                          {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}
+                {mealEntries.map((e:FoodEntry)=>{
+                  const isPhoto = e.source === 'photo'
+                  return (
+                    <div key={e.id} style={{ background:t.surface, border:`1px solid ${editingEntry===e.id?t.teal+'60':t.border}`, borderRadius:10, marginBottom:5, overflow:'hidden' }}>
+                      {/* Photo entry — show image then name + delete */}
+                      {isPhoto && e.photo_url ? (
+                        <div>
+                          <img src={e.photo_url} alt={e.food_name}
+                            style={{ width:'100%', maxHeight:180, objectFit:'cover', display:'block' }}/>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px' }}>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:12, fontWeight:700 }}>{e.food_name === 'Photo Log' ? '📸 Photo Log' : `📸 ${e.food_name}`}</div>
+                              <div style={{ fontSize:11, color:t.textMuted }}>Visual log only</div>
+                            </div>
+                            <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>x</button>
+                          </div>
                         </div>
-                      </div>
-                      <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>x</button>
+                      ) : (
+                        /* Standard entry — name, macros, optional servings editor */
+                        <div style={{ padding:'10px 12px' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings(e.serving_qty||1) }}>
+                              <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
+                              <div style={{ fontSize:11, color:t.textMuted }}>
+                                {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}
+                              </div>
+                            </div>
+                            <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>x</button>
+                          </div>
+                          {editingEntry === e.id && (
+                            <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
+                              <div style={{ fontSize:11, color:t.textMuted, flex:1 }}>Adjust servings:</div>
+                              <div style={{ display:'flex', alignItems:'center', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
+                                <button onClick={()=>setEditServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                                  style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>−</button>
+                                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:28, textAlign:'center' }}>{editServings}</div>
+                                <button onClick={()=>setEditServings(s=>Math.round((s+0.5)*10)/10)}
+                                  style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>+</button>
+                              </div>
+                              <button onClick={()=>updateEntryServings(e, editServings)}
+                                style={{ background:t.teal, border:'none', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#0f0f0f', cursor:'pointer' }}>
+                                Save
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {editingEntry === e.id && (
-                      <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
-                        <div style={{ fontSize:11, color:t.textMuted, flex:1 }}>Adjust servings:</div>
-                        <div style={{ display:'flex', alignItems:'center', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
-                          <button onClick={()=>setEditServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
-                            style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>−</button>
-                          <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:28, textAlign:'center' }}>{editServings}</div>
-                          <button onClick={()=>setEditServings(s=>Math.round((s+0.5)*10)/10)}
-                            style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>+</button>
-                        </div>
-                        <button onClick={()=>updateEntryServings(e, editServings)}
-                          style={{ background:t.teal, border:'none', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#0f0f0f', cursor:'pointer' }}>
-                          Save
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )
           })}
