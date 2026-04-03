@@ -434,8 +434,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setPhotoUploading(false)
   }
 
-  function confirmPhoto() {
-    if (!photoStorageUrl) return
+  function confirmPhoto(storageUrl: string) {
     setPendingFood({
       food_name:   photoCaption.trim() || 'Photo Log',
       serving_size:'1 photo',
@@ -444,7 +443,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       carbs_g:     null,
       fat_g:       null,
       source:      'photo',
-      photo_url:   photoStorageUrl,
+      photo_url:   storageUrl,
     })
   }
 
@@ -698,7 +697,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                     style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'10px', fontSize:13, color:t.textMuted, cursor:'pointer' }}>
                     Retake
                   </button>
-                  <button onClick={confirmPhoto} disabled={!photoStorageUrl}
+                  <button onClick={()=>{ if(photoStorageUrl) confirmPhoto(photoStorageUrl) }} disabled={!photoStorageUrl}
                     style={{ flex:2, background:photoStorageUrl?t.teal:'#333', border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:photoStorageUrl?'pointer':'not-allowed' }}>
                     {photoStorageUrl ? 'Next: Choose Meal →' : 'Uploading...'}
                   </button>
