@@ -421,9 +421,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     try {
       const ext = file.name.split('.').pop() || 'jpg'
       const path = `food-photos/${clientRecord.id}/${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('progress-photos').upload(path, file, { upsert: false })
+      const { error: upErr } = await supabase.storage.from('workout-reviews').upload(path, file, { upsert: false })
       if (upErr) throw new Error(upErr.message)
-      const { data: urlData } = supabase.storage.from('progress-photos').getPublicUrl(path)
+      const { data: urlData } = supabase.storage.from('workout-reviews').getPublicUrl(path)
       setPhotoStorageUrl(urlData.publicUrl)
     } catch (e) {
       setPhotoErr('Upload failed — try again.')
@@ -657,7 +657,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
             {/* Hidden file input */}
-            <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }}
+            <input ref={imageInputRef} type="file" accept="image/*" style={{ display:'none' }}
               onChange={e=>{ const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
 
             {/* No photo yet — show camera button */}
