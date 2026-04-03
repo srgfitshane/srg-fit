@@ -160,6 +160,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [barcodeErr,      setBarcodeErr]      = useState('')
   // Photo log state (replaces old AI recognition)
   const imageInputRef     = useRef<HTMLInputElement>(null)
+  const imageGalleryRef   = useRef<HTMLInputElement>(null)
   const [photoCaption,    setPhotoCaption]    = useState('')
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string|null>(null)
   const [photoStorageUrl, setPhotoStorageUrl] = useState<string|null>(null)
@@ -656,19 +657,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               <span style={{ fontSize:15, fontWeight:800 }}>📸 Photo Log</span>
               <button onClick={resetAdd} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
             </div>
-            {/* Hidden file input */}
-            <input ref={imageInputRef} type="file" accept="image/*" style={{ display:'none' }}
+            {/* Two hidden file inputs — one for camera, one for gallery */}
+            <input ref={imageInputRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }}
+              onChange={e=>{ const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
+            <input ref={imageGalleryRef} type="file" accept="image/*" style={{ display:'none' }}
               onChange={e=>{ const f = e.target.files?.[0]; if(f) handlePhotoFile(f) }}/>
 
-            {/* No photo yet — show camera button */}
+            {/* No photo yet — show camera + gallery buttons */}
             {!photoPreviewUrl && !photoUploading && (
-              <>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
                 <button onClick={()=>imageInputRef.current?.click()}
-                  style={{ width:'100%', background:t.teal+'20', border:`1px solid ${t.teal}40`, borderRadius:12, padding:'22px', fontSize:13, fontWeight:700, color:t.teal, cursor:'pointer', marginBottom:8 }}>
-                  📷 Take a Photo or Choose from Library
+                  style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'18px 8px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:24 }}>📷</span>
+                  <span style={{ fontSize:11, color:t.textDim }}>Take Photo</span>
                 </button>
-                <div style={{ fontSize:11, color:t.textMuted, textAlign:'center' }}>Snap your meal — your coach can see it in your log</div>
-              </>
+                <button onClick={()=>imageGalleryRef.current?.click()}
+                  style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:'18px 8px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:24 }}>🖼️</span>
+                  <span style={{ fontSize:11, color:t.textDim }}>Choose Photo</span>
+                </button>
+              </div>
             )}
 
             {/* Uploading spinner */}
