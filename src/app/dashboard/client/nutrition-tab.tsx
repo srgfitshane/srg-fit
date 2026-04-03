@@ -183,7 +183,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     const { data: prev } = await supabase.from('food_entries')
       .select('food_name,calories,protein_g,carbs_g,fat_g,serving_size,serving_qty,logged_at,source')
       .eq('client_id', clientRecord.id)
-      .neq('source', 'photo')
+      .or('source.is.null,source.neq.photo')
       .order('logged_at', { ascending: false }).limit(30)
     if (prev) {
       const seen = new Set<string>()
