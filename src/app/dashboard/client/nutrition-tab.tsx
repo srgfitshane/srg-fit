@@ -4,6 +4,12 @@ import { createClient } from '@/lib/supabase-browser'
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
 
+// Auth header required by the Edge Function — use the public anon key
+const fsHeaders = {
+  'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+  'Content-Type': 'application/json',
+}
+
 const MEAL_LABELS = [
   { id:'breakfast',   label:'Breakfast',   icon:'🌅' },
   { id:'lunch',       label:'Lunch',       icon:'🥙' },
@@ -151,11 +157,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [editingEntry,    setEditingEntry]    = useState<string|null>(null)
   const [editServings,    setEditServings]    = useState(1)
   const [savedFoods,      setSavedFoods]      = useState<SavedFood[]>([])
-  // Barcode
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
   const [barcodeErr,      setBarcodeErr]      = useState('')
-  // Image recognition
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [imageLoading,    setImageLoading]    = useState(false)
   const [imageResults,    setImageResults]    = useState<FatSecretSearchFood[]>([])
@@ -184,7 +188,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   }, [clientRecord?.id, selectedDate, supabase])
 
   useEffect(() => { if (clientRecord?.id) void loadData() }, [clientRecord?.id, loadData, selectedDate])
-
 
   async function ensureLog() {
     if (!clientRecord) return null
@@ -217,10 +220,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       }).select().single()
       if (error) { console.error('food_entries insert error:', error.message); return }
       if (saved) {
-        // Recalc totals in DB then reload fresh
         const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', currentLog.id)
-        const allEnts = fresh.data || []
-        await recalcTotals(currentLog.id, allEnts)
+        await recalcTotals(currentLog.id, fresh.data || [])
         await loadData()
       }
     } catch (e) { console.error('commitEntry exception:', e) }
@@ -272,7 +273,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     if (updated) setLog(updated)
   }
 
-  // â”€â”€ Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Search ────────────────────────────────────────────────────────────────
   function handleSearchInput(val: string) {
     setSearchQ(val); setSearchError('')
     if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -283,14 +284,15 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   async function doSearch(q: string) {
     setSearching(true)
     try {
-      const res  = await fetch(`${FS_API}?q=${encodeURIComponent(q)}`)
+      // FIX: pass fsHeaders so the Edge Function auth check passes
+      const res  = await fetch(`${FS_API}?q=${encodeURIComponent(q)}`, { headers: fsHeaders })
       const data = await res.json()
       if (data?.foods?.food) {
         const raw = data.foods.food
         setSearchResults(Array.isArray(raw) ? raw : [raw])
         setSearching(false); return
       }
-      // FatSecret not configured or error â€” fall back to USDA
+      // FatSecret not configured or error — fall back to USDA
       const usda = await fetch(
         `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(q)}&pageSize=12&dataType=Branded,Foundation,SR%20Legacy`
       )
@@ -300,11 +302,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setSearching(false)
   }
 
-  // â”€â”€ USDA serving resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // USDA: Foundation/SR Legacy nutrients are per 100g; Branded are per serving.
-  // We always want to present per-serving, so we scale Foundation/SR by actual serving grams.
+  // ── USDA serving resolution ────────────────────────────────────────────────
   function getUSDAServing(food: USDAFoodSearchResult): { grams: number; label: string } | null {
-    // servingSize field (present on some Branded)
     const sSize = Number(food?.servingSize)
     const sUnit = typeof food?.servingSizeUnit === 'string' ? food.servingSizeUnit.toLowerCase() : ''
     if (sSize > 0) {
@@ -312,7 +311,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       const label = food?.householdServingFullText?.trim() || `${sSize}${food.servingSizeUnit}`
       return { grams, label }
     }
-    // foodPortions / foodMeasures
     const portions = Array.isArray(food?.foodPortions) ? food.foodPortions
       : Array.isArray(food?.foodMeasures) ? food.foodMeasures : []
     const portion = portions.find((p) => Number(p?.gramWeight) > 0)
@@ -321,7 +319,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       const parts = [amt !== 1 ? amt : '', portion.modifier || portion.measureUnit?.name || portion.portionDescription].filter(Boolean)
       return { grams: Number(portion.gramWeight), label: parts.join(' ').trim() || `${Math.round(Number(portion.gramWeight))}g` }
     }
-    // householdServingFullText e.g. "1 cup (240g)"
     if (food?.householdServingFullText) {
       const m = String(food.householdServingFullText).match(/\(([\d.]+)\s*g\)/i)
       if (m) return { grams: Number(m[1]), label: String(food.householdServingFullText).trim() }
@@ -333,29 +330,23 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     const nutrients  = food.foodNutrients || []
     const get = (name: string) => { const nutrient = nutrients.find((item) => item.nutrientName?.toLowerCase().includes(name)); return nutrient?.value ?? null }
     const isBranded  = food.dataType === 'Branded'
-    // Branded: nutrients already per serving. Foundation/SR: per 100g, need serving scale.
     let cal = get('energy'); let pro = get('protein')
     let carb = get('carbohydrate'); let fat = get('total lipid')
     const name = food.description || ''
     const cleaned = name === name.toUpperCase()
       ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
-
     if (isBranded) {
-      // Branded: use values directly, serving label from servingSize field
       const sSize = Number(food.servingSize)
       const sLabel = food.householdServingFullText?.trim() || (sSize > 0 ? `${sSize}${food.servingSizeUnit||'g'}` : '1 serving')
       setPendingFood({ food_name: cleaned, calories: cal != null ? Math.round(cal*10)/10 : null, protein_g: pro != null ? Math.round(pro*10)/10 : null, carbs_g: carb != null ? Math.round(carb*10)/10 : null, fat_g: fat != null ? Math.round(fat*10)/10 : null, serving_size: sLabel })
       return
     }
-
-    // Foundation / SR Legacy: per 100g, must find real serving
     let serving = getUSDAServing(food)
     if (!serving && food?.fdcId) {
       try {
         const det = await fetch(`https://api.nal.usda.gov/fdc/v1/food/${food.fdcId}?api_key=${USDA_API_KEY}`)
         const detFood = await det.json()
         serving = getUSDAServing(detFood)
-        // Merge nutrient data from detail response too
         const dn = detFood.foodNutrients || []
         const dget = (name: string) => {
           const nutrient = (dn as Array<{ nutrient?: { name?: string | null } | null; amount?: number | null }>).find((value) => value.nutrient?.name?.toLowerCase().includes(name))
@@ -373,13 +364,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setPendingFood({ food_name: cleaned, calories: r(cal), protein_g: r(pro), carbs_g: r(carb), fat_g: r(fat), serving_size: serving.label })
   }
 
-  // â”€â”€ FatSecret food picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // FatSecret v4 returns all servings. Prefer the first non-100g serving.
+  // ── FatSecret food picker ─────────────────────────────────────────────────
   function pickBestFSServing(food: FatSecretFoodDetail): FatSecretServing | null {
     const raw = food.servings?.serving
     if (!raw) return null
     const all = Array.isArray(raw) ? raw : [raw]
-    // Prefer a serving where metric_serving_amount != 100 (actual portion) 
     const realServing = all.find((serving) => {
       const amt = parseFloat(String(serving.metric_serving_amount || '0'))
       return amt > 0 && Math.round(amt) !== 100
@@ -409,21 +398,21 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     return { cal: calM ? parseFloat(calM[1]) : null, pro: proM ? parseFloat(proM[1]) : null, servingLabel: perM ? perM[1] : '1 serving' }
   }
 
-  // â”€â”€ Barcode lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Barcode lookup ────────────────────────────────────────────────────────
   async function lookupBarcode(code: string) {
     setBarcodeLoading(true); setBarcodeErr('')
     try {
-      // Step 1: resolve barcode to food_id
-      const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`)
+      // FIX: pass fsHeaders so the Edge Function auth check passes
+      const fsRes  = await fetch(`${FS_API}?barcode=${encodeURIComponent(code)}`, { headers: fsHeaders })
       const fsData = await fsRes.json()
       const foodId = fsData?.food_id?.value || fsData?.food_id
       if (foodId) {
-        const detRes  = await fetch(`${FS_API}?food_id=${foodId}`)
+        const detRes  = await fetch(`${FS_API}?food_id=${foodId}`, { headers: fsHeaders })
         const detData = await detRes.json()
         const food = detData?.food
         if (food) { pickFSFood(food); setBarcodeVal(''); setAddMode('none'); setBarcodeLoading(false); return }
       }
-      // Fallback: Open Food Facts
+      // Fallback: Open Food Facts (no auth needed)
       const offRes  = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
       const offData = await offRes.json()
       if (offData?.status === 1) {
@@ -440,7 +429,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setBarcodeLoading(false)
   }
 
-  // â”€â”€ Image food recognition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Image food recognition ────────────────────────────────────────────────
   async function handleImageFile(file: File) {
     setImageLoading(true); setImageErr(''); setImageResults([])
     try {
@@ -450,7 +439,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         r.onerror = () => rej(new Error('Read failed'))
         r.readAsDataURL(file)
       })
-      const fsRes  = await fetch(`${FS_API}?image=${encodeURIComponent(base64)}`)
+      // FIX: pass fsHeaders so the Edge Function auth check passes
+      const fsRes  = await fetch(`${FS_API}?image=${encodeURIComponent(base64)}`, { headers: fsHeaders })
       const fsData = await fsRes.json()
       const items  = fsData?.food_response
       if (items && items.length > 0) {
@@ -462,7 +452,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setImageLoading(false)
   }
 
-  // â”€â”€ Derived state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Derived state ─────────────────────────────────────────────────────────
   const totals = entries.reduce((acc, e) => ({
     calories: acc.calories + (e.calories || 0),
     protein:  acc.protein  + (e.protein_g || 0),
@@ -512,7 +502,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           </div>
         )}
 
-        {/* Macro rings — hidden if coach disabled macros */}
+        {/* Macro rings */}
         {clientRecord?.show_macros !== false && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:20 }}>
           {macros.map(m => {
@@ -579,7 +569,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 return (
                   <button key={food.food_id} onClick={async () => {
                     try {
-                      const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
+                      // FIX: pass fsHeaders for food detail lookup
+                      const res  = await fetch(`${FS_API}?food_id=${food.food_id}`, { headers: fsHeaders })
                       const data = await res.json()
                       pickFSFood(data?.food || food)
                     } catch { pickFSFood(food) }
@@ -648,14 +639,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               </button>
             </div>
             {barcodeErr && (
-                <div style={{ marginTop:8 }}>
-                  <div style={{ fontSize:12, color:t.orange, marginBottom:6 }}>{barcodeErr}</div>
-                  <button onClick={()=>{ setBarcodeErr(''); setAddMode('quick') }}
-                    style={{ fontSize:12, fontWeight:700, color:t.teal, background:'#00c9b115', border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    → Try Quick Add
-                  </button>
-                </div>
-              )}
+              <div style={{ marginTop:8 }}>
+                <div style={{ fontSize:12, color:t.orange, marginBottom:6 }}>{barcodeErr}</div>
+                <button onClick={()=>{ setBarcodeErr(''); setAddMode('quick') }}
+                  style={{ fontSize:12, fontWeight:700, color:t.teal, background:'#00c9b115', border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  → Try Quick Add
+                </button>
+              </div>
+            )}
             {barcodeLoading && <div style={{ fontSize:12, color:t.textMuted, textAlign:'center' as const, padding:'10px 0' }}>Looking up product...</div>}
           </div>
         )}
@@ -682,7 +673,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             {imageResults.map((food) => (
               <button key={food.food_id} onClick={async () => {
                 try {
-                  const res  = await fetch(`${FS_API}?food_id=${food.food_id}`)
+                  // FIX: pass fsHeaders for food detail lookup
+                  const res  = await fetch(`${FS_API}?food_id=${food.food_id}`, { headers: fsHeaders })
                   const data = await res.json()
                   pickFSFood(data?.food || food)
                 } catch { pickFSFood(food) }
