@@ -201,7 +201,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       client_id: clientRecord.id, coach_id: clientRecord.coach_id,
       plan_id: plan?.id || null, log_date: selectedDate,
     }, { onConflict: 'client_id,log_date' }).select().single()
-    if (error) { console.error('ensureLog error:', error.message); return null }
+    if (error) { console.error('ensureLog error:', error.message, error.code, error.details); return null }
     setLog(newLog); return newLog
   }
 
@@ -209,11 +209,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     if (!pendingFood) return
     if (!clientRecord) return
     setSaving(true)
+    let succeeded = false
     try {
       const s = pendingServings
       const isPhoto = pendingFood.source === 'photo'
       const currentLog = await ensureLog()
-      if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); return }
+      if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); setSaving(false); return }
       const { data: saved, error } = await supabase.from('food_entries').insert({
         daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
         food_name:    pendingFood.food_name || '',
@@ -226,18 +227,21 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         carbs_g:   !isPhoto && pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
         fat_g:     !isPhoto && pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
-      if (error) { console.error('food_entries insert error:', error.message); return }
+      if (error) { console.error('food_entries insert error:', error.message); setSaving(false); return }
       if (saved) {
+        succeeded = true
         const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', currentLog.id)
         await recalcTotals(currentLog.id, fresh.data || [])
         await loadData()
       }
     } catch (e) { console.error('commitEntry exception:', e) }
     finally {
-      setPendingFood(null); setPendingServings(1); setAddMode('none')
-      setSearchQ(''); setSearchResults([])
-      setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null)
-      setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
+      if (succeeded) {
+        setPendingFood(null); setPendingServings(1); setAddMode('none')
+        setSearchQ(''); setSearchResults([])
+        setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null)
+        setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
+      }
       setSaving(false)
     }
   }
