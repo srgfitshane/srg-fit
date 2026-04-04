@@ -408,7 +408,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         const detRes  = await fetch(`${FS_API}?food_id=${foodId}`, { headers: fsHeaders })
         const detData = await detRes.json()
         const food = detData?.food
-        if (food) { pickFSFood(food); setBarcodeVal(''); setAddMode('none'); setBarcodeLoading(false); return }
+        if (food) { pickFSFood(food); setBarcodeVal(''); setBarcodeLoading(false); return }
       }
       const offRes  = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
       const offData = await offRes.json()
@@ -419,7 +419,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           setBarcodeErr('Product found but serving info is missing. Try search or Quick Add.')
         } else {
           setPendingFood({ food_name: p.product_name || 'Unknown product', calories: r(n['energy-kcal_serving']), protein_g: r(n.proteins_serving), carbs_g: r(n.carbohydrates_serving), fat_g: r(n.fat_serving), serving_size: p.serving_size || '1 serving' })
-          setBarcodeVal(''); setAddMode('none')
+          setBarcodeVal('')
         }
       } else { setBarcodeErr('Product not found. Try searching by name or Quick Add.') }
     } catch { setBarcodeErr('Lookup failed. Try Quick Add instead.') }
