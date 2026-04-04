@@ -159,7 +159,7 @@ export default function ClientDetail() {
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
         supabase.from('checkins').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(10),
         supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(10),
-        supabase.from('workout_sessions').select('*').eq('client_id', clientId).order('scheduled_date', { ascending: false }).limit(20),
+        supabase.from('workout_sessions').select('*').eq('client_id', clientId).order('scheduled_date', { ascending: false }).limit(100),
         supabase.from('nutrition_plans').select('*').eq('client_id', clientId).eq('is_active', true).single(),
         supabase.from('programs').select('*').eq('client_id', clientId).eq('is_template', false).order('created_at', { ascending: false }).limit(1).single(),
         supabase.from('daily_checkins').select('*').eq('client_id', clientId).order('checkin_date', { ascending: false }).limit(30),
