@@ -504,8 +504,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         setPulseData((todayCheckin as DailyCheckinRecord | null) || null)
 
-        // Journal: today's entry (pulse body or dedicated entry)
-        const journalEntry = todayJournal || (todayCheckin?.body ? todayCheckin : null)
+        // Journal: only show dedicated journal_entries — never bleed in the morning pulse note
+        const journalEntry = todayJournal || null
         if (journalEntry) {
           setJournalText(journalEntry.body || '')
           setJournalPrivate(journalEntry.is_private ?? true)
