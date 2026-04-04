@@ -2225,7 +2225,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
   }
 
   useEffect(() => {
-    if (!profileId) return
+    if (!profileId || !coachId) return
     const load = async () => {
       const { data } = await supabase
         .from('messages')
@@ -2238,11 +2238,11 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
         .eq('sender_id', profileId).eq('recipient_id', coachId).eq('read', false)
     }
     load()
-  }, [profileId])
+  }, [profileId, coachId])
 
   // Realtime
   useEffect(() => {
-    if (!profileId) return
+    if (!profileId || !coachId) return
     const channel = supabase.channel('mini-thread-' + profileId)
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:`recipient_id=eq.${coachId}` }, (payload) => {
         const msg = payload.new as any
@@ -2279,7 +2279,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
       {/* Header */}
       <div style={{ padding:'14px 18px', borderBottom:'1px solid '+c.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ fontSize:13, fontWeight:800 }}>💬 Messages</div>
-        <a href={'/dashboard/coach/messages?client=${client.id}'}
+        <a href={`/dashboard/coach/messages?client=${client.id}`}
           style={{ fontSize:11, fontWeight:700, color:c.teal, textDecoration:'none' }}>
           Open full view →
         </a>
