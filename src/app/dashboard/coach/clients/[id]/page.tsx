@@ -27,9 +27,8 @@ const t = {
 
 const TABS = [
   { id:'overview',  label:'Overview',  icon:'👤' },
-  { id:'training',  label:'Training',  icon:'🏋' },
   { id:'program',   label:'Program',   icon:'📋' },
-  { id:'schedule',  label:'Schedule',  icon:'📅' },
+  { id:'calendar',  label:'Calendar',  icon:'📅' },
   { id:'nutrition', label:'Nutrition', icon:'🥦' },
   { id:'checkins',  label:'Check-ins', icon:'✓' },
   { id:'goals',     label:'Goals',           icon:'🎯' },
@@ -46,6 +45,7 @@ export default function ClientDetail() {
   const [metrics,  setMetrics]  = useState<any[]>([])
   const [workouts, setWorkouts] = useState<any[]>([])
   const [expandedWorkout,    setExpandedWorkout]    = useState<string|null>(null)
+  const [showCompleted,      setShowCompleted]       = useState(false)
   const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
   const [nutritionEdit, setNutritionEdit] = useState(false)
@@ -611,102 +611,6 @@ export default function ClientDetail() {
 
 
           {/* ── WORKOUTS TAB ── */}
-          {activeTab === 'training' && (
-            <div>
-              {/* Completed sessions */}
-              <div style={{ fontSize:13, fontWeight:800, marginBottom:6, color:t.textMuted }}>Completed</div>
-              <div style={{ fontSize:12, color:t.textMuted, marginBottom:16 }}>Tap any session to see the full set-by-set log.</div>
-              {workouts.filter((w:any) => w.status === 'completed').length === 0 ? (
-                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
-                  No completed sessions yet.
-                </div>
-              ) : workouts.filter((w:any) => w.status === 'completed').map((w:any) => {
-                const isExpanded = expandedWorkout === w.id
-                const detail = workoutDetails[w.id]
-                const statusColor = w.status === 'completed' ? t.green : w.status === 'in_progress' ? t.orange : t.textMuted
-                const fmtDuration = (s:number) => s ? Math.floor(s/60)+'m '+s%60+'s' : null
-                return (
-                  <div key={w.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?t.teal+'50':t.border), borderRadius:16, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
-                    {/* Session header — tap to expand */}
-                    <div onClick={()=>{ isExpanded ? setExpandedWorkout(null) : loadWorkoutDetail(w.id) }}
-                      style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', cursor:'pointer' }}>
-                      <div style={{ width:40, height:40, borderRadius:12, background:w.status==='completed'?t.greenDim:t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green+'40':t.orange+'40'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
-                        {w.status==='completed'?'✅':'💪'}
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{w.title || w.name || 'Workout Session'}</div>
-                        <div style={{ fontSize:11, color:t.textMuted, display:'flex', gap:10, flexWrap:'wrap' as const }}>
-                          <span>{new Date(w.scheduled_date||w.created_at).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</span>
-                          {w.duration_seconds && <span>⏱ {fmtDuration(w.duration_seconds)}</span>}
-                          {w.session_rpe && <span>RPE {w.session_rpe}/10</span>}
-                          {w.mood && <span>{w.mood}</span>}
-                        </div>
-                      </div>
-                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:statusColor, textTransform:'capitalize' as const }}>{w.status}</span>
-                        <span style={{ color:t.textMuted, fontSize:14, transform: isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
-                      </div>
-                    </div>
-
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div style={{ borderTop:'1px solid '+t.border, padding:'16px 18px' }}>
-                        {!detail ? (
-                          <div style={{ color:t.textMuted, fontSize:13, textAlign:'center' as const }}>Loading...</div>
-                        ) : detail.exercises.length === 0 ? (
-                          <div style={{ color:t.textMuted, fontSize:13, textAlign:'center' as const }}>No exercises logged for this session.</div>
-                        ) : detail.exercises.map((ex:any) => {
-                          const exSets = detail.sets.filter((s:any) => s.session_exercise_id === ex.id)
-                          const hasVideo = ex.client_video_url
-                          return (
-                            <div key={ex.id} style={{ marginBottom:16 }}>
-                              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                                <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>{ex.exercise_name}</div>
-                                <div style={{ fontSize:11, color:t.textMuted }}>Target: {ex.sets_prescribed}×{ex.reps_prescribed}{ex.weight_prescribed?' @ '+ex.weight_prescribed:''}</div>
-                                {hasVideo && (
-                                  <a href={ex.client_video_url} target="_blank" rel="noreferrer"
-                                    style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color:t.purple, background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:20, padding:'3px 10px', textDecoration:'none' }}>
-                                    📹 Form Check
-                                  </a>
-                                )}
-                              </div>
-                              {exSets.length > 0 ? (
-                                <div style={{ background:t.surfaceHigh, borderRadius:10, overflow:'hidden' }}>
-                                  <div style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', gap:0, padding:'6px 12px', borderBottom:'1px solid '+t.border }}>
-                                    {['Set','Reps','Weight','RPE','Notes'].map(h=>(
-                                      <div key={h} style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>{h}</div>
-                                    ))}
-                                  </div>
-                                  {exSets.map((s:any,i:number)=>(
-                                    <div key={s.id} style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', gap:0, padding:'8px 12px', borderBottom: i<exSets.length-1?'1px solid '+t.border+'66':'none', background: s.is_warmup?t.orangeDim:'transparent' }}>
-                                      <div style={{ fontSize:12, fontWeight:700, color:s.is_warmup?t.orange:t.textDim }}>{s.is_warmup?'W':s.set_number}</div>
-                                      <div style={{ fontSize:13, fontWeight:700 }}>{s.reps_completed||'—'}</div>
-                                      <div style={{ fontSize:13, fontWeight:700 }}>{s.weight_value!=null ? s.weight_value+(s.weight_unit||'lbs') : s.weight_unit==='bw' ? 'BW' : '—'}</div>
-                                      <div style={{ fontSize:13, fontWeight:700, color:s.rpe>=8?t.red:s.rpe>=6?t.orange:t.green }}>{s.rpe||'—'}</div>
-                                      <div style={{ fontSize:11, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{s.notes||'—'}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div style={{ fontSize:12, color:t.textMuted, fontStyle:'italic' }}>Sets not logged individually</div>
-                              )}
-                            </div>
-                          )
-                        })}
-                        {/* Client notes */}
-                        {w.notes_client && (
-                          <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.teal, marginTop:8 }}>
-                            <strong>Client note:</strong> {w.notes_client}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
           {/* CHECK-INS TAB */}
           {activeTab === 'checkins' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -984,7 +888,7 @@ export default function ClientDetail() {
           )}
 
           {/* METRICS TAB */}
-          {activeTab === 'training' && (
+          {activeTab === 'metrics' && (
             <CoachMetricsTab metrics={metrics} t={t} />
           )}
 
@@ -1003,14 +907,103 @@ export default function ClientDetail() {
           )}
 
           {/* SCHEDULE TAB */}
-          {activeTab === 'schedule' && client && (
-            <ScheduleTab
-              clientId={client.id}
-              coachId={coachId!}
-              clientName={client.profiles?.full_name || ''}
-              supabase={supabase}
-              t={t}
-            />
+          {activeTab === 'calendar' && client && (
+            <div>
+              <ScheduleTab
+                clientId={client.id}
+                coachId={coachId!}
+                clientName={client.profiles?.full_name || ''}
+                supabase={supabase}
+                t={t}
+              />
+              {/* Completed sessions — collapsible */}
+              <div style={{ marginTop:24 }}>
+                <button
+                  onClick={()=>setShowCompleted(prev=>!prev)}
+                  style={{ display:'flex', alignItems:'center', gap:8, background:'none', border:'none', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:12, padding:0 }}>
+                  <span style={{ fontSize:13, fontWeight:800, color:t.textMuted }}>Completed Sessions</span>
+                  <span style={{ fontSize:11, color:t.textMuted, background:t.surfaceHigh, borderRadius:20, padding:'2px 8px' }}>
+                    {workouts.filter((w:any)=>w.status==='completed').length}
+                  </span>
+                  <span style={{ color:t.textMuted, fontSize:12, transform:showCompleted?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
+                </button>
+                {showCompleted && (
+                  <div>
+                    <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Tap any session to see the full set-by-set log.</div>
+                    {workouts.filter((w:any) => w.status === 'completed').length === 0 ? (
+                      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
+                        No completed sessions yet.
+                      </div>
+                    ) : workouts.filter((w:any) => w.status === 'completed').map((w:any) => {
+                      const isExpanded = expandedWorkout === w.id
+                      const detail = workoutDetails[w.id]
+                      const fmtDuration = (s:number) => s ? Math.floor(s/60)+'m '+s%60+'s' : null
+                      return (
+                        <div key={w.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?t.teal+'50':t.border), borderRadius:16, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
+                          <div onClick={()=>{ isExpanded ? setExpandedWorkout(null) : loadWorkoutDetail(w.id) }}
+                            style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', cursor:'pointer' }}>
+                            <div style={{ width:40, height:40, borderRadius:12, background:t.greenDim, border:'1px solid '+t.green+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>✅</div>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{w.title || 'Workout Session'}</div>
+                              <div style={{ fontSize:11, color:t.textMuted, display:'flex', gap:10, flexWrap:'wrap' as const }}>
+                                <span>{new Date(w.scheduled_date||w.created_at).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</span>
+                                {w.duration_seconds && <span>⏱ {fmtDuration(w.duration_seconds)}</span>}
+                                {w.session_rpe && <span>RPE {w.session_rpe}/10</span>}
+                                {w.mood && <span>{w.mood}</span>}
+                              </div>
+                            </div>
+                            <span style={{ color:t.textMuted, fontSize:14, transform:isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
+                          </div>
+                          {isExpanded && (
+                            <div style={{ borderTop:'1px solid '+t.border, padding:'16px 18px' }}>
+                              {!detail ? (
+                                <div style={{ color:t.textMuted, fontSize:13, textAlign:'center' as const }}>Loading...</div>
+                              ) : detail.exercises.length === 0 ? (
+                                <div style={{ color:t.textMuted, fontSize:13, textAlign:'center' as const }}>No exercises logged.</div>
+                              ) : detail.exercises.map((ex:any) => {
+                                const exSets = detail.sets.filter((s:any) => s.session_exercise_id === ex.id)
+                                return (
+                                  <div key={ex.id} style={{ marginBottom:16 }}>
+                                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                                      <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>{ex.exercise_name}</div>
+                                      <div style={{ fontSize:11, color:t.textMuted }}>Target: {ex.sets_prescribed}×{ex.reps_prescribed}{ex.weight_prescribed?' @ '+ex.weight_prescribed:''}</div>
+                                      {ex.client_video_url && (
+                                        <a href={ex.client_video_url} target="_blank" rel="noreferrer"
+                                          style={{ marginLeft:'auto', fontSize:11, fontWeight:700, color:t.purple, background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:20, padding:'3px 10px', textDecoration:'none' }}>
+                                          📹 Form Check
+                                        </a>
+                                      )}
+                                    </div>
+                                    {exSets.length > 0 && (
+                                      <div style={{ background:t.surfaceHigh, borderRadius:10, overflow:'hidden' }}>
+                                        <div style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', padding:'6px 12px', borderBottom:'1px solid '+t.border }}>
+                                          {['Set','Reps','Weight','RPE','Notes'].map(h=>(
+                                            <div key={h} style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>{h}</div>
+                                          ))}
+                                        </div>
+                                        {exSets.map((s:any,i:number)=>(
+                                          <div key={s.id} style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', padding:'8px 12px', borderBottom:i<exSets.length-1?'1px solid '+t.border+'66':'none', background:s.is_warmup?t.orangeDim:'transparent' }}>
+                                            <div style={{ fontSize:12, fontWeight:700, color:s.is_warmup?t.orange:t.textDim }}>{s.is_warmup?'W':s.set_number}</div>
+                                            <div style={{ fontSize:13, fontWeight:700 }}>{s.reps_completed||'—'}</div>
+                                            <div style={{ fontSize:13, fontWeight:700 }}>{s.weight_value!=null?s.weight_value+(s.weight_unit||'lbs'):s.weight_unit==='bw'?'BW':'—'}</div>
+                                            <div style={{ fontSize:13 }}>{s.rpe||'—'}</div>
+                                            <div style={{ fontSize:11, color:t.textMuted }}>{s.notes||''}</div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* NUTRITION TAB */}
