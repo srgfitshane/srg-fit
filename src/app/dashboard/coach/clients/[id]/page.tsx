@@ -1268,7 +1268,7 @@ export default function ClientDetail() {
               </div>
             )}
 
-            <MiniThread coachId={coachId!} client={client} />
+            <MiniThread coachId={coachId} client={client} />
             </div>
           )}
 
@@ -2210,14 +2210,23 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
 
 
 // ── MiniThread: embedded in client profile ────────────────────────────────
-function MiniThread({ coachId, client }: { coachId: string; client: any }) {
+function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; client: any }) {
   const supabase  = createClient()
+  const [coachId, setCoachId] = useState<string | null>(coachIdProp)
   const [thread,  setThread]  = useState<any[]>([])
   const [draft,   setDraft]   = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
-  const profileId = client.profile?.id
+  const profileId = client.profile?.id || client.profile_id
+
+  // Resolve coachId from auth if prop hasn't arrived yet
+  useEffect(() => {
+    if (coachIdProp) { setCoachId(coachIdProp); return }
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCoachId(user.id)
+    })
+  }, [coachIdProp])
 
   const colors = {
     bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
