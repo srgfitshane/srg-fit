@@ -47,6 +47,7 @@ interface ExerciseLibraryItem {
   video_url?: string | null
   video_url_female?: string | null
   thumbnail_url?: string | null
+  movement_pattern?: string | null
 }
 
 interface SessionExercise {
@@ -162,30 +163,42 @@ export default function ActiveWorkoutPage() {
 
   function getSwapOptions(exercise: SessionExercise) {
     const primaryMuscles = exercise.exercise?.muscles || []
+    const currentEquipment = exercise.exercise?.equipment || null
+    const currentPattern = exercise.exercise?.movement_pattern || null
     const search = (swapSearch[exercise.id] || '').toLowerCase().trim()
     // Search overrides everything
     if (search) {
       return swapLibrary
         .filter(option => option.id !== exercise.exercise_id)
-        .filter(option => option.name?.toLowerCase().includes(search))
-        .slice(0, 8)
+        .filter(option => option.name?.toLowerCase().includes(search)
+          || option.equipment?.toLowerCase().includes(search)
+          || (option.muscles || []).some((m: string) => m.toLowerCase().includes(search)))
+        .slice(0, 10)
     }
     // AI suggestions if loaded
     if (aiSwapOptions[exercise.id]?.length) {
       return aiSwapOptions[exercise.id]
     }
-    // Fallback: basic muscle/equipment filter
+    // Fallback: same movement pattern + muscles, different equipment — ranked by relevance
     return swapLibrary
       .filter(option => option.id !== exercise.exercise_id)
       .filter(option => {
-        const sameEquipment = option.equipment && exercise.exercise?.equipment
-          ? option.equipment === exercise.exercise.equipment
-          : true
         const optionMuscles = option.muscles || []
-        const sharedMuscle = primaryMuscles.length === 0 || optionMuscles.some((muscle: string) => primaryMuscles.includes(muscle))
-        return sameEquipment || sharedMuscle
+        const sharedMuscle = primaryMuscles.length === 0
+          || optionMuscles.some((m: string) => primaryMuscles.includes(m))
+        return sharedMuscle
       })
-      .slice(0, 5)
+      .sort((a, b) => {
+        // Prefer different equipment (the point of a swap)
+        const aDiffEquip = a.equipment !== currentEquipment ? 1 : 0
+        const bDiffEquip = b.equipment !== currentEquipment ? 1 : 0
+        if (aDiffEquip !== bDiffEquip) return bDiffEquip - aDiffEquip
+        // Then prefer same movement pattern
+        const aSamePattern = a.movement_pattern === currentPattern ? 1 : 0
+        const bSamePattern = b.movement_pattern === currentPattern ? 1 : 0
+        return bSamePattern - aSamePattern
+      })
+      .slice(0, 10)
   }
 
   async function getAISwap(exercise: SessionExercise) {
@@ -193,23 +206,34 @@ export default function ActiveWorkoutPage() {
     if (aiSwapLoading[exId] || aiSwapOptions[exId]?.length) return
     setAiSwapLoading(prev => ({ ...prev, [exId]: true }))
     try {
-      // Pre-filter candidates by shared muscle group (max 50 for Claude)
       const primaryMuscles = exercise.exercise?.muscles || []
+      const currentEquipment = exercise.exercise?.equipment || 'unknown'
+      const currentPattern = exercise.exercise?.movement_pattern || 'unknown'
+
+      // Pre-filter: same muscles, different equipment preferred — max 60 for Claude
       const candidates = swapLibrary
         .filter(o => o.id !== exercise.exercise_id)
         .filter(o => {
-          const sharedMuscle = primaryMuscles.length === 0 ||
-            (o.muscles || []).some((m: string) => primaryMuscles.includes(m))
+          const sharedMuscle = primaryMuscles.length === 0
+            || (o.muscles || []).some((m: string) => primaryMuscles.includes(m))
           return sharedMuscle
         })
-        .slice(0, 50)
+        .sort((a, b) => {
+          // Surface different-equipment options first so Claude sees variety
+          const aDiff = a.equipment !== currentEquipment ? 1 : 0
+          const bDiff = b.equipment !== currentEquipment ? 1 : 0
+          return bDiff - aDiff
+        })
+        .slice(0, 60)
 
       if (!candidates.length) {
         setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
         return
       }
 
-      const candidateList = candidates.map(c => `${c.id}|${c.name}|${c.equipment||'bodyweight'}|${(c.muscles||[]).join(',')}`).join('\n')
+      const candidateList = candidates
+        .map(c => `${c.id}|${c.name}|${c.equipment || 'bodyweight'}|${(c.muscles || []).join(',')}|${c.movement_pattern || ''}`)
+        .join('\n')
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -219,25 +243,32 @@ export default function ActiveWorkoutPage() {
           max_tokens: 200,
           messages: [{
             role: 'user',
-            content: `You are a personal trainer. A client needs to swap this exercise:
-Exercise: ${exercise.exercise_name}
-Muscles: ${primaryMuscles.join(', ') || 'unknown'}
-Equipment: ${exercise.exercise?.equipment || 'unknown'}
+            content: `You are a personal trainer helping a client swap an exercise mid-workout.
 
-From this list, pick the 5 BEST substitutes (same movement pattern, same muscles). Return ONLY the IDs, one per line, no explanation:
+Original exercise: ${exercise.exercise_name}
+Muscles: ${primaryMuscles.join(', ') || 'unknown'}
+Equipment: ${currentEquipment}
+Movement pattern: ${currentPattern}
+
+The client likely needs to swap because of equipment unavailability or discomfort. Pick the 10 BEST substitutes from the list below. Prioritise:
+1. Same muscles, DIFFERENT equipment (so they can actually do it)
+2. Same movement pattern
+3. Similar difficulty
+
+Return ONLY the IDs, one per line, no explanation:
 ${candidateList}`
           }]
         })
       })
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
-      const returnedIds = text.trim().split('\n').map((l: string) => l.trim()).filter(Boolean).slice(0, 5)
+      const returnedIds = text.trim().split('\n').map((l: string) => l.trim()).filter(Boolean).slice(0, 10)
       const matched = returnedIds
         .map((id: string) => candidates.find(c => c.id === id))
         .filter(Boolean) as ExerciseLibraryItem[]
 
-      // Fallback to basic filter if Claude returned nothing useful
-      const final = matched.length >= 3 ? matched : candidates.slice(0, 5)
+      // Fallback to sorted candidates if Claude returned nothing useful
+      const final = matched.length >= 3 ? matched : candidates.slice(0, 10)
       setAiSwapOptions(prev => ({ ...prev, [exId]: final }))
     } catch {
       // Silently fall back to basic suggestions
@@ -291,7 +322,7 @@ ${candidateList}`
         .eq('session_id', sessionId).order('order_index')
       const { data: exerciseLibrary } = await supabase
         .from('exercises')
-        .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
         .limit(1200)
 
       // Fetch already-logged sets so re-open shows real data
@@ -342,8 +373,8 @@ ${candidateList}`
 
     const { data: exerciseLibrary } = await supabase
       .from('exercises')
-      .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url')
-      .limit(250)
+      .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+      .limit(1200)
 
     // Fetch already-logged sets for THIS session so resuming shows real data
     const { data: loggedSets } = await supabase
@@ -1106,8 +1137,9 @@ ${candidateList}`
 
                 {swapOpen[ex.id] && !skipped[ex.id] && (
                   <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                      <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Need a smart swap?</div>
+                    {/* Header */}
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                      <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Swap exercise</div>
                       {!aiSwapOptions[ex.id]?.length && (
                         <button
                           onClick={()=>getAISwap(ex)}
@@ -1120,18 +1152,38 @@ ${candidateList}`
                         <div style={{fontSize:10,color:t.teal,fontWeight:600}}>✨ AI selected</div>
                       )}
                     </div>
+                    {/* Search */}
                     <input
                       value={swapSearch[ex.id]||''}
                       onChange={e=>setSwapSearch(prev=>({...prev,[ex.id]:e.target.value}))}
-                      placeholder="Search exercises..."
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8,boxSizing:'border-box' as const,colorScheme:'dark'}}
+                      placeholder="Search by name or equipment..."
+                      style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}
                     />
+                    {/* Suggestions — max 10 */}
+                    <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:10}}>
+                      {getSwapOptions(ex).map(option => (
+                        <button
+                          key={option.id}
+                          onClick={()=>swapExercise(ex, option.id)}
+                          aria-label={`Swap to ${option.name}`}
+                          style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:t.surface,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
+                          <div>
+                            <div style={{fontWeight:700,lineHeight:1.3}}>{option.name}</div>
+                            {option.equipment && <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>{option.equipment}</div>}
+                          </div>
+                          <span style={{color:t.teal,fontWeight:700,fontSize:12,flexShrink:0}}>Use →</span>
+                        </button>
+                      ))}
+                      {getSwapOptions(ex).length === 0 && (
+                        <div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No matches — try a different search</div>
+                      )}
+                    </div>
+                    {/* Reason + note */}
                     <select
                       value={swapReason[ex.id] || ''}
                       onChange={e=>setSwapReason(prev=>({...prev,[ex.id]:e.target.value}))}
                       aria-label={`Why are you swapping ${ex.exercise_name}?`}
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}
-                    >
+                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
                       <option value="">Why are you swapping?</option>
                       <option value="Pain or discomfort">Pain or discomfort</option>
                       <option value="Equipment unavailable">Equipment unavailable</option>
@@ -1143,24 +1195,8 @@ ${candidateList}`
                       onChange={e=>setSwapNote(prev=>({...prev,[ex.id]:e.target.value}))}
                       aria-label={`Optional note for swapping ${ex.exercise_name}`}
                       placeholder="Optional note for your coach"
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const}}
+                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}}
                     />
-                    <div style={{display:'grid',gap:8}}>
-                      {getSwapOptions(ex).map(option => (
-                        <button
-                          key={option.id}
-                          onClick={()=>swapExercise(ex, option.id)}
-                          aria-label={`Swap ${ex.exercise_name} with ${option.name}`}
-                          style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,background:t.surface,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:12,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left'}}
-                        >
-                          <span>
-                            <strong>{option.name}</strong>
-                            {option.equipment ? <span style={{ color:t.textMuted }}> · {option.equipment}</span> : null}
-                          </span>
-                          <span style={{ color:t.teal, fontWeight:700 }}>Use</span>
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
 
