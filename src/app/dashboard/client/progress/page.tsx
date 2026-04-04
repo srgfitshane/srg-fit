@@ -225,14 +225,13 @@ export default function ClientProgressPage() {
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
           </button>}
-          {!(clientRecord != null && !clientRecord.show_body_metrics) && <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
+          <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             + Log Metrics
-          </button>}
+          </button>
         </div>
       </div>
 
-      {!(clientRecord != null && !clientRecord.show_body_metrics) && (<>
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'16px 18px', marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'flex-start' }}>
           <div style={{ flex:'1 1 240px' }}>
@@ -289,7 +288,7 @@ export default function ClientProgressPage() {
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
           <div style={{ display:'flex', gap:6 }}>
-            {(!(clientRecord != null && !clientRecord.show_body_metrics) ? METRIC_GROUPS : METRIC_GROUPS.filter(g => g.key === 'weight')).map((g,i) => (
+            {(clientRecord == null || clientRecord.show_body_metrics ? METRIC_GROUPS : METRIC_GROUPS.filter(g => g.key === 'weight')).map((g,i) => (
               <button key={g.key} onClick={()=>setActiveGroup(i)}
                 style={{ padding:'6px 12px', borderRadius:20, border:'1px solid',
                   borderColor: activeGroup===i?g.color:t.border,
@@ -396,7 +395,6 @@ export default function ClientProgressPage() {
           })()}
         </div>
       )}
-      </>)}
 
       {/* Progress Photos */}
       {clientRecord?.show_progress_photos !== false && (

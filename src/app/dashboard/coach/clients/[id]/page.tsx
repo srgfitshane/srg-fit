@@ -645,7 +645,7 @@ export default function ClientDetail() {
                 {([
                   { key:'show_nutrition',       label:'Nutrition tab',           desc:'Access to food logging & macros' },
                   { key:'show_macros',           label:'Macro targets',           desc:'See macro rings and targets' },
-                  { key:'show_body_metrics',     label:'Body metrics',            desc:'Weight, body fat & measurements' },
+                  { key:'show_body_metrics',     label:'Body metrics',            desc:'Body fat % and measurements (weight always shown)' },
                   { key:'show_progress_photos',  label:'Progress photos',         desc:'Upload and view progress photos' },
                 ] as const).map(({ key, label, desc }) => (
                   <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', paddingBottom:14, marginBottom:14, borderBottom:'1px solid '+t.border }}>
