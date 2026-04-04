@@ -403,6 +403,15 @@ export default function ClientDetail() {
               </div>
               <div style={{ fontSize:13, color:t.textMuted }}>{client.profile?.email} · Client since {new Date(client.start_date).toLocaleDateString([], { month:'long', day:'numeric', year:'numeric' })}</div>
               {client.flag_note && <div style={{ fontSize:12, color:t.red, marginTop:4, fontStyle:'italic' }}>Note: {client.flag_note}</div>}
+              {/* Last active signal */}
+              {(() => {
+                const last = client.last_checkin_at
+                if (!last) return <div style={{ fontSize:12, color:t.red, marginTop:4, fontWeight:600 }}>⚠️ No check-in on record</div>
+                const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000)
+                const color = days >= 7 ? t.red : days >= 4 ? t.orange : t.green
+                const label = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`
+                return <div style={{ fontSize:12, color, marginTop:4, fontWeight:600 }}>Last active: {label}</div>
+              })()}
             </div>
             {/* Quick stats */}
             <div style={{ display:'flex', gap:12 }}>
@@ -440,7 +449,56 @@ export default function ClientDetail() {
           {activeTab === 'overview' && (
             <div className="overview-grid" style={{ display:"grid" }}>
 
-              {/* Latest check-in */}
+              {/* ── Pinned coach notes ── */}
+              <div style={{ background:t.surface, border:`1px solid ${coachNotes.trim() ? t.orange+'60' : t.border}`, borderRadius:16, padding:20 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                  <div style={{ fontSize:13, fontWeight:800 }}>📌 Coach Notes</div>
+                  {notesSaved && <div style={{ fontSize:11, color:t.green, fontWeight:700 }}>Saved ✓</div>}
+                </div>
+                <textarea
+                  value={coachNotes}
+                  onChange={e=>{ setCoachNotes(e.target.value); setNotesSaved(false) }}
+                  placeholder="Private notes about this client — goals, preferences, injuries, cues that work..."
+                  rows={4}
+                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box', marginBottom:10, colorScheme:'dark' }}
+                />
+                <button onClick={async()=>{ await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId); setNotesSaved(true) }}
+                  style={{ background:coachNotes.trim()?t.orange:'transparent', border:`1px solid ${coachNotes.trim()?t.orange:t.border}`, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:coachNotes.trim()?'#000':t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Save Notes
+                </button>
+              </div>
+
+              {/* ── Morning pulse (most recent) ── */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:800 }}>❤️ Morning Pulse</div>
+                  {dailyPulse[0] && <div style={{ fontSize:11, color:t.textMuted }}>{new Date(dailyPulse[0].checkin_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</div>}
+                </div>
+                {dailyPulse[0] ? (
+                  <div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:10 }}>
+                      {[
+                        { label:'Sleep',  val: dailyPulse[0].sleep_quality ? dailyPulse[0].sleep_quality+'/5' : '—',  color:t.purple },
+                        { label:'Energy', val: dailyPulse[0].energy_score  ? dailyPulse[0].energy_score+'/5'  : '—',  color:t.teal   },
+                        { label:'Stress', val: dailyPulse[0].stress_score  ? dailyPulse[0].stress_score+'/10' : '—',  color:t.orange },
+                      ].map(s => (
+                        <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', textAlign:'center' as const }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
+                          <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {dailyPulse[0].body && !dailyPulse[0].is_private && (
+                      <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal }}>
+                        💬 {dailyPulse[0].body}
+                      </div>
+                    )}
+                    {dailyPulse[0].is_private && <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' }}>Note is private</div>}
+                  </div>
+                ) : (
+                  <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No pulse check-ins yet</div>
+                )}
+              </div>
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Latest Check-in</div>
                 {latestCheckin ? (
@@ -893,10 +951,10 @@ export default function ClientDetail() {
           )}
 
           {/* PROGRAM TAB */}
-          {activeTab === 'program' && (
+          {activeTab === 'program' && coachId && (
             <ProgramTab
               clientId={clientId}
-              coachId={coachId!}
+              coachId={coachId}
               program={program}
               workouts={workouts}
               supabase={supabase}
@@ -907,11 +965,11 @@ export default function ClientDetail() {
           )}
 
           {/* SCHEDULE TAB */}
-          {activeTab === 'calendar' && client && (
+          {activeTab === 'calendar' && client && coachId && (
             <div>
               <ScheduleTab
                 clientId={client.id}
-                coachId={coachId!}
+                coachId={coachId}
                 clientName={client.profiles?.full_name || ''}
                 supabase={supabase}
                 t={t}
@@ -1187,7 +1245,7 @@ export default function ClientDetail() {
 
           {/* FORMS TAB */}
           {activeTab === 'checkins' && (
-            <FormsTab clientId={clientId} coachId={coachId!} forms={forms} onAssign={() => setShowAssignForm(true)} supabase={supabase} router={router} t={t} />
+            <FormsTab clientId={clientId} coachId={coachId || ''} forms={forms} onAssign={() => setShowAssignForm(true)} supabase={supabase} router={router} t={t} />
           )}
 
           {/* MESSAGES TAB */}
