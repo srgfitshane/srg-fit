@@ -235,7 +235,7 @@ export default function ActiveWorkoutPage() {
         .map(c => `${c.id}|${c.name}|${c.equipment || 'bodyweight'}|${(c.muscles || []).join(',')}|${c.movement_pattern || ''}`)
         .join('\n')
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ai-swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -609,7 +609,7 @@ ${candidateList}`
         .slice(0, 60)
       if (!candidates.length) { setAiAddLoading(false); return }
       const candidateList = candidates.map(c => `${c.id}|${c.name}|${c.equipment||'bodyweight'}|${(c.muscles||[]).join(',')}`).join('\n')
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ai-swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
