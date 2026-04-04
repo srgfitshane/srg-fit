@@ -33,7 +33,7 @@ type FoodEntry = {
   photo_url?: string | null
   source?: string | null
 }
-type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved' | 'image'
+type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved' | 'image' | 'confirmed'
 
 type NutritionPlan = {
   id: string
@@ -142,6 +142,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [entries,         setEntries]         = useState<FoodEntry[]>([])
   const [loading,         setLoading]         = useState(true)
   const [addMode,         setAddMode]         = useState<AddMode>('none')
+  const [lastSavedLabel,  setLastSavedLabel]  = useState('')   // e.g. "Chicken Breast → Lunch"
+  const [returnMode,      setReturnMode]      = useState<AddMode>('search') // where Add More goes back to
   const [selectedDate,    setSelectedDate]    = useState(today)
   const [searchQ,         setSearchQ]         = useState('')
   const [searchResults,   setSearchResults]   = useState<SearchResult[]>([])
@@ -230,6 +232,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       if (error) { console.error('food_entries insert error:', error.message); setSaving(false); return }
       if (saved) {
         succeeded = true
+        const mealLabel = MEAL_LABELS.find(m => m.id === meal_time)?.label || meal_time
+        setLastSavedLabel(`${pendingFood.food_name} → ${mealLabel}`)
+        setReturnMode(
+          addMode === 'image' ? 'image' :
+          addMode === 'barcode' ? 'barcode' :
+          addMode === 'quick' ? 'quick' :
+          addMode === 'saved' ? 'saved' : 'search'
+        )
         const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', currentLog.id)
         await recalcTotals(currentLog.id, fresh.data || [])
         await loadData()
@@ -237,7 +247,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     } catch (e) { console.error('commitEntry exception:', e) }
     finally {
       if (succeeded) {
-        setPendingFood(null); setPendingServings(1); setAddMode('none')
+        setPendingFood(null); setPendingServings(1); setAddMode('confirmed')
         setSearchQ(''); setSearchResults([])
         setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null)
         setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
@@ -477,6 +487,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     setAddMode('none'); setSearchQ(''); setSearchResults([]); setSearchError('')
     setBarcodeVal(''); setBarcodeErr('')
     setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null); setPhotoErr('')
+    setLastSavedLabel('')
   }
 
   return (
@@ -707,6 +718,31 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* CONFIRMED STATE — logged successfully, Add More or Done */}
+        {addMode==='confirmed' && !pendingFood && (
+          <div style={{ background:t.surface, border:`1px solid ${t.teal}40`, borderRadius:16, padding:16, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+              <div style={{ width:32, height:32, borderRadius:'50%', background:t.teal+'20', border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>✓</div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>Logged!</div>
+                <div style={{ fontSize:12, color:t.textMuted }}>{lastSavedLabel}</div>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button
+                onClick={()=>{ setAddMode(returnMode) }}
+                style={{ flex:1, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'11px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                + Add More
+              </button>
+              <button
+                onClick={resetAdd}
+                style={{ flex:1, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Done
+              </button>
+            </div>
           </div>
         )}
 
