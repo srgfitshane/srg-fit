@@ -45,7 +45,7 @@ export default function ClientDetail() {
   const [metrics,  setMetrics]  = useState<any[]>([])
   const [workouts, setWorkouts] = useState<any[]>([])
   const [expandedWorkout,    setExpandedWorkout]    = useState<string|null>(null)
-  const [showCompleted,      setShowCompleted]       = useState(false)
+  const [showCompleted,      setShowCompleted]       = useState(true)
   const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
   const [nutritionEdit, setNutritionEdit] = useState(false)
