@@ -2230,7 +2230,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
       const { data } = await supabase
         .from('messages')
         .select('*')
-        .or('and(sender_id.eq.${coachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${coachId})')
+        .or(`and(sender_id.eq.${coachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${coachId})`)
         .order('created_at', { ascending: true })
       setThread(data || [])
       // Mark incoming as read
@@ -2244,7 +2244,7 @@ function MiniThread({ coachId, client }: { coachId: string; client: any }) {
   useEffect(() => {
     if (!profileId) return
     const channel = supabase.channel('mini-thread-' + profileId)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:'recipient_id=eq.${coachId}' }, (payload) => {
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:`recipient_id=eq.${coachId}` }, (payload) => {
         const msg = payload.new as any
         if (msg.sender_id === profileId) {
           setThread(prev => [...prev, msg])
