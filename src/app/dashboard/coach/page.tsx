@@ -172,6 +172,7 @@ export default function CoachDashboard() {
   const [checkInsDue,    setCheckInsDue]    = useState(0)
   const [unreadMsgs,     setUnreadMsgs]     = useState(0)
   const [actionQueue,    setActionQueue]    = useState<QueueItem[]>([])
+  const [attentionClients, setAttentionClients] = useState<CoachClient[]>([])
   const router   = useRouter()
   const supabase = createClient()
 
@@ -265,7 +266,8 @@ export default function CoachDashboard() {
           .map((client) => [client.profile_id as string, client.profile?.full_name || 'Client'])
       )
 
-      const checkInQueueItems: QueueItem[] = safeClientList
+      // Attention clients — going quiet or watch (7+ days no check-in)
+      const attentionList = safeClientList
         .filter((client) => !client.paused)
         .filter((client) => {
           const gap = getDaysSince(client.last_checkin_at)
@@ -278,17 +280,7 @@ export default function CoachDashboard() {
           if (bGap === null) return 1
           return bGap - aGap
         })
-        .slice(0, 3)
-        .map((client) => ({
-          id: `checkin-${client.id}`,
-          type: 'checkin' as const,
-          priority: 78 + Math.min(getDaysSince(client.last_checkin_at) || 8, 10),
-          title: `${client.profile?.full_name || 'Client'} needs a recovery check-in`,
-          detail: formatCheckInGap(client.last_checkin_at),
-          action: 'Open check-ins',
-          color: t.yellow,
-          onClick: () => router.push('/dashboard/coach/checkins'),
-        }))
+      setAttentionClients(attentionList)
 
       const recentSessions = (recentSessionsRes.data || []) as RecentSession[]
       let frictionQueueItems: QueueItem[] = []
@@ -361,7 +353,6 @@ export default function CoachDashboard() {
           color: t.teal,
           onClick: () => router.push('/dashboard/coach/messages'),
         })),
-        ...checkInQueueItems,
         ...frictionQueueItems,
       ]
         .sort((a, b) => b.priority - a.priority)
@@ -646,7 +637,57 @@ export default function CoachDashboard() {
             </div>
           )}
 
-          {/* 2-col layout */}
+          {/* Who Needs Attention */}
+          {attentionClients.length > 0 && (
+            <div style={{ background:t.surface, border:`1px solid ${t.orange}30`, borderRadius:18, padding:'18px 20px', marginBottom:24 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:14, flexWrap:'wrap' as const }}>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:800, color:t.orange, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:4 }}>Needs Attention</div>
+                  <div style={{ fontSize:16, fontWeight:800 }}>
+                    {attentionClients.length} client{attentionClients.length !== 1 ? 's' : ''} going quiet
+                  </div>
+                </div>
+                <button onClick={()=>router.push('/dashboard/coach/load')}
+                  style={{ background:t.orangeDim, border:`1px solid ${t.orange}40`, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                  Full Load View →
+                </button>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {attentionClients.slice(0, 5).map(client => {
+                  const days = getDaysSince(client.last_checkin_at)
+                  const isNever = days === null
+                  const urgency = isNever || days >= 14 ? t.red : days >= 7 ? t.orange : t.yellow
+                  const initials = (client.profile?.full_name || '?').split(' ').map((n:string)=>n[0]).join('').slice(0,2)
+                  return (
+                    <button key={client.id}
+                      onClick={()=>router.push('/dashboard/coach/clients/'+client.id)}
+                      style={{ width:'100%', background:t.surfaceUp, border:`1px solid ${urgency}25`, borderRadius:12, padding:'11px 14px', display:'flex', alignItems:'center', gap:12, textAlign:'left' as const, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      <div style={{ width:36, height:36, borderRadius:10, background:urgency+'20', border:`1px solid ${urgency}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900, color:urgency, flexShrink:0 }}>
+                        {initials}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:800, marginBottom:2 }}>{client.profile?.full_name || 'Client'}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>{formatCheckInGap(client.last_checkin_at)}</div>
+                      </div>
+                      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                        <span style={{ fontSize:10, fontWeight:800, color:urgency, background:urgency+'15', borderRadius:20, padding:'3px 9px', whiteSpace:'nowrap' as const }}>
+                          {isNever ? 'Never checked in' : days >= 14 ? '🔴 Going quiet' : '🟡 Watch'}
+                        </span>
+                        <span style={{ fontSize:14, color:t.textMuted }}>›</span>
+                      </div>
+                    </button>
+                  )
+                })}
+                {attentionClients.length > 5 && (
+                  <button onClick={()=>router.push('/dashboard/coach/load')}
+                    style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    +{attentionClients.length - 5} more → View all in Client Load
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="coach-main">
 
             {/* LEFT: Clients */}
