@@ -345,34 +345,36 @@ export default function ClientProgressPage() {
 
       {/* Chart */}
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
-          <div style={{ display:'flex', gap:6 }}>
+        {/* Metric tabs — horizontally scrollable on mobile */}
+        <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', marginBottom:10, marginLeft:-20, marginRight:-20, paddingLeft:20, paddingRight:20 }}>
+          <div style={{ display:'flex', gap:6, width:'max-content' }}>
             {(clientRecord == null || clientRecord.show_body_metrics
               ? METRIC_GROUPS
               : METRIC_GROUPS.filter(g => g.key === 'weight' || g.habit)
             ).map((g,i) => (
               <button key={g.key} onClick={()=>setActiveGroup(i)}
-                style={{ padding:'6px 12px', borderRadius:20, border:'1px solid',
+                style={{ padding:'6px 12px', borderRadius:20, border:'1px solid', whiteSpace:'nowrap',
                   borderColor: activeGroupIdx===i?g.color:t.border,
                   background: activeGroupIdx===i?g.color+'22':'transparent',
                   color: activeGroupIdx===i?g.color:t.textMuted,
-                  cursor:'pointer', fontSize:12, fontWeight:600 }}>
+                  cursor:'pointer', fontSize:12, fontWeight:600, flexShrink:0 }}>
                 {g.label}
               </button>
             ))}
           </div>
-          <div style={{ display:'flex', gap:4 }}>
-            {TIMEFRAMES.map(tf => (
-              <button key={tf.label} onClick={()=>setTimeframe(tf)}
-                style={{ padding:'5px 10px', borderRadius:8, border:'1px solid',
-                  borderColor: timeframe.label===tf.label?t.teal:t.border,
-                  background: timeframe.label===tf.label?t.teal+'22':'transparent',
-                  color: timeframe.label===tf.label?t.teal:t.textMuted,
-                  cursor:'pointer', fontSize:11, fontWeight:700 }}>
-                {tf.label}
-              </button>
-            ))}
-          </div>
+        </div>
+        {/* Timeframe row */}
+        <div style={{ display:'flex', gap:4, marginBottom:16 }}>
+          {TIMEFRAMES.map(tf => (
+            <button key={tf.label} onClick={()=>setTimeframe(tf)}
+              style={{ padding:'5px 10px', borderRadius:8, border:'1px solid',
+                borderColor: timeframe.label===tf.label?t.teal:t.border,
+                background: timeframe.label===tf.label?t.teal+'22':'transparent',
+                color: timeframe.label===tf.label?t.teal:t.textMuted,
+                cursor:'pointer', fontSize:11, fontWeight:700 }}>
+              {tf.label}
+            </button>
+          ))}
         </div>
 
         {/* Running average stat */}
