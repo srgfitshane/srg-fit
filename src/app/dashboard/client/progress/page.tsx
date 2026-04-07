@@ -218,7 +218,7 @@ export default function ClientProgressPage() {
   const runningAvg = useMemo(() => {
     if (!chartData.length) return null
     const field = activeGroup.fields[0]
-    const vals = chartData.map(d => d[field]).filter((v): v is number => v != null)
+    const vals = chartData.map(d => (d as unknown as Record<string,number>)[field]).filter((v): v is number => v != null)
     if (!vals.length) return null
     return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(
       activeGroup.unit === 'steps' ? 0 : 1
