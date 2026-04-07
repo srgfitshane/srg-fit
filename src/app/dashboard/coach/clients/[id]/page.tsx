@@ -31,7 +31,8 @@ const TABS = [
   { id:'calendar',  label:'Calendar',  icon:'📅' },
   { id:'nutrition', label:'Nutrition', icon:'🥦' },
   { id:'checkins',  label:'Check-ins', icon:'✓' },
-  { id:'goals',     label:'Goals',           icon:'🎯' },
+  { id:'goals',     label:'Goals',     icon:'🎯' },
+  { id:'metrics',   label:'Metrics',   icon:'📈' },
   { id:'pulse',     label:'Pulse & Journal', icon:'❤' },
   { id:'messages',  label:'Messages',  icon:'💬' },
   { id:'intake',    label:'Intake',    icon:'📊' },
@@ -954,7 +955,16 @@ export default function ClientDetail() {
 
           {/* METRICS TAB */}
           {activeTab === 'metrics' && (
-            <CoachMetricsTab metrics={metrics} t={t} />
+            <CoachMetricsTab
+              metrics={metrics}
+              t={t}
+              clientId={clientId}
+              coachId={coachId}
+              onSaved={async () => {
+                const { data } = await supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(20)
+                setMetrics(data || [])
+              }}
+            />
           )}
 
           {/* PROGRAM TAB */}
@@ -1961,8 +1971,44 @@ export default function ClientDetail() {
 
 
 // ── CoachMetricsTab ───────────────────────────────────────────────────────
-function CoachMetricsTab({ metrics, t }: { metrics: any[], t: any }) {
-  const [activeChart, setActiveChart] = useState<'weight'|'bodyfat'|'measurements'>('weight')
+function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: any[], t: any, clientId: string, coachId: string | null, onSaved: () => void }) {
+  const supabase = createClient()
+  const [activeChart, setActiveChart]   = useState<'weight'|'bodyfat'|'measurements'|'sleep'|'steps'|'water'>('weight')
+  const [logOpen,  setLogOpen]  = useState<'none'|'weight'|'measurements'>('none')
+  const [logForm,  setLogForm]  = useState<Record<string,string>>({})
+  const [saving,   setSaving]   = useState(false)
+
+  const localDateStr = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  const saveMetric = async () => {
+    if (!coachId) return
+    setSaving(true)
+    const entry: Record<string,unknown> = {
+      client_id:   clientId,
+      coach_id:    coachId,
+      logged_date: logForm.date || localDateStr(),
+    }
+    const numFields = ['weight','body_fat','waist','hips','chest','left_arm','right_arm','neck','calves','shoulders']
+    for (const f of numFields) {
+      if (logForm[f]) entry[f] = parseFloat(logForm[f])
+    }
+    if (logForm.notes) entry.notes = logForm.notes
+    await supabase.from('metrics').upsert(entry, { onConflict: 'client_id,logged_date' })
+    setSaving(false)
+    setLogOpen('none')
+    setLogForm({})
+    onSaved()
+  }
+
+  const inp: React.CSSProperties = {
+    width:'100%', background:t.surfaceHigh, border:`1px solid ${t.border}`,
+    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13,
+    boxSizing:'border-box', colorScheme:'dark',
+  }
+
 
   if (metrics.length === 0) return (
     <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
@@ -2009,7 +2055,95 @@ function CoachMetricsTab({ metrics, t }: { metrics: any[], t: any }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
 
-      {/* Summary stats */}
+      {/* Log buttons */}
+      <div style={{ display:'flex', gap:10 }}>
+        <button onClick={()=>{ setLogOpen('weight'); setLogForm({}) }}
+          style={{ background:t.teal, color:'#000', border:'none', borderRadius:10, padding:'9px 18px', fontWeight:700, cursor:'pointer', fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
+          ⚖️ Log Weight
+        </button>
+        <button onClick={()=>{ setLogOpen('measurements'); setLogForm({}) }}
+          style={{ background:t.surfaceHigh, color:t.text, border:`1px solid ${t.border}`, borderRadius:10, padding:'9px 18px', fontWeight:700, cursor:'pointer', fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
+          📏 Log Measurements
+        </button>
+      </div>
+
+      {/* Log Weight Modal */}
+      {logOpen === 'weight' && (
+        <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:20, padding:26, width:'100%', maxWidth:380 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+              <div style={{ fontWeight:800, fontSize:17 }}>⚖️ Log Weight</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {[
+                { key:'date',     label:'Date',                  type:'date'   },
+                { key:'weight',   label:'Weight (lbs)',          type:'number' },
+                { key:'body_fat', label:'Body Fat % (optional)', type:'number' },
+                { key:'notes',    label:'Notes (optional)',      type:'text'   },
+              ].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>{f.label}</label>
+                  <input type={f.type} step="0.1"
+                    defaultValue={f.key==='date' ? localDateStr() : ''}
+                    onChange={e => setLogForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={inp} />
+                </div>
+              ))}
+            </div>
+            <button onClick={saveMetric} disabled={saving}
+              style={{ marginTop:16, width:'100%', background:t.teal, color:'#000', border:'none', borderRadius:10, padding:'12px', fontWeight:800, cursor:'pointer', fontSize:14, fontFamily:"'DM Sans',sans-serif" }}>
+              {saving ? 'Saving...' : 'Save Weight'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Log Measurements Modal */}
+      {logOpen === 'measurements' && (
+        <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:20, padding:26, width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+              <div style={{ fontWeight:800, fontSize:17 }}>📏 Log Measurements</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
+              {[
+                { key:'date',        label:'Date',          type:'date',   full:true },
+                { key:'waist',       label:'Waist (in)'      },
+                { key:'hips',        label:'Hips (in)'       },
+                { key:'chest',       label:'Chest (in)'      },
+                { key:'left_arm',    label:'Left Arm (in)'   },
+                { key:'right_arm',   label:'Right Arm (in)'  },
+                { key:'neck',        label:'Neck (in)'       },
+                { key:'shoulders',   label:'Shoulders (in)'  },
+                { key:'calves',      label:'Calves (in)'     },
+                { key:'notes',       label:'Notes',         type:'text', full:true },
+              ].map(f => (
+                <div key={f.key} style={{ gridColumn: f.full?'1/-1':'auto' }}>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>{f.label}</label>
+                  <input type={f.type||'number'} step="0.1"
+                    defaultValue={f.key==='date' ? localDateStr() : ''}
+                    onChange={e => setLogForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={inp} />
+                </div>
+              ))}
+            </div>
+            <button onClick={saveMetric} disabled={saving}
+              style={{ marginTop:16, width:'100%', background:t.teal, color:'#000', border:'none', borderRadius:10, padding:'12px', fontWeight:800, cursor:'pointer', fontSize:14, fontFamily:"'DM Sans',sans-serif" }}>
+              {saving ? 'Saving...' : 'Save Measurements'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {metrics.length === 0 ? (
+        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>📈</div>
+          <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No metrics yet</div>
+          <div style={{ fontSize:13, color:t.textMuted }}>Log the first entry above to start tracking</div>
+        </div>
+      ) : (<>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:10 }}>
         {[
           { label:'Current Weight', val: latest?.weight ? latest.weight+' lbs' : '—', color: t.teal },
@@ -2115,6 +2249,7 @@ function CoachMetricsTab({ metrics, t }: { metrics: any[], t: any }) {
         </div>
       </div>
 
+      </>)}
     </div>
   )
 }
