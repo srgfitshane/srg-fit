@@ -1977,6 +1977,38 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
   const [logOpen,  setLogOpen]  = useState<'none'|'weight'|'measurements'>('none')
   const [logForm,  setLogForm]  = useState<Record<string,string>>({})
   const [saving,   setSaving]   = useState(false)
+  const [habitData, setHabitData] = useState<Record<string, Record<string,number>>>({}) // date → {sleep,steps,water}
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from('habit_logs')
+        .select('logged_date, value, habit:habits(label, unit)')
+        .eq('client_id', clientId)
+        .order('logged_date')
+      const byDate: Record<string, Record<string, number[]>> = {}
+      for (const row of (data || []) as any[]) {
+        const label = (row.habit?.label || '').toLowerCase()
+        const key = label.includes('sleep') ? 'sleep'
+          : label.includes('step') ? 'steps'
+          : (label.includes('water') || label.includes('drink')) ? 'water'
+          : null
+        if (!key) continue
+        const d = row.logged_date
+        if (!byDate[d]) byDate[d] = {}
+        if (!byDate[d][key]) byDate[d][key] = []
+        byDate[d][key].push(Number(row.value))
+      }
+      const result: Record<string, Record<string,number>> = {}
+      for (const [d, keys] of Object.entries(byDate)) {
+        result[d] = {}
+        for (const [k, vals] of Object.entries(keys)) {
+          result[d][k] = Math.round((vals.reduce((a,b)=>a+b,0)/vals.length) * 10) / 10
+        }
+      }
+      setHabitData(result)
+    })()
+  }, [clientId, supabase])
 
   const localDateStr = () => {
     const d = new Date()
@@ -2042,10 +2074,31 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
   const bfChange = latest?.body_fat && first?.body_fat ? +(latest.body_fat - first.body_fat).toFixed(1) : null
 
   const TABS = [
-    { id: 'weight',       label: 'Weight',       color: t.teal   },
-    { id: 'bodyfat',      label: 'Body Fat',     color: t.orange  },
-    { id: 'measurements', label: 'Measurements', color: t.purple  },
+    { id: 'weight',       label: 'Weight',       color: t.teal,   habit: false },
+    { id: 'bodyfat',      label: 'Body Fat',     color: t.orange, habit: false },
+    { id: 'measurements', label: 'Measurements', color: t.purple, habit: false },
+    { id: 'sleep',        label: 'Sleep',        color: '#60a5fa', habit: true, field: 'sleep', unit: 'hrs'   },
+    { id: 'steps',        label: 'Steps',        color: t.green,  habit: true, field: 'steps', unit: 'steps' },
+    { id: 'water',        label: 'Water',        color: t.teal,   habit: true, field: 'water', unit: 'oz'    },
   ] as const
+
+  // Habit chart data for the active habit tab
+  const activeHabitTab = TABS.find(tab => tab.id === activeChart && (tab as any).habit)
+  const habitChartData = activeHabitTab
+    ? Object.entries(habitData)
+        .filter(([, vals]) => vals[(activeHabitTab as any).field] != null)
+        .map(([date, vals]) => ({
+          date: fmt(date),
+          value: vals[(activeHabitTab as any).field],
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    : []
+
+  const habitAvg = habitChartData.length
+    ? (habitChartData.reduce((s, d) => s + d.value, 0) / habitChartData.length).toFixed(
+        (activeHabitTab as any).unit === 'steps' ? 0 : 1
+      )
+    : null
 
   const tooltipStyle = {
     contentStyle: { background: t.surfaceHigh, border: '1px solid '+t.border, borderRadius: 10, color: t.text, fontSize: 12 },
@@ -2210,6 +2263,37 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
               ))}
             </LineChart>
           </ResponsiveContainer>
+        )}
+
+        {/* Sleep / Steps / Water habit charts */}
+        {activeHabitTab && (
+          habitChartData.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'40px 0', color:t.textMuted, fontSize:13 }}>
+              No {activeHabitTab.label.toLowerCase()} logged yet
+            </div>
+          ) : (
+            <>
+              {/* Running average */}
+              {habitAvg && (
+                <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16, padding:'10px 14px', background:(activeHabitTab as any).color+'11', border:`1px solid ${(activeHabitTab as any).color}30`, borderRadius:12 }}>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em' }}>Average</div>
+                    <div style={{ fontSize:22, fontWeight:900, color:(activeHabitTab as any).color }}>{habitAvg} <span style={{ fontSize:13, fontWeight:600 }}>{(activeHabitTab as any).unit}</span></div>
+                  </div>
+                  <div style={{ fontSize:12, color:t.textMuted }}>{habitChartData.length} entries logged</div>
+                </div>
+              )}
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={habitChartData} margin={{ top:5, right:20, left:0, bottom:5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
+                  <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} unit={` ${(activeHabitTab as any).unit}`} />
+                  <Tooltip {...tooltipStyle} />
+                  <Line type="monotone" dataKey="value" stroke={(activeHabitTab as any).color} strokeWidth={2.5} dot={{ r:4, fill:(activeHabitTab as any).color }} connectNulls activeDot={{ r:6 }} name={(activeHabitTab as any).label} />
+                </LineChart>
+              </ResponsiveContainer>
+            </>
+          )
         )}
       </div>
 
