@@ -29,6 +29,7 @@ const CLIENT_COLORS = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 const NAV_ESSENTIALS = [
   { label:'Reviews',    icon:'⏰', path:'/dashboard/coach/reviews'  },
   { label:'Messages',   icon:'💬', path:'/dashboard/coach/messages'  },
+  { label:'Client Load',icon:'📊', path:'/dashboard/coach/load'      },
   { label:'Community',  icon:'🏘️', path:'/dashboard/coach/community' },
   { label:'Programs',   icon:'📋', path:'/dashboard/coach/programs'  },
   { label:'Workouts',   icon:'💪', path:'/dashboard/coach/workouts'  },

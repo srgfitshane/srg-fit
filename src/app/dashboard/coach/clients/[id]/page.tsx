@@ -79,6 +79,8 @@ export default function ClientDetail() {
   const [showAddGoal,   setShowAddGoal]   = useState(false)
   const [goalForm,      setGoalForm]      = useState({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
   const [goalSaving,    setGoalSaving]    = useState(false)
+  const [editingGoalId, setEditingGoalId] = useState<string|null>(null)
+  const [editingGoalVal, setEditingGoalVal] = useState('')
   const [exerciseSearch, setExerciseSearch] = useState('')
   const [exerciseResults, setExerciseResults] = useState<{id:string,name:string}[]>([])
   const [exerciseSearching, setExerciseSearching] = useState(false)
@@ -1642,7 +1644,7 @@ export default function ClientDetail() {
                       ? Math.min(100, Math.round((Number(goal.current_value) / Number(goal.target_value)) * 100))
                       : null
                     const isCompleted = goal.status === 'completed'
-                    const isPast = goal.target_date && new Date(goal.target_date) < new Date() && !isCompleted
+                    const isPast = goal.deadline && new Date(goal.deadline) < new Date() && !isCompleted
                     return (
                       <div key={goal.id} style={{ background:t.surface, border:'1px solid '+(isCompleted ? t.teal+'50' : isPast ? t.red+'30' : t.border), borderRadius:16, padding:18, opacity: isCompleted ? 0.8 : 1 }}>
                         <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom: pct !== null ? 14 : 0 }}>
@@ -1665,24 +1667,40 @@ export default function ClientDetail() {
                                   {goal.current_value ? <> · Now: <strong style={{color:t.teal}}>{goal.current_value}{goal.unit ? ' '+goal.unit : ''}</strong></> : null}
                                 </span>
                               )}
-                              {goal.target_date && (
+                              {goal.deadline && (
                                 <span style={{ fontSize:11, color: isPast ? t.red : t.textDim }}>
-                                  📅 {new Date(goal.target_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                                  📅 {new Date(goal.deadline+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
                                 </span>
                               )}
                             </div>
                           </div>
                           {/* Actions */}
-                          <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-                            {!isCompleted && (
-                              <button onClick={async()=>{
-                                const val = prompt('Update current value for ' + goal.title + ':')
-                                if (val === null) return
-                                const num = parseFloat(val)
-                                if (isNaN(num)) return
-                                await supabase.from('client_goals').update({ current_value: num, updated_at: new Date().toISOString() }).eq('id', goal.id)
-                                setGoals(p => p.map(g => g.id === goal.id ? {...g, current_value: num} : g))
-                              }}
+                          <div style={{ display:'flex', gap:6, flexShrink:0, alignItems:'center' }}>
+                            {!isCompleted && editingGoalId === goal.id ? (
+                              <>
+                                <input
+                                  type="number" step="0.1" value={editingGoalVal}
+                                  onChange={e => setEditingGoalVal(e.target.value)}
+                                  autoFocus
+                                  placeholder="Value"
+                                  style={{ width:80, background:'#1d1d2e', border:'1px solid '+t.teal+'60', borderRadius:8, padding:'5px 9px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none' }}
+                                />
+                                <button onClick={async () => {
+                                  const num = parseFloat(editingGoalVal)
+                                  if (isNaN(num)) return
+                                  await supabase.from('client_goals').update({ current_value: num, updated_at: new Date().toISOString() }).eq('id', goal.id)
+                                  setGoals(p => p.map(g => g.id === goal.id ? {...g, current_value: num} : g))
+                                  setEditingGoalId(null); setEditingGoalVal('')
+                                }} style={{ padding:'5px 10px', borderRadius:8, border:'none', background:t.teal, color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                  ✓
+                                </button>
+                                <button onClick={() => { setEditingGoalId(null); setEditingGoalVal('') }}
+                                  style={{ padding:'5px 9px', borderRadius:8, border:'1px solid '+t.border, background:'transparent', color:t.textMuted, fontSize:11, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                  ✕
+                                </button>
+                              </>
+                            ) : !isCompleted && (
+                              <button onClick={() => { setEditingGoalId(goal.id); setEditingGoalVal(String(goal.current_value ?? '')) }}
                                 style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+t.border, background:'transparent', color:t.textMuted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                 Update
                               </button>
