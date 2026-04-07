@@ -95,7 +95,7 @@ export default function ClientProgressPage() {
   const [timeframe, setTimeframe] = useState(TIMEFRAMES[2])
   const [activeGroup, setActiveGroup] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [logOpen, setLogOpen] = useState(false)
+  const [logOpen,        setLogOpen]        = useState<'none'|'weight'|'measurements'>('none')
   const [photoOpen, setPhotoOpen] = useState(false)
   const [logForm, setLogForm] = useState<Record<string,string>>({})
   const [photoForm, setPhotoForm] = useState({ angle:'front', caption:'', weight_at_time:'' })
@@ -178,7 +178,7 @@ export default function ClientProgressPage() {
       .forEach(f => { if (logForm[f]) payload[f]=parseFloat(logForm[f]) })
     if (logForm.notes) payload.notes = logForm.notes
     await supabase.from('metrics').insert(payload)
-    setLogOpen(false); setLogForm({}); setSaving(false); loadData()
+    setLogOpen('none'); setLogForm({}); setSaving(false); loadData()
   }
 
   async function uploadPhoto() {
@@ -225,9 +225,13 @@ export default function ClientProgressPage() {
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
           </button>}
-          <button onClick={()=>setLogOpen(true)} style={{ background:t.teal, color:'#000', border:'none',
+          <button onClick={()=>setLogOpen('weight')} style={{ background:t.teal, color:'#000', border:'none',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
-            + Log Metrics
+            + Log Weight
+          </button>
+          <button onClick={()=>setLogOpen('measurements')} style={{ background:t.surfaceHigh, color:t.text, border:`1px solid ${t.border}`,
+            borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
+            + Log Measurements
           </button>
         </div>
       </div>
@@ -475,21 +479,57 @@ export default function ClientProgressPage() {
       )}
 
       {/* Log Metrics Modal */}
-      {logOpen && (
+      {/* Log Weight Modal */}
+      {logOpen === 'weight' && (
+        <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:360 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+              <div style={{ fontWeight:800, fontSize:17 }}>⚖️ Log Weight</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {[
+                { key:'date', label:'Date', type:'date' },
+                { key:'weight', label:'Weight (lbs)' },
+                { key:'body_fat', label:'Body Fat % (optional)' },
+                { key:'notes', label:'Notes (optional)', type:'text' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>{f.label}</label>
+                  <input type={f.type||'number'} step="0.1"
+                    defaultValue={f.key==='date' ? localDateStr() : ''}
+                    onChange={e => setLogForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
+                      borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' as const }} />
+                </div>
+              ))}
+            </div>
+            <button onClick={saveMetric} disabled={saving}
+              style={{ marginTop:16, width:'100%', background:t.teal, color:'#000', border:'none',
+                borderRadius:10, padding:'12px', fontWeight:800, cursor:'pointer', fontSize:14 }}>
+              {saving ? 'Saving...' : 'Save Weight'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Log Measurements Modal */}
+      {logOpen === 'measurements' && (
         <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>Log Metrics</div>
-              <button onClick={()=>setLogOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+              <div style={{ fontWeight:800, fontSize:17 }}>📏 Log Measurements</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
               {[
                 { key:'date', label:'Date', type:'date', full:true },
-                { key:'weight', label:'Weight (lbs)' }, { key:'body_fat', label:'Body Fat %' },
-                { key:'waist', label:'Waist (in)' }, { key:'hips', label:'Hips (in)' },
-                { key:'chest', label:'Chest (in)' }, { key:'left_arm', label:'Left Arm (in)' },
-                { key:'right_arm', label:'Right Arm (in)' },
-                { key:'notes', label:'Notes', type:'text', full:true },
+                { key:'waist',       label:'Waist (in)'      },
+                { key:'hips',        label:'Hips (in)'       },
+                { key:'chest',       label:'Chest (in)'      },
+                { key:'left_arm',    label:'Left Arm (in)'   },
+                { key:'right_arm',   label:'Right Arm (in)'  },
+                { key:'notes', label:'Notes (optional)', type:'text', full:true },
               ].map(f => (
                 <div key={f.key} style={{ gridColumn: f.full?'1/-1':'auto' }}>
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>{f.label}</label>
@@ -497,14 +537,14 @@ export default function ClientProgressPage() {
                     defaultValue={f.key==='date' ? localDateStr() : ''}
                     onChange={e => setLogForm(p => ({ ...p, [f.key]: e.target.value }))}
                     style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
-                      borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' }} />
+                      borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' as const }} />
                 </div>
               ))}
             </div>
             <button onClick={saveMetric} disabled={saving}
               style={{ marginTop:16, width:'100%', background:t.teal, color:'#000', border:'none',
                 borderRadius:10, padding:'12px', fontWeight:800, cursor:'pointer', fontSize:14 }}>
-              {saving ? 'Saving...' : 'Save Entry'}
+              {saving ? 'Saving...' : 'Save Measurements'}
             </button>
           </div>
         </div>

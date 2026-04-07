@@ -242,7 +242,7 @@ export default function CheckinForm() {
           notification_type: 'checkin_submitted',
           title: 'Check-in received 📋',
           body: 'A client just submitted their weekly check-in.',
-          link_url: '/dashboard/coach',
+          link_url: '/dashboard/coach/checkins',
         }
       }).catch(() => {})
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'checkin_brief')

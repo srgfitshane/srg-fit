@@ -160,6 +160,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
   const [barcodeErr,      setBarcodeErr]      = useState('')
+  const [cameraOpen,      setCameraOpen]      = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
+  const scanningRef = useRef(false)
   // Photo log state (replaces old AI recognition)
   const imageInputRef     = useRef<HTMLInputElement>(null)
   const imageGalleryRef   = useRef<HTMLInputElement>(null)
@@ -195,6 +199,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   }, [clientRecord?.id, selectedDate, supabase])
 
   useEffect(() => { if (clientRecord?.id) void loadData() }, [clientRecord?.id, loadData, selectedDate])
+  // Stop camera on unmount
+  useEffect(() => () => { stopCamera() }, [])
 
   async function ensureLog() {
     if (!clientRecord) return null
@@ -483,7 +489,55 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
 
   if (!clientRecord) return null
 
-  const resetAdd = () => {
+  // 📷 Camera barcode scanner ───────────────────────────────────────────────
+  async function startCamera() {
+    setBarcodeErr('')
+    setCameraOpen(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      cameraStreamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
+      scanningRef.current = true
+      scanFrame()
+    } catch {
+      setBarcodeErr('Camera access denied. Enter the barcode number manually.')
+      setCameraOpen(false)
+    }
+  }
+
+  function stopCamera() {
+    scanningRef.current = false
+    cameraStreamRef.current?.getTracks().forEach(t => t.stop())
+    cameraStreamRef.current = null
+    setCameraOpen(false)
+  }
+
+  async function scanFrame() {
+    if (!scanningRef.current || !videoRef.current) return
+    try {
+      // @ts-expect-error BarcodeDetector is not in TS lib yet
+      if (typeof BarcodeDetector !== 'undefined') {
+        // @ts-expect-error
+        const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'] })
+        const barcodes = await detector.detect(videoRef.current)
+        if (barcodes.length > 0) {
+          const code = barcodes[0].rawValue
+          stopCamera()
+          await lookupBarcode(code)
+          return
+        }
+      }
+    } catch { /* continue scanning */ }
+    if (scanningRef.current) requestAnimationFrame(scanFrame)
+  }
+
+  function resetAdd() {
+    stopCamera()
     setAddMode('none'); setSearchQ(''); setSearchResults([]); setSearchError('')
     setBarcodeVal(''); setBarcodeErr('')
     setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null); setPhotoErr('')
@@ -636,12 +690,46 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         {addMode==='barcode' && !pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:16, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:15, fontWeight:800 }}>🔢 Barcode Lookup</span>
-              <button onClick={()=>{ resetAdd(); setBarcodeVal(''); setBarcodeErr('') }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>x</button>
+              <span style={{ fontSize:15, fontWeight:800 }}>🔢 Barcode Scanner</span>
+              <button onClick={()=>{ stopCamera(); resetAdd(); setBarcodeVal(''); setBarcodeErr('') }} style={{ marginLeft:'auto', background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20 }}>✕</button>
             </div>
+
+            {/* Camera viewfinder */}
+            {cameraOpen && (
+              <div style={{ position:'relative', marginBottom:12, borderRadius:12, overflow:'hidden', background:'#000', aspectRatio:'16/9' }}>
+                <video ref={videoRef} autoPlay playsInline muted
+                  style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                {/* Scan line overlay */}
+                <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+                  <div style={{ width:'70%', height:2, background:t.teal, boxShadow:`0 0 8px ${t.teal}`, borderRadius:2, opacity:0.8 }} />
+                </div>
+                <div style={{ position:'absolute', bottom:10, left:0, right:0, textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.7)', fontWeight:600 }}>
+                  Point camera at barcode
+                </div>
+                <button onClick={stopCamera}
+                  style={{ position:'absolute', top:10, right:10, background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:8, padding:'5px 12px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Scan button + manual entry */}
+            {!cameraOpen && (
+              <button onClick={startCamera}
+                style={{ width:'100%', background:t.teal, border:'none', borderRadius:10, padding:'12px', fontSize:14, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:12 }}>
+                📷 Scan Barcode
+              </button>
+            )}
+
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+              <div style={{ flex:1, height:1, background:t.border }} />
+              <span style={{ fontSize:11, color:t.textMuted, fontWeight:600 }}>or enter manually</span>
+              <div style={{ flex:1, height:1, background:t.border }} />
+            </div>
+
             <div style={{ display:'flex', gap:8 }}>
               <input value={barcodeVal} onChange={e=>setBarcodeVal(e.target.value.replace(/\D/g,''))}
-                placeholder="Enter barcode number..." inputMode="numeric" autoFocus
+                placeholder="Enter barcode number..." inputMode="numeric"
                 onKeyDown={e=>{ if(e.key==='Enter' && barcodeVal.length>5) lookupBarcode(barcodeVal) }}
                 style={{ ...inp, flex:1 }}/>
               <button onClick={()=>{ if(barcodeVal.length>5) lookupBarcode(barcodeVal) }}
@@ -650,6 +738,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 {barcodeLoading ? '...' : 'Look Up'}
               </button>
             </div>
+
             {barcodeErr && (
               <div style={{ marginTop:8 }}>
                 <div style={{ fontSize:12, color:t.orange, marginBottom:6 }}>{barcodeErr}</div>
