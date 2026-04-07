@@ -237,6 +237,26 @@ export default function CoachCheckins() {
                   {r.pain_notes      && <div style={{ background:t.redDim,    border:'1px solid '+t.red+'30',    borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red,    marginBottom:8 }}><strong>Pain notes:</strong> {r.pain_notes}</div>}
                   {r.message_to_coach && <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal, marginBottom:8 }}><strong>Message:</strong> {r.message_to_coach}</div>}
 
+                  {/* Custom form questions (UUID-keyed, no maps_to) */}
+                  {(() => {
+                    const knownKeys = new Set(['mood_score','energy_score','sleep_quality','sleep_hours','stress_score','stress','hunger_score','pain_score','pain_notes','weight_lbs','weight','workout_adherence','nutrition_adherence','habit_adherence','wins','struggles','goals_next_week','message_to_coach'])
+                    const custom = Object.entries(r).filter(([k, v]) => !knownKeys.has(k) && v != null && String(v).trim() !== '')
+                    if (!custom.length) return null
+                    return (
+                      <div style={{ marginBottom:8 }}>
+                        <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Additional Responses</div>
+                        {custom.map(([k, v]) => (
+                          <div key={k} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', fontSize:12, color:t.text, marginBottom:6 }}>
+                            {String(v).startsWith('http') 
+                              ? <a href={String(v)} target="_blank" rel="noreferrer" style={{ color:t.teal }}>📸 View photo</a>
+                              : String(v)
+                            }
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
                   {/* Previous coach response if exists */}
                   {selected.coach_response && (
                     <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:12 }}>
