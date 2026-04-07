@@ -157,7 +157,7 @@ export default function ClientDetail() {
         { data: macroData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
-        supabase.from('checkins').select('*').eq('client_id', clientId).order('submitted_at', { ascending: false }).limit(10),
+        supabase.from('client_form_assignments').select('id, completed_at, response, coach_response').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
         supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(10),
         supabase.from('workout_sessions').select('*').eq('client_id', clientId).order('scheduled_date', { ascending: false }).limit(100),
         supabase.from('nutrition_plans').select('*').eq('client_id', clientId).eq('is_active', true).single(),
@@ -328,7 +328,8 @@ export default function ClientDetail() {
 
   const initials = (client.profile?.full_name || client.display_name || '?').split(' ').map((n:string)=>n[0]).join('')
   const latestMetric = metrics[0]
-  const latestCheckin = checkins[0]
+  const latestCheckin = checkinAssignments[0] || null
+  const latestCheckinResponse = latestCheckin?.response || {}
 
   return (
     <>      <style>{`
@@ -416,7 +417,7 @@ export default function ClientDetail() {
             {/* Quick stats */}
             <div style={{ display:'flex', gap:12 }}>
               {[
-                { label:'Check-ins',    val:checkins.length,  color:t.teal   },
+                { label:'Check-ins',    val:checkinAssignments.filter((a:any)=>a.status==='completed').length, color:t.teal   },
                 { label:'Workouts',     val:workouts.length,  color:t.orange },
                 { label:'Current Weight', val: latestMetric?.weight ? latestMetric.weight+'lbs' : '—', color:t.purple },
               ].map(s => (
@@ -503,22 +504,26 @@ export default function ClientDetail() {
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Latest Check-in</div>
                 {latestCheckin ? (
                   <div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:12 }}>{new Date(latestCheckin.submitted_at).toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:12 }}>
+                      {latestCheckin.completed_at
+                        ? new Date(latestCheckin.completed_at).toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })
+                        : '—'}
+                    </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
                       {[
-                        { label:'Weight',     val: latestCheckin.weight ? latestCheckin.weight+'lbs' : '—', color:t.teal   },
-                        { label:'Sleep',      val: latestCheckin.sleep_hours ? latestCheckin.sleep_hours+'hrs' : '—', color:t.purple },
-                        { label:'Motivation', val: latestCheckin.motivation ? latestCheckin.motivation+'/10' : '—', color:t.orange },
-                        { label:'Stress',     val: latestCheckin.stress ? latestCheckin.stress+'/10' : '—', color:t.red    },
+                        { label:'Weight',  val: latestCheckinResponse.weight_lbs ? latestCheckinResponse.weight_lbs+'lbs' : '—', color:t.teal   },
+                        { label:'Sleep',   val: latestCheckinResponse.sleep_hours ? latestCheckinResponse.sleep_hours+'hrs' : '—', color:t.purple },
+                        { label:'Stress',  val: latestCheckinResponse.stress_score ? latestCheckinResponse.stress_score+'/10' : latestCheckinResponse.stress ? latestCheckinResponse.stress+'/10' : '—', color:t.red },
+                        { label:'Energy',  val: latestCheckinResponse.energy_score ? latestCheckinResponse.energy_score+'/10' : '—', color:t.orange },
                       ].map(s => (
                         <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
                           <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
-                          <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{s.val}</div>
+                          <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{String(s.val)}</div>
                         </div>
                       ))}
                     </div>
-                    {latestCheckin.wins && <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {latestCheckin.wins}</div>}
-                    {latestCheckin.struggles && <div style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red }}><strong>Struggles:</strong> {latestCheckin.struggles}</div>}
+                    {latestCheckinResponse.wins && <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {String(latestCheckinResponse.wins)}</div>}
+                    {latestCheckinResponse.struggles && <div style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red }}><strong>Struggles:</strong> {String(latestCheckinResponse.struggles)}</div>}
                   </div>
                 ) : (
                   <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No check-ins yet</div>
