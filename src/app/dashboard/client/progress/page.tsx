@@ -23,10 +23,12 @@ const TIMEFRAMES = [
   { label:'6M', days:180 }, { label:'1Y', days:365 }, { label:'All', days:9999 },
 ]
 const METRIC_GROUPS = [
-  { key:'weight', label:'Weight', color:t.teal, fields:['weight'] },
-  { key:'bodyfat', label:'Body Fat %', color:t.orange, fields:['body_fat'] },
-  { key:'measurements', label:'Measurements', color:t.purple,
-    fields:['waist','hips','chest','left_arm','right_arm'] },
+  { key:'weight',       label:'Weight',      color:t.teal,   fields:['weight'],                                    unit:'lbs',   habit:false },
+  { key:'bodyfat',      label:'Body Fat %',  color:t.orange, fields:['body_fat'],                                  unit:'%',     habit:false },
+  { key:'measurements', label:'Measurements',color:t.purple, fields:['waist','hips','chest','left_arm','right_arm'],unit:'in',    habit:false },
+  { key:'sleep',        label:'Sleep',       color:t.blue,   fields:['sleep'],                                     unit:'hrs',   habit:true  },
+  { key:'steps',        label:'Steps',       color:t.green,  fields:['steps'],                                     unit:'steps', habit:true  },
+  { key:'water',        label:'Water',       color:t.teal,   fields:['water'],                                     unit:'oz',    habit:true  },
 ]
 const MCOLORS:Record<string,string> = {
   waist:t.teal, hips:t.pink, chest:t.blue, left_arm:t.green, right_arm:t.purple,
@@ -93,7 +95,7 @@ export default function ClientProgressPage() {
   const [metrics, setMetrics] = useState<MetricEntry[]>([])
   const [photos, setPhotos] = useState<ProgressPhoto[]>([])
   const [timeframe, setTimeframe] = useState(TIMEFRAMES[2])
-  const [activeGroup, setActiveGroup] = useState(0)
+  const [activeGroupIdx, setActiveGroup] = useState(0)
   const [loading, setLoading] = useState(true)
   const [logOpen,        setLogOpen]        = useState<'none'|'weight'|'measurements'>('none')
   const [photoOpen, setPhotoOpen] = useState(false)
@@ -105,6 +107,7 @@ export default function ClientProgressPage() {
   const [compareMode,  setCompareMode]  = useState(false)
   const [compareSelection, setCompareSelection] = useState<ProgressPhoto[]>([])
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>([])
+  const [habitLogs,    setHabitLogs]    = useState<Record<string, Record<string,number>>>({}) // date → {sleep,steps,water}
   const [pulseTimeframe, setPulseTimeframe] = useState(30)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -130,7 +133,7 @@ export default function ClientProgressPage() {
     cutoff.setDate(cutoff.getDate() - timeframe.days)
     const dateStr = timeframe.days===9999 ? '2000-01-01' : localDateStr(cutoff)
 
-    const [{ data: mData }, { data: pData }, { data: pulseData }] = await Promise.all([
+    const [{ data: mData }, { data: pData }, { data: pulseData }, { data: hData }] = await Promise.all([
       supabase.from('metrics').select('*').eq('client_id', clientRecord.id)
         .gte('logged_date', dateStr).order('logged_date'),
       supabase.from('progress_photos').select('*').eq('client_id', user.id)
@@ -139,8 +142,36 @@ export default function ClientProgressPage() {
         .eq('client_id', clientRecord.id)
         .order('checkin_date', { ascending: true })
         .limit(90),
+      supabase.from('habit_logs')
+        .select('logged_date, value, habit:habits(label, unit)')
+        .eq('client_id', clientRecord.id)
+        .gte('logged_date', dateStr)
+        .order('logged_date'),
     ])
+
+    // Aggregate habit logs by date — average multiple entries per day, classify by keyword
+    const byDate: Record<string, Record<string, number[]>> = {}
+    for (const row of (hData || []) as any[]) {
+      const label = (row.habit?.label || '').toLowerCase()
+      const key = label.includes('sleep') ? 'sleep'
+        : label.includes('step') ? 'steps'
+        : label.includes('water') || label.includes('drink') ? 'water'
+        : null
+      if (!key) continue
+      const d = row.logged_date
+      if (!byDate[d]) byDate[d] = {}
+      if (!byDate[d][key]) byDate[d][key] = []
+      byDate[d][key].push(Number(row.value))
+    }
+    const habitByDate: Record<string, Record<string,number>> = {}
+    for (const [d, keys] of Object.entries(byDate)) {
+      habitByDate[d] = {}
+      for (const [k, vals] of Object.entries(keys)) {
+        habitByDate[d][k] = Math.round((vals.reduce((a,b)=>a+b,0) / vals.length) * 10) / 10
+      }
+    }
     setMetrics((mData || []) as MetricEntry[])
+    setHabitLogs(habitByDate)
     setPulseHistory((pulseData || []) as PulseEntry[])
     if (pData?.length) {
       const withUrls = await Promise.all((pData as ProgressPhoto[]).map(async (p) => {
@@ -161,14 +192,38 @@ export default function ClientProgressPage() {
   const bfChange = first?.body_fat != null && last?.body_fat != null ? (Number(last.body_fat) - Number(first.body_fat)).toFixed(1) : null
   const latestPulse = pulseHistory[pulseHistory.length - 1]
   const singlePhotoLightbox = lightbox && !isCompareLightbox(lightbox) ? lightbox : null
-  const chartData = metrics.map(m => ({
-    date: fmt(m.logged_date),
-    ...METRIC_GROUPS[activeGroup].fields.reduce<Record<string, number>>((acc, f) => {
-      const value = m[f as keyof MetricEntry]
-      if (value != null) acc[f] = parseFloat(String(value))
-      return acc
-    }, {})
-  }))
+
+  const activeGroup = METRIC_GROUPS[activeGroupIdx]
+
+  // Build unified chart data — habit groups use habitLogs, metric groups use metrics
+  const chartData = useMemo(() => {
+    if (activeGroup.habit) {
+      // All dates that have this habit logged
+      return Object.entries(habitLogs)
+        .filter(([, vals]) => vals[activeGroup.fields[0]] != null)
+        .map(([date, vals]) => ({ date: fmt(date), [activeGroup.fields[0]]: vals[activeGroup.fields[0]] }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    }
+    return metrics.map(m => ({
+      date: fmt(m.logged_date),
+      ...activeGroup.fields.reduce<Record<string, number>>((acc, f) => {
+        const value = m[f as keyof MetricEntry]
+        if (value != null) acc[f] = parseFloat(String(value))
+        return acc
+      }, {})
+    }))
+  }, [activeGroup, metrics, habitLogs])
+
+  // Running average for current group over the selected timeframe
+  const runningAvg = useMemo(() => {
+    if (!chartData.length) return null
+    const field = activeGroup.fields[0]
+    const vals = chartData.map(d => d[field]).filter((v): v is number => v != null)
+    if (!vals.length) return null
+    return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(
+      activeGroup.unit === 'steps' ? 0 : 1
+    )
+  }, [chartData, activeGroup])
 
   async function saveMetric() {
     if (!clientRecord) return
@@ -262,7 +317,7 @@ export default function ClientProgressPage() {
             </div>
             <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
               <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Current Focus</div>
-              <div style={{ fontSize:16, fontWeight:800, color:t.orange }}>{METRIC_GROUPS[activeGroup].label}</div>
+              <div style={{ fontSize:16, fontWeight:800, color:t.orange }}>{METRIC_GROUPS[activeGroupIdx].label}</div>
             </div>
           </div>
         </div>
@@ -292,12 +347,15 @@ export default function ClientProgressPage() {
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
           <div style={{ display:'flex', gap:6 }}>
-            {(clientRecord == null || clientRecord.show_body_metrics ? METRIC_GROUPS : METRIC_GROUPS.filter(g => g.key === 'weight')).map((g,i) => (
+            {(clientRecord == null || clientRecord.show_body_metrics
+              ? METRIC_GROUPS
+              : METRIC_GROUPS.filter(g => g.key === 'weight' || g.habit)
+            ).map((g,i) => (
               <button key={g.key} onClick={()=>setActiveGroup(i)}
                 style={{ padding:'6px 12px', borderRadius:20, border:'1px solid',
-                  borderColor: activeGroup===i?g.color:t.border,
-                  background: activeGroup===i?g.color+'22':'transparent',
-                  color: activeGroup===i?g.color:t.textMuted,
+                  borderColor: activeGroupIdx===i?g.color:t.border,
+                  background: activeGroupIdx===i?g.color+'22':'transparent',
+                  color: activeGroupIdx===i?g.color:t.textMuted,
                   cursor:'pointer', fontSize:12, fontWeight:600 }}>
                 {g.label}
               </button>
@@ -316,9 +374,25 @@ export default function ClientProgressPage() {
             ))}
           </div>
         </div>
-        {metrics.length===0 ? (
+
+        {/* Running average stat */}
+        {runningAvg && (
+          <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:14, padding:'10px 14px', background:activeGroup.color+'11', border:`1px solid ${activeGroup.color}30`, borderRadius:12 }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em' }}>{timeframe.label} Average</div>
+              <div style={{ fontSize:22, fontWeight:900, color:activeGroup.color }}>{runningAvg} <span style={{ fontSize:13, fontWeight:600 }}>{activeGroup.unit}</span></div>
+            </div>
+            <div style={{ fontSize:12, color:t.textMuted }}>
+              {chartData.length} {chartData.length === 1 ? 'entry' : 'entries'} logged
+            </div>
+          </div>
+        )}
+
+        {chartData.length === 0 ? (
           <div style={{ textAlign:'center', color:t.textMuted, padding:60, fontSize:14 }}>
-            No data yet — log your first entry to start tracking! 💪
+            {activeGroup.habit
+              ? `No ${activeGroup.label.toLowerCase()} logged yet — track it in your daily habits! 💪`
+              : 'No data yet — log your first entry to start tracking! 💪'}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
@@ -328,18 +402,15 @@ export default function ClientProgressPage() {
               <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
               <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text }} />
               <Legend wrapperStyle={{ paddingTop:12, color:t.textMuted, fontSize:12 }} />
-              {METRIC_GROUPS[activeGroup].fields.map(f => (
+              {METRIC_GROUPS[activeGroupIdx].fields.map(f => (
                 <Line key={f} type="monotone" dataKey={f}
-                  stroke={METRIC_GROUPS[activeGroup].fields.length===1 ? METRIC_GROUPS[activeGroup].color : MCOLORS[f]||t.teal}
+                  stroke={METRIC_GROUPS[activeGroupIdx].fields.length===1 ? METRIC_GROUPS[activeGroupIdx].color : MCOLORS[f]||t.teal}
                   strokeWidth={2.5} dot={{ r:4 }} connectNulls activeDot={{ r:6 }} />
               ))}
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
-
-
-      {/* Daily Pulse Charts */}
       {pulseHistory.length > 0 && (
         <div style={{ marginBottom:28 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>

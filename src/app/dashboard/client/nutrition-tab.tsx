@@ -503,7 +503,31 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         videoRef.current.play()
       }
       scanningRef.current = true
-      scanFrame()
+
+      // @ts-expect-error BarcodeDetector not in TS lib
+      if (typeof BarcodeDetector !== 'undefined') {
+        // Native — Android Chrome / desktop
+        scanFrame()
+      } else {
+        // Fallback — dynamically load @zxing/browser for iOS Safari + Firefox
+        try {
+          const { BrowserMultiFormatReader } = await import('@zxing/browser')
+          const reader = new BrowserMultiFormatReader()
+          if (videoRef.current) {
+            reader.decodeFromVideoElement(videoRef.current, (result, err) => {
+              if (result && scanningRef.current) {
+                const code = result.getText()
+                stopCamera()
+                void lookupBarcode(code)
+              }
+              // err is normal when no barcode in frame — ignore
+            })
+          }
+        } catch {
+          setBarcodeErr('Camera scan unavailable on this browser. Enter the barcode number manually below.')
+          stopCamera()
+        }
+      }
     } catch {
       setBarcodeErr('Camera access denied. Enter the barcode number manually.')
       setCameraOpen(false)
