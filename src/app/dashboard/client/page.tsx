@@ -229,7 +229,7 @@ type DailyCheckinRecord = {
 type JournalEntryRecord = {
   id: string
   entry_date: string
-  body?: string | null
+  content?: string | null
   is_private?: boolean | null
 }
 
@@ -507,7 +507,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         // Journal: only show dedicated journal_entries — never bleed in the morning pulse note
         const journalEntry = todayJournal || null
         if (journalEntry) {
-          setJournalText(journalEntry.body || '')
+          setJournalText(journalEntry.content || '')
           setJournalPrivate(journalEntry.is_private ?? true)
           setJournalDate(todayStr)
         }
@@ -803,7 +803,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     await supabase.from('journal_entries').upsert({
       client_id:  clientRecord.id,
       entry_date: today,
-      body:       journalText.trim(),
+      content:    journalText.trim(),
       is_private: journalPrivate,
     }, { onConflict: 'client_id,entry_date' })
     setJournalDate(today)
@@ -1646,7 +1646,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       </div>
                     </div>
                     <div style={{ fontSize:13, color:t.textDim, lineHeight:1.6, whiteSpace:'pre-wrap' as const }}>
-                      {entry.body}
+                      {entry.content}
                     </div>
                   </div>
                 ))}
