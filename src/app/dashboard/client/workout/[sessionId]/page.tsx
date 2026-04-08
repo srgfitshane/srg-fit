@@ -15,6 +15,7 @@ const t = {
 
 interface SetData {
   reps_completed: string
+  duration_completed: string
   weight_value: string
   weight_unit: 'lbs'|'kg'|'bw'
   rpe: string
@@ -67,6 +68,8 @@ interface SessionExercise {
   client_video_url?: string | null
   swap_reason?: string | null
   exercise?: ExerciseLibraryItem | null
+  tracking_type?: string | null
+  duration_seconds?: number | null
 }
 
 type WorkoutCompleteProps = {
@@ -90,7 +93,7 @@ interface LoggedSetRow {
 }
 
 function defaultSet(): SetData {
-  return { reps_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false }
+  return { reps_completed:'', duration_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false }
 }
 
 const SKIP_REASONS = [
@@ -340,6 +343,7 @@ ${candidateList}`
         const already = loggedByEx[ex.id] || []
         const rows: SetData[] = already.map((s) => ({
           reps_completed: s.reps_completed != null ? String(s.reps_completed) : '',
+          duration_completed: '',
           weight_value:   s.weight_value   != null ? String(s.weight_value)   : '',
           weight_unit:    (s.weight_unit || 'lbs') as 'lbs'|'kg'|'bw',
           rpe:            s.rpe            != null ? String(s.rpe)            : '',
@@ -397,6 +401,7 @@ ${candidateList}`
       // Build set rows: fill logged ones first, then pad with blank rows up to prescribed count
       const rows: SetData[] = already.map((s) => ({
         reps_completed: s.reps_completed != null ? String(s.reps_completed) : '',
+        duration_completed: '',
         weight_value:   s.weight_value   != null ? String(s.weight_value)   : '',
         weight_unit:    (s.weight_unit || 'lbs') as 'lbs'|'kg'|'bw',
         rpe:            s.rpe            != null ? String(s.rpe)            : '',
@@ -514,13 +519,21 @@ ${candidateList}`
 
   async function logSet(exId: string, setIdx: number) {
     const s = setData[exId][setIdx]
-    if (!s.reps_completed && !s.weight_value) return
+    const ex = exercises.find(e => e.id === exId)
+    const isTime = ex?.tracking_type === 'time'
+
+    if (isTime) {
+      if (!s.duration_completed) return
+    } else {
+      if (!s.reps_completed && !s.weight_value) return
+    }
 
     const { error } = await supabase.from('exercise_sets').insert({
       session_exercise_id: exId,
       session_id: sessionId,
       set_number: setIdx + 1,
-      reps_completed: parseInt(s.reps_completed) || null,
+      reps_completed: isTime ? null : parseInt(s.reps_completed) || null,
+      duration_seconds: isTime ? parseInt(s.duration_completed) || null : null,
       weight_value: s.weight_unit === 'bw' ? null : parseFloat(s.weight_value) || null,
       weight_unit: s.weight_unit,
       rpe: parseInt(s.rpe) || null,
@@ -1094,7 +1107,7 @@ ${candidateList}`
                   <div style={{flex:1,minWidth:0}}>
                     <h2 style={{fontSize:17,fontWeight:900,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ex.exercise_name || ex.exercise?.name || 'Exercise'}</h2>
                     <div style={{fontSize:12,color:t.textDim}}>
-                      {ex.sets_prescribed} × {ex.reps_prescribed}{ex.weight_prescribed ? ` @ ${ex.weight_prescribed}` : ''}
+                      {ex.sets_prescribed} × {ex.tracking_type === 'time' ? `${ex.duration_seconds || '—'}s` : ex.reps_prescribed}{ex.weight_prescribed ? ` @ ${ex.weight_prescribed}` : ''}
                     </div>
                   </div>
                   <div style={{display:'flex',gap:6,flexShrink:0}}>
@@ -1371,11 +1384,23 @@ ${candidateList}`
                     )}
                     <div className="workout-set-grid">
                       <div>
-                        <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
-                        <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
-                          aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} reps for ${ex.exercise_name}`}
-                          placeholder={ex.reps_prescribed||'—'} inputMode="numeric" disabled={s.logged}
-                          style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                        {ex.tracking_type === 'time' ? (
+                          <>
+                            <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Duration (sec)</label>
+                            <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
+                              placeholder={ex.duration_seconds ? String(ex.duration_seconds) : '30'}
+                              inputMode="numeric" disabled={s.logged}
+                              style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                          </>
+                        ) : (
+                          <>
+                            <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
+                            <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
+                              aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} reps for ${ex.exercise_name}`}
+                              placeholder={ex.reps_prescribed||'—'} inputMode="numeric" disabled={s.logged}
+                              style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                          </>
+                        )}
                       </div>
                       <div>
                         <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>

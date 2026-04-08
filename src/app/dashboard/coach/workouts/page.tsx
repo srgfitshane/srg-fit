@@ -33,6 +33,8 @@ interface TemplateEx {
   rest_seconds: number
   notes: string
   order_index: number
+  tracking_type: 'reps' | 'time'
+  duration_seconds: number
 }
 
 type View = 'list' | 'build'
@@ -120,7 +122,7 @@ export default function CoachWorkoutsPage() {
     })
     const exs = (tmpl.workout_template_exercises || [])
       .sort((a:any,b:any) => a.order_index - b.order_index)
-      .map((e:any) => ({ ...e, notes: e.notes || '' }))
+      .map((e:any) => ({ ...e, notes: e.notes || '', tracking_type: e.tracking_type || 'reps', duration_seconds: e.duration_seconds || 30 }))
     setBuildExercises(exs)
     setView('build')
   }
@@ -133,6 +135,7 @@ export default function CoachWorkoutsPage() {
       sets_prescribed: 3, reps_prescribed: '8-12',
       weight_prescribed: '', rest_seconds: 90,
       notes: '', order_index: prev.length,
+      tracking_type: 'reps', duration_seconds: 30,
     }])
   }
 
@@ -191,6 +194,8 @@ export default function CoachWorkoutsPage() {
           rest_seconds: e.rest_seconds,
           notes: e.notes || null,
           order_index: i,
+          tracking_type: e.tracking_type || 'reps',
+          duration_seconds: e.tracking_type === 'time' ? e.duration_seconds : null,
         }))
       )
     }
@@ -214,57 +219,40 @@ export default function CoachWorkoutsPage() {
     if (!actionModal) return
     setActionSaving(true)
     const { template, action } = actionModal
-
     if (action === 'client') {
-      // Create a workout_session + session_exercises from this template
       if (!actionForm.client_id) { setActionSaving(false); return }
       const client = clients.find(c => c.id === actionForm.client_id)
-      const { data: session } = await supabase.from('workout_sessions').insert({
-        coach_id: coachId,
-        client_id: actionForm.client_id,
-        title: template.title,
-        scheduled_date: actionForm.date || null,
-        notes_coach: template.notes_coach || null,
-        status: 'assigned',
-      }).select().single()
 
-      if (session) {
-        const exs = (template.workout_template_exercises || [])
-          .sort((a:any,b:any) => a.order_index - b.order_index)
-        await supabase.from('session_exercises').insert(
-          exs.map((e:any, i:number) => ({
-            session_id: session.id,
-            exercise_id: e.exercise_id,
-            exercise_name: e.exercise_name,
-            exercise_type: e.exercise_type,
-            sets_prescribed: e.sets_prescribed,
-            reps_prescribed: e.reps_prescribed,
-            weight_prescribed: e.weight_prescribed || null,
-            rest_seconds: e.rest_seconds,
-            notes_coach: e.notes || null,
-            order_index: i,
-          }))
-        )
-        if (client?.profile_id) {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.access_token) {
-            fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-              method: 'POST', headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({
-                user_id: client.profile_id,
-                notification_type: 'program_assigned',
-                title: `New workout assigned: ${template.title}`,
-                body: actionForm.date ? `Scheduled for ${actionForm.date}` : 'Ready when you are!',
-                link_url: '/dashboard/client',
-              })
-            }).catch(()=>{})
-          }
+      const res = await fetch('/api/workouts/assign-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: template.id,
+          client_id: actionForm.client_id,
+          scheduled_date: actionForm.date || null,
+        }),
+      })
+
+      if (res.ok && client?.profile_id) {
+        const { data: { session: authSession } } = await supabase.auth.getSession()
+        if (authSession?.access_token) {
+          fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+            method: 'POST', headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authSession.access_token}`,
+            },
+            body: JSON.stringify({
+              user_id: client.profile_id,
+              notification_type: 'program_assigned',
+              title: `New workout assigned: ${template.title}`,
+              body: actionForm.date ? `Scheduled for ${actionForm.date}` : 'Ready when you are!',
+              link_url: '/dashboard/client',
+            })
+          }).catch(()=>{})
         }
       }
     }
+
 
     if (action === 'program') {
       // Add as a workout_block to an existing program
@@ -551,13 +539,27 @@ export default function CoachWorkoutsPage() {
                         <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>
                         <button onClick={()=>removeBuildEx(i)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>✕</button>
                       </div>
+                      {/* Reps / Time toggle */}
+                      <div style={{display:'flex',gap:4,marginBottom:10}}>
+                        {(['reps','time'] as const).map(type=>(
+                          <button key={type} onClick={()=>updateBuildEx(i,'tracking_type',type)}
+                            style={{padding:'3px 10px',borderRadius:20,border:`1px solid ${ex.tracking_type===type?t.teal:t.border}`,background:ex.tracking_type===type?t.tealDim:'transparent',color:ex.tracking_type===type?t.teal:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                            {type === 'reps' ? '🔢 Reps' : '⏱ Time'}
+                          </button>
+                        ))}
+                      </div>
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8}}>
-                        {[
+                        {(ex.tracking_type === 'time' ? [
+                          {label:'Sets', field:'sets_prescribed', type:'number', ph:'3'},
+                          {label:'Duration (sec)', field:'duration_seconds', type:'number', ph:'30'},
+                          {label:'Load', field:'weight_prescribed', type:'text', ph:'BW'},
+                          {label:'Rest (sec)', field:'rest_seconds', type:'number', ph:'60'},
+                        ] : [
                           {label:'Sets', field:'sets_prescribed', type:'number', ph:'3'},
                           {label:'Reps', field:'reps_prescribed', type:'text', ph:'8-12'},
                           {label:'Load', field:'weight_prescribed', type:'text', ph:'RPE 8'},
                           {label:'Rest (sec)', field:'rest_seconds', type:'number', ph:'90'},
-                        ].map(f=>(
+                        ]).map(f=>(
                           <div key={f.field}>
                             <label style={{fontSize:10,color:t.textDim,display:'block',marginBottom:3}}>{f.label}</label>
                             <input type={f.type} value={(ex as any)[f.field]} placeholder={f.ph}
