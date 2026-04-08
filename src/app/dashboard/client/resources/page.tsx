@@ -82,7 +82,7 @@ export default function ClientResourcesPage() {
         setItems(resolved)
         // Default to first top-level category
         const first = (gs||[]).find(g=>!g.parent_id)
-        if (first) setActiveParent(first.id)
+        if (first) setActiveParent(null) // start on grid, not auto-selected
         setLoading(false)
       })()
     }, 0)
@@ -134,75 +134,85 @@ export default function ClientResourcesPage() {
         ) : (
           <div style={{maxWidth:680,margin:'0 auto',padding:'20px 16px'}}>
 
-            {/* Category tabs — horizontal scroll */}
-            <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch',marginBottom:16,marginLeft:-16,marginRight:-16,paddingLeft:16,paddingRight:16}}>
-              <div style={{display:'flex',gap:8,width:'max-content'}}>
-                {topLevelGroups.map(cat=>(
-                  <button key={cat.id} onClick={()=>{setActiveParent(cat.id);setActiveGroup(null);setSearch('')}}
-                    style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:20,border:'1px solid '+(activeParent===cat.id?cat.color+'60':t.border),background:activeParent===cat.id?cat.color+'18':'transparent',color:activeParent===cat.id?cat.color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,whiteSpace:'nowrap',flexShrink:0}}>
-                    <span>{cat.icon||'📁'}</span>{cat.name}
-                    <span style={{fontSize:10,opacity:0.7}}>({totalInCat(cat.id)})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* ── CATEGORY GRID (no selection) ── */}
+            {!activeParent && (
+              <>
+                <div style={{fontSize:13,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:14}}>Browse Categories</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:12}}>
+                  {topLevelGroups.map(cat => {
+                    const count = totalInCat(cat.id)
+                    const color = cat.color || t.teal
+                    return (
+                      <div key={cat.id} onClick={()=>{setActiveParent(cat.id);setActiveGroup(null);setSearch('')}}
+                        style={{background:t.surface,border:`1px solid ${color}30`,borderRadius:16,padding:'18px 16px',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+                        {/* color accent bar */}
+                        <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${color},${color}88)`}}/>
+                        <div style={{fontSize:32,marginBottom:10,lineHeight:1}}>{cat.icon||'📁'}</div>
+                        <div style={{fontSize:14,fontWeight:800,marginBottom:3,color:t.text}}>{cat.name}</div>
+                        <div style={{fontSize:12,color:t.textMuted}}>{count} item{count!==1?'s':''}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
             {activeParent && (
               <>
-                {/* Subfolders for active category */}
-                {subgroups(activeParent).length > 0 && (
-                  <div style={{marginBottom:16}}>
-                    <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch',marginLeft:-16,marginRight:-16,paddingLeft:16,paddingRight:16}}>
-                      <div style={{display:'flex',gap:8,width:'max-content'}}>
-                        {/* General items in category */}
-                        {itemsFor(activeParent).length > 0 && (
-                          <button onClick={()=>setActiveGroup(activeParent)}
-                            style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:20,border:'1px solid '+(activeGroup===activeParent?activeParentData?.color+'50':t.border),background:activeGroup===activeParent?activeParentData?.color+'15':'transparent',color:activeGroup===activeParent?activeParentData?.color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,whiteSpace:'nowrap',flexShrink:0}}>
-                            📋 General
-                          </button>
-                        )}
-                        {subgroups(activeParent).map(sub=>(
-                          <button key={sub.id} onClick={()=>setActiveGroup(sub.id)}
-                            style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:20,border:'1px solid '+(activeGroup===sub.id?sub.color+'50':t.border),background:activeGroup===sub.id?sub.color+'15':'transparent',color:activeGroup===sub.id?sub.color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,whiteSpace:'nowrap',flexShrink:0}}>
-                            {sub.icon||'📂'} {sub.name}
-                            <span style={{fontSize:10,opacity:0.7}}>({itemsFor(sub.id).length})</span>
-                          </button>
-                        ))}
-                      </div>
+                {/* Back to categories */}
+                <button onClick={()=>{setActiveParent(null);setActiveGroup(null);setSearch('')}}
+                  style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",padding:'0 0 16px 0',display:'flex',alignItems:'center',gap:4}}>
+                  ← Categories
+                </button>
+
+                {/* Subfolders — small card grid */}
+                {subgroups(activeParent).length > 0 && !activeGroup && (
+                  <>
+                    <div style={{fontSize:13,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>
+                      {activeParentData?.icon} {activeParentData?.name}
                     </div>
-                  </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:16}}>
+                      {subgroups(activeParent).map(sub=>(
+                        <div key={sub.id} onClick={()=>setActiveGroup(sub.id)}
+                          style={{background:t.surface,border:`1px solid ${sub.color||t.border}30`,borderRadius:14,padding:'14px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:10}}>
+                          <div style={{width:36,height:36,borderRadius:10,background:(sub.color||t.teal)+'18',border:`1px solid ${sub.color||t.teal}30`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>
+                            {sub.icon||'📂'}
+                          </div>
+                          <div style={{minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:700,color:sub.color||t.textDim,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub.name}</div>
+                            <div style={{fontSize:11,color:t.textMuted}}>{itemsFor(sub.id).length} items</div>
+                          </div>
+                        </div>
+                      ))}
+                      {itemsFor(activeParent).length > 0 && (
+                        <div onClick={()=>setActiveGroup(activeParent)}
+                          style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'14px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:10}}>
+                          <div style={{width:36,height:36,borderRadius:10,background:t.surfaceHigh,border:`1px solid ${t.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>
+                            📋
+                          </div>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:700,color:t.textDim}}>General</div>
+                            <div style={{fontSize:11,color:t.textMuted}}>{itemsFor(activeParent).length} items</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
 
-                {/* No subfolder selected — show overview */}
-                {!activeGroup && (
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
-                    {subgroups(activeParent).map(sub=>(
-                      <div key={sub.id} onClick={()=>setActiveGroup(sub.id)}
-                        style={{background:t.surface,border:`1px solid ${sub.color}30`,borderRadius:12,padding:'14px 16px',cursor:'pointer'}}>
-                        <div style={{fontSize:24,marginBottom:6}}>{sub.icon||'📂'}</div>
-                        <div style={{fontSize:13,fontWeight:700,color:sub.color,marginBottom:2}}>{sub.name}</div>
-                        <div style={{fontSize:11,color:t.textMuted}}>{itemsFor(sub.id).length} items</div>
-                      </div>
-                    ))}
-                    {itemsFor(activeParent).length > 0 && (
-                      <div onClick={()=>setActiveGroup(activeParent)}
-                        style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:12,padding:'14px 16px',cursor:'pointer'}}>
-                        <div style={{fontSize:24,marginBottom:6}}>📋</div>
-                        <div style={{fontSize:13,fontWeight:700,color:t.textDim,marginBottom:2}}>General</div>
-                        <div style={{fontSize:11,color:t.textMuted}}>{itemsFor(activeParent).length} items</div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* If no subfolders, items render in the flat section below */}
 
                 {/* Items list */}
                 {activeGroup && (
                   <>
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
+                      <button onClick={()=>setActiveGroup(null)} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",padding:0,display:subgroups(activeParent).length===0?'none':'block'}}>
+                        ←
+                      </button>
                       <span style={{fontSize:18}}>{activeGroupData?.icon||activeParentData?.icon}</span>
                       <div style={{fontSize:14,fontWeight:700,flex:1}}>{activeGroupData?.name||activeParentData?.name}</div>
                       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..."
-                        style={{background:t.surface,border:'1px solid '+t.border,borderRadius:20,padding:'6px 14px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",width:140}}/>
+                        style={{background:t.surface,border:'1px solid '+t.border,borderRadius:20,padding:'6px 14px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",width:130}}/>
                     </div>
                     {displayItems.length === 0 ? (
                       <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:14,padding:'48px 20px',textAlign:'center',color:t.textMuted,fontSize:13}}>
@@ -248,6 +258,40 @@ export default function ClientResourcesPage() {
                       </div>
                     )}
                   </>
+                )}
+
+                {/* No subfolders, no group set yet — auto-show items */}
+                {!activeGroup && subgroups(activeParent).length === 0 && (
+                  <div style={{display:'grid',gap:12}}>
+                    {itemsFor(activeParent).map(item=>{
+                      const tm = TYPE_META[item.content_type]||TYPE_META.article
+                      return (
+                        <div key={item.id} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:14,padding:'14px 16px',display:'flex',gap:12,alignItems:'flex-start'}}>
+                          <div style={{width:42,height:42,borderRadius:11,background:tm.color+'18',border:'1px solid '+tm.color+'30',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{tm.icon}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4,flexWrap:'wrap' as const}}>
+                              <div style={{fontSize:14,fontWeight:700}}>{item.title}</div>
+                              <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:tm.color+'18',color:tm.color}}>{tm.label}</span>
+                              {(item.duration||item.estimated_duration) && <span style={{fontSize:10,color:t.textMuted,background:t.surfaceHigh,padding:'2px 7px',borderRadius:20}}>⏱ {item.estimated_duration||item.duration}</span>}
+                            </div>
+                            {item.description && <div style={{fontSize:12,color:t.textDim,lineHeight:1.5,marginBottom:6}}>{item.description}</div>}
+                            {item.file_url && (
+                              <a href={item.file_url} target="_blank" rel="noreferrer"
+                                style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+t.teal+'30',padding:'5px 12px',borderRadius:8}}>
+                                Open ↗
+                              </a>
+                            )}
+                            {item.content_type === 'workout' && (
+                              <button onClick={()=>openAssign(item)}
+                                style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:'#000',background:t.teal,border:'none',padding:'5px 12px',borderRadius:8,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                📅 Add to My Day
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </>
             )}
