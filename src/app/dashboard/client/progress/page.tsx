@@ -109,6 +109,8 @@ export default function ClientProgressPage() {
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>([])
   const [habitLogs,    setHabitLogs]    = useState<Record<string, Record<string,number>>>({}) // date → {sleep,steps,water}
   const [pulseTimeframe, setPulseTimeframe] = useState(30)
+  const [journalEntries, setJournalEntries] = useState<{id:string,entry_date:string,content:string,is_private:boolean}[]>([])
+  const [expandedEntry, setExpandedEntry] = useState<string|null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -133,7 +135,7 @@ export default function ClientProgressPage() {
     cutoff.setDate(cutoff.getDate() - timeframe.days)
     const dateStr = timeframe.days===9999 ? '2000-01-01' : localDateStr(cutoff)
 
-    const [{ data: mData }, { data: pData }, { data: pulseData }, { data: hData }] = await Promise.all([
+    const [{ data: mData }, { data: pData }, { data: pulseData }, { data: hData }, { data: jData }] = await Promise.all([
       supabase.from('metrics').select('*').eq('client_id', clientRecord.id)
         .gte('logged_date', dateStr).order('logged_date'),
       supabase.from('progress_photos').select('*').eq('client_id', user.id)
@@ -147,6 +149,11 @@ export default function ClientProgressPage() {
         .eq('client_id', clientRecord.id)
         .gte('logged_date', dateStr)
         .order('logged_date'),
+      supabase.from('journal_entries')
+        .select('id, entry_date, content, is_private')
+        .eq('client_id', user.id)
+        .order('entry_date', { ascending: false })
+        .limit(60),
     ])
 
     // Aggregate habit logs by date — average multiple entries per day, classify by keyword
@@ -173,6 +180,7 @@ export default function ClientProgressPage() {
     setMetrics((mData || []) as MetricEntry[])
     setHabitLogs(habitByDate)
     setPulseHistory((pulseData || []) as PulseEntry[])
+    setJournalEntries((jData || []) as {id:string,entry_date:string,content:string,is_private:boolean}[])
     if (pData?.length) {
       const withUrls = await Promise.all((pData as ProgressPhoto[]).map(async (p) => {
         const { data: url } = await supabase.storage.from('progress-photos').createSignedUrl(p.storage_path, 3600)
@@ -744,6 +752,42 @@ export default function ClientProgressPage() {
         </div>
       )}
     </div>
+        {/* Journal History */}
+        {journalEntries.length > 0 && (
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>✍️ Journal</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {journalEntries.map(entry => (
+                <div key={entry.id}
+                  onClick={()=>setExpandedEntry(expandedEntry===entry.id ? null : entry.id)}
+                  style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', cursor:'pointer' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: expandedEntry===entry.id ? 10 : 0 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:t.teal }}>
+                      {new Date(entry.entry_date+'T00:00:00').toLocaleDateString([], { weekday:'short', month:'long', day:'numeric' })}
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:10, color:entry.is_private ? t.textMuted : t.teal, fontWeight:600 }}>
+                        {entry.is_private ? '🔒 Private' : '👁 Shared'}
+                      </span>
+                      <span style={{ fontSize:10, color:t.textMuted }}>{expandedEntry===entry.id ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+                  {expandedEntry !== entry.id && (
+                    <div style={{ fontSize:12, color:t.textDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
+                      {entry.content}
+                    </div>
+                  )}
+                  {expandedEntry === entry.id && (
+                    <div style={{ fontSize:13, color:t.textDim, lineHeight:1.65, whiteSpace:'pre-wrap' as const }}>
+                      {entry.content}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
     <ClientBottomNav />
     </>
   )
