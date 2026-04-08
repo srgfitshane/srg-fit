@@ -436,7 +436,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     <Avatar name={author?.full_name||'?'} role={p.author_role} color={color} size={30}/>
                     <div style={{ flex:1 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                        <span style={{ fontSize:13, fontWeight:700 }}>{author?.full_name||'Someone'}</span>
+                        <span style={{ fontSize:13, fontWeight:700 }}>{(author?.full_name||'Someone').split(' ')[0]}</span>
                         {isCoach && <span style={{ fontSize:8, fontWeight:800, color:t.teal, background:t.tealDim, padding:'1px 5px', borderRadius:20 }}>COACH</span>}
                       </div>
                       <div style={{ fontSize:10, color:t.textMuted }}>{fmt(p.created_at)}</div>
@@ -521,7 +521,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                           </div>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:2 }}>
-                              <span style={{ fontSize:11, fontWeight:700 }}>{rAuthor?.full_name||'Unknown'}</span>
+                              <span style={{ fontSize:11, fontWeight:700 }}>{(rAuthor?.full_name||'Unknown').split(' ')[0]}</span>}</span>
                               {r.author_role==='coach' && <span style={{ fontSize:8, fontWeight:800, color:t.teal, background:t.tealDim, padding:'1px 4px', borderRadius:20 }}>COACH</span>}
                               <span style={{ fontSize:10, color:t.textMuted }}>{fmt(r.created_at)}</span>
                             </div>
