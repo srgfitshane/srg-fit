@@ -60,13 +60,14 @@ interface Props {
   myId: string
   otherId: string
   otherName: string
+  myName?: string
   otherAvatar?: string | null
   height?: string
 
   quickReplies?: Array<{ id: string; title: string; body: string }>
 }
 
-export default function RichMessageThread({ myId, otherId, otherName, height = '100%', quickReplies = [] }: Props) {
+export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [] }: Props) {
   const supabase = useMemo(() => createClient(), [])
 
   // Fire-and-forget push notification to the recipient
@@ -82,9 +83,9 @@ export default function RichMessageThread({ myId, otherId, otherName, height = '
       body: JSON.stringify({
         user_id: otherId,
         notification_type: 'new_message',
-        title: `Message from ${otherName || 'your coach'}`,
+        title: `New message from ${myName || 'your coach'}`,
         body: body.slice(0, 100),
-        link_url: '/dashboard/client?tab=messages',
+        link_url: '/dashboard/client?tab=messages&view=coach',
       })
     }).catch(() => {})
   }

@@ -25,6 +25,7 @@ export default function MessagesPage() {
 
 function MessagesInner() {
   const [coachId,    setCoachId]    = useState<string | null>(null)
+  const [coachName,  setCoachName]  = useState<string>('Coach Shane')
   const [clients,    setClients]    = useState<any[]>([])
   const [activeId,   setActiveId]   = useState<string | null>(null)
   const [unread,     setUnread]     = useState<Record<string, number>>({})
@@ -64,6 +65,8 @@ function MessagesInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCoachId(user.id)
+      const { data: coachProf } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      if (coachProf?.full_name) setCoachName(coachProf.full_name)
 
       const { data: cls } = await supabase
         .from('clients')
@@ -440,6 +443,7 @@ function MessagesInner() {
                     myId={coachId}
                     otherId={activeClient.profile.id}
                     otherName={activeClient.profile.full_name || 'Client'}
+                    myName={coachName}
                     otherAvatar={activeClient.profile.avatar_url}
                     height="100%"
                     quickReplies={macros}

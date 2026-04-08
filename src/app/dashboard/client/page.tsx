@@ -344,7 +344,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckinRecord[]>([])
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState<DashboardTab>(() => {
-    // Allow deep-linking via ?tab=billing etc from profile page
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search).get('tab')
       return coerceDashboardTab(p)
@@ -353,7 +352,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   })
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
-  const [messagesView, setMessagesView] = useState<'hub'|'coach'>('hub')
+  const [messagesView, setMessagesView] = useState<'hub'|'coach'>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('view') === 'coach' ? 'coach' : 'hub'
+    }
+    return 'hub'
+  })
   const [unreadMsgCount, setUnreadMsgCount] = useState(0)
   const [unreadCommunityCount, setUnreadCommunityCount] = useState(0)
   const activeNavRef = useRef<DashboardTab>('today')
@@ -1545,6 +1549,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     myId={profile.id}
                     otherId={coachProfileId}
                     otherName="Coach Shane"
+                    myName={profile?.full_name || 'Client'}
                     height="100%"
                   />
                 ) : (
