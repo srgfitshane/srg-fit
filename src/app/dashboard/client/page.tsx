@@ -800,12 +800,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const saveJournal = async () => {
     if (!clientRecord || !journalText.trim() || !profile?.id) return
     setJournalSaving(true)
-    await supabase.from('journal_entries').upsert({
+    const { error } = await supabase.from('journal_entries').upsert({
       client_id:  profile.id,
       entry_date: today,
       content:    journalText.trim(),
       is_private: journalPrivate,
     }, { onConflict: 'client_id,entry_date' })
+    if (error) {
+      console.error('Journal save error:', error.message, '| profile.id:', profile.id, '| today:', today)
+      setJournalSaving(false)
+      return
+    }
     setJournalDate(today)
     setJournalSaving(false)
     setJournalSaved(true)
