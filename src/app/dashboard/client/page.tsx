@@ -1396,10 +1396,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     {journalPrivate ? 'Private' : 'Visible to Coach'}
                   </span>
                 </button>
-                <button onClick={saveJournal} disabled={journalSaving||!journalText.trim()}
-                  style={{ background:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':t.surfaceHigh, border:'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
-                  {journalSaved ? '✓ Saved!' : journalSaving ? 'Saving...' : 'Save'}
-                </button>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  {journalDate === today && !journalSaved && (
+                    <span style={{ fontSize:11, color:t.teal, fontWeight:600 }}>✓ Saved today</span>
+                  )}
+                  <button onClick={saveJournal} disabled={journalSaving||!journalText.trim()}
+                    style={{ background:journalSaved?t.tealDim:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':t.surfaceHigh, border:journalSaved?'1px solid '+t.teal+'40':'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalSaved?t.teal:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+                    {journalSaved ? '✓ Saved!' : journalSaving ? 'Saving...' : journalDate === today ? 'Update' : 'Save'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
