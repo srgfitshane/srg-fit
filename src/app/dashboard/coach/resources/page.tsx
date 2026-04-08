@@ -64,11 +64,11 @@ export default function CoachResourcesPage() {
       supabase.from('content_groups').select('*').eq('coach_id', user.id).order('order_index'),
       supabase.from('content_items').select('*').eq('coach_id', user.id).order('created_at'),
     ])
-    const resolved = await Promise.all((is||[]).map(async (item:any) => ({
-      ...item,
-      file_path: item.file_url || null,
-      file_url: await resolveSignedMediaUrl(supabase, 'resources', item.file_url),
-    })))
+    const resolved = await Promise.all((is||[]).map(async (item:any) => {
+      if (!item.file_url) return item
+      const { data } = await supabase.storage.from('resources').createSignedUrl(item.file_url, 60 * 60)
+      return { ...item, file_path: item.file_url, file_url: data?.signedUrl || item.file_url }
+    }))
     setGroups(gs||[])
     setItems(resolved)
     setLoading(false)
