@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -44,7 +45,11 @@ export default function ClientResourcesPage() {
           supabase.from('content_items').select('id,group_id,title,description,content_type,difficulty,duration,estimated_duration,file_url,tags,workout_exercises').eq('coach_id',clientData.coach_id).order('created_at'),
         ])
         setGroups(gs||[])
-        setItems(is||[])
+        const resolved = await Promise.all((is||[]).map(async (item: any) => ({
+          ...item,
+          file_url: await resolveSignedMediaUrl(supabase, 'resources', item.file_url),
+        })))
+        setItems(resolved)
         // Default to first top-level category
         const first = (gs||[]).find(g=>!g.parent_id)
         if (first) setActiveParent(first.id)
