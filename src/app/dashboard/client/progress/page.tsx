@@ -111,6 +111,10 @@ export default function ClientProgressPage() {
   const [pulseTimeframe, setPulseTimeframe] = useState(30)
   const [journalEntries, setJournalEntries] = useState<{id:string,entry_date:string,content:string,is_private:boolean}[]>([])
   const [expandedEntry, setExpandedEntry] = useState<string|null>(null)
+  const [activeGoals, setActiveGoals] = useState<{id:string,title:string,description:string|null,type:string,status:string,current_value:number|null,target_value:number|null,unit:string|null,deadline:string|null}[]>([])
+  const [suggestGoalOpen,   setSuggestGoalOpen]   = useState(false)
+  const [suggestGoalText,   setSuggestGoalText]   = useState('')
+  const [suggestGoalSaving, setSuggestGoalSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -135,7 +139,7 @@ export default function ClientProgressPage() {
     cutoff.setDate(cutoff.getDate() - timeframe.days)
     const dateStr = timeframe.days===9999 ? '2000-01-01' : localDateStr(cutoff)
 
-    const [{ data: mData }, { data: pData }, { data: pulseData }, { data: hData }, { data: jData }] = await Promise.all([
+    const [{ data: mData }, { data: pData }, { data: pulseData }, { data: hData }, { data: jData }, { data: goalsData }] = await Promise.all([
       supabase.from('metrics').select('*').eq('client_id', clientRecord.id)
         .gte('logged_date', dateStr).order('logged_date'),
       supabase.from('progress_photos').select('*').eq('client_id', user.id)
@@ -154,6 +158,11 @@ export default function ClientProgressPage() {
         .eq('client_id', user.id)
         .order('entry_date', { ascending: false })
         .limit(60),
+      supabase.from('client_goals')
+        .select('id,title,description,type,status,current_value,target_value,unit,deadline')
+        .eq('client_id', clientRecord.id)
+        .in('status', ['active','completed'])
+        .order('created_at', { ascending: false }),
     ])
 
     // Aggregate habit logs by date — average multiple entries per day, classify by keyword
@@ -181,6 +190,7 @@ export default function ClientProgressPage() {
     setHabitLogs(habitByDate)
     setPulseHistory((pulseData || []) as PulseEntry[])
     setJournalEntries((jData || []) as {id:string,entry_date:string,content:string,is_private:boolean}[])
+    setActiveGoals((goalsData || []) as any[])
     if (pData?.length) {
       const withUrls = await Promise.all((pData as ProgressPhoto[]).map(async (p) => {
         const { data: url } = await supabase.storage.from('progress-photos').createSignedUrl(p.storage_path, 3600)
@@ -232,6 +242,27 @@ export default function ClientProgressPage() {
       activeGroup.unit === 'steps' ? 0 : 1
     )
   }, [chartData, activeGroup])
+
+  async function suggestGoal() {
+    if (!suggestGoalText.trim() || !clientRecord) return
+    setSuggestGoalSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      // Send as a message to coach — simplest path, no separate table needed
+      const { data: coachData } = await supabase.from('clients')
+        .select('coach_id').eq('id', clientRecord.id).single()
+      if (coachData?.coach_id) {
+        await supabase.from('messages').insert({
+          sender_id: user.id,
+          recipient_id: coachData.coach_id,
+          content: `💡 Goal suggestion: ${suggestGoalText.trim()}`,
+        })
+      }
+    }
+    setSuggestGoalText('')
+    setSuggestGoalOpen(false)
+    setSuggestGoalSaving(false)
+  }
 
   async function saveMetric() {
     if (!clientRecord) return
@@ -330,6 +361,79 @@ export default function ClientProgressPage() {
           </div>
         </div>
       </div>
+
+      {/* ── GOALS ── */}
+      {activeGoals.length > 0 && (
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>My Goals</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {activeGoals.map((goal) => {
+              const pct = goal.target_value && goal.current_value != null
+                ? Math.min(100, Math.round((goal.current_value / goal.target_value) * 100))
+                : null
+              const isComplete = goal.status === 'completed' || (pct !== null && pct >= 100)
+              const color = isComplete ? t.teal : goal.type === 'consistency' ? t.orange : goal.type === 'bodyweight' ? t.purple : t.yellow
+              const icon = isComplete ? '🏆' : goal.type === 'consistency' ? '🔥' : goal.type === 'bodyweight' ? '⚖️' : '🏋️'
+              const today = new Date(); today.setHours(0,0,0,0)
+              const daysLeft = goal.deadline
+                ? Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / 86400000)
+                : null
+              return (
+                <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : color+'30'}`, borderRadius:13, padding:'12px 14px' }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom: pct !== null ? 8 : 0 }}>
+                    <div style={{ width:32, height:32, borderRadius:9, background:color+'18', border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                      {icon}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color: isComplete ? t.teal : t.text }}>{goal.title}</div>
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                        {goal.target_value != null && goal.unit
+                          ? `${Number(goal.current_value ?? 0).toFixed(goal.type === 'bodyweight' ? 1 : 0)} / ${goal.target_value} ${goal.unit}`
+                          : goal.description || ''}
+                        {daysLeft !== null && !isComplete && (
+                          <span style={{ marginLeft:6, color: daysLeft <= 7 ? t.red : t.textMuted }}>
+                            · {daysLeft > 0 ? `${daysLeft}d left` : 'Due today'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isComplete && <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Done ✓</span>}
+                  </div>
+                  {pct !== null && (
+                    <div>
+                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:t.textMuted, marginBottom:4 }}>
+                        <span>Progress</span>
+                        <span style={{ fontWeight:700, color: pct >= 100 ? t.teal : color }}>{pct}%</span>
+                      </div>
+                      <div style={{ height:6, borderRadius:4, background:t.surfaceHigh, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:`${pct}%`, borderRadius:4, background: pct >= 100 ? t.teal : `linear-gradient(90deg,${color},${color}aa)`, transition:'width 0.6s ease' }}/>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {suggestGoalOpen ? (
+            <div style={{ marginTop:10, display:'flex', gap:8 }}>
+              <input value={suggestGoalText} onChange={e=>setSuggestGoalText(e.target.value)}
+                placeholder="e.g. Hit 225lb squat, Run a 5K..."
+                style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.teal+'50', borderRadius:10, padding:'9px 12px', fontSize:13, color:t.text, fontFamily:'system-ui,sans-serif', outline:'none' }}/>
+              <button onClick={suggestGoal} disabled={!suggestGoalText.trim()||suggestGoalSaving}
+                style={{ background:t.teal, border:'none', borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:'system-ui,sans-serif' }}>
+                {suggestGoalSaving ? '...' : 'Send'}
+              </button>
+              <button onClick={()=>setSuggestGoalOpen(false)}
+                style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:10, padding:'9px 12px', fontSize:12, color:t.textMuted, cursor:'pointer', fontFamily:'system-ui,sans-serif' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={()=>setSuggestGoalOpen(true)}
+              style={{ marginTop:10, width:'100%', background:'transparent', border:'1px dashed '+t.border, borderRadius:10, padding:'9px', fontSize:12, fontWeight:600, color:t.textMuted, cursor:'pointer', fontFamily:'system-ui,sans-serif' }}>
+              + Suggest a goal to your coach
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Stats summary */}
       {metrics.length > 0 && (
