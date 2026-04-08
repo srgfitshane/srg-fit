@@ -216,20 +216,22 @@ export default function ClientProgressPage() {
   // Build unified chart data — habit groups use habitLogs, metric groups use metrics
   const chartData = useMemo(() => {
     if (activeGroup.habit) {
-      // All dates that have this habit logged
       return Object.entries(habitLogs)
         .filter(([, vals]) => vals[activeGroup.fields[0]] != null)
+        .sort((a, b) => a[0].localeCompare(b[0]))  // sort on raw YYYY-MM-DD before formatting
         .map(([date, vals]) => ({ date: fmt(date), [activeGroup.fields[0]]: vals[activeGroup.fields[0]] }))
-        .sort((a, b) => a.date.localeCompare(b.date))
     }
-    return metrics.map(m => ({
-      date: fmt(m.logged_date),
-      ...activeGroup.fields.reduce<Record<string, number>>((acc, f) => {
-        const value = m[f as keyof MetricEntry]
-        if (value != null) acc[f] = parseFloat(String(value))
-        return acc
-      }, {})
-    }))
+    return metrics
+      .slice()
+      .sort((a, b) => a.logged_date.localeCompare(b.logged_date))  // ensure chronological
+      .map(m => ({
+        date: fmt(m.logged_date),
+        ...activeGroup.fields.reduce<Record<string, number>>((acc, f) => {
+          const value = m[f as keyof MetricEntry]
+          if (value != null) acc[f] = parseFloat(String(value))
+          return acc
+        }, {})
+      }))
   }, [activeGroup, metrics, habitLogs])
 
   // Running average for current group over the selected timeframe
