@@ -31,6 +31,35 @@ export default function ClientResourcesPage() {
   const [activeParent, setActiveParent] = useState<string|null>(null)
   const [activeGroup,  setActiveGroup]  = useState<string|null>(null)
   const [search,       setSearch]       = useState('')
+  const [assignItem,   setAssignItem]   = useState<Item|null>(null)
+  const [assignDate,   setAssignDate]   = useState('')
+  const [assigning,    setAssigning]    = useState(false)
+  const [assignDone,   setAssignDone]   = useState<Set<string>>(new Set())
+
+  const localDateStr = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  const openAssign = (item: Item) => {
+    setAssignItem(item)
+    setAssignDate(localDateStr())
+  }
+
+  const confirmAssign = async () => {
+    if (!assignItem || !assignDate) return
+    setAssigning(true)
+    const res = await fetch('/api/workouts/self-assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: assignItem.id, scheduled_date: assignDate }),
+    })
+    setAssigning(false)
+    if (res.ok) {
+      setAssignDone(prev => new Set([...prev, assignItem.id + assignDate]))
+      setAssignItem(null)
+    }
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -206,6 +235,12 @@ export default function ClientResourcesPage() {
                                     Open ↗
                                   </a>
                                 )}
+                                {item.content_type === 'workout' && (
+                                  <button onClick={()=>openAssign(item)}
+                                    style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:'#000',background:t.teal,border:'none',padding:'5px 12px',borderRadius:8,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                    📅 Add to My Day
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )
@@ -219,6 +254,22 @@ export default function ClientResourcesPage() {
           </div>
         )}
       </div>
+      {/* Assign workout modal */}
+      {assignItem && (
+        <div style={{position:'fixed',inset:0,background:'#000a',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}} onClick={()=>setAssignItem(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:20,padding:28,width:'100%',maxWidth:380}}>
+            <div style={{fontWeight:800,fontSize:17,marginBottom:4}}>📅 Add to My Day</div>
+            <div style={{fontSize:13,color:t.textMuted,marginBottom:20}}>{assignItem.title}</div>
+            <label style={{fontSize:11,fontWeight:700,color:t.textMuted,display:'block',marginBottom:6,textTransform:'uppercase' as const}}>Date</label>
+            <input type="date" value={assignDate} onChange={e=>setAssignDate(e.target.value)}
+              style={{width:'100%',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'10px 12px',fontSize:14,color:t.text,colorScheme:'dark',boxSizing:'border-box' as const,fontFamily:"'DM Sans',sans-serif"}}/>
+            <button onClick={confirmAssign} disabled={assigning||!assignDate}
+              style={{marginTop:16,width:'100%',background:t.teal,border:'none',borderRadius:10,padding:'12px',fontWeight:800,fontSize:14,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",opacity:assigning?0.6:1}}>
+              {assigning ? 'Adding...' : 'Add Workout'}
+            </button>
+          </div>
+        </div>
+      )}
       <ClientBottomNav />
     </>
   )
