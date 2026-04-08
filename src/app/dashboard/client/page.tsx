@@ -477,8 +477,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .select('id, note, form:onboarding_forms(title, form_type, is_checkin_type)')
             .eq('client_id', cid).eq('status', 'pending').limit(3),
           supabase.from('daily_checkins').select('*').eq('client_id', cid).eq('checkin_date', todayStr).single(),
-          supabase.from('journal_entries').select('*').eq('client_id', cid).eq('entry_date', todayStr).single(),
-          supabase.from('journal_entries').select('*').eq('client_id', cid).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
+          supabase.from('journal_entries').select('*').eq('client_id', clientData.profile_id).eq('entry_date', todayStr).single(),
+          supabase.from('journal_entries').select('*').eq('client_id', clientData.profile_id).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
           supabase.from('client_activities').select('*').eq('client_id', cid).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(5),
           supabase.from('workout_sessions').select('id, title').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
@@ -801,7 +801,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     if (!clientRecord || !journalText.trim()) return
     setJournalSaving(true)
     await supabase.from('journal_entries').upsert({
-      client_id:  clientRecord.id,
+      client_id:  clientRecord.profile_id,
       entry_date: today,
       content:    journalText.trim(),
       is_private: journalPrivate,
@@ -814,7 +814,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     const { data: pastData } = await supabase
       .from('journal_entries')
       .select('*')
-      .eq('client_id', clientRecord.id)
+      .eq('client_id', clientRecord.profile_id)
       .neq('entry_date', today)
       .order('entry_date', { ascending: false })
       .limit(30)
