@@ -324,10 +324,15 @@ ${candidateList}`
         .from('session_exercises')
         .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
         .eq('session_id', sessionId).order('order_index')
-      const { data: exerciseLibrary } = await supabase
-        .from('exercises')
+      const [{ data: exLib1 }, { data: exLib2 }] = await Promise.all([
+      supabase.from('exercises')
         .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
-        .limit(2000)
+        .range(0, 999),
+      supabase.from('exercises')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .range(1000, 1999),
+    ])
+    const exerciseLibrary = [...(exLib1 || []), ...(exLib2 || [])]
 
       // Fetch already-logged sets so re-open shows real data
       const { data: loggedSets } = await supabase
@@ -376,10 +381,15 @@ ${candidateList}`
 
     
 
-    const { data: exerciseLibrary } = await supabase
-      .from('exercises')
-      .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
-      .limit(2000)
+    const [{ data: exLib1 }, { data: exLib2 }] = await Promise.all([
+      supabase.from('exercises')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .range(0, 999),
+      supabase.from('exercises')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .range(1000, 1999),
+    ])
+    const exerciseLibrary = [...(exLib1 || []), ...(exLib2 || [])]
 
     // Fetch already-logged sets for THIS session so resuming shows real data
     const { data: loggedSets } = await supabase

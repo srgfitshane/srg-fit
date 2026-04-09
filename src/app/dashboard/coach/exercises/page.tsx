@@ -62,10 +62,16 @@ export default function ExerciseLibrary() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
-    const { data } = await supabase.from('exercises').select(
-      'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
-    ).order('name').limit(2000)
-    setExercises(data || [])
+    // Fetch in two pages to get past PostgREST's 1000-row server cap
+    const [{ data: page1 }, { data: page2 }] = await Promise.all([
+      supabase.from('exercises').select(
+        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
+      ).order('name').range(0, 999),
+      supabase.from('exercises').select(
+        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
+      ).order('name').range(1000, 1999),
+    ])
+    setExercises([...(page1 || []), ...(page2 || [])])
     setLoading(false)
   }
 

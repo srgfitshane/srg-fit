@@ -69,8 +69,11 @@ export default function ProgramBuilder() {
       .from('workout_blocks').select(`*, block_exercises(*, exercise:exercises(name, muscles))`)
       .eq('program_id', programId).order('week_number').order('order_index')
     setBlocks(blockData || [])
-    const { data: exData } = await supabase.from('exercises').select('*').order('name').limit(2000)
-    setExercises(exData || [])
+    const [{ data: exPage1 }, { data: exPage2 }] = await Promise.all([
+      supabase.from('exercises').select('*').order('name').range(0, 999),
+      supabase.from('exercises').select('*').order('name').range(1000, 1999),
+    ])
+    setExercises([...(exPage1 || []), ...(exPage2 || [])])
     setLoading(false)
   }
 

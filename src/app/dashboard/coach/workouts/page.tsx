@@ -67,14 +67,16 @@ export default function CoachWorkoutsPage() {
 
     const [
       { data: tmpl },
-      { data: exs },
+      { data: exs1 },
+      { data: exs2 },
       { data: cls },
       { data: progs },
       { data: rgroups },
     ] = await Promise.all([
       supabase.from('workout_templates').select(`*, workout_template_exercises(*)`)
         .eq('coach_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('exercises').select('id, name, muscles, movement_pattern, difficulty').order('name').limit(2000),
+      supabase.from('exercises').select('id, name, muscles, movement_pattern, difficulty').order('name').range(0, 999),
+      supabase.from('exercises').select('id, name, muscles, movement_pattern, difficulty').order('name').range(1000, 1999),
       supabase.from('clients')
         .select('id, profile_id, profiles!profile_id(full_name)')
         .eq('coach_id', user.id).eq('active', true),
@@ -84,7 +86,7 @@ export default function CoachWorkoutsPage() {
     ])
 
     setTemplates(tmpl || [])
-    setExercises(exs || [])
+    setExercises([...(exs1 || []), ...(exs2 || [])])
     setPrograms(progs || [])
     setResourceGroups(rgroups || [])
 
