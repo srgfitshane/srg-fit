@@ -48,6 +48,7 @@ export default function ProgramBuilder() {
   const [activeWeek, setActiveWeek] = useState(1)
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null)
+  const [pendingRole, setPendingRole] = useState<string>('main')
   const [addExTab,   setAddExTab]   = useState<'exercise'|'template'>('exercise')
   const [exSearch,   setExSearch]   = useState('')
   const [templates,  setTemplates]  = useState<any[]>([])
@@ -150,7 +151,7 @@ export default function ProgramBuilder() {
     const { data: newEx } = await supabase.from('block_exercises').insert({
       block_id: blockId, exercise_id: exerciseId,
       sets: 3, reps: '8-10', target_weight: '', rest_seconds: 90,
-      rpe: '', tut: '', exercise_role: exCount === 0 ? 'main' : exCount === 1 ? 'secondary' : 'accessory',
+      rpe: '', tut: '', exercise_role: pendingRole,
       order_index: exCount,
     }).select(`*, exercise:exercises(name, muscles)`).single()
     if (newEx) setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, block_exercises: [...(b.block_exercises||[]), newEx] } : b))
@@ -167,7 +168,8 @@ export default function ProgramBuilder() {
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, block_exercises: (b.block_exercises||[]).filter((e:any) => e.id !== exId) } : b))
   }
 
-  const openAddEx = async (blockId: string) => {
+  const openAddEx = async (blockId: string, role = 'main') => {
+    setPendingRole(role)
     setShowAddEx(blockId)
     setExSearch('')
     setAddExTab('exercise')
@@ -613,10 +615,18 @@ export default function ProgramBuilder() {
                         )
                       })}
 
-                      <button onClick={()=>openAddEx(block.id)}
-                        style={{ width:'100%', padding:'9px', borderRadius:10, border:'1px dashed '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
-                        + Add Exercise
-                      </button>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginTop:4 }}>
+                        {[
+                          { role:'warmup',   label:'🔥 Warm-Up', color:t.teal   },
+                          { role:'main',     label:'💪 Main',    color:t.orange  },
+                          { role:'cooldown', label:'🧘 Cool-Down', color:t.purple },
+                        ].map(({role, label, color}) => (
+                          <button key={role} onClick={()=>openAddEx(block.id, role)}
+                            style={{ padding:'9px 4px', borderRadius:10, border:`1px dashed ${color}50`, background:color+'12', color, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )
@@ -647,7 +657,13 @@ export default function ProgramBuilder() {
           <div onClick={()=>setShowAddEx(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:520, padding:24, maxHeight:'85vh', display:'flex', flexDirection:'column' as any }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-                <div style={{ fontSize:15, fontWeight:800 }}>Add to Day</div>
+                <div>
+                  <div style={{ fontSize:15, fontWeight:800 }}>Add Exercise</div>
+                  <div style={{ fontSize:11, fontWeight:700, marginTop:2,
+                    color: pendingRole==='warmup' ? t.teal : pendingRole==='cooldown' ? t.purple : t.orange }}>
+                    {pendingRole==='warmup' ? '🔥 Warm-Up' : pendingRole==='cooldown' ? '🧘 Cool-Down' : '💪 Main Workout'}
+                  </div>
+                </div>
                 <span onClick={()=>setShowAddEx(null)} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
               </div>
 

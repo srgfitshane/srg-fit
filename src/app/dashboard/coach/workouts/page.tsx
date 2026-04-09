@@ -35,6 +35,7 @@ interface TemplateEx {
   order_index: number
   tracking_type: 'reps' | 'time'
   duration_seconds: number
+  exercise_role: 'main' | 'secondary' | 'accessory' | 'variation' | 'warmup' | 'cooldown'
 }
 
 type View = 'list' | 'build'
@@ -122,7 +123,7 @@ export default function CoachWorkoutsPage() {
     })
     const exs = (tmpl.workout_template_exercises || [])
       .sort((a:any,b:any) => a.order_index - b.order_index)
-      .map((e:any) => ({ ...e, notes: e.notes || '', tracking_type: e.tracking_type || 'reps', duration_seconds: e.duration_seconds || 30 }))
+      .map((e:any) => ({ ...e, notes: e.notes || '', tracking_type: e.tracking_type || 'reps', duration_seconds: e.duration_seconds || 30, exercise_role: e.exercise_role || 'main' }))
     setBuildExercises(exs)
     setView('build')
   }
@@ -136,6 +137,7 @@ export default function CoachWorkoutsPage() {
       weight_prescribed: '', rest_seconds: 90,
       notes: '', order_index: prev.length,
       tracking_type: 'reps', duration_seconds: 30,
+      exercise_role: 'main',
     }])
   }
 
@@ -196,6 +198,7 @@ export default function CoachWorkoutsPage() {
           order_index: i,
           tracking_type: e.tracking_type || 'reps',
           duration_seconds: e.tracking_type === 'time' ? e.duration_seconds : null,
+          exercise_role: e.exercise_role || 'main',
         }))
       )
     }
@@ -424,6 +427,11 @@ export default function CoachWorkoutsPage() {
                               <div key={i} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 0',borderBottom:i<Math.min(3,exCount-1)?`1px solid ${t.border}44`:'none'}}>
                                 <span style={{fontSize:10,fontWeight:800,color:t.teal,minWidth:16}}>{i+1}.</span>
                                 <span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.exercise_name}</span>
+                                {ex.exercise_role && ex.exercise_role !== 'main' && (
+                                  <span style={{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:20,background:ex.exercise_role==='warmup'?t.teal+'18':t.purple+'18',color:ex.exercise_role==='warmup'?t.teal:t.purple,flexShrink:0}}>
+                                    {ex.exercise_role==='warmup'?'WU':'CD'}
+                                  </span>
+                                )}
                                 <span style={{fontSize:11,color:t.textMuted,flexShrink:0}}>{ex.sets_prescribed}×{ex.reps_prescribed}</span>
                               </div>
                             ))}
@@ -538,6 +546,19 @@ export default function CoachWorkoutsPage() {
                         <span style={{fontSize:12,fontWeight:800,color:t.teal,minWidth:20}}>{i+1}.</span>
                         <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>
                         <button onClick={()=>removeBuildEx(i)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>✕</button>
+                      </div>
+                      {/* Section role toggle */}
+                      <div style={{display:'flex',gap:4,marginBottom:10}}>
+                        {([
+                          {role:'warmup',   label:'🔥 Warm-up', color:t.teal},
+                          {role:'main',     label:'💪 Main',    color:t.orange},
+                          {role:'cooldown', label:'🧘 Cool-down', color:t.purple},
+                        ] as const).map(({role,label,color})=>(
+                          <button key={role} onClick={()=>updateBuildEx(i,'exercise_role',role)}
+                            style={{padding:'3px 10px',borderRadius:20,border:`1px solid ${ex.exercise_role===role?color:t.border}`,background:ex.exercise_role===role?color+'18':'transparent',color:ex.exercise_role===role?color:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                            {label}
+                          </button>
+                        ))}
                       </div>
                       {/* Reps / Time toggle */}
                       <div style={{display:'flex',gap:4,marginBottom:10}}>

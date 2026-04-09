@@ -91,6 +91,7 @@ export async function POST(req: Request) {
         order_index: i,
         tracking_type: e.tracking_type || 'reps',
         duration_seconds: e.duration_seconds || null,
+        exercise_role: e.exercise_role || 'main',
       }))
     )
   }

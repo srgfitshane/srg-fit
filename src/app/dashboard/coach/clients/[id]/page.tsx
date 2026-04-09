@@ -2769,6 +2769,9 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
             rest_seconds: ex.rest_seconds || null,
             notes_coach: ex.notes || null,
             order_index: ex.order_index,
+            exercise_role: ex.exercise_role || 'main',
+            tracking_type: ex.tracking_type || 'reps',
+            duration_seconds: ex.duration_seconds || null,
           }))
         )
       }

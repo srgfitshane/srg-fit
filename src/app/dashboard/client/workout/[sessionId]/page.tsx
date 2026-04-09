@@ -70,6 +70,7 @@ interface SessionExercise {
   exercise?: ExerciseLibraryItem | null
   tracking_type?: string | null
   duration_seconds?: number | null
+  exercise_role?: string | null
 }
 
 type WorkoutCompleteProps = {
@@ -1078,19 +1079,39 @@ ${candidateList}`
         )}
 
         {/* Exercise tabs */}
-        <div style={{display:'flex',overflowX:'auto',padding:'12px 16px 0',gap:8,flexShrink:0}}>
+        <div style={{display:'flex',overflowX:'auto',padding:'12px 16px 0',gap:6,flexShrink:0,alignItems:'center'}}>
           {exercises.map((ex,i)=>{
             const done = (setData[ex.id]||[]).filter(s=>s.logged).length
             const total = ex.sets_prescribed || setData[ex.id]?.length || 0
             const complete = done >= total && total > 0
             const isSkipped = skipped[ex.id]
+            const prevRole = i > 0 ? exercises[i-1].exercise_role : null
+            const thisRole = ex.exercise_role || 'main'
+            // Show a section divider when role changes
+            const showDivider = i === 0
+              ? (thisRole === 'warmup')
+              : (thisRole !== prevRole && (thisRole === 'warmup' || thisRole === 'cooldown' || (prevRole === 'warmup' && thisRole !== 'warmup') || (thisRole === 'cooldown')))
+            const dividerLabel = thisRole === 'warmup' ? '🔥 Warm-Up'
+              : thisRole === 'cooldown' ? '🧘 Cool-Down'
+              : (prevRole === 'warmup') ? '💪 Main'
+              : null
+            const dividerColor = thisRole === 'warmup' ? t.teal
+              : thisRole === 'cooldown' ? '#8b5cf6'
+              : t.orange
             return (
-              <button key={ex.id} onClick={()=>setActiveExIdx(i)}
-                aria-label={`Open exercise ${i + 1}: ${ex.exercise_name}`}
-                aria-pressed={activeExIdx===i}
-                style={{flexShrink:0,background:activeExIdx===i?t.tealDim:(isSkipped?'#1a1a1a':(complete?t.greenDim:t.surfaceHigh)),border:`1px solid ${activeExIdx===i?t.teal:isSkipped?t.border:(complete?t.green:t.border)}`,borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:700,color:activeExIdx===i?t.teal:isSkipped?t.textMuted:(complete?t.green:t.textDim),cursor:'pointer',whiteSpace:'nowrap',textDecoration:isSkipped?'line-through':'none'}}>
-                {isSkipped ? '⏭ ' : complete ? '✓ ' : ''}{i+1}. {(ex.exercise_name || ex.exercise?.name || 'Exercise').split(' ').slice(0,2).join(' ')}
-              </button>
+              <div key={ex.id} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                {showDivider && dividerLabel && (
+                  <div style={{fontSize:9,fontWeight:800,color:dividerColor,background:dividerColor+'18',border:`1px solid ${dividerColor}30`,borderRadius:20,padding:'2px 7px',whiteSpace:'nowrap',textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>
+                    {dividerLabel}
+                  </div>
+                )}
+                <button onClick={()=>setActiveExIdx(i)}
+                  aria-label={`Open exercise ${i + 1}: ${ex.exercise_name}`}
+                  aria-pressed={activeExIdx===i}
+                  style={{flexShrink:0,background:activeExIdx===i?t.tealDim:(isSkipped?'#1a1a1a':(complete?t.greenDim:t.surfaceHigh)),border:`1px solid ${activeExIdx===i?t.teal:isSkipped?t.border:(complete?t.green:t.border)}`,borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:700,color:activeExIdx===i?t.teal:isSkipped?t.textMuted:(complete?t.green:t.textDim),cursor:'pointer',whiteSpace:'nowrap',textDecoration:isSkipped?'line-through':'none'}}>
+                  {isSkipped ? '⏭ ' : complete ? '✓ ' : ''}{i+1}. {(ex.exercise_name || ex.exercise?.name || 'Exercise').split(' ').slice(0,2).join(' ')}
+                </button>
+              </div>
             )
           })}
         </div>
@@ -1102,6 +1123,12 @@ ${candidateList}`
           return (
             <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
             <div style={{marginBottom:12}}>
+                {/* Section label */}
+                {ex.exercise_role && ex.exercise_role !== 'main' && (
+                  <div style={{fontSize:10,fontWeight:800,letterSpacing:'0.07em',textTransform:'uppercase' as const,marginBottom:6,color:ex.exercise_role==='warmup'?t.teal:ex.exercise_role==='cooldown'?'#8b5cf6':t.orange}}>
+                    {ex.exercise_role==='warmup'?'🔥 Warm-Up':ex.exercise_role==='cooldown'?'🧘 Cool-Down':''}
+                  </div>
+                )}
                 {/* Name row */}
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:4}}>
                   <div style={{flex:1,minWidth:0}}>
