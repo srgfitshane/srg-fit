@@ -74,7 +74,7 @@ export default function CoachWorkoutsPage() {
     ] = await Promise.all([
       supabase.from('workout_templates').select(`*, workout_template_exercises(*)`)
         .eq('coach_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('exercises').select('id, name, muscles, movement_pattern, difficulty').order('name'),
+      supabase.from('exercises').select('id, name, muscles, movement_pattern, difficulty').order('name').limit(2000),
       supabase.from('clients')
         .select('id, profile_id, profiles!profile_id(full_name)')
         .eq('coach_id', user.id).eq('active', true),

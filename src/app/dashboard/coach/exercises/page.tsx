@@ -64,7 +64,7 @@ export default function ExerciseLibrary() {
     if (!user) { router.push('/login'); return }
     const { data } = await supabase.from('exercises').select(
       'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
-    ).order('name')
+    ).order('name').limit(2000)
     setExercises(data || [])
     setLoading(false)
   }

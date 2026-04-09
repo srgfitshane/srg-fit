@@ -327,7 +327,7 @@ ${candidateList}`
       const { data: exerciseLibrary } = await supabase
         .from('exercises')
         .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
-        .limit(1200)
+        .limit(2000)
 
       // Fetch already-logged sets so re-open shows real data
       const { data: loggedSets } = await supabase
@@ -379,7 +379,7 @@ ${candidateList}`
     const { data: exerciseLibrary } = await supabase
       .from('exercises')
       .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
-      .limit(1200)
+      .limit(2000)
 
     // Fetch already-logged sets for THIS session so resuming shows real data
     const { data: loggedSets } = await supabase

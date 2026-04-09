@@ -45,7 +45,6 @@ const NAV_EXPANDED = [
   { label:'Exercises',   icon:'🏋️', path:'/dashboard/coach/exercises'  },
   { label:'Forms',       icon:'📝', path:'/dashboard/coach/onboarding' },
   { label:'Plans',       icon:'💳', path:'/dashboard/coach/plans'      },
-  { label:'Outreach',    icon:'📨', path:'/dashboard/coach/outreach'   },
 ]
 
 type CoachClient = {
