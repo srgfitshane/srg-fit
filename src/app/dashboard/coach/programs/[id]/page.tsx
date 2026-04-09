@@ -81,10 +81,7 @@ export default function ProgramBuilder() {
   const totalWeeks = weeks.length || 1
   const blocksForWeek = (w: number) => blocks.filter(b => b.week_number === w).sort((a,b)=>a.order_index-b.order_index)
 
-  const [weekMenuOpen, setWeekMenuOpen] = useState<number|null>(null)
-
   const duplicateWeek = async (weekNum: number) => {
-    setWeekMenuOpen(null)
     const nextWeek = totalWeeks + 1
     const srcBlocks = blocksForWeek(weekNum)
     for (const b of srcBlocks) {
@@ -109,7 +106,6 @@ export default function ProgramBuilder() {
   }
 
   const deleteWeek = async (weekNum: number) => {
-    setWeekMenuOpen(null)
     if (totalWeeks <= 1) return // can't delete the only week
     // Delete all blocks (cascades to block_exercises via FK)
     const blocksToDelete = blocksForWeek(weekNum)
@@ -454,7 +450,7 @@ export default function ProgramBuilder() {
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}input,textarea,select{color-scheme:dark;}
         .role-pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;}
       `}</style>
-      <div onClick={()=>setWeekMenuOpen(null)} style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
+      <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 24px', display:'flex', alignItems:'center', height:60, gap:12 }}>
@@ -489,47 +485,37 @@ export default function ProgramBuilder() {
         </div>
 
         {/* Week tabs */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 24px', display:'flex', alignItems:'center', gap:6, overflowX:'auto', height:48 }}>
-          {weeks.map((w,i) => {
-            const isActive = activeWeek === w
-            const color = WEEK_COLORS[i%8]
-            return (
-              <div key={w} style={{ position:'relative' as const, flexShrink:0 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:0 }}>
-                  <button onClick={()=>{ setActiveWeek(w); setWeekMenuOpen(null) }}
-                    style={{ padding:'6px 12px', borderRadius:weekMenuOpen===w?'20px 0 0 20px':20, border:'1px solid '+(isActive?color+'60':t.border), borderRight: weekMenuOpen===w||isActive ? 'none':'1px solid '+(isActive?color+'60':t.border), background:isActive?color+'18':'transparent', color:isActive?color:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', transition:'all 0.15s ease' }}>
-                    Week {w}
-                  </button>
-                  {isActive && (
-                    <button onClick={e=>{ e.stopPropagation(); setWeekMenuOpen(weekMenuOpen===w?null:w) }}
-                      style={{ padding:'6px 8px', borderRadius:'0 20px 20px 0', border:'1px solid '+color+'60', borderLeft:'1px solid '+color+'30', background:color+'18', color:color, fontSize:11, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", lineHeight:1 }}>
-                      ⋯
-                    </button>
-                  )}
-                </div>
-                {weekMenuOpen === w && (
-                  <div style={{ position:'absolute' as const, top:'calc(100% + 4px)', left:0, zIndex:50, background:t.surface, border:'1px solid '+t.border, borderRadius:10, overflow:'hidden', minWidth:160, boxShadow:'0 8px 24px #00000060' }}>
-                    <button onClick={()=>duplicateWeek(w)}
-                      style={{ width:'100%', padding:'10px 14px', background:'transparent', border:'none', color:t.text, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, display:'flex', alignItems:'center', gap:8 }}
-                      onMouseEnter={e=>e.currentTarget.style.background=t.surfaceHigh}
-                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                      📋 Duplicate Week {w}
-                    </button>
-                    {totalWeeks > 1 && (
-                      <button onClick={()=>deleteWeek(w)}
-                        style={{ width:'100%', padding:'10px 14px', background:'transparent', border:'none', borderTop:'1px solid '+t.border, color:t.red, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, display:'flex', alignItems:'center', gap:8 }}
-                        onMouseEnter={e=>e.currentTarget.style.background=t.redDim}
-                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                        🗑 Delete Week {w}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-          {weeks.length === 0 && (
-            <button onClick={addWeek} style={{ padding:'6px 16px', borderRadius:20, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Add First Week</button>
+        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border }}>
+          <div style={{ padding:'0 24px', display:'flex', alignItems:'center', gap:6, overflowX:'auto', height:48 }}>
+            {weeks.map((w,i) => {
+              const isActive = activeWeek === w
+              const color = WEEK_COLORS[i%8]
+              return (
+                <button key={w} onClick={()=>setActiveWeek(w)}
+                  style={{ flexShrink:0, padding:'6px 16px', borderRadius:20, border:'1px solid '+(isActive?color+'60':t.border), background:isActive?color+'18':'transparent', color:isActive?color:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', transition:'all 0.15s ease' }}>
+                  Week {w}
+                </button>
+              )
+            })}
+            {weeks.length === 0 && (
+              <button onClick={addWeek} style={{ padding:'6px 16px', borderRadius:20, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Add First Week</button>
+            )}
+          </div>
+          {/* Week actions — shown below tabs, no overflow clipping */}
+          {weeks.length > 0 && (
+            <div style={{ padding:'0 24px 8px', display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:11, color:t.textMuted, marginRight:4 }}>Week {activeWeek}:</span>
+              <button onClick={()=>duplicateWeek(activeWeek)}
+                style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:4 }}>
+                📋 Duplicate
+              </button>
+              {totalWeeks > 1 && (
+                <button onClick={()=>{ if (confirm(`Delete Week ${activeWeek} and all its exercises?`)) deleteWeek(activeWeek) }}
+                  style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.red+'40', background:t.redDim, color:t.red, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:4 }}>
+                  🗑 Delete
+                </button>
+              )}
+            </div>
           )}
         </div>
 
