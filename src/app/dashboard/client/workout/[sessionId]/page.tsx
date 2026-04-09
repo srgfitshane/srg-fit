@@ -1257,6 +1257,28 @@ ${candidateList}`
                   {previewOpen[ex.id] ? 'Hide preview' : 'See exercise'}
                 </button>
 
+                {/* Inline demo video — always visible, tap to play */}
+                {(() => {
+                  const isFemale = clientGender === 'female'
+                  const demoUrl = (isFemale && ex.exercise?.video_url_female)
+                    ? ex.exercise.video_url_female
+                    : ex.exercise?.video_url
+                  if (!demoUrl) return null
+                  return (
+                    <div style={{marginTop:10,marginBottom:2}}>
+                      <video src={demoUrl} controls playsInline preload="metadata"
+                        onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
+                        style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain'}}/>
+                      {ex.exercise?.cues && (
+                        <div style={{marginTop:8,padding:'10px 12px',background:t.orange+'15',border:'1px solid '+t.orange+'30',borderRadius:10}}>
+                          <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>📌 Cues</div>
+                          <div style={{fontSize:12,color:t.orange,lineHeight:1.6,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
                 {/* Preview panel */}
                 {previewOpen[ex.id] && (
                   <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'14px',marginTop:8}}>
@@ -1304,29 +1326,15 @@ ${candidateList}`
                       </div>
                     )}
 
-                    {/* Coaching cues */}
-                    {ex.exercise?.cues && (
+                    {/* Coaching cues — only show here if no video (already shown above with video) */}
+                    {ex.exercise?.cues && !ex.exercise?.video_url && !ex.exercise?.video_url_female && (
                       <div>
                         <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Coaching Cues</div>
                         <div style={{fontSize:13,color:t.orange,lineHeight:1.7,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
                       </div>
                     )}
 
-                    {/* Video embed — shows female version for female-identified clients if available */}
-                    {(ex.exercise?.video_url || ex.exercise?.video_url_female) && (() => {
-                      const isFemale = clientGender === 'female'
-                      const demoUrl = (isFemale && ex.exercise?.video_url_female)
-                        ? ex.exercise.video_url_female
-                        : ex.exercise?.video_url
-                      return demoUrl ? (
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Demo Video</div>
-                          <video src={demoUrl} controls playsInline preload="metadata"
-                            onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
-                            style={{width:'100%',borderRadius:10,maxHeight:240,background:'#000',display:'block'}}/>
-                        </div>
-                      ) : null
-                    })()}
+                    {/* Video already shown inline above the set logger */}
 
                     {/* No data fallback */}
                     {!ex.exercise?.description && !ex.exercise?.cues && !ex.exercise?.muscles?.length && !ex.exercise?.video_url && (
