@@ -69,7 +69,7 @@ export default function ProgramBuilder() {
       .from('workout_blocks').select(`*, block_exercises(*, exercise:exercises(name, muscles))`)
       .eq('program_id', programId).order('week_number').order('order_index')
     setBlocks(blockData || [])
-    const { data: exData } = await supabase.from('exercises').select('*').order('name')
+    const { data: exData } = await supabase.from('exercises').select('*').order('name').limit(2000)
     setExercises(exData || [])
     setLoading(false)
   }
@@ -560,8 +560,21 @@ export default function ProgramBuilder() {
                                     {/* Inline editor */}
                                     {editingEx===ex.id && (
                                       <div style={{ background:t.surfaceHigh, borderRadius:12, padding:'12px', marginTop:8 }}>
+                                        {/* Reps / Time toggle */}
+                                        <div style={{ display:'flex', gap:4, marginBottom:8 }}>
+                                          {(['reps','time'] as const).map(type => (
+                                            <button key={type} onClick={()=>updateExercise(ex.id,'tracking_type',type)}
+                                              style={{ padding:'3px 10px', borderRadius:20, border:`1px solid ${(ex.tracking_type||'reps')===type?t.teal:t.border}`, background:(ex.tracking_type||'reps')===type?t.tealDim:'transparent', color:(ex.tracking_type||'reps')===type?t.teal:t.textMuted, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>
+                                              {type==='reps'?'🔢 Reps':'⏱ Time'}
+                                            </button>
+                                          ))}
+                                        </div>
                                         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
-                                          {([['Sets','sets','number'],['Reps','reps','text'],['Weight','target_weight','text']] as [string,string,string][]).map(([lbl,fld,typ])=>(
+                                          {([
+                                            ['Sets','sets','number'],
+                                            (ex.tracking_type||'reps')==='time' ? ['Duration (sec)','duration_seconds','number'] : ['Reps','reps','text'],
+                                            ['Weight','target_weight','text']
+                                          ] as [string,string,string][]).map(([lbl,fld,typ])=>(
                                             <div key={fld}>
                                               <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>{lbl}</div>
                                               <input type={typ} defaultValue={ex[fld]||''} onBlur={e=>updateExercise(ex.id,fld,e.target.value)}
