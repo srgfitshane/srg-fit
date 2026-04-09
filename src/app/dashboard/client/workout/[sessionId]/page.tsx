@@ -1252,9 +1252,8 @@ ${candidateList}`
                 <button onClick={()=>setPreviewOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
                   aria-label={`${previewOpen[ex.id] ? 'Hide' : 'Show'} exercise preview for ${ex.exercise_name}`}
                   aria-expanded={!!previewOpen[ex.id]}
-                  style={{display:'flex',alignItems:'center',gap:6,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:600,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:previewOpen[ex.id]?0:0}}>
-                  <span style={{fontSize:14}}>{previewOpen[ex.id]?'▲':'▼'}</span>
-                  {previewOpen[ex.id] ? 'Hide preview' : 'See exercise'}
+                  style={{display:'flex',alignItems:'center',gap:6,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:600,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  {previewOpen[ex.id] ? '▲ Less detail' : '▼ More detail'}
                 </button>
 
                 {/* Inline demo video — always visible, tap to play */}
