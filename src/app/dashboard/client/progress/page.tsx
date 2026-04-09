@@ -332,38 +332,6 @@ export default function ClientProgressPage() {
         </div>
       </div>
 
-      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'16px 18px', marginBottom:20 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'flex-start' }}>
-          <div style={{ flex:'1 1 240px' }}>
-            <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Progress Snapshot</div>
-            <div style={{ fontSize:16, fontWeight:800, color:t.text }}>
-              {metrics.length === 0 ? 'Start with your first metric or progress photo' : 'Your progress story is building'}
-            </div>
-            <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5, marginTop:4 }}>
-              {metrics.length === 0
-                ? 'Consistent check-ins make it easier to spot what is working before motivation dips.'
-                : latestPulse
-                ? `Latest recovery check-in: sleep ${latestPulse.sleep_quality ?? '—'}/5, energy ${latestPulse.energy_score ?? '—'}/5.`
-                : 'Keep logging photos and measurements so coaching adjustments stay evidence-based.'}
-            </div>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:8, flex:'1 1 260px' }}>
-            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Metric Entries</div>
-              <div style={{ fontSize:16, fontWeight:800, color:t.teal }}>{metrics.length}</div>
-            </div>
-            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Photo Checkpoints</div>
-              <div style={{ fontSize:16, fontWeight:800, color:t.purple }}>{photos.length}</div>
-            </div>
-            <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Current Focus</div>
-              <div style={{ fontSize:16, fontWeight:800, color:t.orange }}>{METRIC_GROUPS[activeGroupIdx].label}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ── GOALS ── */}
       {activeGoals.length > 0 && (
         <div style={{ marginBottom:20 }}>
