@@ -156,6 +156,33 @@ export default function ProgramBuilder() {
     await load(); setActiveWeek(nextWeek)
   }
 
+  const duplicateDay = async (block: any) => {
+    const weekBlocks = blocksForWeek(block.week_number)
+    const labels = ['A','B','C','D','E','F','G']
+    const label = labels[weekBlocks.length] || `Day ${weekBlocks.length + 1}`
+    const { data: nb } = await supabase.from('workout_blocks').insert({
+      program_id: programId,
+      name: `${block.day_label || block.name} (copy)`,
+      day_label: `${block.day_label || label} (copy)`,
+      block_label: block.block_label,
+      week_number: block.week_number,
+      order_index: weekBlocks.length,
+      group_types: block.group_types || {},
+    }).select().single()
+    if (nb) {
+      for (const ex of (block.block_exercises || [])) {
+        await supabase.from('block_exercises').insert({
+          block_id: nb.id, exercise_id: ex.exercise_id, sets: ex.sets, reps: ex.reps,
+          target_weight: ex.target_weight, rest_seconds: ex.rest_seconds, rpe: ex.rpe,
+          tut: ex.tut, superset_group: ex.superset_group, exercise_role: ex.exercise_role,
+          notes: ex.notes, order_index: ex.order_index, progression_note: ex.progression_note,
+          tracking_type: ex.tracking_type, duration_seconds: ex.duration_seconds,
+        })
+      }
+    }
+    await load()
+  }
+
   const addDay = async (weekNum: number) => {
     const existing = blocksForWeek(weekNum)
     const labels = ['A','B','C','D','E','F','G']
@@ -553,6 +580,11 @@ export default function ProgramBuilder() {
                           title="Save to Workout Library"
                           style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                           📋 Save
+                        </button>
+                        <button onClick={()=>duplicateDay(block)}
+                          title="Duplicate this day"
+                          style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          ⧉ Dupe
                         </button>
                         <button onClick={()=>deleteBlock(block.id)}
                           style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕</button>

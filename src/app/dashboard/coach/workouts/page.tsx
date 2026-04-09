@@ -214,6 +214,43 @@ export default function CoachWorkoutsPage() {
     setTemplates(prev => prev.filter(t => t.id !== id))
   }
 
+  async function duplicateTemplate(tmpl: any) {
+    const { data: newTmpl } = await supabase.from('workout_templates').insert({
+      coach_id: coachId,
+      title: `${tmpl.title} (copy)`,
+      category: tmpl.category,
+      difficulty: tmpl.difficulty,
+      estimated_minutes: tmpl.estimated_minutes,
+      description: tmpl.description,
+      notes_coach: tmpl.notes_coach,
+      tags: tmpl.tags,
+    }).select().single()
+    if (newTmpl) {
+      const exs = (tmpl.workout_template_exercises || [])
+        .sort((a: any, b: any) => a.order_index - b.order_index)
+      if (exs.length > 0) {
+        await supabase.from('workout_template_exercises').insert(
+          exs.map((e: any, i: number) => ({
+            template_id: newTmpl.id,
+            exercise_id: e.exercise_id,
+            exercise_name: e.exercise_name,
+            exercise_type: e.exercise_type,
+            sets_prescribed: e.sets_prescribed,
+            reps_prescribed: e.reps_prescribed,
+            weight_prescribed: e.weight_prescribed,
+            rest_seconds: e.rest_seconds,
+            notes: e.notes,
+            order_index: i,
+            tracking_type: e.tracking_type || 'reps',
+            duration_seconds: e.duration_seconds,
+            exercise_role: e.exercise_role || 'main',
+          }))
+        )
+      }
+    }
+    await load()
+  }
+
   // ── Action handlers ────────────────────────────────────────────────────
   function openAction(template: any, action: 'client'|'program'|'resource') {
     setActionModal({ template, action })
@@ -454,11 +491,15 @@ export default function CoachWorkoutsPage() {
                           ))}
                         </div>
 
-                        {/* Edit / Delete */}
+                        {/* Edit / Duplicate / Delete */}
                         <div style={{display:'flex',gap:6}}>
                           <button onClick={()=>openEdit(tmpl)}
                             style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'6px',fontSize:11,fontWeight:700,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                             ✏️ Edit
+                          </button>
+                          <button onClick={()=>duplicateTemplate(tmpl)}
+                            style={{background:t.purpleDim,border:`1px solid ${t.purple}40`,borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,color:t.purple,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                            ⧉
                           </button>
                           <DeleteButton onDelete={()=>deleteTemplate(tmpl.id)} t={t}/>
                         </div>
