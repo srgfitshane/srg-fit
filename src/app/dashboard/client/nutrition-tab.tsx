@@ -193,7 +193,21 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       .order('logged_at', { ascending: false }).limit(30)
     if (prev) {
       const seen = new Set<string>()
-      setSavedFoods((prev as SavedFood[]).filter((food) => { if (seen.has(food.food_name)) return false; seen.add(food.food_name); return true }))
+      setSavedFoods((prev as SavedFood[])
+        .filter((food) => { if (seen.has(food.food_name)) return false; seen.add(food.food_name); return true })
+        .map((food) => ({
+          ...food,
+          // Strip "Nx " prefix baked into serving_size when it was logged (e.g. "2x 1 packet" → "1 packet")
+          serving_size: food.serving_size
+            ? food.serving_size.replace(/^\d+(\.\d+)?x\s+/, '')
+            : food.serving_size,
+          // Normalise calories/macros back to per-serving-unit values
+          calories:  food.serving_qty && food.serving_qty > 1 && food.calories  != null ? Math.round(food.calories  / food.serving_qty * 10) / 10 : food.calories,
+          protein_g: food.serving_qty && food.serving_qty > 1 && food.protein_g != null ? Math.round(food.protein_g / food.serving_qty * 10) / 10 : food.protein_g,
+          carbs_g:   food.serving_qty && food.serving_qty > 1 && food.carbs_g   != null ? Math.round(food.carbs_g   / food.serving_qty * 10) / 10 : food.carbs_g,
+          fat_g:     food.serving_qty && food.serving_qty > 1 && food.fat_g     != null ? Math.round(food.fat_g     / food.serving_qty * 10) / 10 : food.fat_g,
+        }))
+      )
     }
     setLoading(false)
   }, [clientRecord?.id, selectedDate, supabase])
