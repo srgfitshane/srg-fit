@@ -869,7 +869,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             {savedFoods.length === 0 && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Foods you log will appear here for quick re-adding.</div>}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
               {savedFoods.map((f) => (
-                <button key={f.food_name} onClick={()=>setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size })}
+                <button key={f.food_name} onClick={()=>{ setPendingServings(1); setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size }) }}
                   style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'center' as const }}>
                   <div style={{ fontSize:12, fontWeight:700, color:t.text, marginBottom:3, lineHeight:1.3 }}>{f.food_name.length>18?f.food_name.slice(0,16)+'…':f.food_name}</div>
                   {f.calories != null && <div style={{ fontSize:10, color:t.orange }}>{Math.round(f.calories)} kcal</div>}
