@@ -7,7 +7,6 @@ import ClientBottomNav from '@/components/client/ClientBottomNav'
 const localDateStr = (d: Date = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 
-
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
   teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', orangeDim:'#f5a62315',
@@ -16,12 +15,11 @@ const t = {
   text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
 }
 
-// Unified event type covering both calendar_events + workout_sessions
 type CalItem = {
   id: string
   title: string
-  date: string        // YYYY-MM-DD
-  start_at?: string   // full ISO for calendar events
+  date: string
+  start_at?: string
   end_at?: string
   color: string
   icon: string
@@ -32,26 +30,17 @@ type CalItem = {
   session_rpe?: number
   mood?: string
   duration_seconds?: number
-  source_id?: string  // workout session id for linking
+  source_id?: string
 }
 
-type JournalEntrySummary = {
-  entry_date: string
-  is_private: boolean
-}
+type JournalEntrySummary = { entry_date: string }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const SHORT_DAYS = ['S','M','T','W','T','F','S']
+const FULL_DAYS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
-const EVENT_TYPE_META: Record<string, { label:string, icon:string, color:string }> = {
-  session:       { label:'Training',    icon:'🏋️', color:'#00c9b1' },
-  check_in_call: { label:'Check-in',   icon:'📞', color:'#8b5cf6' },
-  consultation:  { label:'Consult',    icon:'🤝', color:'#f472b6' },
-  rest_day:      { label:'Rest Day',   icon:'😴', color:'#5a5a78' },
-  milestone:     { label:'Milestone',  icon:'🎯', color:'#22c55e' },
-  note:          { label:'Note',       icon:'📝', color:'#f5a623' },
-  other:         { label:'Event',      icon:'📌', color:'#38bdf8' },
-}
+const MOOD_ICONS: Record<string,string> = { great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate()
@@ -59,39 +48,35 @@ function isSameDay(a: Date, b: Date) {
 function fmtTime(ts: string) {
   return new Date(ts).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' })
 }
-function fmtDate(d: string) {
-  return new Date(d+'T00:00:00').toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })
-}
-function fmtDur(s: number) {
-  return s ? `${Math.floor(s/60)}m` : ''
-}
+function fmtDur(s: number) { return s ? `${Math.floor(s/60)}m` : '' }
 
 export default function ClientCalendarPage() {
   const today   = new Date()
+  const todayStr = localDateStr(today)
   const supabase = createClient()
   const router   = useRouter()
 
-  const [items,     setItems]     = useState<CalItem[]>([])
+  const [items,        setItems]        = useState<CalItem[]>([])
   const [journalDates, setJournalDates] = useState<Set<string>>(new Set())
-  const [loading,   setLoading]   = useState(true)
-  const [viewMonth, setViewMonth] = useState(today.getMonth())
-  const [viewYear,  setViewYear]  = useState(today.getFullYear())
-  const [selected,  setSelected]  = useState<CalItem|null>(null)
-  const [selectedDate, setSelectedDate] = useState<string|null>(null)
-  const [mobile,    setMobile]    = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 600 : false))
+  const [loading,      setLoading]      = useState(true)
+  const [viewMonth,    setViewMonth]    = useState(today.getMonth())
+  const [viewYear,     setViewYear]     = useState(today.getFullYear())
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr)
 
-  useEffect(() => {
-    const handleResize = () => setMobile(window.innerWidth < 600)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  // Build the current week (Sun–Sat containing today)
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - today.getDay())
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart)
+    d.setDate(weekStart.getDate() + i)
+    return d
+  })
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void (async () => {
         const { data:{ user } } = await supabase.auth.getUser()
         if (!user) { router.push('/login'); return }
-
         const { data: clientData } = await supabase
           .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
         if (!clientData) { setLoading(false); return }
@@ -101,42 +86,39 @@ export default function ClientCalendarPage() {
             .eq('coach_id', clientData.coach_id)
             .eq('client_id', clientData.id)
             .order('start_at'),
-          supabase.from('workout_sessions').select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client')
+          supabase.from('workout_sessions')
+            .select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client')
             .eq('client_id', clientData.id)
+            .not('program_id', 'is', null)
             .order('scheduled_date'),
-          supabase.from('journal_entries').select('entry_date, is_private')
-            .eq('client_id', clientData.id)
-            .order('entry_date', { ascending: false })
-            .limit(365),
+          supabase.from('journal_entries').select('entry_date')
+            .eq('client_id', user.id)
+            .order('entry_date', { ascending: false }).limit(365),
         ])
 
-        setJournalDates(new Set(((journals || []) as JournalEntrySummary[]).map((journal) => journal.entry_date)))
+        setJournalDates(new Set(((journals||[]) as JournalEntrySummary[]).map(j => j.entry_date)))
 
         const merged: CalItem[] = []
-
-        for (const e of calEvts || []) {
-          const meta = EVENT_TYPE_META[e.event_type] || EVENT_TYPE_META.other
+        for (const e of calEvts||[]) {
+          const color = e.color || '#8b5cf6'
           merged.push({
             id: e.id, title: e.title,
             date: e.start_at.split('T')[0],
             start_at: e.start_at, end_at: e.end_at,
-            color: e.color || meta.color,
-            icon: meta.icon, label: meta.label,
-            type: 'calendar',
-            description: e.description,
+            color, icon: '📅', label: e.event_type || 'Event',
+            type: 'calendar', description: e.description,
           })
         }
-
-        for (const s of sessions || []) {
+        for (const s of sessions||[]) {
           if (!s.scheduled_date) continue
-          const done = s.status === 'completed'
+          const done   = s.status === 'completed'
           const inProg = s.status === 'in_progress'
           merged.push({
             id: 'ws_'+s.id, title: s.title || 'Workout',
             date: s.scheduled_date,
             color: done ? '#22c55e' : inProg ? '#00c9b1' : '#f5a623',
-            icon: done ? '✅' : inProg ? '▶️' : '💪',
-            label: done ? 'Completed' : inProg ? 'In Progress' : 'Workout',
+            icon:  done ? '✅' : inProg ? '▶️' : '💪',
+            label: done ? 'Completed' : inProg ? 'In Progress' : 'Scheduled',
             type: 'workout', status: s.status,
             session_rpe: s.session_rpe, mood: s.mood,
             duration_seconds: s.duration_seconds,
@@ -144,7 +126,6 @@ export default function ClientCalendarPage() {
             source_id: s.id,
           })
         }
-
         merged.sort((a,b) => a.date.localeCompare(b.date))
         setItems(merged)
         setLoading(false)
@@ -153,7 +134,7 @@ export default function ClientCalendarPage() {
     return () => window.clearTimeout(timeoutId)
   }, [router, supabase])
 
-  // Build calendar grid
+  // Calendar grid helpers
   const firstDay = new Date(viewYear, viewMonth, 1)
   const lastDay  = new Date(viewYear, viewMonth+1, 0)
   const cells: (Date|null)[] = [
@@ -162,276 +143,225 @@ export default function ClientCalendarPage() {
   ]
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const itemsForDay = (d: Date) =>
-    items.filter(e => e.date === localDateStr(d))
-
-  const upcomingItems = items
-    .filter(e => new Date(e.date+'T23:59:59') >= today)
-    .slice(0, 8)
-
+  const itemsForDate = (ds: string) => items.filter(e => e.date === ds)
   const prevMonth = () => { const d=new Date(viewYear,viewMonth-1,1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }
   const nextMonth = () => { const d=new Date(viewYear,viewMonth+1,1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }
 
-  const MOOD_ICONS: Record<string,string> = { great:'😄', good:'🙂', okay:'😐', tired:'😴', awful:'😓' }
+  const selectedItems = itemsForDate(selectedDate)
+  const hasJournal    = journalDates.has(selectedDate)
+
+  // Upcoming: next 6 workout sessions from today
+  const upcomingWorkouts = items
+    .filter(e => e.type === 'workout' && e.date >= todayStr && e.status !== 'completed')
+    .slice(0, 6)
+
+  const selectedDateObj = new Date(selectedDate + 'T00:00:00')
+  const selectedLabel   = selectedDate === todayStr ? 'Today'
+    : selectedDate === localDateStr(new Date(today.getTime() + 86400000)) ? 'Tomorrow'
+    : selectedDateObj.toLocaleDateString([], { weekday:'long', month:'short', day:'numeric' })
 
   if (loading) return (
-    <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.teal, fontSize:14, fontWeight:700 }}>
-      Loading...
-    </div>
+    <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
   )
 
   return (
-    <>      <style>{`
+    <>
+      <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};}
-        .cal-layout{display:grid;grid-template-columns:1fr 220px;gap:16px;}
-        .cal-cell{min-height:72px;}
-        @media(max-width:720px){
-          .cal-layout{grid-template-columns:1fr;}
-          .cal-sidebar{display:none;}
-          .cal-cell{min-height:52px;}
-        }
-        @media(max-width:480px){
-          .cal-cell{min-height:44px;padding:4px!important;}
-          .cal-cell-date{font-size:12px!important;}
-        }
-        @media(max-width:380px){
-          .cal-cell{min-height:38px;padding:3px!important;}
-          .cal-cell-date{font-size:11px!important;}
-        }
+        .cal-cell{min-height:56px;padding:4px 5px;}
+        @media(max-width:400px){.cal-cell{min-height:44px;padding:3px 4px;}}
       `}</style>
-      <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
+      <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, paddingBottom:80 }}>
 
         {/* Top bar */}
-        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:56, gap:12 }}>
+        <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:56, gap:12, position:'sticky', top:0, zIndex:10 }}>
           <button onClick={()=>router.push('/dashboard/client')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
           <div style={{ width:1, height:26, background:t.border }}/>
           <div style={{ fontSize:14, fontWeight:700 }}>📅 My Schedule</div>
-          <div style={{ flex:1 }}/>
-          <div style={{ fontSize:11, color:t.textMuted }}>{items.length} events</div>
         </div>
 
-        <div style={{ maxWidth:860, margin:'0 auto', padding:'12px 8px' }}>
+        <div style={{ maxWidth:520, margin:'0 auto', padding:'16px 14px' }}>
 
-          {/* Legend */}
-          <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:12 }}>
-            {[
-              { color:'#f5a623', label:'Workout' },
-              { color:'#00c9b1', label:'In progress' },
-              { color:'#22c55e', label:'Done' },
-              { color:'#8b5cf6', label:'Event' },
-            ].map(l => (
-              <div key={l.label} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, color:t.textMuted }}>
-                <div style={{ width:7, height:7, borderRadius:'50%', background:l.color, flexShrink:0 }}/>
-                {l.label}
-              </div>
-            ))}
-          </div>
-
-          {/* Month nav */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
-            <button onClick={prevMonth}
-              style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', color:t.text, cursor:'pointer', fontSize:16 }}>‹</button>
-            <div style={{ fontSize:16, fontWeight:900, flex:1, textAlign:'center' }}>{MONTHS[viewMonth]} {viewYear}</div>
-            <button onClick={nextMonth}
-              style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', color:t.text, cursor:'pointer', fontSize:16 }}>›</button>
-            <button onClick={()=>{ setViewMonth(today.getMonth()); setViewYear(today.getFullYear()) }}
-              style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer' }}>
-              Today
-            </button>
-          </div>
-
-          <div className="cal-layout">
-
-            {/* Calendar grid */}
-            <div>
-              {/* Day headers */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
-                {SHORT_DAYS.map((d,i) => (
-                  <div key={i} style={{ textAlign:'center', fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', padding:'4px 0', letterSpacing:'0.04em' }}>{d}</div>
-                ))}
-              </div>
-
-              {/* Cells */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
-                {cells.map((d, i) => {
-                  const isToday  = d ? isSameDay(d, today) : false
-                  const dayItems = d ? itemsForDay(d) : []
-                  const dateStr  = d ? localDateStr(d) : ''
-                  const hasJournal = d ? journalDates.has(dateStr) : false
-                  return (
-                    <div key={i}
-                      onClick={() => {
-                        if (!d) return
-                        if (mobile) {
-                          const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-                          setSelectedDate(prev => prev === ds ? null : ds)
-                          setSelected(dayItems[0] || null)
-                        } else {
-                          if (dayItems.length) setSelected(dayItems[0])
-                        }
-                      }}
-                      className="cal-cell"
-                      style={{
-                        background: isToday ? t.surfaceHigh : t.surface,
-                        border: '1px solid '+(isToday ? t.teal+'50' : t.border),
-                        borderRadius: 8,
-                        padding: '5px 6px',
-                        opacity: d ? 1 : 0.2,
-                        cursor: d && (dayItems.length || hasJournal) ? 'pointer' : 'default',
-                        position: 'relative' as const,
-                        overflow: 'hidden',
-                      }}>
-                      {d && (
-                        <>
-                          <div className="cal-cell-date" style={{ fontSize:12, fontWeight: isToday ? 900 : 600, color: isToday ? t.teal : t.textDim, marginBottom:2, lineHeight:1 }}>
-                            {d.getDate()}
-                          </div>
-                          {/* Dot indicators — compact on mobile */}
-                          {(dayItems.length > 0 || hasJournal) && (
-                            <div style={{ display:'flex', gap:2, flexWrap:'wrap' }}>
-                              {dayItems.slice(0,3).map(e => (
-                                <div key={e.id} style={{ width:5, height:5, borderRadius:'50%', background:e.color, flexShrink:0 }}/>
-                              ))}
-                              {hasJournal && <span style={{ fontSize:7, lineHeight:1 }}>✍️</span>}
-                              {dayItems.length > 3 && <div style={{ fontSize:8, color:t.textMuted, fontWeight:700 }}>+{dayItems.length-3}</div>}
-                            </div>
-                          )}
-                          {/* Chips only on wider desktop (>720px sidebar visible) */}
-                          {!mobile && dayItems.slice(0,1).map(e => (
-                            <div key={e.id} onClick={ev=>{ev.stopPropagation();setSelected(e)}}
-                              style={{ fontSize:9, fontWeight:700, background:e.color+'22', color:e.color, borderRadius:4, padding:'1px 4px', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}>
-                              {e.icon} {e.title}
-                            </div>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Mobile: tapped day panel — shows all events for that day */}
-              {mobile && selectedDate && (() => {
-                const dayEvts = items.filter(e => e.date === selectedDate)
-                const hasJ = journalDates.has(selectedDate)
-                const displayDate = new Date(selectedDate + 'T00:00:00').toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })
+          {/* ── WEEK STRIP ── */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'14px 12px', marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
+              This Week
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
+              {weekDays.map((d, i) => {
+                const ds      = localDateStr(d)
+                const isToday = ds === todayStr
+                const isSel   = ds === selectedDate
+                const dayItems = itemsForDate(ds)
+                const hasDone = dayItems.some(e => e.status === 'completed')
+                const hasSched = dayItems.some(e => e.type === 'workout' && e.status !== 'completed')
+                const hasEvt  = dayItems.some(e => e.type === 'calendar')
                 return (
-                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:16, marginTop:14 }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-                      <div style={{ fontSize:13, fontWeight:800 }}>{displayDate}</div>
-                      <button onClick={()=>setSelectedDate(null)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, lineHeight:1 }}>✕</button>
-                    </div>
-                    {dayEvts.length === 0 && !hasJ && (
-                      <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', padding:'12px 0' }}>Nothing scheduled</div>
-                    )}
-                    {dayEvts.map(e => (
-                      <div key={e.id} style={{ background:t.surfaceHigh, border:'1px solid '+e.color+'30', borderRadius:11, padding:'12px 14px', marginBottom:8 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: (e.description || e.session_rpe || e.start_at) ? 8 : 0 }}>
-                          <span style={{ fontSize:16 }}>{e.icon}</span>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:13, fontWeight:800 }}>{e.title}</div>
-                            <div style={{ fontSize:11, fontWeight:700, color:e.color }}>{e.label}</div>
-                          </div>
-                          {e.start_at && <div style={{ fontSize:11, color:t.textMuted }}>{fmtTime(e.start_at)}{e.end_at ? ` – ${fmtTime(e.end_at)}` : ''}</div>}
-                        </div>
-                        {e.type==='workout' && e.status==='completed' && (e.session_rpe || e.mood || e.duration_seconds) && (
-                          <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const, marginBottom:6 }}>
-                            {e.session_rpe && <span style={{ fontSize:11, color:t.orange }}>RPE {e.session_rpe}</span>}
-                            {e.mood && <span style={{ fontSize:13 }}>{MOOD_ICONS[e.mood]||''}</span>}
-                            {e.duration_seconds && <span style={{ fontSize:11, color:t.teal }}>⏱ {fmtDur(e.duration_seconds)}</span>}
-                          </div>
-                        )}
-                        {e.description && (
-                          <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5, marginBottom: e.type==='workout'&&e.source_id&&e.status!=='completed' ? 8 : 0 }}>
-                            {e.description}
-                          </div>
-                        )}
-                        {e.type==='workout' && e.source_id && e.status!=='completed' && (
-                          <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
-                            style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                            {e.status==='in_progress' ? '▶ Continue Workout' : '💪 Start Workout'}
-                          </button>
-                        )}
-                        {e.type==='workout' && e.source_id && e.status==='completed' && (
-                          <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
-                            style={{ width:'100%', background:t.green+'18', border:'1px solid '+t.green+'40', borderRadius:9, padding:'9px', fontSize:12, fontWeight:700, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
-                            ✏️ Re-open Workout
-                          </button>
-                        )}
+                  <div key={i} onClick={() => setSelectedDate(ds)}
+                    style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 4px', borderRadius:12,
+                      background: isSel ? t.teal+'20' : isToday ? t.surfaceHigh : 'transparent',
+                      border: '1px solid ' + (isSel ? t.teal+'60' : isToday ? t.teal+'25' : 'transparent'),
+                      cursor:'pointer' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color: isSel ? t.teal : t.textMuted }}>{FULL_DAYS[i]}</div>
+                    <div style={{ fontSize:15, fontWeight:900, color: isSel ? t.teal : isToday ? t.text : t.textDim }}>{d.getDate()}</div>
+                    {/* Status dot */}
+                    <div style={{ width:6, height:6, borderRadius:'50%',
+                      background: hasDone ? t.green : hasSched ? t.orange : hasEvt ? t.purple : 'transparent',
+                      border: !hasDone && !hasSched && !hasEvt ? '1px solid '+t.border : 'none' }}/>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* ── SELECTED DAY DETAIL ── */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:16, marginBottom:16 }}>
+            <div style={{ fontSize:14, fontWeight:800, marginBottom:12, color: selectedDate === todayStr ? t.teal : t.text }}>
+              {selectedLabel}
+            </div>
+            {selectedItems.length === 0 && !hasJournal ? (
+              <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'16px 0' }}>Nothing scheduled</div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {selectedItems.map(e => (
+                  <div key={e.id} style={{ background:t.surfaceHigh, border:'1px solid '+e.color+'30', borderRadius:12, padding:'12px 14px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: e.description || e.session_rpe ? 8 : 0 }}>
+                      <div style={{ width:36, height:36, borderRadius:10, background:e.color+'18', border:'1px solid '+e.color+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>
+                        {e.icon}
                       </div>
-                    ))}
-                    {hasJ && (
-                      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:11 }}>
-                        <span style={{ fontSize:16 }}>✍️</span>
-                        <div style={{ fontSize:13, fontWeight:700 }}>Journal entry</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:800, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.title}</div>
+                        <div style={{ fontSize:11, fontWeight:700, color:e.color }}>{e.label}
+                          {e.duration_seconds ? <span style={{ color:t.textMuted, fontWeight:400 }}> · ⏱ {fmtDur(e.duration_seconds)}</span> : ''}
+                        </div>
+                      </div>
+                      {e.start_at && <div style={{ fontSize:11, color:t.textMuted, flexShrink:0 }}>{fmtTime(e.start_at)}</div>}
+                    </div>
+                    {e.status==='completed' && (e.session_rpe || e.mood) && (
+                      <div style={{ display:'flex', gap:10, marginBottom:8, paddingTop:8, borderTop:'1px solid '+t.border }}>
+                        {e.session_rpe && <span style={{ fontSize:12, color:t.orange, fontWeight:700 }}>RPE {e.session_rpe}/10</span>}
+                        {e.mood && <span style={{ fontSize:16 }}>{MOOD_ICONS[e.mood]||''}</span>}
+                      </div>
+                    )}
+                    {e.description && (
+                      <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6, borderTop:'1px solid '+t.border, paddingTop:8, marginTop: e.session_rpe ? 0 : 0 }}>
+                        📌 {e.description}
+                      </div>
+                    )}
+                    {e.type==='workout' && e.source_id && e.status !== 'completed' && (
+                      <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
+                        style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'11px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {e.status==='in_progress' ? '▶ Continue Workout' : '💪 Start Workout'}
+                      </button>
+                    )}
+                    {e.type==='workout' && e.source_id && e.status==='completed' && (
+                      <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
+                        style={{ marginTop:8, width:'100%', background:'transparent', border:'1px solid '+t.green+'40', borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        ✏️ Review Session
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {hasJournal && (
+                  <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:36, height:36, borderRadius:10, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>✍️</div>
+                    <div style={{ fontSize:13, fontWeight:700 }}>Journal entry</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── MONTHLY CALENDAR ── */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'14px 10px', marginBottom:16 }}>
+            {/* Month nav */}
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+              <button onClick={prevMonth} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'5px 12px', color:t.text, cursor:'pointer', fontSize:16, lineHeight:1 }}>‹</button>
+              <div style={{ fontSize:14, fontWeight:900, flex:1, textAlign:'center' }}>{MONTHS[viewMonth]} {viewYear}</div>
+              <button onClick={nextMonth} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'5px 12px', color:t.text, cursor:'pointer', fontSize:16, lineHeight:1 }}>›</button>
+              <button onClick={()=>{ setViewMonth(today.getMonth()); setViewYear(today.getFullYear()); setSelectedDate(todayStr) }}
+                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer' }}>
+                Today
+              </button>
+            </div>
+            {/* Day headers */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
+              {SHORT_DAYS.map((d,i) => (
+                <div key={i} style={{ textAlign:'center', fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.04em', padding:'2px 0' }}>{d}</div>
+              ))}
+            </div>
+            {/* Cells */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+              {cells.map((d, i) => {
+                if (!d) return <div key={i} className="cal-cell" style={{ opacity:0 }}/>
+                const ds       = localDateStr(d)
+                const isToday  = ds === todayStr
+                const isSel    = ds === selectedDate
+                const dayItems = itemsForDate(ds)
+                const hasJ     = journalDates.has(ds)
+                return (
+                  <div key={i} onClick={() => setSelectedDate(ds)}
+                    className="cal-cell"
+                    style={{
+                      background: isSel ? t.teal+'20' : isToday ? t.surfaceHigh : t.surfaceUp,
+                      border: '1px solid '+(isSel ? t.teal+'60' : isToday ? t.teal+'30' : t.border),
+                      borderRadius:8, cursor:'pointer',
+                    }}>
+                    <div style={{ fontSize:11, fontWeight: isToday ? 900 : 600, color: isSel ? t.teal : isToday ? t.text : t.textDim, lineHeight:1 }}>{d.getDate()}</div>
+                    {(dayItems.length > 0 || hasJ) && (
+                      <div style={{ display:'flex', gap:2, marginTop:3, flexWrap:'wrap' }}>
+                        {dayItems.slice(0,3).map(e => (
+                          <div key={e.id} style={{ width:5, height:5, borderRadius:'50%', background:e.color, flexShrink:0 }}/>
+                        ))}
+                        {hasJ && <span style={{ fontSize:6, lineHeight:1 }}>✍</span>}
                       </div>
                     )}
                   </div>
                 )
-              })()}
+              })}
             </div>
-
-            {/* Sidebar — desktop only */}
-            <div className="cal-sidebar" style={{ display:'flex', flexDirection:'column', gap:12 }}>
-
-              {/* Selected detail */}
-              {selected && (
-                <div style={{ background:t.surface, border:'1px solid '+(selected.color+'50'), borderRadius:14, padding:16 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:selected.color, textTransform:'uppercase' }}>
-                      {selected.icon} {selected.label}
-                    </div>
-                    <button onClick={()=>setSelected(null)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13 }}>✕</button>
-                  </div>
-                  <div style={{ fontSize:14, fontWeight:800, marginBottom:6 }}>{selected.title}</div>
-                  <div style={{ fontSize:11, color:t.textDim, marginBottom:4 }}>📅 {fmtDate(selected.date)}</div>
-                  {selected.start_at && (
-                    <div style={{ fontSize:11, color:t.textDim, marginBottom:4 }}>
-                      🕐 {fmtTime(selected.start_at)}{selected.end_at && ` → ${fmtTime(selected.end_at)}`}
-                    </div>
-                  )}
-                  {selected.type==='workout' && selected.status==='completed' && (
-                    <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:4 }}>
-                      {selected.session_rpe && <span style={{ fontSize:11, color:t.orange }}>RPE {selected.session_rpe}</span>}
-                      {selected.mood && <span style={{ fontSize:14 }}>{MOOD_ICONS[selected.mood]||''}</span>}
-                      {selected.duration_seconds && <span style={{ fontSize:11, color:t.teal }}>⏱ {fmtDur(selected.duration_seconds)}</span>}
-                    </div>
-                  )}
-                  {selected.description && (
-                    <div style={{ fontSize:11, color:t.textMuted, borderTop:'1px solid '+t.border, paddingTop:8, marginTop:8, lineHeight:1.5 }}>{selected.description}</div>
-                  )}
-                  {selected.type==='workout' && selected.source_id && selected.status!=='completed' && (
-                    <button onClick={()=>router.push('/dashboard/client/workout/'+selected.source_id)}
-                      style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                      {selected.status==='in_progress' ? '▶ Continue' : '💪 Start'}
-                    </button>
-                  )}
+            {/* Legend */}
+            <div style={{ display:'flex', gap:12, marginTop:12, justifyContent:'center', flexWrap:'wrap' }}>
+              {[{ color:t.orange, label:'Workout' }, { color:t.green, label:'Done' }, { color:t.purple, label:'Event' }].map(l => (
+                <div key={l.label} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, color:t.textMuted }}>
+                  <div style={{ width:6, height:6, borderRadius:'50%', background:l.color }}/>
+                  {l.label}
                 </div>
-              )}
-
-              {/* Upcoming */}
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, overflow:'hidden' }}>
-                <div style={{ padding:'12px 14px', borderBottom:'1px solid '+t.border, fontSize:11, fontWeight:800 }}>⏭ Upcoming</div>
-                {upcomingItems.length===0
-                  ? <div style={{ padding:16, textAlign:'center', color:t.textMuted, fontSize:11 }}>Nothing coming up</div>
-                  : upcomingItems.map(e => (
-                    <div key={e.id} onClick={()=>setSelected(e)}
-                      style={{ padding:'10px 14px', borderBottom:'1px solid '+t.border, cursor:'pointer', display:'flex', gap:8, alignItems:'flex-start' }}>
-                      <div style={{ width:3, minHeight:32, borderRadius:2, background:e.color, flexShrink:0, marginTop:2 }}/>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:12, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.icon} {e.title}</div>
-                        <div style={{ fontSize:10, color:t.textMuted }}>
-                          {new Date(e.date+'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}
-                          {e.start_at ? ' · '+fmtTime(e.start_at) : ''}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                }
-              </div>
+              ))}
             </div>
           </div>
+
+          {/* ── UPCOMING WORKOUTS ── */}
+          {upcomingWorkouts.length > 0 && (
+            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:16 }}>
+              <div style={{ padding:'12px 16px', borderBottom:'1px solid '+t.border, fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                ⏭ Upcoming Workouts
+              </div>
+              {upcomingWorkouts.map((e, i) => {
+                const d = new Date(e.date+'T00:00:00')
+                const isToday = e.date === todayStr
+                const isTmrw  = e.date === localDateStr(new Date(today.getTime() + 86400000))
+                const dayLabel = isToday ? 'Today' : isTmrw ? 'Tomorrow'
+                  : d.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })
+                return (
+                  <div key={e.id} onClick={()=>{ setSelectedDate(e.date); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()) }}
+                    style={{ padding:'12px 16px', borderBottom: i < upcomingWorkouts.length-1 ? '1px solid '+t.border : 'none',
+                      cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ width:4, height:36, borderRadius:2, background:e.color, flexShrink:0 }}/>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {e.icon} {e.title}
+                      </div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>{dayLabel}</div>
+                    </div>
+                    <div style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:20, background:e.color+'18', color:e.color }}>{e.label}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
         </div>
       </div>
       <ClientBottomNav />
