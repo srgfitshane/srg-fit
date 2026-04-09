@@ -62,6 +62,8 @@ export default function ClientCalendarPage() {
   const [viewMonth,    setViewMonth]    = useState(today.getMonth())
   const [viewYear,     setViewYear]     = useState(today.getFullYear())
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
+  const [rescheduling, setRescheduling] = useState<string|null>(null) // session id being rescheduled
+  const [reschedPick,  setReschedPick]  = useState<string>('')        // picked new date
 
   // Build the current week (Sun–Sat containing today)
   const weekStart = new Date(today)
@@ -160,6 +162,16 @@ export default function ClientCalendarPage() {
     : selectedDate === localDateStr(new Date(today.getTime() + 86400000)) ? 'Tomorrow'
     : selectedDateObj.toLocaleDateString([], { weekday:'long', month:'short', day:'numeric' })
 
+  const rescheduleSession = async (sessionId: string, newDate: string) => {
+    await supabase.from('workout_sessions').update({ scheduled_date: newDate }).eq('id', sessionId)
+    setItems(prev => prev.map(e =>
+      e.source_id === sessionId ? { ...e, date: newDate } : e
+    ))
+    setSelectedDate(newDate)
+    setRescheduling(null)
+    setReschedPick('')
+  }
+
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
   )
@@ -254,6 +266,34 @@ export default function ClientCalendarPage() {
                         style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'11px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         {e.status==='in_progress' ? '▶ Continue Workout' : '💪 Start Workout'}
                       </button>
+                    )}
+                    {e.type==='workout' && e.source_id && e.status !== 'completed' && (
+                      rescheduling === e.source_id ? (
+                        <div style={{ marginTop:8, display:'flex', flexDirection:'column' as const, gap:8 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:t.textMuted }}>Move to:</div>
+                          <input type="date" value={reschedPick} min={todayStr}
+                            onChange={e2=>setReschedPick(e2.target.value)}
+                            style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.teal+'50', borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}
+                          />
+                          <div style={{ display:'flex', gap:6 }}>
+                            <button
+                              disabled={!reschedPick}
+                              onClick={()=>{ if (reschedPick && e.source_id) rescheduleSession(e.source_id, reschedPick) }}
+                              style={{ flex:1, background: reschedPick ? t.orange : t.surfaceHigh, border:'none', borderRadius:8, padding:'9px', fontSize:13, fontWeight:800, color: reschedPick ? '#000' : t.textMuted, cursor: reschedPick ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
+                              Confirm
+                            </button>
+                            <button onClick={()=>{ setRescheduling(null); setReschedPick('') }}
+                              style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:8, padding:'9px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={()=>{ setRescheduling(e.source_id!); setReschedPick('') }}
+                          style={{ marginTop:6, width:'100%', background:'transparent', border:'1px solid '+t.border, borderRadius:10, padding:'8px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          🗓 Reschedule
+                        </button>
+                      )
                     )}
                     {e.type==='workout' && e.source_id && e.status==='completed' && (
                       <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
