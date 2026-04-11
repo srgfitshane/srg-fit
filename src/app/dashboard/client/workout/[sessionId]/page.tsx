@@ -1372,17 +1372,11 @@ ${candidateList}`
                                             placeholder={ex.weight_prescribed||'—'} inputMode="decimal" disabled={s.logged||s.weight_unit==='bw'}
                                             style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:(s.logged||s.weight_unit==='bw')?0.5:1}}/>
                                         </div>
-                                        <div>
-                                          <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>RPE</label>
-                                          <input type="number" value={s.rpe} onChange={e=>updateSet(ex.id,idx,'rpe',e.target.value)}
-                                            placeholder="1-10" min={1} max={10} inputMode="numeric" disabled={s.logged}
-                                            style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                                        </div>
                                       </div>
                                     )}
                                     <div className="workout-set-note-row">
                                       <input value={s.notes} onChange={e=>updateSet(ex.id,idx,'notes',e.target.value)}
-                                        placeholder="Notes..." disabled={s.logged}
+                                        placeholder="RPE, pain, how it felt..." disabled={s.logged}
                                         style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
                                       {!s.logged&&(
                                         <button onClick={()=>logSet(ex.id,idx)}
