@@ -398,6 +398,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const todayStartMs = useMemo(() => new Date(`${today}T00:00:00`).getTime(), [today])
   const clientId = clientRecord?.id ?? null
 
+  // In preview mode, append ?return= so the workout page knows where to send coach after finishing
+  const workoutUrl = (sessionId: string) => {
+    const base = `/dashboard/client/workout/${sessionId}`
+    return overrideClientId ? `${base}?return=${encodeURIComponent(`/dashboard/preview/${overrideClientId}`)}` : base
+  }
+
   const incompleteHabits = useMemo(() => (
     habits.filter((habit) => {
       const value = habitLogs[habit.id] || 0
@@ -1160,7 +1166,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     </div>
                   </div>
                   {(nextSession.status === 'in_progress' || nextSession.isToday) && (
-                    <button onClick={()=>router.push(`/dashboard/client/workout/${nextSession.id}`)}
+                    <button onClick={()=>router.push(workoutUrl(nextSession.id))}
                       style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                       {nextSession.status === 'in_progress' ? 'Resume Workout 🔄' : 'Start Workout 💪'}
                     </button>
@@ -1173,7 +1179,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{ fontSize:14, fontWeight:800, color:t.green }}>Workout Complete!</div>
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedToday.title} — great work today 💪</div>
                   </div>
-                  <button onClick={()=>router.push(`/dashboard/client/workout/${completedToday.id}`)}
+                  <button onClick={()=>router.push(workoutUrl(completedToday.id))}
                     style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                     Review
                   </button>
@@ -1348,7 +1354,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── TRAINING TAB ── */}
           {activeNav === 'training' && (
-            <TrainingTab clientRecord={clientRecord} supabase={supabase} router={router} t={t} />
+            <TrainingTab clientRecord={clientRecord} supabase={supabase} router={router} t={t} overrideClientId={overrideClientId} />
           )}
 
           {/* ── NUTRITION TAB ── */}
@@ -1520,7 +1526,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <button onClick={() => {
                 setPlusOpen(false)
                 if (nextSession) {
-                  router.push(`/dashboard/client/workout/${nextSession.id}`)
+                  router.push(workoutUrl(nextSession.id))
                   return
                 }
                 openTab('training')
@@ -2137,7 +2143,11 @@ function CoachReviewVideo({ url }: { url: string }) {
 }
 
 // ── TrainingTab ───────────────────────────────────────────────────────────
-function TrainingTab({ clientRecord, supabase, router, t }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; router: ReturnType<typeof useRouter>; t: Theme }) {
+function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; router: ReturnType<typeof useRouter>; t: Theme; overrideClientId?: string }) {
+  const workoutUrl = (sessionId: string) => {
+    const base = `/dashboard/client/workout/${sessionId}`
+    return overrideClientId ? `${base}?return=${encodeURIComponent(`/dashboard/preview/${overrideClientId}`)}` : base
+  }
   const [program, setProgram] = useState<TrainingProgramRecord | null>(null)
   const [sessions, setSessions] = useState<WorkoutSessionRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -2190,7 +2200,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: { clientRecord: Dash
             <p style={{ fontSize:13, color:t.textDim, fontWeight:600 }}>All caught up!</p>
           </div>
         ) : upcoming.map(s => (
-          <div key={s.id} onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
+          <div key={s.id} onClick={() => router.push(workoutUrl(s.id))}
             style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', marginBottom:10, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:44, height:44, borderRadius:12, background:s.status==='in_progress'?t.tealDim:t.orangeDim, border:'1px solid '+(s.status==='in_progress'?t.teal:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
               {s.status === 'in_progress' ? '▶️' : '💪'}
@@ -2218,7 +2228,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: { clientRecord: Dash
           <div style={{ display:'grid', gap:8 }}>
             {completed.map(s => (
               <div key={s.id}
-                onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
+                onClick={() => router.push(workoutUrl(s.id))}
                 style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? t.teal+'40' : t.border}`, borderRadius:12, padding:'12px 16px', cursor:'pointer' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: (s.coach_review_notes || s.coach_review_video_url) ? 10 : 0 }}>
                   <span style={{ fontSize:18 }}>✅</span>
@@ -2314,7 +2324,7 @@ function TrainingTab({ clientRecord, supabase, router, t }: { clientRecord: Dash
 
           {/* Quick-start: next session */}
           {upcoming.length > 0 && (
-            <div onClick={() => router.push(`/dashboard/client/workout/${upcoming[0].id}`)}
+            <div onClick={() => router.push(workoutUrl(upcoming[0].id))}
               style={{ background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:16, overflow:'hidden', cursor:'pointer' }}>
               <div style={{ height:3, background:`linear-gradient(90deg,${t.orange},${t.yellow})` }} />
               <div style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
@@ -2342,7 +2352,11 @@ function TrainingTab({ clientRecord, supabase, router, t }: { clientRecord: Dash
 
 
 // ── WorkoutsTab ───────────────────────────────────────────────────────────
-function WorkoutsTab({ clientRecord, supabase, router, t }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; router: ReturnType<typeof useRouter>; t: Theme }) {
+function WorkoutsTab({ clientRecord, supabase, router, t, overrideClientId }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient>; router: ReturnType<typeof useRouter>; t: Theme; overrideClientId?: string }) {
+  const workoutUrl = (sessionId: string) => {
+    const base = `/dashboard/client/workout/${sessionId}`
+    return overrideClientId ? `${base}?return=${encodeURIComponent(`/dashboard/preview/${overrideClientId}`)}` : base
+  }
   const [sessions, setSessions] = useState<WorkoutSessionRecord[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -2394,7 +2408,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t }: { clientRecord: Dash
               </div>
             ) : upcoming.map(s => (
               <div key={s.id}
-                onClick={() => router.push(`/dashboard/client/workout/${s.id}`)}
+                onClick={() => router.push(workoutUrl(s.id))}
                 style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', marginBottom:10, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
                 <div style={{ width:44, height:44, borderRadius:12, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
                   {s.status === 'in_progress' ? '▶️' : '💪'}

@@ -80,6 +80,7 @@ type WorkoutCompleteProps = {
   t: typeof t
   sessionId: string
   supabase: ReturnType<typeof createClient>
+  returnUrl: string
 }
 
 interface LoggedSetRow {
@@ -113,6 +114,10 @@ export default function ActiveWorkoutPage() {
   const router = useRouter()
   const { sessionId: sessionIdParam } = useParams()
   const sessionId = sessionIdParam as string
+  // Read ?return= param set when coach launches workout from preview mode
+  const returnUrl = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('return') || '/dashboard/client'
+    : '/dashboard/client'
 
   const [session, setSession] = useState<WorkoutSession | null>(null)
   const [exercises, setExercises] = useState<SessionExercise[]>([])
@@ -728,7 +733,7 @@ ${candidateList}`
       status: 'assigned',
       started_at: null,
     }).eq('id', sessionId)
-    router.push('/dashboard/client')
+    router.push(returnUrl)
   }
 
   async function reopenWorkout() {
@@ -998,7 +1003,7 @@ ${candidateList}`
     </div>
   )
 
-  if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase}/>
+  if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase} returnUrl={returnUrl}/>
 
   // ── Re-opened completed workout ──────────────────────────────────────────
   if (isReopened) return (
@@ -1013,7 +1018,7 @@ ${candidateList}`
           style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
           ✏️ Re-open Workout
         </button>
-        <button onClick={()=>router.push('/dashboard/client')}
+        <button onClick={()=>router.push(returnUrl)}
           style={{width:'100%',background:'none',border:`1px solid ${t.border}`,borderRadius:13,padding:'12px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
           ← Back to Dashboard
         </button>
@@ -1630,7 +1635,7 @@ ${candidateList}`
   )
 }
 
-function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase }: WorkoutCompleteProps) {
+function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, returnUrl }: WorkoutCompleteProps) {
   const fmtTime = (s: number) => `${Math.floor(s/60)}m ${s%60}s`
   const [countdown, setCountdown] = useState(4)
   const [cancelled, setCancelled] = useState(false)
@@ -1641,7 +1646,7 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase }: W
       setCountdown(c => {
         if (c <= 1) {
           clearInterval(interval)
-          router.push('/dashboard/client')
+          router.push(returnUrl)
           return 0
         }
         return c - 1
@@ -1670,7 +1675,7 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase }: W
         <p style={{fontSize:13,color:t.textDim,marginBottom:32,maxWidth:280,lineHeight:1.6}}>
           Crushed it. Your coach will review this session and leave feedback. Be Kind to Yourself & Stay Awesome 💪
         </p>
-        <button onClick={()=>router.push('/dashboard/client')}
+        <button onClick={()=>router.push(returnUrl)}
           style={{background:t.accent,border:'none',borderRadius:14,padding:'14px 32px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
           Back to Dashboard {!cancelled && countdown > 0 ? `(${countdown})` : ''}
         </button>
