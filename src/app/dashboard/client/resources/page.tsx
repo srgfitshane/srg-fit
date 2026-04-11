@@ -35,6 +35,7 @@ export default function ClientResourcesPage() {
   const [assignDate,   setAssignDate]   = useState('')
   const [assigning,    setAssigning]    = useState(false)
   const [assignDone,   setAssignDone]   = useState<Set<string>>(new Set())
+  const [isCoach,      setIsCoach]      = useState(false)
 
   const localDateStr = () => {
     const d = new Date()
@@ -67,7 +68,7 @@ export default function ClientResourcesPage() {
         const { data:{ user } } = await supabase.auth.getUser()
         if (!user){ router.push('/login'); return }
         const { data:clientData } = await supabase.from('clients').select('coach_id').eq('profile_id',user.id).single<{coach_id:string|null}>()
-        if (!clientData?.coach_id){ setLoading(false); return }
+        if (!clientData?.coach_id){ setIsCoach(true); setLoading(false); return }
         const [{ data:gs },{ data:is }] = await Promise.all([
           supabase.from('content_groups').select('id,name,color,icon,parent_id').eq('coach_id',clientData.coach_id).order('order_index'),
           supabase.from('content_items').select('id,group_id,title,description,content_type,difficulty,duration,estimated_duration,file_url,tags,workout_exercises').eq('coach_id',clientData.coach_id).order('created_at'),
@@ -245,7 +246,7 @@ export default function ClientResourcesPage() {
                                     Open ↗
                                   </a>
                                 )}
-                                {item.content_type === 'workout' && (
+                                {item.content_type === 'workout' && !isCoach && (
                                   <button onClick={()=>openAssign(item)}
                                     style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:'#000',background:t.teal,border:'none',padding:'5px 12px',borderRadius:8,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                     📅 Add to My Day
@@ -281,7 +282,7 @@ export default function ClientResourcesPage() {
                                 Open ↗
                               </a>
                             )}
-                            {item.content_type === 'workout' && (
+                            {item.content_type === 'workout' && !isCoach && (
                               <button onClick={()=>openAssign(item)}
                                 style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:'#000',background:t.teal,border:'none',padding:'5px 12px',borderRadius:8,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                 📅 Add to My Day

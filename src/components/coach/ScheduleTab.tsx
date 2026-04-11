@@ -177,6 +177,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
   const [loading,    setLoading]    = useState(true)
   const [addModal,   setAddModal]   = useState<string|null>(null) // date string or null
   const [delConfirm, setDelConfirm] = useState<any>(null) // item to delete
+  const [reschedDate, setReschedDate] = useState('')      // new date when rescheduling
 
   useEffect(() => { load() }, [clientId])
 
@@ -208,6 +209,13 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
     await supabase.from('calendar_events').delete().eq('id', id)
     setCalEvents(p => p.filter(e => e.id !== id))
     setDelConfirm(null)
+  }
+  const rescheduleSession = async () => {
+    if (!reschedDate || !delConfirm?.id) return
+    await supabase.from('workout_sessions').update({ scheduled_date: reschedDate }).eq('id', delConfirm.id)
+    setSessions(p => p.map(s => s.id === delConfirm.id ? { ...s, scheduled_date: reschedDate } : s))
+    setDelConfirm(null)
+    setReschedDate('')
   }
 
   // Build calendar grid
@@ -329,7 +337,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
 
       {/* Delete / detail confirm */}
       {delConfirm && (
-        <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={()=>setDelConfirm(null)}>
+        <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={()=>{ setDelConfirm(null); setReschedDate('') }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:360 }}>
             <div style={{ fontSize:14, fontWeight:800, marginBottom:8 }}>
               {delConfirm._type==='session' ? '🏋️' : (EVENT_ICON[delConfirm.event_type]||'📅')} {delConfirm.title}
@@ -344,8 +352,22 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
                 </span>
               </div>
             )}
+            {/* Reschedule — sessions only */}
+            {delConfirm._type==='session' && (
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Reschedule to</div>
+                <input type="date" value={reschedDate} onChange={e=>setReschedDate(e.target.value)}
+                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, colorScheme:'dark', boxSizing:'border-box' as const, fontFamily:"'DM Sans',sans-serif" }}/>
+                {reschedDate && (
+                  <button onClick={rescheduleSession}
+                    style={{ marginTop:8, width:'100%', background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    📅 Move to {reschedDate}
+                  </button>
+                )}
+              </div>
+            )}
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={()=>setDelConfirm(null)}
+              <button onClick={()=>{ setDelConfirm(null); setReschedDate('') }}
                 style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.textDim, cursor:'pointer' }}>
                 Cancel
               </button>
