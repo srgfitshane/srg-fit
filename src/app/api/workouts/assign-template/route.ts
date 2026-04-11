@@ -43,8 +43,9 @@ export async function POST(req: Request) {
         coach_id: user.id,
         name: 'My Workouts',
         is_template: false,
-        is_active: true,
+        active: true,
         is_self_service: true,
+        status: 'active',
       })
       .select('id')
       .single()
