@@ -169,6 +169,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
   supabase: any
   t: any
 }) {
+  const router = useRouter()
   const today = new Date()
   const [viewMonth,  setViewMonth]  = useState(today.getMonth())
   const [viewYear,   setViewYear]   = useState(today.getFullYear())
@@ -365,6 +366,16 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
                   </button>
                 )}
               </div>
+            )}
+            {/* Log Workout — assigned/in_progress sessions only */}
+            {delConfirm._type==='session' && (delConfirm.status==='assigned'||delConfirm.status==='in_progress') && (
+              <button onClick={()=>{
+                const returnUrl = encodeURIComponent(`/dashboard/coach/clients/${clientId}?tab=calendar`)
+                router.push(`/dashboard/client/workout/${delConfirm.id}?return=${returnUrl}`)
+              }}
+                style={{ width:'100%', background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:8 }}>
+                {delConfirm.status==='in_progress' ? '▶️ Continue Logging' : '💪 Log This Workout'}
+              </button>
             )}
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={()=>{ setDelConfirm(null); setReschedDate('') }}
