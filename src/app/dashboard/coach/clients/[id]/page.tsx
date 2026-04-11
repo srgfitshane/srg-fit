@@ -92,6 +92,8 @@ export default function ClientDetail() {
   const [notesSaved, setNotesSaved] = useState(false)
   const [clientGender, setClientGender] = useState('')
   const [genderSaved, setGenderSaved] = useState(false)
+  const [trainingType, setTrainingType] = useState('remote')
+  const [trainingTypeSaved, setTrainingTypeSaved] = useState(false)
   const [perms, setPerms] = useState({ show_nutrition:true, show_macros:true, show_body_metrics:true, show_progress_photos:true })
   const [forms,        setForms]        = useState<any[]>([])
   const [showAssignForm, setShowAssignForm] = useState(false)
@@ -135,12 +137,13 @@ export default function ClientDetail() {
 
       const { data: clientData } = await supabase
         .from('clients')
-        .select('*, display_name, client_type, contact_email, contact_phone, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)')
+        .select('*, display_name, client_type, training_type, contact_email, contact_phone, profile:profiles!clients_profile_id_fkey(full_name, email, avatar_url)')
         .eq('id', clientId)
         .single()
       setClient(clientData)
       if (clientData?.coach_notes) setCoachNotes(clientData.coach_notes)
       if (clientData?.gender) setClientGender(clientData.gender)
+      if (clientData?.training_type) setTrainingType(clientData.training_type)
       setPerms({ show_nutrition: clientData?.show_nutrition ?? true, show_macros: clientData?.show_macros ?? true, show_body_metrics: clientData?.show_body_metrics ?? true, show_progress_photos: clientData?.show_progress_photos ?? true })
 
       // Fire all secondary queries in parallel
@@ -402,7 +405,7 @@ export default function ClientDetail() {
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
                 <div style={{ fontSize:22, fontWeight:900 }}>{client.profile?.full_name || client.display_name || 'Unnamed Client'}</div>
-                {client.client_type === 'offline' && <div style={{ fontSize:12, color:'#8b5cf6', fontWeight:700, marginTop:2 }}>In-Person Client{client.contact_email ? ' · '+client.contact_email : ''}{client.contact_phone ? ' · '+client.contact_phone : ''}</div>}
+                {client.client_type === 'offline' && <div style={{ fontSize:12, color:'#8b5cf6', fontWeight:700, marginTop:2 }}>In-Person{client.contact_email ? ' · '+client.contact_email : ''}{client.contact_phone ? ' · '+client.contact_phone : ''}</div>}
                 {client.flagged && <div style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'2px 10px', fontSize:11, fontWeight:700, color:t.red }}>🚩 Flagged</div>}
               </div>
               <div style={{ fontSize:13, color:t.textMuted }}>{client.profile?.email} · Client since {new Date(client.start_date).toLocaleDateString([], { month:'long', day:'numeric', year:'numeric' })}</div>
@@ -612,6 +615,27 @@ export default function ClientDetail() {
               {/* Coach notes */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Coach Notes</div>
+
+                {/* Training Type */}
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Training Type</div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <select value={trainingType} onChange={e => { setTrainingType(e.target.value); setTrainingTypeSaved(false) }}
+                      style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as any, outline:'none' }}>
+                      <option value="remote">🌐 Remote</option>
+                      <option value="hybrid">⚡ Hybrid</option>
+                      <option value="in_person">🏋️ In-Person</option>
+                    </select>
+                    <button onClick={async () => {
+                      await supabase.from('clients').update({ training_type: trainingType }).eq('id', clientId)
+                      setTrainingTypeSaved(true)
+                      setTimeout(() => setTrainingTypeSaved(false), 2000)
+                    }}
+                      style={{ background: trainingTypeSaved ? t.green : t.tealDim, border:'1px solid '+(trainingTypeSaved ? t.green : t.teal)+'40', borderRadius:9, padding:'9px 16px', fontSize:12, fontWeight:700, color: trainingTypeSaved ? '#000' : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, transition:'background .3s' }}>
+                      {trainingTypeSaved ? '✓ Saved!' : 'Save'}
+                    </button>
+                  </div>
+                </div>
 
                 {/* Gender */}
                 <div style={{ marginBottom:14 }}>

@@ -50,6 +50,7 @@ const NAV_EXPANDED = [
 type CoachClient = {
   display_name?: string | null
   client_type?: string | null
+  training_type?: string | null
   contact_email?: string | null
   contact_phone?: string | null
   id: string
@@ -185,7 +186,7 @@ export default function CoachDashboard() {
       setProfile(prof)
       const { data: clientList } = await supabase
         .from('clients')
-        .select(`*, display_name, client_type, contact_email, contact_phone, profile:profiles!profile_id(full_name, email, avatar_url)`)
+        .select(`*, display_name, client_type, training_type, contact_email, contact_phone, profile:profiles!profile_id(full_name, email, avatar_url)`)
         .eq('coach_id', user.id)
         .neq('archived', true)
       const safeClientList = (clientList || []) as CoachClient[]
@@ -852,7 +853,9 @@ export default function CoachDashboard() {
                         <div onClick={()=>router.push('/dashboard/coach/clients/'+client.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2, flexWrap:'wrap' }}>
                             <span style={{ fontSize:14, fontWeight:700 }}>{client.profile?.full_name || client.display_name || 'Unknown'}</span>
-                            {client.client_type === 'offline' && <span style={{ fontSize:10, fontWeight:800, color:'#8b5cf6', background:'#8b5cf615', border:'1px solid #8b5cf640', borderRadius:4, padding:'1px 6px' }}>In-Person</span>}
+                            {client.training_type === 'in_person' && <span style={{ fontSize:10, fontWeight:800, color:'#8b5cf6', background:'#8b5cf615', border:'1px solid #8b5cf640', borderRadius:4, padding:'1px 6px' }}>In-Person</span>}
+                            {client.training_type === 'hybrid'    && <span style={{ fontSize:10, fontWeight:800, color:'#f5a623', background:'#f5a62315', border:'1px solid #f5a62340', borderRadius:4, padding:'1px 6px' }}>Hybrid</span>}
+                            {client.training_type === 'remote'    && <span style={{ fontSize:10, fontWeight:800, color:'#00c9b1', background:'#00c9b115', border:'1px solid #00c9b140', borderRadius:4, padding:'1px 6px' }}>Remote</span>}
                             {client.paused   && <span style={{ fontSize:10, fontWeight:800, color:t.orange, background:t.orangeDim, borderRadius:6, padding:'2px 7px' }}>⏸ PAUSED</span>}
                             {client.flagged  && <span style={{ fontSize:10, fontWeight:800, color:t.red, background:t.redDim, borderRadius:6, padding:'2px 7px' }}>🚩</span>}
                           </div>
