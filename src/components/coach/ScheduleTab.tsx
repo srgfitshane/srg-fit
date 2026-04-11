@@ -25,7 +25,7 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: 
   useEffect(() => { if (mode === 'workout') loadTemplates() }, [mode])
 
   const loadTemplates = async () => {
-    const { data } = await supabase.from('programs').select('id, name').eq('is_template', true).order('name')
+    const { data } = await supabase.from('workout_templates').select('id, title').order('title')
     setTemplates(data || [])
   }
 
@@ -42,40 +42,30 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: 
       if (mode === 'workout') {
         if (wkMode === 'blank') {
           if (!title.trim()) { setError('Enter a workout title'); setSaving(false); return }
+          // Find or create self-service program so program_id is never null
+          let { data: prog } = await supabase.from('programs')
+            .select('id').eq('client_id', clientId).eq('is_self_service', true).single()
+          if (!prog) {
+            const { data: newProg } = await supabase.from('programs').insert({
+              client_id: clientId, coach_id: coachId,
+              name: 'My Workouts', is_template: false, is_active: true, is_self_service: true,
+            }).select('id').single()
+            prog = newProg
+          }
+          if (!prog) { setError('Could not create workout'); setSaving(false); return }
           await supabase.from('workout_sessions').insert({
-            client_id:clientId, coach_id:coachId, title:title.trim(),
-            scheduled_date:date, status:'scheduled',
+            client_id: clientId, coach_id: coachId,
+            program_id: prog.id,
+            title: title.trim(), scheduled_date: date, status: 'assigned',
           })
         } else {
           if (!templateId) { setError('Select a template'); setSaving(false); return }
-          const { data: tplSessions } = await supabase
-            .from('workout_sessions').select('id,title,day_number,day_label')
-            .eq('program_id', templateId).eq('status','template').order('day_number')
-          const tpl = templates.find(t => t.id === templateId)
-          if (!tplSessions?.length) {
-            await supabase.from('workout_sessions').insert({
-              client_id:clientId, coach_id:coachId,
-              title:tpl?.name||'Workout', scheduled_date:date, status:'scheduled',
-            })
-          } else {
-            for (let i = 0; i < tplSessions.length; i++) {
-              const s = tplSessions[i]
-              const d = new Date(date + 'T12:00:00')
-              d.setDate(d.getDate() + i)
-              const { data: ns } = await supabase.from('workout_sessions').insert({
-                client_id:clientId, coach_id:coachId,
-                title:s.title||s.day_label||`Day ${i+1}`,
-                scheduled_date:toDateStr(d), status:'scheduled',
-              }).select().single()
-              if (ns) {
-                const { data: exs } = await supabase.from('session_exercises')
-                  .select('*').eq('session_id', s.id).order('order_index')
-                if (exs?.length) await supabase.from('session_exercises').insert(
-                  exs.map(({ id:_a, session_id:_b, created_at:_c, ...rest }: any) => ({ ...rest, session_id:ns.id }))
-                )
-              }
-            }
-          }
+          const res = await fetch('/api/workouts/assign-template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ template_id: templateId, client_id: clientId, scheduled_date: date }),
+          })
+          if (!res.ok) { setError('Failed to assign template'); setSaving(false); return }
         }
       } else if (mode === 'event') {
         const meta = EVENT_TYPES.find(e => e.id === eventType)
@@ -136,7 +126,7 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: 
               ? <div style={{ fontSize:12, color:t.textMuted, padding:'8px 0' }}>No templates yet. Create one in Programs.</div>
               : <select value={templateId} onChange={e=>setTemplateId(e.target.value)} style={inp}>
                   <option value="">— Select template —</option>
-                  {templates.map(tpl=><option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
+                  {templates.map(tpl=><option key={tpl.id} value={tpl.id}>{tpl.title}</option>)}
                 </select>
           )}
           {error && <div style={{ fontSize:12, color:t.red, background:t.redDim, borderRadius:8, padding:'8px 12px' }}>{error}</div>}
