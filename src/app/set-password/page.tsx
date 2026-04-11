@@ -98,7 +98,12 @@ function SetPasswordInner() {
     setLoading(true)
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) {
-      setError(updateError.message)
+      const msg = updateError.message.toLowerCase()
+      if (msg.includes('weak') || msg.includes('strength') || msg.includes('characters') || msg.includes('policy')) {
+        setError('Password not strong enough. Use at least 8 characters with a letter, number, and special character (e.g. !, @, #).')
+      } else {
+        setError(updateError.message)
+      }
       setLoading(false)
       return
     }
@@ -204,6 +209,9 @@ function SetPasswordInner() {
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Password</label>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                     placeholder="Min. 8 characters" style={inp} />
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:6, lineHeight:1.5 }}>
+                    Must be at least 8 characters and include a letter, a number, and a special character (e.g. <span style={{ fontFamily:'monospace' }}>!</span>, <span style={{ fontFamily:'monospace' }}>@</span>, <span style={{ fontFamily:'monospace' }}>#</span>)
+                  </div>
                 </div>
 
                 <div style={{ marginBottom:20 }}>
