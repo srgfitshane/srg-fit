@@ -51,6 +51,10 @@ export default function CoachWorkoutsPage() {
   const [loading,    setLoading]    = useState(true)
   const [view,       setView]       = useState<View>('list')
   const [editing,    setEditing]    = useState<any>(null) // template being edited/created
+  // Auto-assign params — set when arriving from ScheduleTab "Build New"
+  const [autoAssignClient, setAutoAssignClient] = useState<string|null>(null)
+  const [autoAssignDate,   setAutoAssignDate]   = useState<string|null>(null)
+  const [autoAssignReturn, setAutoAssignReturn] = useState<string|null>(null)
   const [saving,     setSaving]     = useState(false)
   const [showExPicker, setShowExPicker] = useState(false)
   const [actionModal,setActionModal]= useState<any>(null) // {template, action}
@@ -59,6 +63,20 @@ export default function CoachWorkoutsPage() {
   const [resourceGroups, setResourceGroups] = useState<any[]>([])
 
   useEffect(() => { load() }, [])
+
+  // Read auto-assign params from URL (from ScheduleTab "Build New")
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const clientId = p.get('auto_client')
+    const date     = p.get('auto_date')
+    const ret      = p.get('return')
+    if (clientId) {
+      setAutoAssignClient(clientId)
+      setAutoAssignDate(date)
+      setAutoAssignReturn(ret)
+      openNew()
+    }
+  }, [])
 
   const load = useCallback(async () => {
     const { data:{ user } } = await supabase.auth.getUser()
@@ -206,6 +224,22 @@ export default function CoachWorkoutsPage() {
     }
     await load()
     setSaving(false)
+
+    // If we arrived from ScheduleTab "Build New", auto-assign to the client then navigate back
+    if (autoAssignClient && templateId) {
+      await fetch('/api/workouts/assign-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: templateId,
+          client_id: autoAssignClient,
+          scheduled_date: autoAssignDate || null,
+        }),
+      })
+      router.push(autoAssignReturn || '/dashboard/coach')
+      return
+    }
+
     setView('list')
   }
 

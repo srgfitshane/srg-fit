@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -11,11 +12,12 @@ function isSameDay(a: Date, b: Date) {
 }
 
 // Quick-add modal
-function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: any) {
+function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose, returnUrl }: any) {
+  const router = useRouter()
   const inp = { background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", width:'100%', colorScheme:'dark' as const }
   const [mode,       setMode]       = useState<'pick'|'workout'|'event'>('pick')
+  const [wkMode,     setWkMode]     = useState<'template'|'build'>('template')
   const [title,      setTitle]      = useState('')
-  const [wkMode,     setWkMode]     = useState<'blank'|'template'>('blank')
   const [templates,  setTemplates]  = useState<any[]>([])
   const [templateId, setTemplateId] = useState('')
   const [eventType,  setEventType]  = useState('check_in_call')
@@ -40,23 +42,13 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: 
     setSaving(true); setError('')
     try {
       if (mode === 'workout') {
-        if (wkMode === 'blank') {
-          if (!title.trim()) { setError('Enter a workout title'); setSaving(false); return }
-          const res = await fetch('/api/workouts/create-blank', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_id: clientId, title: title.trim(), scheduled_date: date }),
-          })
-          if (!res.ok) { setError('Could not create workout'); setSaving(false); return }
-        } else {
-          if (!templateId) { setError('Select a template'); setSaving(false); return }
-          const res = await fetch('/api/workouts/assign-template', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ template_id: templateId, client_id: clientId, scheduled_date: date }),
-          })
-          if (!res.ok) { setError('Failed to assign template'); setSaving(false); return }
-        }
+        if (!templateId) { setError('Select a template'); setSaving(false); return }
+        const res = await fetch('/api/workouts/assign-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template_id: templateId, client_id: clientId, scheduled_date: date }),
+        })
+        if (!res.ok) { setError('Failed to assign template'); setSaving(false); return }
       } else if (mode === 'event') {
         const meta = EVENT_TYPES.find(e => e.id === eventType)
         await supabase.from('calendar_events').insert({
@@ -101,15 +93,25 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: 
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-            {(['blank','template'] as const).map(m=>(
-              <button key={m} onClick={()=>setWkMode(m)}
+            {(['template','build'] as const).map(m=>(
+              <button key={m} onClick={()=>setWkMode(m as any)}
                 style={{ padding:'10px', borderRadius:10, border:'1px solid '+(wkMode===m?t.teal:t.border), background:wkMode===m?t.tealDim:'transparent', color:wkMode===m?t.teal:t.textDim, fontWeight:700, fontSize:12, cursor:'pointer' }}>
-                {m==='blank' ? '✏️ Blank' : '📋 Template'}
+                {m==='template' ? '📋 Template' : '🔨 Build New'}
               </button>
             ))}
           </div>
-          {wkMode==='blank' && (
-            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Workout title (e.g. Upper Body A)..." style={inp} autoFocus />
+          {wkMode==='build' && (
+            <div style={{ textAlign:'center' as const, padding:'8px 0' }}>
+              <div style={{ fontSize:12, color:t.textMuted, marginBottom:12, lineHeight:1.6 }}>
+                Build a new workout in the library.<br/>It will be saved and auto-assigned to this client on this date.
+              </div>
+              <button onClick={()=>{
+                onClose()
+                router.push(`/dashboard/coach/workouts?auto_client=${clientId}&auto_date=${date}&return=${encodeURIComponent(returnUrl||'/dashboard/coach')}`)
+              }} style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                🔨 Open Workout Builder
+              </button>
+            </div>
           )}
           {wkMode==='template' && (
             templates.length===0
@@ -321,6 +323,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
           t={t}
           onSave={async () => { setAddModal(null); await load() }}
           onClose={() => setAddModal(null)}
+          returnUrl={`/dashboard/coach/clients/${clientId}?tab=calendar`}
         />
       )}
 
