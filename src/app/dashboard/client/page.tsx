@@ -48,6 +48,40 @@ const getGreeting = () => {
   return 'Good evening'
 }
 
+const DAILY_PHRASES = [
+  'One day at a time.',
+  'You got this.',
+  'Show up. That\'s the work.',
+  'Progress, not perfection.',
+  'Small steps still move you forward.',
+  'Consistency beats intensity.',
+  'Trust the process.',
+  'Every rep counts.',
+  'You\'re doing better than you think.',
+  'Rest is part of the work.',
+  'It\'s okay to start slow.',
+  'Be patient with yourself.',
+  'Strength is built in the hard moments.',
+  'You\'ve done hard things before.',
+  'One more than yesterday.',
+  'Effort is always enough.',
+  'The only bad workout is the one that didn\'t happen.',
+  'Take it one set at a time.',
+  'You showed up. That matters.',
+  'Breathe. You\'ve got this.',
+  'Focus on what you can control.',
+  'Today is a good day to try.',
+  'Some days the win is just showing up.',
+  'Slow is smooth. Smooth is fast.',
+  'Proud of you for being here.',
+]
+
+const getDailyPhrase = () => {
+  const day = new Date()
+  const idx = (day.getFullYear() * 1000 + day.getMonth() * 31 + day.getDate()) % DAILY_PHRASES.length
+  return DAILY_PHRASES[idx]
+}
+
 type DashboardTab = 'today' | 'nutrition' | 'resources' | 'messages' | 'metrics' | 'training' | 'billing'
 
 type ActivityDraft = {
@@ -989,7 +1023,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ fontSize:23, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', lineHeight:1.2, marginBottom:3 }}>
               <span className="card-text">{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</span>
             </div>
-            <div style={{ fontSize:12, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:6 }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
+            <div style={{ fontSize:12, color:t.textDim, fontStyle:'italic' }}>{getDailyPhrase()}</div>
           </div>
 
           {/* ── STREAK ── */}
