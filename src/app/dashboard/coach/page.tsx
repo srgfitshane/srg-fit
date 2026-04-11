@@ -213,6 +213,7 @@ export default function CoachDashboard() {
         .eq('coach_id', user.id)
         .neq('archived', true)
         .eq('paused', false)
+        .neq('training_type', 'in_person')
         .or(`last_checkin_at.is.null,last_checkin_at.lte.${sevenDaysAgoStr}`)
       setCheckInsDue(ciDue || 0)
 
@@ -271,6 +272,7 @@ export default function CoachDashboard() {
       // Attention clients — going quiet or watch (7+ days no check-in)
       const attentionList = safeClientList
         .filter((client) => !client.paused)
+        .filter((client) => client.training_type !== 'in_person')
         .filter((client) => {
           const gap = getDaysSince(client.last_checkin_at)
           return gap === null || gap >= 7
