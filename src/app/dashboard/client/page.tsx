@@ -668,6 +668,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setClientRecord((clientData as DashboardClientRecord | null) || null)
       setCoachProfileId(clientData?.coach_id || null)
 
+      // Coach landed on client dashboard with no client record — redirect them home
+      if (!clientData && (prof as any)?.role === 'coach') {
+        router.replace('/dashboard/coach')
+        return
+      }
+
       if (clientData) {
         // Fetch unread count FIRST — before loadClientData and before RichMessageThread
         // mounts and marks messages read (happens when deep-linking via ?tab=messages)
@@ -982,9 +988,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 <div style={{ fontSize:10, color:'rgba(0,0,0,0.6)', fontWeight:600 }}>Coach mode — fully interactive</div>
               </div>
             </div>
-            <button onClick={() => router.back()}
+            <button onClick={() => router.push(`/dashboard/coach/clients/${overrideClientId}`)}
               style={{ background:'rgba(0,0,0,0.15)', border:'1px solid rgba(0,0,0,0.2)', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              ← Back
+              ← Exit Preview
             </button>
           </div>
         )}

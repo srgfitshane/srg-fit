@@ -750,11 +750,13 @@ ${candidateList}`
   async function finishWorkout() {
     setSaving(true)
     const now = new Date()
+    const isCoachMode = returnUrl.includes('/preview/')
     const reviewDue = new Date(now.getTime() + 24 * 60 * 60 * 1000)
     const { error } = await supabase.from('workout_sessions').update({
       status: 'completed',
       completed_at: now.toISOString(),
-      review_due_at: reviewDue.toISOString(),
+      // Skip review countdown when coach is logging — they don't review their own logs
+      ...(isCoachMode ? { coach_reviewed_at: now.toISOString() } : { review_due_at: reviewDue.toISOString() }),
       duration_seconds: elapsedSeconds,
       session_rpe: parseInt(finishForm.session_rpe) || null,
       energy_level: parseInt(finishForm.energy_level),
