@@ -42,22 +42,12 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose }: 
       if (mode === 'workout') {
         if (wkMode === 'blank') {
           if (!title.trim()) { setError('Enter a workout title'); setSaving(false); return }
-          // Find or create self-service program so program_id is never null
-          let { data: prog } = await supabase.from('programs')
-            .select('id').eq('client_id', clientId).eq('is_self_service', true).single()
-          if (!prog) {
-            const { data: newProg } = await supabase.from('programs').insert({
-              client_id: clientId, coach_id: coachId,
-              name: 'My Workouts', is_template: false, is_active: true, is_self_service: true,
-            }).select('id').single()
-            prog = newProg
-          }
-          if (!prog) { setError('Could not create workout'); setSaving(false); return }
-          await supabase.from('workout_sessions').insert({
-            client_id: clientId, coach_id: coachId,
-            program_id: prog.id,
-            title: title.trim(), scheduled_date: date, status: 'assigned',
+          const res = await fetch('/api/workouts/create-blank', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: clientId, title: title.trim(), scheduled_date: date }),
           })
+          if (!res.ok) { setError('Could not create workout'); setSaving(false); return }
         } else {
           if (!templateId) { setError('Select a template'); setSaving(false); return }
           const res = await fetch('/api/workouts/assign-template', {
