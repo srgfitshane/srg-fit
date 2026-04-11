@@ -124,6 +124,7 @@ export default function ActiveWorkoutPage() {
   const [setData, setSetData] = useState<Record<string, SetData[]>>({})
   const [prevSets, setPrevSets] = useState<Record<string, {reps:number|null, weight:number|null, unit:string}[]>>({})
   const [activeExIdx, setActiveExIdx] = useState(0)
+  const [expandedExId, setExpandedExId] = useState<string|null>(null) // which exercise card is open
   const [restTimer, setRestTimer] = useState<number|null>(null)
   const [restActive, setRestActive] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -368,6 +369,8 @@ ${candidateList}`
       setSwapLibrary((exerciseLibrary || []) as ExerciseLibraryItem[])
       const signedExercises = await withSignedMedia((exs || []) as SessionExercise[])
       setExercises(signedExercises)
+      // Auto-open the first incomplete exercise
+      if (signedExercises.length > 0) setExpandedExId(signedExercises[0].id)
       setSkipped(signedExercises.reduce((acc, exerciseRow) => {
         acc[exerciseRow.id] = !!exerciseRow.skipped || !!(exerciseRow.notes_client?.startsWith('[SKIPPED]'))
         return acc
@@ -600,8 +603,8 @@ ${candidateList}`
     setSkipOpen(prev => ({ ...prev, [exId]: false }))
     // Auto-advance to next non-skipped exercise
     const nextIdx = exercises.findIndex((ex, i) => i > activeExIdx && !skipped[ex.id])
-    if (nextIdx !== -1) setActiveExIdx(nextIdx)
-    else if (activeExIdx < exercises.length - 1) setActiveExIdx(activeExIdx + 1)
+    const nextEx = nextIdx !== -1 ? exercises[nextIdx] : exercises[activeExIdx + 1]
+    if (nextEx) { setActiveExIdx(nextIdx !== -1 ? nextIdx : activeExIdx + 1); setExpandedExId(nextEx.id) }
   }
 
   // ── Add exercise to session ──────────────────────────────────────────────
@@ -1093,486 +1096,377 @@ ${candidateList}`
           </div>
         )}
 
-        {/* Exercise tabs */}
-        <div style={{display:'flex',overflowX:'auto',padding:'12px 16px 0',gap:6,flexShrink:0,alignItems:'center'}}>
-          {exercises.map((ex,i)=>{
-            const done = (setData[ex.id]||[]).filter(s=>s.logged).length
-            const total = ex.sets_prescribed || setData[ex.id]?.length || 0
-            const complete = done >= total && total > 0
-            const isSkipped = skipped[ex.id]
-            const prevRole = i > 0 ? exercises[i-1].exercise_role : null
-            const thisRole = ex.exercise_role || 'main'
-            // Show a section divider when role changes
-            const showDivider = i === 0
-              ? (thisRole === 'warmup')
-              : (thisRole !== prevRole && (thisRole === 'warmup' || thisRole === 'cooldown' || (prevRole === 'warmup' && thisRole !== 'warmup') || (thisRole === 'cooldown')))
-            const dividerLabel = thisRole === 'warmup' ? '🔥 Warm-Up'
-              : thisRole === 'cooldown' ? '🧘 Cool-Down'
-              : (prevRole === 'warmup') ? '💪 Main'
-              : null
-            const dividerColor = thisRole === 'warmup' ? t.teal
-              : thisRole === 'cooldown' ? '#8b5cf6'
-              : t.orange
-            return (
-              <div key={ex.id} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-                {showDivider && dividerLabel && (
-                  <div style={{fontSize:9,fontWeight:800,color:dividerColor,background:dividerColor+'18',border:`1px solid ${dividerColor}30`,borderRadius:20,padding:'2px 7px',whiteSpace:'nowrap',textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>
-                    {dividerLabel}
-                  </div>
-                )}
-                <button onClick={()=>setActiveExIdx(i)}
-                  aria-label={`Open exercise ${i + 1}: ${ex.exercise_name}`}
-                  aria-pressed={activeExIdx===i}
-                  style={{flexShrink:0,background:activeExIdx===i?t.tealDim:(isSkipped?'#1a1a1a':(complete?t.greenDim:t.surfaceHigh)),border:`1px solid ${activeExIdx===i?t.teal:isSkipped?t.border:(complete?t.green:t.border)}`,borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:700,color:activeExIdx===i?t.teal:isSkipped?t.textMuted:(complete?t.green:t.textDim),cursor:'pointer',whiteSpace:'nowrap',textDecoration:isSkipped?'line-through':'none'}}>
-                  {isSkipped ? '⏭ ' : complete ? '✓ ' : ''}{i+1}. {(ex.exercise_name || ex.exercise?.name || 'Exercise').split(' ').slice(0,2).join(' ')}
-                </button>
-              </div>
-            )
-          })}
-        </div>
+        {/* Exercise list — grouped by role */}
+        <div style={{flex:1,overflowY:'auto',padding:'12px 16px 16px'}}>
+          {(() => {
+            // Group exercises by role
+            const ROLE_ORDER = ['warmup','main','secondary','accessory','variation','cooldown']
+            const ROLE_LABELS: Record<string,string> = {
+              warmup:'🔥 Warm-Up', main:'💪 Main', secondary:'🎯 Secondary',
+              accessory:'⚙️ Accessory', variation:'🔄 Variation', cooldown:'🧘 Cool-Down'
+            }
+            const ROLE_COLORS: Record<string,string> = {
+              warmup:t.teal, main:t.orange, secondary:'#f472b6',
+              accessory:'#8b5cf6', variation:t.accent, cooldown:'#8b5cf6'
+            }
+            // Build groups preserving order of first appearance
+            const seen: string[] = []
+            exercises.forEach(ex => {
+              const r = ex.exercise_role || 'main'
+              if (!seen.includes(r)) seen.push(r)
+            })
+            const groups = seen.map(role => ({
+              role,
+              label: ROLE_LABELS[role] || role,
+              color: ROLE_COLORS[role] || t.orange,
+              exercises: exercises.filter(ex => (ex.exercise_role || 'main') === role)
+            }))
 
-        {/* Active exercise */}
-        {exercises[activeExIdx] && (() => {
-          const ex = exercises[activeExIdx]
-          const setsArr = setData[ex.id] || []
-          return (
-            <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
-            <div style={{marginBottom:12}}>
-                {/* Section label */}
-                {ex.exercise_role && ex.exercise_role !== 'main' && (
-                  <div style={{fontSize:10,fontWeight:800,letterSpacing:'0.07em',textTransform:'uppercase' as const,marginBottom:6,color:ex.exercise_role==='warmup'?t.teal:ex.exercise_role==='cooldown'?'#8b5cf6':t.orange}}>
-                    {ex.exercise_role==='warmup'?'🔥 Warm-Up':ex.exercise_role==='cooldown'?'🧘 Cool-Down':''}
-                  </div>
-                )}
-                {/* Name row */}
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:4}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <h2 style={{fontSize:17,fontWeight:900,marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ex.exercise_name || ex.exercise?.name || 'Exercise'}</h2>
-                    <div style={{fontSize:12,color:t.textDim}}>
-                      {ex.sets_prescribed} × {ex.tracking_type === 'time' ? `${ex.duration_seconds || '—'}s` : ex.reps_prescribed}{ex.weight_prescribed ? ` @ ${ex.weight_prescribed}` : ''}
-                    </div>
-                  </div>
-                  <div style={{display:'flex',gap:6,flexShrink:0}}>
-                    {!skipped[ex.id] && (
-                      <button onClick={()=>setSwapOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                        style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?t.teal+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                        Swap
-                      </button>
-                    )}
-                    {!skipped[ex.id] && (
-                      <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                        style={{background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?t.red+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                        ⏭ Skip
-                      </button>
-                    )}
-                    {skipped[ex.id] && (
-                      <span style={{fontSize:11,fontWeight:700,color:t.textMuted,background:t.surfaceHigh,borderRadius:8,padding:'5px 10px'}}>⏭ Skipped</span>
-                    )}
-                  </div>
+            return groups.map(group => (
+              <div key={group.role} style={{marginBottom:20}}>
+                {/* Section header */}
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                  <div style={{height:1,background:group.color+'30',flex:1}}/>
+                  <span style={{fontSize:11,fontWeight:800,color:group.color,letterSpacing:'0.08em',textTransform:'uppercase' as const,whiteSpace:'nowrap' as const}}>
+                    {group.label}
+                  </span>
+                  <div style={{height:1,background:group.color+'30',flex:1}}/>
                 </div>
 
-                {ex.notes_coach && <div style={{fontSize:11,color:t.orange,marginBottom:8}}>📌 {ex.notes_coach}</div>}
-                {ex.original_exercise_name && (
-                  <div style={{fontSize:11,color:t.teal,marginBottom:8}}>↔ Swapped from {ex.original_exercise_name}{ex.swap_reason ? ` · ${ex.swap_reason}` : ''}</div>
-                )}
+                {/* Exercise cards */}
+                {group.exercises.map(ex => {
+                  const setsArr = setData[ex.id] || []
+                  const done = setsArr.filter(s=>s.logged).length
+                  const total = ex.sets_prescribed || setsArr.length || 0
+                  const complete = done >= total && total > 0
+                  const isSkipped = skipped[ex.id]
+                  const isOpen = expandedExId === ex.id
 
-                {/* Prev / Next inline */}
-                <div style={{display:'flex',gap:8,marginBottom:4}}>
-                  <button onClick={()=>setActiveExIdx(Math.max(0, activeExIdx - 1))}
-                    disabled={activeExIdx === 0}
-                    style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'6px 10px',fontSize:12,fontWeight:700,color:activeExIdx===0?t.textMuted:t.textDim,cursor:activeExIdx===0?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:activeExIdx===0?0.4:1}}>
-                    ← Prev
-                  </button>
-                  <button onClick={()=>setActiveExIdx(Math.min(exercises.length - 1, activeExIdx + 1))}
-                    disabled={activeExIdx >= exercises.length - 1}
-                    style={{flex:1,background:activeExIdx>=exercises.length-1?'transparent':t.tealDim,border:'1px solid '+(activeExIdx>=exercises.length-1?t.border:t.teal+'40'),borderRadius:8,padding:'6px 10px',fontSize:12,fontWeight:700,color:activeExIdx>=exercises.length-1?t.textMuted:t.teal,cursor:activeExIdx>=exercises.length-1?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:activeExIdx>=exercises.length-1?0.4:1}}>
-                    Next →
-                  </button>
-                </div>
+                  return (
+                    <div key={ex.id} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
 
-                {swapOpen[ex.id] && !skipped[ex.id] && (
-                  <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
-                    {/* Header */}
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                      <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Swap exercise</div>
-                      {!aiSwapOptions[ex.id]?.length && (
-                        <button
-                          onClick={()=>getAISwap(ex)}
-                          disabled={aiSwapLoading[ex.id]}
-                          style={{fontSize:11,fontWeight:700,color:'#000',background:aiSwapLoading[ex.id]?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiSwapLoading[ex.id]?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                          {aiSwapLoading[ex.id] ? '✨ Thinking...' : '✨ AI Pick'}
-                        </button>
-                      )}
-                      {aiSwapOptions[ex.id]?.length > 0 && (
-                        <div style={{fontSize:10,color:t.teal,fontWeight:600}}>✨ AI selected</div>
-                      )}
-                    </div>
-                    {/* Search */}
-                    <input
-                      value={swapSearch[ex.id]||''}
-                      onChange={e=>setSwapSearch(prev=>({...prev,[ex.id]:e.target.value}))}
-                      placeholder="Search by name or equipment..."
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}
-                    />
-                    {/* Suggestions — max 10 */}
-                    <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:10}}>
-                      {getSwapOptions(ex).map(option => (
-                        <button
-                          key={option.id}
-                          onClick={()=>swapExercise(ex, option.id)}
-                          aria-label={`Swap to ${option.name}`}
-                          style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:t.surface,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
-                          <div>
-                            <div style={{fontWeight:700,lineHeight:1.3}}>{option.name}</div>
-                            {option.equipment && <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>{option.equipment}</div>}
+                      {/* Card header — always visible, tap to expand */}
+                      <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
+                        aria-label={`${isOpen?'Collapse':'Expand'} ${ex.exercise_name}`}
+                        aria-expanded={isOpen}
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'none',border:'none',cursor:'pointer',textAlign:'left' as const,fontFamily:"'DM Sans',sans-serif"}}>
+                        {/* Status dot */}
+                        <div style={{width:10,height:10,borderRadius:'50%',flexShrink:0,
+                          background:isSkipped?t.border:complete?t.green:done>0?t.orange:t.surfaceHigh,
+                          border:`2px solid ${isSkipped?t.border:complete?t.green:done>0?t.orange:t.border}`}}/>
+                        {/* Name + prescription */}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:14,fontWeight:700,color:isSkipped?t.textMuted:t.text,textDecoration:isSkipped?'line-through':'none',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                            {ex.exercise_name || ex.exercise?.name || 'Exercise'}
                           </div>
-                          <span style={{color:t.teal,fontWeight:700,fontSize:12,flexShrink:0}}>Use →</span>
-                        </button>
-                      ))}
-                      {getSwapOptions(ex).length === 0 && (
-                        <div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No matches — try a different search</div>
-                      )}
-                    </div>
-                    {/* Reason + note */}
-                    <select
-                      value={swapReason[ex.id] || ''}
-                      onChange={e=>setSwapReason(prev=>({...prev,[ex.id]:e.target.value}))}
-                      aria-label={`Why are you swapping ${ex.exercise_name}?`}
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
-                      <option value="">Why are you swapping?</option>
-                      <option value="Pain or discomfort">Pain or discomfort</option>
-                      <option value="Equipment unavailable">Equipment unavailable</option>
-                      <option value="Exercise felt awkward">Exercise felt awkward</option>
-                      <option value="Need a home-friendly option">Need a home-friendly option</option>
-                    </select>
-                    <input
-                      value={swapNote[ex.id]||''}
-                      onChange={e=>setSwapNote(prev=>({...prev,[ex.id]:e.target.value}))}
-                      aria-label={`Optional note for swapping ${ex.exercise_name}`}
-                      placeholder="Optional note for your coach"
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}}
-                    />
-                  </div>
-                )}
-
-                {/* Skip panel */}
-                {skipOpen[ex.id] && !skipped[ex.id] && (
-                  <div style={{background:t.redDim,border:'1px solid '+t.red+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
-                    <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:8}}>Skip this exercise?</div>
-                    <select
-                      value={skipReason[ex.id] || ''}
-                      onChange={e=>setSkipReason(prev=>({...prev,[ex.id]:e.target.value}))}
-                      aria-label={`Why are you skipping ${ex.exercise_name}?`}
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}
-                    >
-                      <option value="">Choose a reason</option>
-                      {SKIP_REASONS.map(reason => <option key={reason} value={reason}>{reason}</option>)}
-                    </select>
-                    <input
-                      value={skipNote[ex.id]||''}
-                      onChange={e=>setSkipNote(prev=>({...prev,[ex.id]:e.target.value}))}
-                      aria-label={`Required note for skipping ${ex.exercise_name}`}
-                      placeholder="Required note: what happened?"
-                      style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const}}
-                    />
-                    <div className="workout-skip-actions">
-                      <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:false}))}
-                        aria-label={`Cancel skipping ${ex.exercise_name}`}
-                        style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'8px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                        Cancel
+                          <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>
+                            {ex.sets_prescribed} sets · {ex.tracking_type==='time'?`${ex.duration_seconds||'—'}s`:ex.reps_prescribed+' reps'}{ex.weight_prescribed?` · ${ex.weight_prescribed}`:''}
+                          </div>
+                        </div>
+                        {/* Progress + chevron */}
+                        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                          {isSkipped
+                            ? <span style={{fontSize:11,fontWeight:700,color:t.textMuted}}>⏭ Skipped</span>
+                            : <span style={{fontSize:12,fontWeight:800,color:complete?t.green:done>0?t.orange:t.textMuted}}>{done}/{total}</span>
+                          }
+                          <span style={{fontSize:12,color:t.textMuted,transform:isOpen?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▼</span>
+                        </div>
                       </button>
-                      <button onClick={()=>skipExercise(ex.id)}
-                        aria-label={`Confirm skipping ${ex.exercise_name}`}
-                        style={{flex:2,background:t.red,border:'none',borderRadius:8,padding:'8px',fontSize:12,fontWeight:800,color:'#fff',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                        ⏭ Yes, Skip Exercise
-                      </button>
-                    </div>
-                  </div>
-                )}
 
-                {/* Preview toggle button */}
-                <button onClick={()=>setPreviewOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                  aria-label={`${previewOpen[ex.id] ? 'Hide' : 'Show'} exercise preview for ${ex.exercise_name}`}
-                  aria-expanded={!!previewOpen[ex.id]}
-                  style={{display:'flex',alignItems:'center',gap:6,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'6px 12px',fontSize:12,fontWeight:600,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                  {previewOpen[ex.id] ? '▲ Less detail' : '▼ More detail'}
-                </button>
+                      {/* Expanded content */}
+                      {isOpen && (
+                        <div style={{padding:'0 16px 16px'}}>
 
-                {/* Inline demo video — always visible, tap to play */}
-                {(() => {
-                  const isFemale = clientGender === 'female'
-                  const demoUrl = (isFemale && ex.exercise?.video_url_female)
-                    ? ex.exercise.video_url_female
-                    : ex.exercise?.video_url
-                  if (!demoUrl) return null
-                  return (
-                    <div style={{marginTop:10,marginBottom:2}}>
-                      <video src={demoUrl} controls playsInline preload="metadata"
-                        onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
-                        style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain'}}/>
-                      {ex.exercise?.cues && (
-                        <div style={{marginTop:8,padding:'10px 12px',background:t.orange+'15',border:'1px solid '+t.orange+'30',borderRadius:10}}>
-                          <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>📌 Cues</div>
-                          <div style={{fontSize:12,color:t.orange,lineHeight:1.6,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
+                          {/* Swap / Skip actions */}
+                          {!isSkipped && (
+                            <div style={{display:'flex',gap:6,marginBottom:12}}>
+                              <button onClick={()=>setSwapOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
+                                style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?t.teal+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                Swap
+                              </button>
+                              <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
+                                style={{background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?t.red+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                ⏭ Skip
+                              </button>
+                              <button onClick={()=>setPreviewOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
+                                style={{background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginLeft:'auto'}}>
+                                {previewOpen[ex.id]?'▲ Less':'▼ Demo'}
+                              </button>
+                            </div>
+                          )}
+
+                          {ex.notes_coach && <div style={{fontSize:11,color:t.orange,marginBottom:10}}>📌 {ex.notes_coach}</div>}
+                          {ex.original_exercise_name && <div style={{fontSize:11,color:t.teal,marginBottom:10}}>↔ Swapped from {ex.original_exercise_name}{ex.swap_reason?` · ${ex.swap_reason}`:''}</div>}
+
+                          {/* Swap panel */}
+                          {swapOpen[ex.id] && !isSkipped && (
+                            <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                                <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Swap exercise</div>
+                                <div style={{display:'flex',gap:6}}>
+                                  {!aiSwapOptions[ex.id]?.length && (
+                                    <button onClick={()=>getAISwap(ex)}
+                                      disabled={aiSwapLoading[ex.id]}
+                                      style={{fontSize:11,fontWeight:700,color:'#000',background:aiSwapLoading[ex.id]?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiSwapLoading[ex.id]?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                      {aiSwapLoading[ex.id]?'✨ Thinking...':'✨ AI Pick'}
+                                    </button>
+                                  )}
+                                  {aiSwapOptions[ex.id]?.length>0 && <div style={{fontSize:10,color:t.teal,fontWeight:600}}>✨ AI selected</div>}
+                                </div>
+                              </div>
+                              <input value={swapSearch[ex.id]||''} onChange={e=>setSwapSearch(prev=>({...prev,[ex.id]:e.target.value}))}
+                                placeholder="Search by name or equipment..."
+                                style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
+                              <div style={{display:'flex',flexDirection:'column' as const,gap:6,marginBottom:10}}>
+                                {getSwapOptions(ex).map(option=>(
+                                  <button key={option.id} onClick={()=>swapExercise(ex,option.id)}
+                                    style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,background:t.surface,border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:13,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
+                                    <div>
+                                      <div style={{fontWeight:700,lineHeight:1.3}}>{option.name}</div>
+                                      {option.equipment&&<div style={{fontSize:11,color:t.textMuted,marginTop:1}}>{option.equipment}</div>}
+                                    </div>
+                                    <span style={{color:t.teal,fontWeight:700,fontSize:12,flexShrink:0}}>Use →</span>
+                                  </button>
+                                ))}
+                                {getSwapOptions(ex).length===0&&<div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No matches — try a different search</div>}
+                              </div>
+                              <select value={swapReason[ex.id]||''} onChange={e=>setSwapReason(prev=>({...prev,[ex.id]:e.target.value}))}
+                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
+                                <option value="">Why are you swapping?</option>
+                                <option value="Pain or discomfort">Pain or discomfort</option>
+                                <option value="Equipment unavailable">Equipment unavailable</option>
+                                <option value="Exercise felt awkward">Exercise felt awkward</option>
+                                <option value="Need a home-friendly option">Need a home-friendly option</option>
+                              </select>
+                              <input value={swapNote[ex.id]||''} onChange={e=>setSwapNote(prev=>({...prev,[ex.id]:e.target.value}))}
+                                placeholder="Optional note for your coach"
+                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}}/>
+                            </div>
+                          )}
+
+                          {/* Skip panel */}
+                          {skipOpen[ex.id] && !isSkipped && (
+                            <div style={{background:t.redDim,border:'1px solid '+t.red+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+                              <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:8}}>Skip this exercise?</div>
+                              <select value={skipReason[ex.id]||''} onChange={e=>setSkipReason(prev=>({...prev,[ex.id]:e.target.value}))}
+                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
+                                <option value="">Choose a reason</option>
+                                {SKIP_REASONS.map(reason=><option key={reason} value={reason}>{reason}</option>)}
+                              </select>
+                              <input value={skipNote[ex.id]||''} onChange={e=>setSkipNote(prev=>({...prev,[ex.id]:e.target.value}))}
+                                placeholder="Required note: what happened?"
+                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const}}/>
+                              <div className="workout-skip-actions">
+                                <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:false}))}
+                                  style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'8px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                  Cancel
+                                </button>
+                                <button onClick={()=>skipExercise(ex.id)}
+                                  style={{flex:2,background:t.red,border:'none',borderRadius:8,padding:'8px',fontSize:12,fontWeight:800,color:'#fff',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                  ⏭ Yes, Skip Exercise
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Demo video + preview */}
+                          {previewOpen[ex.id] && (() => {
+                            const isFemale = clientGender==='female'
+                            const demoUrl = (isFemale&&ex.exercise?.video_url_female)?ex.exercise.video_url_female:ex.exercise?.video_url
+                            return (
+                              <div style={{marginBottom:12}}>
+                                {demoUrl && (
+                                  <video src={demoUrl} controls playsInline preload="metadata"
+                                    onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
+                                    style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain',marginBottom:8}}/>
+                                )}
+                                {ex.exercise?.cues && (
+                                  <div style={{padding:'10px 12px',background:t.orange+'15',border:'1px solid '+t.orange+'30',borderRadius:10,marginBottom:8}}>
+                                    <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>📌 Cues</div>
+                                    <div style={{fontSize:12,color:t.orange,lineHeight:1.6,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
+                                  </div>
+                                )}
+                                {((ex.exercise?.muscles?.length??0)>0||(ex.exercise?.secondary_muscles?.length??0)>0) && (
+                                  <div style={{display:'flex',flexWrap:'wrap' as const,gap:5}}>
+                                    {(ex.exercise?.muscles||[]).map((m:string)=>(
+                                      <span key={m} style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700,color:t.teal}}>{m}</span>
+                                    ))}
+                                    {(ex.exercise?.secondary_muscles||[]).map((m:string)=>(
+                                      <span key={m} style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:6,padding:'2px 8px',fontSize:11,color:t.textDim}}>{m}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+
+                          {/* Set logging grid */}
+                          {!isSkipped && (
+                            <div style={{display:'grid',gap:8,marginBottom:10}}>
+                              {setsArr.map((s,idx)=>{
+                                const prior = prevSets[ex.id]?.[idx]
+                                return (
+                                  <div key={idx} style={{background:s.logged?t.greenDim:t.surfaceHigh,border:`1px solid ${s.logged?t.green:t.border}`,borderRadius:12,padding:'12px 14px',transition:'all 0.2s'}}>
+                                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:prior?6:8}}>
+                                      <span style={{fontSize:12,fontWeight:800,color:s.logged?t.green:t.textDim,minWidth:40}}>
+                                        {s.is_warmup?'Warm-up':`Set ${idx+1}`}
+                                      </span>
+                                      <label style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:t.textMuted,marginLeft:'auto',cursor:'pointer'}}>
+                                        <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
+                                        Warmup
+                                      </label>
+                                      {s.logged&&<span style={{fontSize:12,color:t.green,fontWeight:700}}>✓</span>}
+                                    </div>
+                                    {prior&&(
+                                      <div style={{fontSize:11,color:t.textMuted,marginBottom:8,display:'flex',alignItems:'center',gap:4}}>
+                                        <span style={{color:t.teal,opacity:0.7}}>↩</span>
+                                        <span>Last: </span>
+                                        <span style={{color:t.textDim,fontWeight:700}}>
+                                          {prior.reps?`${prior.reps} reps`:'—'}
+                                          {prior.weight&&prior.unit!=='bw'?` @ ${prior.weight}${prior.unit}`:prior.unit==='bw'?' bodyweight':''}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {!s.logged&&(
+                                      <div className="workout-set-helper-row">
+                                        {prior&&(
+                                          <button onClick={()=>applySetTemplate(ex.id,idx,{reps:prior.reps,weight:prior.weight,unit:prior.unit})}
+                                            style={{background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                            Use last time
+                                          </button>
+                                        )}
+                                        {idx>0&&(
+                                          <button onClick={()=>copyPreviousLoggedSet(ex.id,idx)}
+                                            style={{background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:700,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                            Copy prev
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                    {ex.tracking_type==='time'?(
+                                      <div style={{marginBottom:8}}>
+                                        <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Duration (seconds)</label>
+                                        <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
+                                          placeholder={String(ex.duration_seconds||'')} inputMode="numeric" disabled={s.logged}
+                                          style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                                      </div>
+                                    ):(
+                                      <div className="workout-set-inputs" style={{marginBottom:8}}>
+                                        <div>
+                                          <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
+                                          <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
+                                            placeholder={ex.reps_prescribed||'—'} inputMode="numeric" disabled={s.logged}
+                                            style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                                        </div>
+                                        <div>
+                                          <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>
+                                            Weight
+                                            <select value={s.weight_unit} onChange={e=>updateSet(ex.id,idx,'weight_unit',e.target.value)} disabled={s.logged}
+                                              style={{background:'none',border:'none',color:t.teal,fontSize:11,marginLeft:4,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                              <option value="lbs">lbs</option>
+                                              <option value="kg">kg</option>
+                                              <option value="bw">BW</option>
+                                            </select>
+                                          </label>
+                                          <input type="number" value={s.weight_value} onChange={e=>updateSet(ex.id,idx,'weight_value',e.target.value)}
+                                            placeholder={ex.weight_prescribed||'—'} inputMode="decimal" disabled={s.logged||s.weight_unit==='bw'}
+                                            style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:(s.logged||s.weight_unit==='bw')?0.5:1}}/>
+                                        </div>
+                                        <div>
+                                          <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>RPE</label>
+                                          <input type="number" value={s.rpe} onChange={e=>updateSet(ex.id,idx,'rpe',e.target.value)}
+                                            placeholder="1-10" min={1} max={10} inputMode="numeric" disabled={s.logged}
+                                            style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="workout-set-note-row">
+                                      <input value={s.notes} onChange={e=>updateSet(ex.id,idx,'notes',e.target.value)}
+                                        placeholder="Notes..." disabled={s.logged}
+                                        style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
+                                      {!s.logged&&(
+                                        <button onClick={()=>logSet(ex.id,idx)}
+                                          style={{background:t.accent,border:'none',borderRadius:8,padding:'7px 16px',fontSize:13,fontWeight:700,color:'#0f0f0f',cursor:'pointer',whiteSpace:'nowrap'}}>
+                                          Log ✓
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Add set + form check video */}
+                          {!isSkipped && (
+                            <div style={{display:'flex',gap:8,marginBottom:10}}>
+                              <button onClick={()=>addSet(ex.id)}
+                                style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
+                                + Add Set
+                              </button>
+                              <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:`1px solid ${videoUploads[ex.id]?t.green+'50':t.border}`,borderRadius:10,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,textAlign:'center' as const}}>
+                                {videoUploading[ex.id]?'⏳ Uploading...':videoUploads[ex.id]?'✓ Video':'📹 Form Check'}
+                                <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
+                                  disabled={videoUploading[ex.id]}
+                                  onChange={e=>{const f=e.target.files?.[0];if(f)uploadFormVideo(ex.id,f)}}/>
+                              </label>
+                              {videoUploads[ex.id]&&(
+                                <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
+                                  style={{display:'flex',alignItems:'center',padding:'9px 14px',background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:10,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',flexShrink:0}}>
+                                  View ↗
+                                </a>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Add Exercise (last exercise only) */}
+                          {exercises.indexOf(ex)===exercises.length-1 && (
+                            <div style={{marginTop:4}}>
+                              <button onClick={()=>{setAddExOpen(o=>!o);if(!aiAddOptions.length)getAIAddSuggestions()}}
+                                style={{width:'100%',background:addExOpen?t.tealDim:'none',border:`1px dashed ${addExOpen?t.teal+'60':t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:addExOpen?t.teal:t.textDim,cursor:'pointer'}}>
+                                + Add Exercise
+                              </button>
+                              {addExOpen&&(
+                                <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginTop:8}}>
+                                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                                    <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Add an exercise</div>
+                                    {!aiAddOptions.length&&(
+                                      <button onClick={getAIAddSuggestions} disabled={aiAddLoading}
+                                        style={{fontSize:11,fontWeight:700,color:'#000',background:aiAddLoading?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiAddLoading?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                        {aiAddLoading?'✨ Thinking...':'✨ AI Suggest'}
+                                      </button>
+                                    )}
+                                    {aiAddOptions.length>0&&<div style={{fontSize:10,color:t.teal,fontWeight:600}}>✨ AI selected</div>}
+                                  </div>
+                                  <input value={addExSearch} onChange={e=>{setAddExSearch(e.target.value);setAiAddOptions([])}}
+                                    placeholder="Search exercises..."
+                                    style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
+                                  <div style={{display:'grid',gap:8}}>
+                                    {getAddExOptions().map(option=>(
+                                      <button key={option.id} onClick={()=>addExercise(option.id)}
+                                        style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,background:t.surface,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:12,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
+                                        <div>
+                                          <div style={{fontWeight:700}}>{option.name}</div>
+                                          {option.equipment&&<div style={{fontSize:11,color:t.textMuted}}>{option.equipment}</div>}
+                                        </div>
+                                        <span style={{color:t.teal,fontWeight:700,fontSize:12,flexShrink:0}}>Add +</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                         </div>
                       )}
                     </div>
-                  )
-                })()}
-
-                {/* Preview panel */}
-                {previewOpen[ex.id] && (
-                  <div style={{background:t.surface,border:'1px solid '+t.border,borderRadius:12,padding:'14px',marginTop:8}}>
-                    {/* Thumbnail / video */}
-                    {ex.exercise?.thumbnail_url && (
-                      <div style={{ position:'relative', width:'100%', height:180, marginBottom:10, overflow:'hidden', borderRadius:8 }}>
-                        <Image
-                          src={ex.exercise.thumbnail_url}
-                          alt={ex.exercise_name || ex.exercise?.name || 'Exercise preview'}
-                          fill
-                          sizes="(max-width: 480px) 100vw, 448px"
-                          style={{ objectFit:'cover' }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Muscles */}
-                    {((ex.exercise?.muscles?.length ?? 0) > 0 || (ex.exercise?.secondary_muscles?.length ?? 0) > 0) && (
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>Muscles</div>
-                        <div style={{display:'flex',flexWrap:'wrap' as const,gap:5}}>
-                          {(ex.exercise?.muscles||[]).map((m:string)=>(
-                            <span key={m} style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700,color:t.teal}}>{m}</span>
-                          ))}
-                          {(ex.exercise?.secondary_muscles||[]).map((m:string)=>(
-                            <span key={m} style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:6,padding:'2px 8px',fontSize:11,color:t.textDim}}>{m}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Equipment */}
-                    {ex.exercise?.equipment && (
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Equipment</div>
-                        <div style={{fontSize:12,color:t.text}}>{ex.exercise.equipment}</div>
-                      </div>
-                    )}
-
-                    {/* Description */}
-                    {ex.exercise?.description && (
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Description</div>
-                        <div style={{fontSize:13,color:t.textDim,lineHeight:1.6}}>{ex.exercise.description}</div>
-                      </div>
-                    )}
-
-                    {/* Coaching cues — only show here if no video (already shown above with video) */}
-                    {ex.exercise?.cues && !ex.exercise?.video_url && !ex.exercise?.video_url_female && (
-                      <div>
-                        <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>Coaching Cues</div>
-                        <div style={{fontSize:13,color:t.orange,lineHeight:1.7,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
-                      </div>
-                    )}
-
-                    {/* Video already shown inline above the set logger */}
-
-                    {/* No data fallback */}
-                    {!ex.exercise?.description && !ex.exercise?.cues && !ex.exercise?.muscles?.length && !ex.exercise?.video_url && (
-                      <div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No preview available for this exercise yet.</div>
-                    )}
-                  </div>
-                )}
-
-              </div>
-
-              <div style={{display:'grid',gap:10,marginBottom:12}}>
-                {setsArr.map((s,idx)=>{
-                  const prior = prevSets[ex.id]?.[idx]
-                  return (
-                  <div key={idx} style={{background:s.logged?t.greenDim:t.surface,border:`1px solid ${s.logged?t.green:t.border}`,borderRadius:14,padding:'14px 16px',transition:'all 0.2s'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:prior?6:10}}>
-                      <span style={{fontSize:12,fontWeight:800,color:s.logged?t.green:t.textDim,minWidth:40}}>
-                        {s.is_warmup?'Warm-up':`Set ${idx+1}`}
-                      </span>
-                      <label style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:t.textMuted,marginLeft:'auto',cursor:'pointer'}}>
-                        <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)}
-                          style={{accentColor:t.orange}}/>
-                        Warmup
-                      </label>
-                      {s.logged && <span style={{fontSize:12,color:t.green,fontWeight:700}}>✓ Logged</span>}
-                    </div>
-                    {/* Previous session hint */}
-                    {prior && (
-                      <div style={{fontSize:11,color:t.textMuted,marginBottom:8,paddingLeft:2,display:'flex',alignItems:'center',gap:4}}>
-                        <span style={{color:t.teal,opacity:0.7}}>↩</span>
-                        <span>Last time: </span>
-                        <span style={{color:t.textDim,fontWeight:700}}>
-                          {prior.reps ? `${prior.reps} reps` : '—'}
-                          {prior.weight && prior.unit !== 'bw' ? ` @ ${prior.weight}${prior.unit}` : prior.unit === 'bw' ? ' bodyweight' : ''}
-                        </span>
-                      </div>
-                    )}
-                    {!s.logged && (
-                      <div className="workout-set-helper-row">
-                        {prior && (
-                          <button onClick={()=>applySetTemplate(ex.id, idx, { reps: prior.reps, weight: prior.weight, unit: prior.unit })}
-                            aria-label={`Use last workout numbers for ${s.is_warmup ? 'warm-up' : `set ${idx + 1}`} of ${ex.exercise_name}`}
-                            style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                            Use last time
-                          </button>
-                        )}
-                        {idx > 0 && (
-                          <button onClick={()=>copyPreviousLoggedSet(ex.id, idx)}
-                            aria-label={`Copy previous set values into ${s.is_warmup ? 'warm-up' : `set ${idx + 1}`} for ${ex.exercise_name}`}
-                            style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:700,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                            Copy previous set
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <div className="workout-set-grid">
-                      <div>
-                        {ex.tracking_type === 'time' ? (
-                          <>
-                            <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Duration (sec)</label>
-                            <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
-                              placeholder={ex.duration_seconds ? String(ex.duration_seconds) : '30'}
-                              inputMode="numeric" disabled={s.logged}
-                              style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                          </>
-                        ) : (
-                          <>
-                            <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
-                            <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
-                              aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} reps for ${ex.exercise_name}`}
-                              placeholder={ex.reps_prescribed||'—'} inputMode="numeric" disabled={s.logged}
-                              style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                          </>
-                        )}
-                      </div>
-                      <div>
-                        <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>
-                          Weight
-                          <select value={s.weight_unit} onChange={e=>updateSet(ex.id,idx,'weight_unit',e.target.value)} disabled={s.logged}
-                            aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} weight unit for ${ex.exercise_name}`}
-                            style={{background:'none',border:'none',color:t.teal,fontSize:11,marginLeft:4,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                            <option value="lbs">lbs</option>
-                            <option value="kg">kg</option>
-                            <option value="bw">BW</option>
-                          </select>
-                        </label>
-                        <input type="number" value={s.weight_value} onChange={e=>updateSet(ex.id,idx,'weight_value',e.target.value)}
-                          aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} weight for ${ex.exercise_name}`}
-                          placeholder={ex.weight_prescribed||'—'} inputMode="decimal" disabled={s.logged||s.weight_unit==='bw'}
-                          style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:(s.logged||s.weight_unit==='bw')?0.5:1}}/>
-                      </div>
-                      <div>
-                        <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>RPE</label>
-                        <input type="number" value={s.rpe} onChange={e=>updateSet(ex.id,idx,'rpe',e.target.value)}
-                          aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} RPE for ${ex.exercise_name}`}
-                          placeholder="1-10" min={1} max={10} inputMode="numeric" disabled={s.logged}
-                          style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                      </div>
-                    </div>
-                    <div className="workout-set-note-row">
-                      <input value={s.notes} onChange={e=>updateSet(ex.id,idx,'notes',e.target.value)}
-                        aria-label={`${s.is_warmup ? 'Warm-up' : `Set ${idx + 1}`} notes for ${ex.exercise_name}`}
-                        placeholder="Notes..." disabled={s.logged}
-                        style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                      {!s.logged && (
-                        <button onClick={()=>logSet(ex.id,idx)}
-                          aria-label={`Log ${s.is_warmup ? 'warm-up' : `set ${idx + 1}`} for ${ex.exercise_name}`}
-                          style={{background:t.accent,border:'none',borderRadius:8,padding:'7px 16px',fontSize:13,fontWeight:700,color:'#0f0f0f',cursor:'pointer',whiteSpace:'nowrap'}}>
-                          Log ✓
-                        </button>
-                      )}
-                    </div>
-                  </div>
                   )
                 })}
               </div>
-
-              <div style={{display:'flex',gap:8,marginBottom:0}}>
-                <button onClick={()=>addSet(ex.id)}
-                  aria-label={`Add another set for ${ex.exercise_name}`}
-                  style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'10px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
-                  + Add Set
-                </button>
-                {activeExIdx === exercises.indexOf(ex) && exercises.indexOf(ex) === exercises.length - 1 && (
-                  <button onClick={()=>{ setAddExOpen(o=>!o); if(!aiAddOptions.length) getAIAddSuggestions() }}
-                    style={{flex:1,background:addExOpen?t.tealDim:'none',border:`1px dashed ${addExOpen?t.teal+'60':t.border}`,borderRadius:10,padding:'10px',fontSize:13,color:addExOpen?t.teal:t.textDim,cursor:'pointer'}}>
-                    + Add Exercise
-                  </button>
-                )}
-              </div>
-
-              {/* Add Exercise panel */}
-              {addExOpen && activeExIdx === exercises.indexOf(ex) && exercises.indexOf(ex) === exercises.length - 1 && (
-                <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginTop:8}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                    <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Add an exercise</div>
-                    {!aiAddOptions.length && (
-                      <button onClick={getAIAddSuggestions} disabled={aiAddLoading}
-                        style={{fontSize:11,fontWeight:700,color:'#000',background:aiAddLoading?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiAddLoading?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                        {aiAddLoading ? '✨ Thinking...' : '✨ AI Suggest'}
-                      </button>
-                    )}
-                    {aiAddOptions.length > 0 && <div style={{fontSize:10,color:t.teal,fontWeight:600}}>✨ AI selected</div>}
-                  </div>
-                  <input value={addExSearch} onChange={e=>{ setAddExSearch(e.target.value); setAiAddOptions([]) }}
-                    placeholder="Search exercises..."
-                    style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8,boxSizing:'border-box' as const,colorScheme:'dark'}}
-                  />
-                  <div style={{display:'grid',gap:8}}>
-                    {getAddExOptions().map(option => (
-                      <button key={option.id} onClick={()=>addExercise(option.id)}
-                        style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,background:t.surface,border:'1px solid '+t.border,borderRadius:10,padding:'10px 12px',fontSize:12,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
-                        <span>
-                          <strong>{option.name}</strong>
-                          {option.equipment ? <span style={{color:t.textMuted}}> · {option.equipment}</span> : null}
-                        </span>
-                        <span style={{color:t.teal,fontWeight:700}}>Add</span>
-                      </button>
-                    ))}
-                    {getAddExOptions().length === 0 && (
-                      <div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No exercises found</div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Form check video — below sets, library + camera both available */}
-              <div style={{marginTop:12,padding:'12px 14px',background:t.surface,border:`1px solid ${t.border}`,borderRadius:12}}>
-                <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:8}}>📹 Form Check</div>
-                <div className="workout-form-check-row">
-                  {/* Single button — opens native file picker on all platforms, user chooses camera or library */}
-                  <label aria-label={`Upload form check video for ${ex.exercise_name}`} style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:`1px solid ${videoUploads[ex.id]?t.green+'50':t.border}`,borderRadius:9,padding:'10px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,textAlign:'center' as const}}>
-                    {videoUploading[ex.id] ? '⏳ Uploading...' : videoUploads[ex.id] ? '✓ Uploaded' : '📹 Add Video'}
-                    <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
-                      disabled={videoUploading[ex.id]}
-                      onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadFormVideo(ex.id, f) }}/>
-                  </label>
-                  {videoUploads[ex.id] && (
-                    <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
-                      aria-label={`View uploaded form check video for ${ex.exercise_name}`}
-                      style={{display:'flex',alignItems:'center',padding:'10px 14px',background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:9,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',flexShrink:0}}>
-                      View ↗
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {activeExIdx < exercises.length - 1 && (
-                <button onClick={()=>setActiveExIdx(activeExIdx+1)}
-                  aria-label="Go to next exercise"
-                  style={{width:'100%',marginTop:10,background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:10,padding:'11px',fontSize:13,fontWeight:700,color:t.teal,cursor:'pointer'}}>
-                  Next Exercise →
-                </button>
-              )}
-            </div>
-          )
-        })()}
+            ))
+          })()}
+        </div>
 
         {/* Finish banner */}
         {allLogged && phase === 'workout' && (
