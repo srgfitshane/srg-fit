@@ -26,16 +26,16 @@ const t = {
 }
 
 const TABS = [
-  { id:'overview',  label:'Overview',  icon:'👤' },
-  { id:'program',   label:'Program',   icon:'📋' },
-  { id:'calendar',  label:'Calendar',  icon:'📅' },
-  { id:'nutrition', label:'Nutrition', icon:'🥦' },
-  { id:'checkins',  label:'Check-ins', icon:'✓' },
-  { id:'goals',     label:'Goals',     icon:'🎯' },
-  { id:'metrics',   label:'Metrics',   icon:'📈' },
-  { id:'pulse',     label:'Pulse & Journal', icon:'❤' },
-  { id:'messages',  label:'Messages',  icon:'💬' },
-  { id:'intake',    label:'Intake',    icon:'📊' },
+  { id:'overview',  label:'Overview',  icon:'👤', inPersonOnly: false },
+  { id:'program',   label:'Program',   icon:'📋', inPersonOnly: false },
+  { id:'calendar',  label:'Calendar',  icon:'📅', inPersonOnly: false },
+  { id:'nutrition', label:'Nutrition', icon:'🥦', inPersonOnly: false },
+  { id:'checkins',  label:'Check-ins', icon:'✓',  inPersonOnly: true  },
+  { id:'goals',     label:'Goals',     icon:'🎯', inPersonOnly: false },
+  { id:'metrics',   label:'Metrics',   icon:'📈', inPersonOnly: false },
+  { id:'pulse',     label:'Pulse & Journal', icon:'❤', inPersonOnly: true },
+  { id:'messages',  label:'Messages',  icon:'💬', inPersonOnly: true  },
+  { id:'intake',    label:'Intake',    icon:'📊', inPersonOnly: true  },
 ]
 
 
@@ -377,6 +377,17 @@ export default function ClientDetail() {
               {resendDone ? '✓ Sent!' : resending ? 'Sending...' : '📨 Resend Invite'}
             </button>
           )}
+          {client.training_type === 'in_person' && (
+            <button onClick={async () => {
+              if (!confirm('Send this client an invite to create their app account? They will be upgraded to Hybrid.')) return
+              await supabase.from('clients').update({ training_type: 'hybrid', client_type: 'online' }).eq('id', clientId)
+              setTrainingType('hybrid')
+              await resendInvite()
+            }}
+              style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              📱 Invite to App (→ Hybrid)
+            </button>
+          )}
           <button onClick={()=>setShowAssignForm(true)}
             style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             📝 Send Form
@@ -439,7 +450,7 @@ export default function ClientDetail() {
         {/* Tabs */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border }}>
           <div className="tab-bar" style={{ maxWidth:1200, margin:'0 auto', display:'flex', padding:'0 28px', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-            {TABS.map(tab => (
+            {TABS.filter(tab => !(tab.inPersonOnly && client?.training_type === 'in_person')).map(tab => (
               <div key={tab.id} onClick={()=>setActiveTab(tab.id)}
                 className="tab-item" style={{ display:'flex', alignItems:'center', gap:6, padding:'14px 18px', cursor:'pointer', borderBottom:'2px solid '+(activeTab===tab.id ? t.teal : 'transparent'), fontSize:13, fontWeight:activeTab===tab.id ? 700 : 500, color:activeTab===tab.id ? t.teal : t.textDim, transition:'all 0.15s ease', whiteSpace:'nowrap', flexShrink:0 }}>
                 <span>{tab.icon}</span>{tab.label}
