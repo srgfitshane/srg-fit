@@ -97,18 +97,17 @@ export default function CoachHabits() {
   }
 
   const moveHabit = async (id: string, dir: -1|1) => {
-    setHabits(prev => {
-      const arr = [...prev].sort((a,b) => (a.order_index??0) - (b.order_index??0))
-      const idx = arr.findIndex(h => h.id === id)
-      const next = idx + dir
-      if (next < 0 || next >= arr.length) return prev
-      const tmp = arr[idx].order_index ?? idx
-      arr[idx] = { ...arr[idx], order_index: arr[next].order_index ?? next }
-      arr[next] = { ...arr[next], order_index: tmp }
-      void supabase.from('habits').update({ order_index: arr[idx].order_index }).eq('id', arr[idx].id)
-      void supabase.from('habits').update({ order_index: arr[next].order_index }).eq('id', arr[next].id)
-      return arr
-    })
+    const sorted = [...habits].sort((a,b) => (a.order_index??0) - (b.order_index??0))
+    const idx = sorted.findIndex(h => h.id === id)
+    const next = idx + dir
+    if (next < 0 || next >= sorted.length) return
+    // Re-assign clean sequential order_index values then swap
+    const reindexed = sorted.map((h, i) => ({ ...h, order_index: i }))
+    ;[reindexed[idx].order_index, reindexed[next].order_index] = [reindexed[next].order_index, reindexed[idx].order_index]
+    setHabits(reindexed)
+    await Promise.all(reindexed.map(h => 
+      supabase.from('habits').update({ order_index: h.order_index }).eq('id', h.id)
+    ))
   }
 
   const applyPreset = (p: typeof HABIT_PRESETS[0]) => {
