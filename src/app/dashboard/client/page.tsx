@@ -206,6 +206,7 @@ type HabitRecord = {
   unit?: string | null
   color?: string | null
   icon?: string | null
+  order_index?: number | null
 }
 
 type HabitLogRecord = {
@@ -1284,7 +1285,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {habits.map((h) => {
+                {[...habits].sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0)).map((h) => {
                   const val = habitLogs[h.id] || 0
                   const target = h.target || 0
                   const pct = h.habit_type==='check' ? (val?100:0) : target > 0 ? Math.min(100, Math.round((val / target) * 100)) : 0
@@ -1685,7 +1686,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       type="number" autoFocus inputMode="numeric" placeholder="0"
                       value={logPopup.draft}
                       onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
-                      onKeyDown={e=>{ if(e.key==='Enter'){ logHabit(logPopup.habit.id, +logPopup.draft||0); setLogPopup(null) }}}
+                      onKeyDown={e=>{ if(e.key==='Enter'){ const v = +logPopup.draft||0; if(v > 0){ logHabit(logPopup.habit.id, v); setLogPopup(null) } }}}
                       style={{ flex:1, background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
                     />
                     <div style={{ fontSize:16, fontWeight:700, color:t.textMuted, flexShrink:0 }}>{logPopup.habit.unit}</div>
@@ -1693,7 +1694,13 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 )}
               </div>
               <button
-                onClick={()=>{ const v = logPopup.habit.unit==='hrs' ? (() => { const parts=(logPopup.draft||'0:0').split(':'); const hh=parseInt(parts[0]||'0'); const mm=parseInt(parts[1]||'0'); return hh+(mm/60) })() : (+logPopup.draft||0); logHabit(logPopup.habit.id, v); setLogPopup(null) }}
+                onClick={()=>{ 
+                  const v = logPopup.habit.unit==='hrs' 
+                    ? (() => { const parts=(logPopup.draft||'0:0').split(':'); const hh=parseInt(parts[0]||'0'); const mm=parseInt(parts[1]||'0'); return hh+(mm/60) })() 
+                    : (+logPopup.draft||0)
+                  if (!v || v <= 0) { setLogPopup(null); return }
+                  logHabit(logPopup.habit.id, v); setLogPopup(null) 
+                }}
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Save ✓
               </button>

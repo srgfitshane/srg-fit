@@ -234,7 +234,8 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText() }
+    // Enter does NOT send — use the send button only
+    // Shift+Enter still adds a new line naturally
   }
 
   // ── Upload + send file ────────────────────────────────────────────────────

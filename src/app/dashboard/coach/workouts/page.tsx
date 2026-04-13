@@ -617,8 +617,8 @@ export default function CoachWorkoutsPage() {
                     <div key={i} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'14px 16px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
                         <div style={{display:'flex',flexDirection:'column',gap:2}}>
-                          <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:'none',border:'none',color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',fontSize:10,lineHeight:1,padding:'1px 4px'}}>▲</button>
-                          <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:'none',border:'none',color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',fontSize:10,lineHeight:1,padding:'1px 4px'}}>▼</button>
+                          <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:i===0?'transparent':t.tealDim,border:`1px solid ${i===0?t.border:t.teal+'40'}`,borderRadius:6,color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',fontSize:14,lineHeight:1,padding:'4px 8px',fontFamily:"'DM Sans',sans-serif"}}>▲</button>
+                          <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:i===buildExercises.length-1?'transparent':t.tealDim,border:`1px solid ${i===buildExercises.length-1?t.border:t.teal+'40'}`,borderRadius:6,color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',fontSize:14,lineHeight:1,padding:'4px 8px',fontFamily:"'DM Sans',sans-serif"}}>▼</button>
                         </div>
                         <span style={{fontSize:12,fontWeight:800,color:t.teal,minWidth:20}}>{i+1}.</span>
                         <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>

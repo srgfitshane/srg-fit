@@ -67,7 +67,7 @@ export default function CoachHabits() {
   }
 
   const loadHabits = async (clientId: string) => {
-    const { data } = await supabase.from('habits').select('*').eq('client_id', clientId).order('created_at')
+    const { data } = await supabase.from('habits').select('*').eq('client_id', clientId).order('order_index').order('created_at')
     setHabits(data || [])
   }
 
@@ -94,6 +94,21 @@ export default function CoachHabits() {
   const deleteHabit = async (id: string) => {
     await supabase.from('habits').delete().eq('id', id)
     setHabits(prev => prev.filter(h => h.id !== id))
+  }
+
+  const moveHabit = async (id: string, dir: -1|1) => {
+    setHabits(prev => {
+      const arr = [...prev].sort((a,b) => (a.order_index??0) - (b.order_index??0))
+      const idx = arr.findIndex(h => h.id === id)
+      const next = idx + dir
+      if (next < 0 || next >= arr.length) return prev
+      const tmp = arr[idx].order_index ?? idx
+      arr[idx] = { ...arr[idx], order_index: arr[next].order_index ?? next }
+      arr[next] = { ...arr[next], order_index: tmp }
+      void supabase.from('habits').update({ order_index: arr[idx].order_index }).eq('id', arr[idx].id)
+      void supabase.from('habits').update({ order_index: arr[next].order_index }).eq('id', arr[next].id)
+      return arr
+    })
   }
 
   const applyPreset = (p: typeof HABIT_PRESETS[0]) => {
@@ -160,6 +175,12 @@ export default function CoachHabits() {
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:6 }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                    <button onClick={()=>moveHabit(h.id,-1)}
+                      style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'3px 7px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1, fontFamily:"'DM Sans',sans-serif" }}>▲</button>
+                    <button onClick={()=>moveHabit(h.id,1)}
+                      style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'3px 7px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1, fontFamily:"'DM Sans',sans-serif" }}>▼</button>
+                  </div>
                   <button onClick={()=>toggleActive(h)}
                     style={{ background:h.active?t.greenDim:t.surfaceHigh, border:'1px solid '+(h.active?t.green+'40':t.border), borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:h.active?t.green:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {h.active ? '✓ Active' : 'Paused'}

@@ -2607,7 +2607,7 @@ function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; 
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+    // Enter does NOT send — use the send button only
   }
 
   const c = colors

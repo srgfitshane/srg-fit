@@ -241,6 +241,24 @@ export default function ProgramBuilder() {
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, block_exercises: (b.block_exercises||[]).filter((e:any) => e.id !== exId) } : b))
   }
 
+  const moveExercise = async (blockId: string, exId: string, dir: -1|1) => {
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b
+      const exes = [...(b.block_exercises||[])].sort((a:any,b:any) => a.order_index - b.order_index)
+      const idx = exes.findIndex((e:any) => e.id === exId)
+      const next = idx + dir
+      if (next < 0 || next >= exes.length) return b
+      // Swap order_index values
+      const tmp = exes[idx].order_index
+      exes[idx] = { ...exes[idx], order_index: exes[next].order_index }
+      exes[next] = { ...exes[next], order_index: tmp }
+      // Persist both
+      void supabase.from('block_exercises').update({ order_index: exes[idx].order_index }).eq('id', exes[idx].id)
+      void supabase.from('block_exercises').update({ order_index: exes[next].order_index }).eq('id', exes[next].id)
+      return { ...b, block_exercises: exes }
+    }))
+  }
+
   const openAddEx = async (blockId: string, role = 'main') => {
     setPendingRole(role)
     setShowAddEx(blockId)
@@ -648,6 +666,12 @@ export default function ProgramBuilder() {
                                         {ex.notes && <div style={{ fontSize:10, color:t.textMuted, fontStyle:'italic', marginTop:2 }}>📝 {ex.notes}</div>}
                                       </div>
                                       <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+                                        <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                                          <button onClick={()=>moveExercise(block.id, ex.id, -1)}
+                                            style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▲</button>
+                                          <button onClick={()=>moveExercise(block.id, ex.id, 1)}
+                                            style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▼</button>
+                                        </div>
                                         <button onClick={()=>setEditingEx(editingEx===ex.id?null:ex.id)}
                                           style={{ background:t.surfaceHigh, border:'none', borderRadius:6, padding:'4px 8px', fontSize:10, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                           {editingEx===ex.id?'done':'edit'}
