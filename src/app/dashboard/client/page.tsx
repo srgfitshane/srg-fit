@@ -368,6 +368,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])
   const [habitLogs,    setHabitLogs]    = useState<Record<string,number>>({})
+  const [clientTasks,  setClientTasks]  = useState<{id:string,title:string,repeat:string,due_date:string|null,last_completed_date:string|null}[]>([])
   const [milestones,   setMilestones]   = useState<MilestoneRecord[]>([])
   const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
@@ -497,6 +498,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: completedTodayData },
           { data: latestMetric },
           { data: allPRData },
+          { data: taskData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
@@ -529,9 +531,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('workout_sessions').select('id, title').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
           supabase.from('metrics').select('weight').eq('client_id', clientData.id).not('weight', 'is', null).order('logged_date', { ascending: false }).limit(1).single(),
           supabase.from('personal_records').select('exercise_id, weight_pr').eq('client_id', cid),
+          supabase.from('client_tasks').select('*').eq('client_id', cid).order('created_at'),
         ])
 
         setHabits((habitData || []) as HabitRecord[])
+        setClientTasks(taskData || [])
 
         const logMap: Record<string,number> = {}
         ;((habitLogData || []) as HabitLogRecord[]).forEach((log) => { logMap[log.habit_id] = log.value })
@@ -800,6 +804,33 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       }
     }
   }
+
+  const completeTask = async (taskId: string) => {
+    await supabase.from('client_tasks').update({ last_completed_date: today }).eq('id', taskId)
+    setClientTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_completed_date: today } : t))
+  }
+
+  const uncompleteTask = async (taskId: string) => {
+    await supabase.from('client_tasks').update({ last_completed_date: null }).eq('id', taskId)
+    setClientTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_completed_date: null } : t))
+  }
+
+  const isTaskDoneToday = (task: { repeat: string, last_completed_date: string | null }) => {
+    if (task.repeat === 'once')   return task.last_completed_date !== null
+    if (task.repeat === 'daily')  return task.last_completed_date === today
+    if (task.repeat === 'weekly') {
+      if (!task.last_completed_date) return false
+      const diff = Math.floor((new Date(today + 'T00:00:00').getTime() - new Date(task.last_completed_date + 'T00:00:00').getTime()) / 86400000)
+      return diff < 7
+    }
+    return false
+  }
+
+  // Tasks due today: daily always show, weekly always show, once only if due today or no date
+  const todayTasks = clientTasks.filter(t => {
+    if (t.repeat === 'daily' || t.repeat === 'weekly') return true
+    return t.due_date === today || !t.due_date
+  })
 
 
   const suggestGoal = async () => {
@@ -1281,10 +1312,32 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           )}
 
           {/* ── 6. TASKS / HABITS ── */}
-          {habits.length > 0 && (
+          {(habits.length > 0 || todayTasks.length > 0) && (
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
-              <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tasks & Habits</div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em' }}>Tasks & Habits</div>
+                <button onClick={()=>router.push('/dashboard/client/calendar')}
+                  style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  + Task
+                </button>
+              </div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {/* Client tasks */}
+                {todayTasks.map(task => {
+                  const done = isTaskDoneToday(task)
+                  return (
+                    <div key={task.id} style={{ background:t.surface, border:'1px solid '+(done?t.green+'40':t.teal+'30'), borderRadius:13, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
+                      <button onClick={()=> done ? uncompleteTask(task.id) : completeTask(task.id)}
+                        style={{ width:28, height:28, borderRadius:8, border:'2px solid '+(done?t.green:t.teal+'60'), background:done?t.green+'22':t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, fontSize:14, color:done?t.green:t.teal }}>
+                        {done ? '✓' : ''}
+                      </button>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:700, textDecoration:done?'line-through':'none', color:done?t.textMuted:t.text }}>{task.title}</div>
+                        {task.repeat !== 'once' && <div style={{ fontSize:11, color:t.textMuted, marginTop:1, textTransform:'capitalize' as const }}>{task.repeat}</div>}
+                      </div>
+                    </div>
+                  )
+                })}
                 {[...habits].sort((a,b) => (a.order_index ?? 0) - (b.order_index ?? 0)).map((h) => {
                   const val = habitLogs[h.id] || 0
                   const target = h.target || 0

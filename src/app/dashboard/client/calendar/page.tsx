@@ -33,6 +33,14 @@ type CalItem = {
   source_id?: string
 }
 
+type ClientTask = {
+  id: string
+  title: string
+  repeat: 'once' | 'daily' | 'weekly'
+  due_date: string | null
+  last_completed_date: string | null
+}
+
 type JournalEntrySummary = { entry_date: string }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -58,12 +66,20 @@ export default function ClientCalendarPage() {
 
   const [items,        setItems]        = useState<CalItem[]>([])
   const [journalDates, setJournalDates] = useState<Set<string>>(new Set())
+  const [tasks,        setTasks]        = useState<ClientTask[]>([])
   const [loading,      setLoading]      = useState(true)
   const [viewMonth,    setViewMonth]    = useState(today.getMonth())
   const [viewYear,     setViewYear]     = useState(today.getFullYear())
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
-  const [rescheduling, setRescheduling] = useState<string|null>(null) // session id being rescheduled
-  const [reschedPick,  setReschedPick]  = useState<string>('')        // picked new date
+  const [rescheduling, setRescheduling] = useState<string|null>(null)
+  const [reschedPick,  setReschedPick]  = useState<string>('')
+  const [clientId,     setClientId]     = useState<string|null>(null)
+  // Task add modal
+  const [showAddTask,  setShowAddTask]  = useState(false)
+  const [taskTitle,    setTaskTitle]    = useState('')
+  const [taskRepeat,   setTaskRepeat]   = useState<'once'|'daily'|'weekly'>('once')
+  const [taskDate,     setTaskDate]     = useState(todayStr)
+  const [taskSaving,   setTaskSaving]   = useState(false)
 
   // Build the current week (Sun–Sat containing today)
   const weekStart = new Date(today)
@@ -82,8 +98,9 @@ export default function ClientCalendarPage() {
         const { data: clientData } = await supabase
           .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
         if (!clientData) { setLoading(false); return }
+        setClientId(clientData.id)
 
-        const [{ data: calEvts }, { data: sessions }, { data: journals }] = await Promise.all([
+        const [{ data: calEvts }, { data: sessions }, { data: journals }, { data: taskData }] = await Promise.all([
           supabase.from('calendar_events').select('*')
             .eq('coach_id', clientData.coach_id)
             .eq('client_id', clientData.id)
@@ -96,7 +113,12 @@ export default function ClientCalendarPage() {
           supabase.from('journal_entries').select('entry_date')
             .eq('client_id', user.id)
             .order('entry_date', { ascending: false }).limit(365),
+          supabase.from('client_tasks').select('*')
+            .eq('client_id', clientData.id)
+            .order('created_at'),
         ])
+
+        setTasks((taskData || []) as ClientTask[])
 
         setJournalDates(new Set(((journals||[]) as JournalEntrySummary[]).map(j => j.entry_date)))
 
@@ -161,6 +183,55 @@ export default function ClientCalendarPage() {
   const selectedLabel   = selectedDate === todayStr ? 'Today'
     : selectedDate === localDateStr(new Date(today.getTime() + 86400000)) ? 'Tomorrow'
     : selectedDateObj.toLocaleDateString([], { weekday:'long', month:'short', day:'numeric' })
+
+  const isTaskDoneToday = (task: ClientTask) => {
+    if (task.repeat === 'once')   return task.last_completed_date !== null
+    if (task.repeat === 'daily')  return task.last_completed_date === todayStr
+    if (task.repeat === 'weekly') {
+      if (!task.last_completed_date) return false
+      const last = new Date(task.last_completed_date + 'T00:00:00')
+      const diff = Math.floor((new Date(todayStr + 'T00:00:00').getTime() - last.getTime()) / 86400000)
+      return diff < 7
+    }
+    return false
+  }
+
+  const completeTask = async (task: ClientTask) => {
+    await supabase.from('client_tasks').update({ last_completed_date: todayStr }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, last_completed_date: todayStr } : t))
+  }
+
+  const uncompleteTask = async (task: ClientTask) => {
+    await supabase.from('client_tasks').update({ last_completed_date: null }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, last_completed_date: null } : t))
+  }
+
+  const deleteTask = async (id: string) => {
+    await supabase.from('client_tasks').delete().eq('id', id)
+    setTasks(prev => prev.filter(t => t.id !== id))
+  }
+
+  const saveTask = async () => {
+    if (!taskTitle.trim() || !clientId) return
+    setTaskSaving(true)
+    const { data } = await supabase.from('client_tasks').insert({
+      client_id: clientId,
+      title: taskTitle.trim(),
+      repeat: taskRepeat,
+      due_date: taskRepeat === 'once' ? taskDate : null,
+    }).select().single()
+    if (data) setTasks(prev => [...prev, data as ClientTask])
+    setTaskTitle(''); setTaskRepeat('once'); setTaskDate(todayStr)
+    setShowAddTask(false); setTaskSaving(false)
+  }
+
+  // Tasks visible on selected date
+  const tasksForDate = (ds: string) => tasks.filter(t => {
+    if (t.repeat === 'daily')  return true
+    if (t.repeat === 'weekly') return true
+    if (t.repeat === 'once')   return t.due_date === ds || (!t.due_date && ds === todayStr)
+    return false
+  })
 
   const rescheduleSession = async (sessionId: string, newDate: string) => {
     await supabase.from('workout_sessions').update({ scheduled_date: newDate }).eq('id', sessionId)
@@ -229,10 +300,16 @@ export default function ClientCalendarPage() {
 
           {/* ── SELECTED DAY DETAIL ── */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:16, marginBottom:16 }}>
-            <div style={{ fontSize:14, fontWeight:800, marginBottom:12, color: selectedDate === todayStr ? t.teal : t.text }}>
-              {selectedLabel}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <div style={{ fontSize:14, fontWeight:800, color: selectedDate === todayStr ? t.teal : t.text }}>
+                {selectedLabel}
+              </div>
+              <button onClick={()=>{ setTaskDate(selectedDate); setShowAddTask(true) }}
+                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 12px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                + Add Task
+              </button>
             </div>
-            {selectedItems.length === 0 && !hasJournal ? (
+            {selectedItems.length === 0 && !hasJournal && tasksForDate(selectedDate).length === 0 ? (
               <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'16px 0' }}>Nothing scheduled</div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -309,6 +386,25 @@ export default function ClientCalendarPage() {
                     <div style={{ fontSize:13, fontWeight:700 }}>Journal entry</div>
                   </div>
                 )}
+                {/* Tasks for this day */}
+                {tasksForDate(selectedDate).map(task => {
+                  const done = isTaskDoneToday(task)
+                  const REPEAT_LABEL = { once:'One-time', daily:'Daily', weekly:'Weekly' }
+                  return (
+                    <div key={task.id} style={{ background:t.surfaceHigh, border:'1px solid '+(done ? t.green+'40' : t.teal+'30'), borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
+                      <button onClick={()=> done ? uncompleteTask(task) : completeTask(task)}
+                        style={{ width:28, height:28, borderRadius:8, border:'2px solid '+(done?t.green:t.teal+'60'), background:done?t.green:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, fontSize:14 }}>
+                        {done ? '✓' : ''}
+                      </button>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:700, textDecoration: done ? 'line-through' : 'none', color: done ? t.textMuted : t.text }}>{task.title}</div>
+                        <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{REPEAT_LABEL[task.repeat]}</div>
+                      </div>
+                      <button onClick={()=>deleteTask(task.id)}
+                        style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16, lineHeight:1, padding:4 }}>✕</button>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -405,6 +501,49 @@ export default function ClientCalendarPage() {
         </div>
       </div>
       <ClientBottomNav />
+
+      {/* Add Task Modal */}
+      {showAddTask && (
+        <>
+          <div onClick={()=>setShowAddTask(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50 }}/>
+          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:51, padding:'24px 20px 48px', fontFamily:"'DM Sans',sans-serif" }}>
+            <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }}/>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:20 }}>Add Task</div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Task</div>
+              <input autoFocus value={taskTitle} onChange={e=>setTaskTitle(e.target.value)}
+                placeholder="e.g. Take medication, Call doctor..."
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:15, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark', boxSizing:'border-box' as const }}/>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Repeat</div>
+              <div style={{ display:'flex', gap:8 }}>
+                {(['once','daily','weekly'] as const).map(r => (
+                  <button key={r} onClick={()=>setTaskRepeat(r)}
+                    style={{ flex:1, padding:'9px', borderRadius:10, border:'1px solid '+(taskRepeat===r?t.teal+'60':t.border), background:taskRepeat===r?t.tealDim:'transparent', fontSize:13, fontWeight:700, color:taskRepeat===r?t.teal:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' as const }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {taskRepeat === 'once' && (
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Date</div>
+                <input type="date" value={taskDate} onChange={e=>setTaskDate(e.target.value)}
+                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:14, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark', boxSizing:'border-box' as const }}/>
+              </div>
+            )}
+
+            <button onClick={saveTask} disabled={!taskTitle.trim() || taskSaving}
+              style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: taskTitle.trim() ? `linear-gradient(135deg,${t.teal},${t.teal}cc)` : t.surfaceHigh, color: taskTitle.trim() ? '#000' : t.textMuted, fontSize:15, fontWeight:800, cursor: taskTitle.trim() ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
+              {taskSaving ? 'Saving...' : 'Save Task'}
+            </button>
+          </div>
+        </>
+      )}
     </>
   )
 }
