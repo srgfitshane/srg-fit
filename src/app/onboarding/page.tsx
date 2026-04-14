@@ -257,10 +257,23 @@ export default function OnboardingPage() {
                 </div>
               </div>
               <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Where Do You Train?</label>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                  {['Home','Gym','Park / Outdoors','Other'].map(opt => (
+                    chip(opt, data.workout_location===opt, ()=>set('workout_location',opt))
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Equipment Access</label>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
                   {['Barbell','Dumbbells','Cables','Machines','Bodyweight','Resistance Bands','Kettlebells','Pull-up Bar','Bench','Other'].map(eq => chip(eq, equipmentAccess.includes(eq), ()=>toggle('equipment_access',eq), '#f5a623'))}
                 </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6, display:'block' }}>Additional Equipment <span style={{ color:'#5a5a78', fontSize:10, fontWeight:500, textTransform:'none' as const }}>(optional — anything else you have access to)</span></label>
+                <textarea value={data.additional_equipment as string||''} onChange={e=>set('additional_equipment',e.target.value)} rows={2}
+                  placeholder="e.g. Safety squat bar, reverse hyper, GHD, lat pulldown, sled..." style={{...inp(), resize:'none', lineHeight:1.6}} />
               </div>
               <div>
                 <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'block' }}>Cardio Preference</label>
