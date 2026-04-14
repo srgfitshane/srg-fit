@@ -571,7 +571,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         }
       }
     } catch { /* continue scanning */ }
-    if (scanningRef.current) requestAnimationFrame(scanFrame)
+    // 400ms throttle — fast enough to feel instant, not hammering at 60fps
+    if (scanningRef.current) setTimeout(() => requestAnimationFrame(scanFrame), 400)
   }
 
   function resetAdd() {
