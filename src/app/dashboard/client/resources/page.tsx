@@ -74,12 +74,12 @@ export default function ClientResourcesPage() {
           supabase.from('content_items').select('id,group_id,title,description,content_type,difficulty,duration,estimated_duration,file_url,tags,workout_exercises').eq('coach_id',clientData.coach_id).order('created_at'),
         ])
         setGroups(gs||[])
-        const resolved = await Promise.all((is||[]).map(async (item: any) => {
+        // Bucket is public — getPublicUrl is synchronous, no network calls needed
+        const resolved = (is||[]).map((item: any) => {
           if (!item.file_url) return item
-          // Paths stored without bucket prefix — generate signed URL directly
-          const { data } = await supabase.storage.from('resources').createSignedUrl(item.file_url, 60 * 60)
-          return { ...item, file_url: data?.signedUrl || item.file_url }
-        }))
+          const { data } = supabase.storage.from('resources').getPublicUrl(item.file_url)
+          return { ...item, file_url: data.publicUrl }
+        })
         setItems(resolved)
         // Default to first top-level category
         const first = (gs||[]).find(g=>!g.parent_id)
