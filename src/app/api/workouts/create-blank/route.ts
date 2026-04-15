@@ -9,6 +9,10 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Verify the caller is actually the coach
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'coach') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { client_id, title, scheduled_date } = await req.json()
   if (!client_id || !title?.trim()) {
     return NextResponse.json({ error: 'client_id and title required' }, { status: 400 })
