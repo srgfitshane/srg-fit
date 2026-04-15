@@ -160,15 +160,19 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       ? await supabase.from('message_reactions').select('*').in('message_id', msgIds)
       : { data: [] }
 
-    const withReactions = await Promise.all(msgs.map(async (m) => {
+    const withReactions = msgs.map((m) => {
       const bucket = MEDIA_BUCKETS[m.message_type]
-      const mediaUrl = bucket ? await resolveSignedMediaUrl(supabase, bucket, m.media_url) : m.media_url
+      let mediaUrl = m.media_url
+      if (bucket && m.media_url && !m.media_url.startsWith('http')) {
+        const { data } = supabase.storage.from(bucket).getPublicUrl(m.media_url)
+        mediaUrl = data.publicUrl
+      }
       return {
         ...m,
         media_url: mediaUrl,
         reactions: (reactions || []).filter(r => r.message_id === m.id),
       }
-    }))
+    })
     setThread(withReactions)
 
     // Mark incoming as read
@@ -198,7 +202,15 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         filter: `recipient_id=eq.${myId}` }, (p) => {
         const msg = p.new as Message
         if (msg.sender_id === otherId) {
-          setThread(prev => [...prev, { ...msg, reactions: [] }])
+          let mediaUrl = msg.media_url
+          if (msg.media_url && !msg.media_url.startsWith('http')) {
+            const bucket = MEDIA_BUCKETS[msg.message_type]
+            if (bucket) {
+              const { data } = supabase.storage.from(bucket).getPublicUrl(msg.media_url)
+              mediaUrl = data.publicUrl
+            }
+          }
+          setThread(prev => [...prev, { ...msg, media_url: mediaUrl, reactions: [] }])
           supabase.from('messages').update({ read: true }).eq('id', msg.id)
         }
       })
@@ -245,13 +257,14 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     const path = `${myId}/${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage.from('message-media').upload(path, file)
     if (upErr) { setUploading(false); alert('Upload failed: ' + upErr.message); return }
-    const signedUrl = await resolveSignedMediaUrl(supabase, 'message-media', path)
+    const { data: urlData } = supabase.storage.from('message-media').getPublicUrl(path)
+    const publicUrl = urlData.publicUrl
     const { data } = await supabase.from('messages').insert({
       sender_id: myId, recipient_id: otherId,
       body: null, message_type: msgType,
       media_url: path, media_type: file.type, read: false,
     }).select().single()
-    if (data) setThread(prev => [...prev, { ...data, media_url: signedUrl, reactions: [] }])
+    if (data) setThread(prev => [...prev, { ...data, media_url: publicUrl, reactions: [] }])
     notifyRecipient(msgType === 'image' ? '📷 Image' : msgType === 'video' ? '🎥 Video' : '📎 File')
     setPreviewFile(null)
     setUploading(false)
