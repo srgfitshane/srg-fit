@@ -527,7 +527,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('journal_entries').select('*').eq('client_id', profileId).eq('entry_date', todayStr).single(),
           supabase.from('journal_entries').select('*').eq('client_id', profileId).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
-          supabase.from('client_activities').select('*').eq('client_id', cid).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(5),
+          supabase.from('client_activities').select('*').eq('client_id', cid).eq('activity_date', todayStr).order('created_at', { ascending: false }).limit(5),
           supabase.from('workout_sessions').select('id, title').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
           supabase.from('metrics').select('weight').eq('client_id', clientData.id).not('weight', 'is', null).order('logged_date', { ascending: false }).limit(1).single(),
           supabase.from('personal_records').select('exercise_id, weight_pr').eq('client_id', cid),
