@@ -641,7 +641,7 @@ export default function ProgramBuilder() {
                 const groupTypes: Record<string,string> = block.group_types || {}
 
                 return (
-                  <div key={block.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden' }}>
+                  <div key={block.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18 }}>
 
                     {/* Day header */}
                     <div style={{ background:t.surfaceUp, padding:'12px 16px', borderBottom:'1px solid '+t.border }}>
@@ -867,7 +867,7 @@ export default function ProgramBuilder() {
                           </button>
                         ))}
                       </div>
-                      <button onClick={()=>{ setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main') }}
+                      <button onClick={(e)=>{ e.stopPropagation(); setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main') }}
                         style={{ marginTop:6, width:'100%', padding:'8px 4px', borderRadius:10, border:`1px dashed ${t.yellow}50`, background:t.yellow+'10', color:t.yellow, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         🎲 + Open Slot (Client Chooses)
                       </button>
