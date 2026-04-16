@@ -47,6 +47,7 @@ export default function ProgramBuilder() {
   const [view,       setView]       = useState<'builder'|'calendar'>('builder')
   const [activeWeek, setActiveWeek] = useState(1)
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
+  const [groupingEx, setGroupingEx] = useState<string|null>(null) // exercise id with group input open
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null)
   const [pendingRole, setPendingRole] = useState<string>('main')
   const [addExTab,   setAddExTab]   = useState<'exercise'|'template'>('exercise')
@@ -479,13 +480,15 @@ export default function ProgramBuilder() {
 
   const getGroups = (exes: any[]) => {
     const groups: Record<string, any[]> = {}
+    const groupFirstIndex: Record<string, number> = {}
     exes.sort((a,b)=>a.order_index-b.order_index).forEach((ex:any) => {
       const g = ex.superset_group?.trim() || '__none__'
-      if (!groups[g]) groups[g] = []
+      if (!groups[g]) { groups[g] = []; groupFirstIndex[g] = ex.order_index ?? 999 }
       groups[g].push(ex)
     })
+    // Sort groups by the order_index of their first exercise — preserves intended layout
     return Object.entries(groups).sort(([a],[b]) => {
-      if (a==='__none__') return 1; if (b==='__none__') return -1; return a.localeCompare(b)
+      return (groupFirstIndex[a] ?? 999) - (groupFirstIndex[b] ?? 999)
     })
   }
 
@@ -655,6 +658,22 @@ export default function ProgramBuilder() {
                                       </div>
                                       <div style={{ flex:1, minWidth:0 }}>
                                         <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{ex.exercise?.name || 'Exercise'}</div>
+                                        {/* Group badge — tap to assign/change group */}
+                                        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                                          <button onClick={()=>setGroupingEx(groupingEx===ex.id?null:ex.id)}
+                                            style={{ background: ex.superset_group ? groupColorMap[ex.superset_group]+'22' : t.surfaceHigh, border:'1px solid '+(ex.superset_group ? groupColorMap[ex.superset_group]+'60' : t.border), borderRadius:5, padding:'2px 8px', fontSize:10, fontWeight:800, color: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em' }}>
+                                            {ex.superset_group ? `Group ${ex.superset_group}` : '+ Group'}
+                                          </button>
+                                          {groupingEx === ex.id && (
+                                            <input autoFocus
+                                              defaultValue={ex.superset_group || ''}
+                                              placeholder="A, B, C…"
+                                              onBlur={e => { updateExercise(ex.id, 'superset_group', e.target.value.trim()); setGroupingEx(null) }}
+                                              onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') { updateExercise(ex.id,'superset_group',(e.target as HTMLInputElement).value.trim()); setGroupingEx(null) }}}
+                                              style={{ width:60, background:t.surface, border:'1px solid '+t.teal+'60', borderRadius:5, padding:'2px 7px', fontSize:11, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
+                                            />
+                                          )}
+                                        </div>
                                         <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.6 }}>
                                           {ex.sets}×{ex.reps}
                                           {ex.target_weight ? <span style={{ color:t.text }}> @ {ex.target_weight}</span> : ''}
