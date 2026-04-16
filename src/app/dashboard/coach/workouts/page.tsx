@@ -615,7 +615,7 @@ export default function CoachWorkoutsPage() {
                 <div style={{fontSize:36,marginBottom:12}}>💪</div>
                 <div style={{fontSize:14,fontWeight:700,marginBottom:6,color:t.textDim}}>No exercises yet</div>
                 <div style={{fontSize:12,color:t.textMuted,marginBottom:20}}>Click the button below to search and add exercises</div>
-                <button onClick={()=>{setSearchEx('');setExGroup('all');setShowExPicker(true)}}
+                <button onClick={()=>{setSearchEx('');setExGroup('all');setExMovement('all');setExEquipment('all');setShowExPicker(true)}}
                   style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:10,padding:'10px 24px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                   + Add Exercise
                 </button>
@@ -632,7 +632,7 @@ export default function CoachWorkoutsPage() {
                         </div>
                         <span style={{fontSize:12,fontWeight:800,color:t.teal,minWidth:20}}>{i+1}.</span>
                         <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>
-                        <button onClick={()=>{ setSwapIdx(i); setShowExPicker(true) }} style={{background:t.orangeDim,border:`1px solid ${t.orange}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
+                        <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }} style={{background:t.orangeDim,border:`1px solid ${t.orange}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
                         <button onClick={()=>removeBuildEx(i)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>✕</button>
                       </div>
                       {/* Section role toggle */}
@@ -687,7 +687,7 @@ export default function CoachWorkoutsPage() {
                 </div>
 
                 {/* Add more exercises button */}
-                <button onClick={()=>{setSearchEx('');setExGroup('all');setShowExPicker(true)}}
+                <button onClick={()=>{setSearchEx('');setExGroup('all');setExMovement('all');setExEquipment('all');setShowExPicker(true)}}
                   style={{width:'100%',background:t.tealDim,border:`1px dashed ${t.teal}60`,borderRadius:12,padding:'12px',fontSize:13,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>
                   + Add Exercise
                 </button>
