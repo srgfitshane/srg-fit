@@ -55,7 +55,10 @@ export default function ProgramBuilder() {
   const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
   const [addExTab,   setAddExTab]   = useState<'exercise'|'template'>('exercise')
-  const [exSearch,   setExSearch]   = useState('')
+  const [exSearch,    setExSearch]    = useState('')
+  const [exGroup,     setExGroup]     = useState('all')
+  const [exMovement,  setExMovement]  = useState('all')
+  const [exEquipment, setExEquipment] = useState('all')
   const [templates,  setTemplates]  = useState<any[]>([])
   const [tmplLoading,setTmplLoading]= useState(false)
   const [saving,     setSaving]     = useState<string|null>(null)
@@ -520,7 +523,17 @@ export default function ProgramBuilder() {
     setAddDayTmplLoading(false)
   }
 
-  const filteredExercises = exercises.filter(e => e.name.toLowerCase().includes(exSearch.toLowerCase()))
+  const muscleGroups    = [...new Set(exercises.flatMap((e:any) => Array.isArray(e.muscles) ? e.muscles.map((m:string)=>m.trim()) : []).filter(Boolean))].sort() as string[]
+  const movementPatterns = [...new Set(exercises.map((e:any) => e.movement_pattern).filter(Boolean))].sort() as string[]
+  const equipmentList   = [...new Set(exercises.map((e:any) => e.equipment).filter(Boolean))].sort() as string[]
+  const filteredExercises = exercises.filter((e:any) => {
+    const matchSearch   = !exSearch    || e.name.toLowerCase().includes(exSearch.toLowerCase())
+    const exMuscles     = Array.isArray(e.muscles) ? e.muscles.map((m:string)=>m.trim()) : []
+    const matchMuscle   = exGroup     === 'all' || exMuscles.includes(exGroup)
+    const matchMovement = exMovement  === 'all' || e.movement_pattern === exMovement
+    const matchEquip    = exEquipment === 'all' || e.equipment === exEquipment
+    return matchSearch && matchMuscle && matchMovement && matchEquip
+  })
 
   const getGroups = (exes: any[]) => {
     const groups: Record<string, any[]> = {}
@@ -910,7 +923,22 @@ export default function ProgramBuilder() {
               {addExTab === 'exercise' && (
                 <>
                   <input value={exSearch} onChange={e=>setExSearch(e.target.value)} placeholder="Search exercises..." autoFocus
-                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", marginBottom:12 }} />
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", marginBottom:8 }} />
+                  {/* Muscle filter */}
+                  <div className="ex-chips" style={{display:'flex',gap:5,overflowX:'auto',flexWrap:'nowrap',marginBottom:4,msOverflowStyle:'none',scrollbarWidth:'none'}}>
+                    <button onClick={()=>setExGroup('all')} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>💪 All</button>
+                    {muscleGroups.map(g=>(<button key={g} onClick={()=>setExGroup(g)} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>{g}</button>))}
+                  </div>
+                  {/* Movement filter */}
+                  <div className="ex-chips" style={{display:'flex',gap:5,overflowX:'auto',flexWrap:'nowrap',marginBottom:4,msOverflowStyle:'none',scrollbarWidth:'none'}}>
+                    <button onClick={()=>setExMovement('all')} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exMovement==='all'?t.orange:t.border}`,background:exMovement==='all'?t.orangeDim:'transparent',color:exMovement==='all'?t.orange:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>🔄 All</button>
+                    {movementPatterns.map(m=>(<button key={m} onClick={()=>setExMovement(m)} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exMovement===m?t.orange:t.border}`,background:exMovement===m?t.orangeDim:'transparent',color:exMovement===m?t.orange:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>{m}</button>))}
+                  </div>
+                  {/* Equipment filter */}
+                  <div className="ex-chips" style={{display:'flex',gap:5,overflowX:'auto',flexWrap:'nowrap',marginBottom:8,msOverflowStyle:'none',scrollbarWidth:'none'}}>
+                    <button onClick={()=>setExEquipment('all')} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exEquipment==='all'?t.purple:t.border}`,background:exEquipment==='all'?t.purple+'20':'transparent',color:exEquipment==='all'?t.purple:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>🏋️ All</button>
+                    {equipmentList.map(eq=>(<button key={eq} onClick={()=>setExEquipment(eq)} style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${exEquipment===eq?t.purple:t.border}`,background:exEquipment===eq?t.purple+'20':'transparent',color:exEquipment===eq?t.purple:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>{eq}</button>))}
+                  </div>
                   <div style={{ overflowY:'auto', flex:1 }}>
                     {filteredExercises.length === 0 && <div style={{ textAlign:'center', padding:'24px', color:t.textMuted, fontSize:13 }}>No exercises found. Visit 🏋️ Exercises to add some.</div>}
                     {filteredExercises.map(ex => (

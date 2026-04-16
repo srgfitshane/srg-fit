@@ -394,7 +394,9 @@ export default function CoachWorkoutsPage() {
 
   // ── Filtered exercises (used in modal) ────────────────────────────────────
   const [searchEx, setSearchEx] = useState('')
-  const [exGroup,  setExGroup]  = useState('all')
+  const [exGroup,     setExGroup]     = useState('all')
+  const [exMovement,  setExMovement]  = useState('all')
+  const [exEquipment, setExEquipment] = useState('all')
   const muscleGroups = [...new Set(
     exercises.flatMap((e:any) => {
       if (!e.muscles) return []
@@ -402,13 +404,17 @@ export default function CoachWorkoutsPage() {
       return String(e.muscles).split(',').map((m:string) => m.trim()).filter(Boolean)
     })
   )].sort() as string[]
+  const movementPatterns = [...new Set(exercises.map((e:any) => e.movement_pattern).filter(Boolean))].sort() as string[]
+  const equipmentList = [...new Set(exercises.map((e:any) => e.equipment).filter(Boolean))].sort() as string[]
   const filteredEx = exercises.filter((e:any) => {
     const matchSearch = !searchEx || e.name.toLowerCase().includes(searchEx.toLowerCase())
     const exMuscles: string[] = !e.muscles ? [] :
       Array.isArray(e.muscles) ? e.muscles.map((m:string) => m.trim()) :
       String(e.muscles).split(',').map((m:string) => m.trim())
-    const matchGroup = exGroup === 'all' || exMuscles.includes(exGroup)
-    return matchSearch && matchGroup
+    const matchGroup    = exGroup     === 'all' || exMuscles.includes(exGroup)
+    const matchMovement = exMovement  === 'all' || e.movement_pattern === exMovement
+    const matchEquip    = exEquipment === 'all' || e.equipment === exEquipment
+    return matchSearch && matchGroup && matchMovement && matchEquip
   })
 
   const inp = {
@@ -711,16 +717,42 @@ export default function CoachWorkoutsPage() {
                   autoFocus
                   style={{...inp,marginBottom:10}}
                 />
-                {/* Muscle group filters - single scrollable row */}
+                {/* Muscle filter */}
                 <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:2,msOverflowStyle:'none',scrollbarWidth:'none'}}>
                   <button onClick={()=>setExGroup('all')}
-                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
-                    All
+                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
+                    💪 All
                   </button>
                   {muscleGroups.map(g=>(
                     <button key={g} onClick={()=>setExGroup(g)}
                       style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>
                       {g}
+                    </button>
+                  ))}
+                </div>
+                {/* Movement pattern filter */}
+                <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:2,msOverflowStyle:'none',scrollbarWidth:'none',marginTop:4}}>
+                  <button onClick={()=>setExMovement('all')}
+                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exMovement==='all'?t.orange:t.border}`,background:exMovement==='all'?t.orangeDim:'transparent',color:exMovement==='all'?t.orange:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
+                    🔄 All
+                  </button>
+                  {movementPatterns.map(m=>(
+                    <button key={m} onClick={()=>setExMovement(m)}
+                      style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exMovement===m?t.orange:t.border}`,background:exMovement===m?t.orangeDim:'transparent',color:exMovement===m?t.orange:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                {/* Equipment filter */}
+                <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:4,msOverflowStyle:'none',scrollbarWidth:'none',marginTop:4}}>
+                  <button onClick={()=>setExEquipment('all')}
+                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exEquipment==='all'?t.purple:t.border}`,background:exEquipment==='all'?t.purple+'20':'transparent',color:exEquipment==='all'?t.purple:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
+                    🏋️ All
+                  </button>
+                  {equipmentList.map(eq=>(
+                    <button key={eq} onClick={()=>setExEquipment(eq)}
+                      style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exEquipment===eq?t.purple:t.border}`,background:exEquipment===eq?t.purple+'20':'transparent',color:exEquipment===eq?t.purple:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
+                      {eq}
                     </button>
                   ))}
                 </div>
