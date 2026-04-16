@@ -16,14 +16,14 @@ const t = {
 const WEEK_COLORS = [t.teal, t.orange, t.purple, t.green, t.yellow, t.pink, t.blue, t.red]
 const GROUP_COLORS = [t.teal, t.orange, t.purple, t.green, t.yellow, t.pink, t.blue, t.red]
 
-const ROLE_OPTIONS = ['main','secondary','accessory','variation','warmup','cooldown']
+const ROLE_OPTIONS = ['main','secondary','accessory','variation','warmup','cooldown','finisher']
 const ROLE_COLORS: Record<string,string> = {
   main: t.orange, secondary: t.teal, accessory: t.purple,
-  variation: t.yellow, warmup: t.blue, cooldown: t.pink,
+  variation: t.yellow, warmup: t.blue, cooldown: t.pink, finisher: t.red,
 }
 const ROLE_LABELS: Record<string,string> = {
   main:'Main', secondary:'Secondary', accessory:'Accessory',
-  variation:'Variation', warmup:'Warm-up', cooldown:'Cool-down',
+  variation:'Variation', warmup:'Warm-up', cooldown:'Cool-down', finisher:'Finisher',
 }
 
 const GROUP_TYPES = [
@@ -771,11 +771,12 @@ export default function ProgramBuilder() {
                         )
                       })}
 
-                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginTop:4 }}>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:6, marginTop:4 }}>
                         {[
-                          { role:'warmup',   label:'🔥 Warm-Up', color:t.teal   },
-                          { role:'main',     label:'💪 Main',    color:t.orange  },
+                          { role:'warmup',   label:'🔥 Warm-Up',  color:t.teal   },
+                          { role:'main',     label:'💪 Main',     color:t.orange  },
                           { role:'cooldown', label:'🧘 Cool-Down', color:t.purple },
+                          { role:'finisher', label:'🔴 Finisher', color:t.red    },
                         ].map(({role, label, color}) => (
                           <button key={role} onClick={()=>openAddEx(block.id, role)}
                             style={{ padding:'9px 4px', borderRadius:10, border:`1px dashed ${color}50`, background:color+'12', color, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>

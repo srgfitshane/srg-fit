@@ -1102,14 +1102,16 @@ ${candidateList}`
         <div style={{flex:1,overflowY:'auto',padding:'12px 16px 16px'}}>
           {(() => {
             // Group exercises by role
-            const ROLE_ORDER = ['warmup','main','secondary','accessory','variation','cooldown']
+            const ROLE_ORDER = ['warmup','main','secondary','accessory','variation','cooldown','finisher']
             const ROLE_LABELS: Record<string,string> = {
               warmup:'🔥 Warm-Up', main:'💪 Main', secondary:'🎯 Secondary',
-              accessory:'⚙️ Accessory', variation:'🔄 Variation', cooldown:'🧘 Cool-Down'
+              accessory:'⚙️ Accessory', variation:'🔄 Variation', cooldown:'🧘 Cool-Down',
+              finisher:'🔴 Finisher',
             }
             const ROLE_COLORS: Record<string,string> = {
               warmup:t.teal, main:t.orange, secondary:'#f472b6',
-              accessory:'#8b5cf6', variation:t.accent, cooldown:'#8b5cf6'
+              accessory:'#8b5cf6', variation:t.accent, cooldown:'#8b5cf6',
+              finisher:'#ef4444',
             }
             // Build groups preserving order of first appearance
             const seen: string[] = []

@@ -35,7 +35,7 @@ interface TemplateEx {
   order_index: number
   tracking_type: 'reps' | 'time'
   duration_seconds: number
-  exercise_role: 'main' | 'secondary' | 'accessory' | 'variation' | 'warmup' | 'cooldown'
+  exercise_role: 'main' | 'secondary' | 'accessory' | 'variation' | 'warmup' | 'cooldown' | 'finisher'
 }
 
 type View = 'list' | 'build'
@@ -501,8 +501,11 @@ export default function CoachWorkoutsPage() {
                                 <span style={{fontSize:10,fontWeight:800,color:t.teal,minWidth:16}}>{i+1}.</span>
                                 <span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.exercise_name}</span>
                                 {ex.exercise_role && ex.exercise_role !== 'main' && (
-                                  <span style={{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:20,background:ex.exercise_role==='warmup'?t.teal+'18':t.purple+'18',color:ex.exercise_role==='warmup'?t.teal:t.purple,flexShrink:0}}>
-                                    {ex.exercise_role==='warmup'?'WU':'CD'}
+                                  <span style={{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:20,
+                                    background: ex.exercise_role==='warmup'?t.teal+'18':ex.exercise_role==='finisher'?t.red+'18':t.purple+'18',
+                                    color: ex.exercise_role==='warmup'?t.teal:ex.exercise_role==='finisher'?t.red:t.purple,
+                                    flexShrink:0}}>
+                                    {ex.exercise_role==='warmup'?'WU':ex.exercise_role==='finisher'?'FIN':'CD'}
                                   </span>
                                 )}
                                 <span style={{fontSize:11,color:t.textMuted,flexShrink:0}}>{ex.sets_prescribed}×{ex.reps_prescribed}</span>
@@ -627,9 +630,10 @@ export default function CoachWorkoutsPage() {
                       {/* Section role toggle */}
                       <div style={{display:'flex',gap:4,marginBottom:10}}>
                         {([
-                          {role:'warmup',   label:'🔥 Warm-up', color:t.teal},
-                          {role:'main',     label:'💪 Main',    color:t.orange},
+                          {role:'warmup',   label:'🔥 Warm-up',  color:t.teal},
+                          {role:'main',     label:'💪 Main',     color:t.orange},
                           {role:'cooldown', label:'🧘 Cool-down', color:t.purple},
+                          {role:'finisher', label:'🔴 Finisher', color:t.red},
                         ] as const).map(({role,label,color})=>(
                           <button key={role} onClick={()=>updateBuildEx(i,'exercise_role',role)}
                             style={{padding:'3px 10px',borderRadius:20,border:`1px solid ${ex.exercise_role===role?color:t.border}`,background:ex.exercise_role===role?color+'18':'transparent',color:ex.exercise_role===role?color:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
