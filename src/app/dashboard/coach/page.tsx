@@ -488,15 +488,14 @@ export default function CoachDashboard() {
         .coach-quicknav-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surfaceUp);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
         .coach-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
-        .coach-main{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
-        .coach-sidebar{display:flex;flex-direction:column;gap:14px;position:sticky;top:18px;}
+        .coach-main{display:grid;grid-template-columns:1fr;gap:20px;align-items:start;}
+        .coach-sidebar{display:none;}
         .client-actions{display:flex;gap:5px;flex-shrink:0;}
         .nav-grid-essential{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
         .nav-grid-expanded{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
         .coach-mobile-nav{display:none;}
         .coach-quicknav-expanded{display:none;}
         @media(min-width:1400px){
-          .coach-main{grid-template-columns:1fr 420px;}
           .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
           .nav-grid-expanded{grid-template-columns:repeat(3,1fr);}
         }
@@ -807,11 +806,27 @@ export default function CoachDashboard() {
 
             {/* LEFT: Clients */}
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, overflow:'hidden' }}>
-              <div style={{ padding:'20px 24px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
-                <div style={{ fontSize:15, fontWeight:800 }}>
-                  Clients <span style={{ fontSize:13, color:t.textMuted, fontWeight:500 }}>
-                    ({clients.filter(c=>!c.paused).length} active{clients.filter(c=>c.paused).length > 0 ? ', '+clients.filter(c=>c.paused).length+' paused' : ''})
-                  </span>
+              <div style={{ padding:'16px 24px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                  <div style={{ fontSize:15, fontWeight:800 }}>
+                    Clients <span style={{ fontSize:13, color:t.textMuted, fontWeight:500 }}>
+                      ({clients.filter(c=>!c.paused).length} active{clients.filter(c=>c.paused).length > 0 ? ', '+clients.filter(c=>c.paused).length+' paused' : ''})
+                    </span>
+                  </div>
+                  {/* Pulse stats inline */}
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {[
+                      { label:'Reviews', value: pendingReviews, color:t.red },
+                      { label:'Messages', value: unreadMsgs, color:t.teal },
+                      { label:'Check-ins', value: checkInsDue, color:t.orange },
+                      { label:'Insights', value: aiInsights.length, color:t.purple },
+                    ].map(item => (
+                      <div key={item.label} style={{ display:'flex', alignItems:'center', gap:5, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'4px 10px' }}>
+                        <span style={{ fontSize:13, fontWeight:900, color:item.color }}>{item.value}</span>
+                        <span style={{ fontSize:11, color:t.textMuted }}>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
                   <input
@@ -911,54 +926,6 @@ export default function CoachDashboard() {
 
             {/* RIGHT: Quick access */}
             <div className="coach-sidebar">
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Coach Pulse</div>
-                <div style={{ display:'grid', gap:10 }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700 }}>Primary focus</div>
-                      <div style={{ fontSize:12, color:t.textMuted }}>{todayFocus ? todayFocus.title : 'Nothing urgent right now'}</div>
-                    </div>
-                    {todayFocus && (
-                      <button onClick={todayFocus.onClick}
-                        style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        Open
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8 }}>
-                    {[
-                      { label:'Reviews', value: pendingReviews, color:t.red },
-                      { label:'Messages', value: unreadMsgs, color:t.teal },
-                      { label:'Check-ins', value: checkInsDue, color:t.orange },
-                      { label:'Insights', value: aiInsights.length, color:t.purple },
-                    ].map((item) => (
-                      <div key={item.label} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                        <div style={{ fontSize:18, fontWeight:900, color:item.color }}>{item.value}</div>
-                        <div style={{ fontSize:11, color:t.textMuted }}>{item.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>Quick Access</div>
-                  <button onClick={()=>setNavExpanded(p=>!p)}
-                    style={{ background:navExpanded?t.tealDim:'transparent', border:'1px solid '+(navExpanded?t.teal+'40':t.border), borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:700, color:navExpanded?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {navExpanded ? '▲ Less' : '▼ More'}
-                  </button>
-                </div>
-                <div className="nav-grid-essential">
-                  {NAV_ESSENTIALS.map(item => <NavBtn key={item.label} item={item} />)}
-                </div>
-                {navExpanded && (
-                  <div className="nav-grid-expanded" style={{ marginTop:8 }}>
-                    {NAV_EXPANDED.map(item => <NavBtn key={item.label} item={item} />)}
-                  </div>
-                )}
-              </div>
             </div>
 
           </div>{/* end 2-col */}
