@@ -48,7 +48,8 @@ export default function ProgramBuilder() {
   const [activeWeek, setActiveWeek] = useState(1)
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
   const [groupingEx, setGroupingEx] = useState<string|null>(null) // exercise id with group input open
-  const [showAddEx,  setShowAddEx]  = useState<string|null>(null)
+  const [showAddEx,  setShowAddEx]  = useState<string|null>(null) // blockId
+  const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
   const [addExTab,   setAddExTab]   = useState<'exercise'|'template'>('exercise')
   const [exSearch,   setExSearch]   = useState('')
@@ -230,6 +231,22 @@ export default function ProgramBuilder() {
     }).select(`*, exercise:exercises(name, muscles)`).single()
     if (newEx) setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, block_exercises: [...(b.block_exercises||[]), newEx] } : b))
     setShowAddEx(null); setExSearch(''); setEditingEx(newEx?.id || null)
+  }
+
+  const swapExercise = async (blockExId: string, newExerciseId: string) => {
+    const ex = exercises.find(e => e.id === newExerciseId)
+    await supabase.from('block_exercises').update({
+      exercise_id: newExerciseId,
+    }).eq('id', blockExId)
+    setBlocks(prev => prev.map(b => ({
+      ...b,
+      block_exercises: (b.block_exercises||[]).map((e:any) =>
+        e.id === blockExId
+          ? { ...e, exercise_id: newExerciseId, exercise: { name: ex?.name || '', muscles: ex?.muscles || '' } }
+          : e
+      )
+    })))
+    setSwapExId(null); setShowAddEx(null); setExSearch('')
   }
 
   const updateExercise = async (exId: string, field: string, value: any) => {
@@ -695,6 +712,10 @@ export default function ProgramBuilder() {
                                           style={{ background:t.surfaceHigh, border:'none', borderRadius:6, padding:'4px 8px', fontSize:10, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                           {editingEx===ex.id?'done':'edit'}
                                         </button>
+                                        <button onClick={()=>{ setSwapExId(ex.id); setShowAddEx(block.id); setExSearch(''); setAddExTab('exercise') }}
+                                          style={{ background:t.orangeDim, border:`1px solid ${t.orange}40`, borderRadius:6, padding:'4px 8px', fontSize:10, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                          swap
+                                        </button>
                                         <button onClick={()=>deleteExercise(block.id, ex.id)}
                                           style={{ background:'none', border:'none', color:t.red+'60', cursor:'pointer', fontSize:12 }}>✕</button>
                                       </div>
@@ -809,19 +830,20 @@ export default function ProgramBuilder() {
           />
         )}
 
-        {/* Add Exercise / From Template Modal */}
+        {/* Add / Swap Exercise Modal */}
         {showAddEx && (
-          <div onClick={()=>setShowAddEx(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div onClick={()=>{ setShowAddEx(null); setSwapExId(null) }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:520, padding:24, maxHeight:'85vh', display:'flex', flexDirection:'column' as any }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
                 <div>
-                  <div style={{ fontSize:15, fontWeight:800 }}>Add Exercise</div>
-                  <div style={{ fontSize:11, fontWeight:700, marginTop:2,
+                  <div style={{ fontSize:15, fontWeight:800 }}>{swapExId ? '🔄 Swap Exercise' : 'Add Exercise'}</div>
+                  {!swapExId && <div style={{ fontSize:11, fontWeight:700, marginTop:2,
                     color: pendingRole==='warmup' ? t.teal : pendingRole==='cooldown' ? t.purple : t.orange }}>
                     {pendingRole==='warmup' ? '🔥 Warm-Up' : pendingRole==='cooldown' ? '🧘 Cool-Down' : '💪 Main Workout'}
-                  </div>
+                  </div>}
+                  {swapExId && <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Pick a replacement — all sets and settings are kept</div>}
                 </div>
-                <span onClick={()=>setShowAddEx(null)} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
+                <span onClick={()=>{ setShowAddEx(null); setSwapExId(null) }} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
               </div>
 
               {/* Tab switcher */}
@@ -842,7 +864,7 @@ export default function ProgramBuilder() {
                   <div style={{ overflowY:'auto', flex:1 }}>
                     {filteredExercises.length === 0 && <div style={{ textAlign:'center', padding:'24px', color:t.textMuted, fontSize:13 }}>No exercises found. Visit 🏋️ Exercises to add some.</div>}
                     {filteredExercises.map(ex => (
-                      <div key={ex.id} onClick={()=>addExercise(showAddEx, ex.id)}
+                      <div key={ex.id} onClick={()=> swapExId ? swapExercise(swapExId, ex.id) : addExercise(showAddEx, ex.id)}
                         style={{ padding:'10px 12px', borderRadius:10, cursor:'pointer', marginBottom:4, display:'flex', alignItems:'center', gap:10 }}
                         onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceUp)}
                         onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
@@ -850,7 +872,7 @@ export default function ProgramBuilder() {
                           <div style={{ fontSize:13, fontWeight:700 }}>{ex.name}</div>
                           {ex.muscles?.length > 0 && <div style={{ fontSize:11, color:t.textMuted }}>{ex.muscles.join(', ')}</div>}
                         </div>
-                        <div style={{ fontSize:11, color:t.teal, fontWeight:700 }}>+ Add</div>
+                        <div style={{ fontSize:11, color: swapExId ? t.orange : t.teal, fontWeight:700 }}>{swapExId ? '⇄ Swap' : '+ Add'}</div>
                       </div>
                     ))}
                   </div>

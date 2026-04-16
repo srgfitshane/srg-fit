@@ -57,6 +57,7 @@ export default function CoachWorkoutsPage() {
   const [autoAssignReturn, setAutoAssignReturn] = useState<string|null>(null)
   const [saving,     setSaving]     = useState(false)
   const [showExPicker, setShowExPicker] = useState(false)
+  const [swapIdx,      setSwapIdx]      = useState<number|null>(null) // index being swapped
   const [actionModal,setActionModal]= useState<any>(null) // {template, action}
   const [actionForm, setActionForm] = useState({ client_id:'', date:'', program_id:'', resource_group_id:'' })
   const [actionSaving,setActionSaving]=useState(false)
@@ -625,6 +626,7 @@ export default function CoachWorkoutsPage() {
                         </div>
                         <span style={{fontSize:12,fontWeight:800,color:t.teal,minWidth:20}}>{i+1}.</span>
                         <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>
+                        <button onClick={()=>{ setSwapIdx(i); setShowExPicker(true) }} style={{background:t.orangeDim,border:`1px solid ${t.orange}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
                         <button onClick={()=>removeBuildEx(i)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>✕</button>
                       </div>
                       {/* Section role toggle */}
@@ -690,13 +692,16 @@ export default function CoachWorkoutsPage() {
 
         {/* ── EXERCISE PICKER MODAL ── */}
         {showExPicker && (
-          <div style={{position:'fixed',inset:0,background:'#000000cc',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}} onClick={()=>setShowExPicker(false)}>
+          <div style={{position:'fixed',inset:0,background:'#000000cc',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}} onClick={()=>{ setShowExPicker(false); setSwapIdx(null) }}>
             <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:20,width:'100%',maxWidth:560,maxHeight:'85vh',display:'flex',flexDirection:'column'}}>
               {/* Header */}
               <div style={{padding:'18px 20px 12px',borderBottom:`1px solid ${t.border}`,flexShrink:0}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-                  <div style={{fontSize:15,fontWeight:800}}>Exercise Library</div>
-                  <button onClick={()=>setShowExPicker(false)} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:20,lineHeight:1}}>✕</button>
+                  <div>
+                    <div style={{fontSize:15,fontWeight:800}}>{swapIdx !== null ? '🔄 Swap Exercise' : 'Exercise Library'}</div>
+                    {swapIdx !== null && <div style={{fontSize:11,color:t.textMuted,marginTop:2}}>Pick a replacement — sets and settings are kept</div>}
+                  </div>
+                  <button onClick={()=>{ setShowExPicker(false); setSwapIdx(null) }} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:20,lineHeight:1}}>✕</button>
                 </div>
                 {/* Search */}
                 <input
@@ -724,10 +729,21 @@ export default function CoachWorkoutsPage() {
               <div style={{overflowY:'auto',flex:1,padding:'8px 12px',display:'grid',gap:4}}>
                 <div style={{fontSize:11,color:t.textMuted,padding:'4px 4px 8px',fontWeight:600}}>{filteredEx.length} exercise{filteredEx.length!==1?'s':''}</div>
                 {filteredEx.map((ex:any)=>{
-                  const added = buildExercises.some(e=>e.exercise_id===ex.id)
+                  const added = swapIdx === null && buildExercises.some(e=>e.exercise_id===ex.id)
                   return (
                     <div key={ex.id}
-                      onClick={()=>{ if(!added){ addExToTemplate(ex) } }}
+                      onClick={()=>{
+                        if (swapIdx !== null) {
+                          // Swap mode — replace exercise at swapIdx
+                          setBuildExercises(prev => prev.map((e,i) => i === swapIdx
+                            ? { ...e, exercise_id: ex.id, exercise_name: ex.name }
+                            : e
+                          ))
+                          setSwapIdx(null); setShowExPicker(false)
+                        } else if (!added) {
+                          addExToTemplate(ex)
+                        }
+                      }}
                       style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:10,background:added?t.tealDim:t.surfaceHigh,border:`1px solid ${added?t.teal:t.border}`,cursor:added?'default':'pointer',transition:'all 0.12s'}}
                       onMouseEnter={e=>{ if(!added) e.currentTarget.style.borderColor=t.teal+'60' }}
                       onMouseLeave={e=>{ if(!added) e.currentTarget.style.borderColor=t.border }}>
@@ -738,7 +754,7 @@ export default function CoachWorkoutsPage() {
                       {added ? (
                         <span style={{fontSize:11,fontWeight:700,color:t.teal,flexShrink:0}}>✓ Added</span>
                       ) : (
-                        <span style={{fontSize:18,color:t.textMuted,flexShrink:0}}>+</span>
+                        <span style={{fontSize:11,fontWeight:700,color:swapIdx!==null?t.orange:t.teal,flexShrink:0}}>{swapIdx!==null?'⇄ Swap':'+ Add'}</span>
                       )}
                     </div>
                   )
