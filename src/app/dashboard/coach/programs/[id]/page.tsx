@@ -50,7 +50,11 @@ export default function ProgramBuilder() {
   const [groupingEx, setGroupingEx] = useState<string|null>(null)
   const [openSlotModal, setOpenSlotModal] = useState<{blockId:string}|null>(null)
   const [slotConstraint, setSlotConstraint] = useState('')
-  const [slotRole, setSlotRole] = useState('main') // exercise id with group input open
+  const [slotRole,       setSlotRole]       = useState('main')
+  const [slotTracking,   setSlotTracking]   = useState<'reps'|'time'>('reps')
+  const [slotSets,       setSlotSets]       = useState('3')
+  const [slotReps,       setSlotReps]       = useState('8-10')
+  const [slotDuration,   setSlotDuration]   = useState('30') // exercise id with group input open
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null) // blockId
   const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
@@ -264,7 +268,11 @@ export default function ProgramBuilder() {
       is_open_slot: true,
       slot_constraint: constraint.trim() || 'Client\'s choice',
       exercise_role: role,
-      sets: 3, reps: '8-10', rest_seconds: 90,
+      sets: parseInt(slotSets) || 3,
+      reps: slotTracking === 'reps' ? slotReps : '',
+      tracking_type: slotTracking,
+      duration_seconds: slotTracking === 'time' ? parseInt(slotDuration) * 60 : null,
+      rest_seconds: 90,
       order_index: exCount,
     }).select('*').single()
     if (newEx) setBlocks(prev => prev.map(b => b.id === blockId
@@ -272,6 +280,7 @@ export default function ProgramBuilder() {
       : b
     ))
     setOpenSlotModal(null); setSlotConstraint(''); setSlotRole('main')
+    setSlotTracking('reps'); setSlotSets('3'); setSlotReps('8-10'); setSlotDuration('30')
   }
 
   const updateExercise = async (exId: string, field: string, value: any) => {
@@ -867,7 +876,7 @@ export default function ProgramBuilder() {
                           </button>
                         ))}
                       </div>
-                      <button onClick={(e)=>{ e.stopPropagation(); setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main') }}
+                      <button onClick={(e)=>{ e.stopPropagation(); setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main'); setSlotTracking('reps'); setSlotSets('3'); setSlotReps('8-10'); setSlotDuration('30') }}
                         style={{ marginTop:6, width:'100%', padding:'8px 4px', borderRadius:10, border:`1px dashed ${t.yellow}50`, background:t.yellow+'10', color:t.yellow, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         🎲 + Open Slot (Client Chooses)
                       </button>
@@ -1146,9 +1155,40 @@ export default function ProgramBuilder() {
             <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Hint / Constraint</div>
               <input autoFocus value={slotConstraint} onChange={e=>setSlotConstraint(e.target.value)}
-                placeholder="e.g. Horizontal Push, Any Cardio, Their Choice..."
-                onKeyDown={e=>{ if(e.key==='Enter' && slotConstraint.trim()) addOpenSlot(openSlotModal.blockId, slotConstraint, slotRole) }}
+                placeholder="e.g. Any Cardio, Horizontal Push, Their Choice..."
                 style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const, colorScheme:'dark' }}/>
+            </div>
+            {/* Tracking type toggle */}
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Format</div>
+              <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+                {(['reps','time'] as const).map(type => (
+                  <button key={type} onClick={()=>setSlotTracking(type)}
+                    style={{ flex:1, padding:'8px', borderRadius:9, border:`1px solid ${slotTracking===type?t.teal+'60':t.border}`, background:slotTracking===type?t.tealDim:'transparent', color:slotTracking===type?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {type === 'reps' ? '🔢 Sets & Reps' : '⏱ Sets & Time'}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns: slotTracking==='reps' ? '1fr 1fr' : '1fr 1fr', gap:8 }}>
+                <div>
+                  <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Sets</div>
+                  <input type="number" value={slotSets} onChange={e=>setSlotSets(e.target.value)} min="1" max="10"
+                    style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}/>
+                </div>
+                {slotTracking === 'reps' ? (
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Reps</div>
+                    <input value={slotReps} onChange={e=>setSlotReps(e.target.value)} placeholder="e.g. 8-10"
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}/>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Duration (min)</div>
+                    <input type="number" value={slotDuration} onChange={e=>setSlotDuration(e.target.value)} min="1"
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif', colorScheme:'dark" }}/>
+                  </div>
+                )}
+              </div>
             </div>
             <div style={{ marginBottom:20 }}>
               <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Role</div>
