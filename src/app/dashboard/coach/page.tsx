@@ -484,6 +484,8 @@ export default function CoachDashboard() {
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};overflow-x:hidden;}
         button{-webkit-tap-highlight-color:transparent;}
+        .coach-quicknav{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+        .coach-quicknav-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surfaceUp);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;}
         .coach-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
         .coach-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
         .coach-main{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
@@ -492,6 +494,7 @@ export default function CoachDashboard() {
         .nav-grid-essential{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
         .nav-grid-expanded{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
         .coach-mobile-nav{display:none;}
+        .coach-quicknav-expanded{display:none;}
         @media(min-width:1400px){
           .coach-main{grid-template-columns:1fr 420px;}
           .nav-grid-essential{grid-template-columns:repeat(3,1fr);}
@@ -501,6 +504,7 @@ export default function CoachDashboard() {
           .coach-main{grid-template-columns:1fr;}
           .coach-flow{grid-template-columns:1fr;}
           .coach-sidebar{display:none;}
+          .coach-quicknav{display:none;}
           .coach-mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;}
         }
         @media(max-width:900px){
@@ -550,6 +554,17 @@ export default function CoachDashboard() {
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:26, fontWeight:900, marginBottom:4 }}>{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</div>
             <div style={{ fontSize:13, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
+          </div>
+
+          {/* Desktop quick nav — full-width icon strip under greeting, hidden on mobile */}
+          <div className="coach-quicknav">
+            {[...NAV_ESSENTIALS, ...NAV_EXPANDED].map(item => (
+              <button key={item.label} onClick={()=>router.push(item.path)} className="coach-quicknav-btn"
+                style={{ '--border':t.border, '--surfaceUp':t.surfaceUp } as React.CSSProperties}>
+                <span style={{ fontSize:16 }}>{item.icon}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:t.textDim }}>{item.label}</span>
+              </button>
+            ))}
           </div>
 
           {/* Mobile-only quick nav — hidden on desktop where sidebar handles this */}
