@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
-const TOTAL_BATCHES = 29 // ceil(1157 / 40)
+const TOTAL_BATCHES = 29
 
 export default function EnrichExercisesPage() {
   const [running,  setRunning]  = useState(false)
@@ -15,15 +15,17 @@ export default function EnrichExercisesPage() {
     setLog(prev => [...prev, msg])
   }
 
+  async function getToken(): Promise<string | null> {
+    // Always refresh session to get a fresh token
+    const { data } = await supabase.auth.refreshSession()
+    return data.session?.access_token ?? null
+  }
+
   async function runEnrichment() {
     setRunning(true)
     setDone(false)
     setLog([])
     setProgress(0)
-
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) { addLog('ERROR: Not authenticated'); setRunning(false); return }
 
     const fnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/enrich-exercises`
 
@@ -33,6 +35,14 @@ export default function EnrichExercisesPage() {
 
     while (true) {
       addLog(`Batch ${batch + 1}/${TOTAL_BATCHES} — calling Claude...`)
+
+      // Refresh token before every batch
+      const token = await getToken()
+      if (!token) {
+        addLog('ERROR: Could not refresh session — please reload and try again')
+        break
+      }
+
       try {
         const res = await fetch(fnUrl, {
           method: 'POST',
@@ -57,8 +67,7 @@ export default function EnrichExercisesPage() {
           break
         }
         batch++
-        // Small pause between batches
-        await new Promise(r => setTimeout(r, 1000))
+        await new Promise(r => setTimeout(r, 800))
       } catch (err: any) {
         addLog(`EXCEPTION on batch ${batch + 1}: ${err.message}`)
         break
@@ -70,8 +79,7 @@ export default function EnrichExercisesPage() {
   const t = {
     bg: '#080810', surface: '#12121f', border: '#2a2a3d',
     teal: '#00C9B1', tealDim: '#00C9B11a', text: '#f0f0ff',
-    textMuted: '#8888aa', orange: '#ff7043', green: '#4caf50',
-    red: '#f44336',
+    textMuted: '#8888aa', green: '#4caf50', red: '#f44336',
   }
 
   return (
@@ -80,11 +88,10 @@ export default function EnrichExercisesPage() {
         <div style={{ fontSize:11, color:t.textMuted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.1em' }}>Coach Admin</div>
         <h1 style={{ fontSize:22, fontWeight:900, margin:0 }}>🤖 AI Exercise Enrichment</h1>
         <p style={{ fontSize:13, color:t.textMuted, marginTop:8, lineHeight:1.6 }}>
-          Runs all 1,157 exercises through Claude in batches of 40. Fixes names, muscles, movement patterns, equipment, and adds a description to every exercise. Takes about 5-10 minutes.
+          Runs all exercises through Claude in batches of 40. Fixes names, muscles, movement patterns, equipment, and adds a description to every exercise. Takes about 15-20 minutes total.
         </p>
       </div>
 
-      {/* Progress bar */}
       {(running || done) && (
         <div style={{ marginBottom:20 }}>
           <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:12, color:t.textMuted }}>
@@ -97,9 +104,7 @@ export default function EnrichExercisesPage() {
         </div>
       )}
 
-      <button
-        onClick={runEnrichment}
-        disabled={running}
+      <button onClick={runEnrichment} disabled={running}
         style={{
           background: running ? t.surface : `linear-gradient(135deg,${t.teal},${t.teal}cc)`,
           border: running ? '1px solid '+t.border : 'none',
@@ -110,7 +115,6 @@ export default function EnrichExercisesPage() {
         {running ? '⏳ Running...' : done ? '✓ Run Again' : '🚀 Start Enrichment'}
       </button>
 
-      {/* Log output */}
       {log.length > 0 && (
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:16, fontFamily:'monospace', fontSize:12, lineHeight:1.8, maxHeight:480, overflowY:'auto' }}>
           {log.map((line, i) => (
@@ -119,16 +123,14 @@ export default function EnrichExercisesPage() {
                    : line.includes('✓') ? t.green
                    : line.startsWith('All done') ? t.teal
                    : t.textMuted
-            }}>
-              {line}
-            </div>
+            }}>{line}</div>
           ))}
         </div>
       )}
 
       {done && (
         <div style={{ marginTop:16, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:12, padding:16, fontSize:13, color:t.teal, fontWeight:700 }}>
-          ✓ Exercise library enriched. Head to the exercise library to see the results. You can delete this page after you're satisfied.
+          ✓ Exercise library enriched. Head to the exercise library to check the results.
         </div>
       )}
     </div>
