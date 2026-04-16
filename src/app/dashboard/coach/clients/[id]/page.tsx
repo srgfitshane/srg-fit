@@ -54,6 +54,7 @@ export default function ClientDetail() {
   const [nutritionSaving, setNutritionSaving] = useState(false)
   const [monthlyMacros, setMonthlyMacros] = useState<any[]>([])
   const [program,       setProgram]       = useState<any>(null)
+  const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0)
   const [dailyPulse,    setDailyPulse]    = useState<any[]>([])
   const [journalEntries,setJournalEntries]= useState<any[]>([])
   const [showArchive, setShowArchive] = useState(false)
@@ -1013,6 +1014,7 @@ export default function ClientDetail() {
               router={router}
               t={t}
               onProgramChange={setProgram}
+              onScheduled={()=>setScheduleRefreshKey(k=>k+1)}
             />
           )}
 
@@ -1025,6 +1027,7 @@ export default function ClientDetail() {
                 clientName={client.profiles?.full_name || ''}
                 supabase={supabase}
                 t={t}
+                refreshKey={scheduleRefreshKey}
               />
               {/* Completed sessions — collapsible */}
               <div style={{ marginTop:24 }}>
@@ -2649,7 +2652,7 @@ function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; 
 }
 
 // ── ProgramTab ────────────────────────────────────────────────────────────
-function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t, onProgramChange }: any) {
+function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t, onProgramChange, onScheduled }: any) {
   const [clientPrograms, setClientPrograms] = useState<any[]>([])
   const [templates, setTemplates] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -2797,6 +2800,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     setScheduling(null)
     setScheduleDone(progId)
     setTimeout(() => setScheduleDone(null), 3000)
+    onScheduled?.()
   }
 
   const deleteProgram = async (id: string) => {

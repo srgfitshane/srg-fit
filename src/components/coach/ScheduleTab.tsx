@@ -162,12 +162,13 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose, re
 }
 
 // ── Main ScheduleTab component ────────────────────────────────────────────────
-export default function ScheduleTab({ clientId, coachId, clientName, supabase, t }: {
+export default function ScheduleTab({ clientId, coachId, clientName, supabase, t, refreshKey }: {
   clientId: string
   coachId: string
   clientName: string
   supabase: any
   t: any
+  refreshKey?: number
 }) {
   const router = useRouter()
   const today = new Date()
@@ -180,7 +181,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
   const [delConfirm, setDelConfirm] = useState<any>(null) // item to delete
   const [reschedDate, setReschedDate] = useState('')      // new date when rescheduling
 
-  useEffect(() => { load() }, [clientId])
+  useEffect(() => { load() }, [clientId, refreshKey])
 
   const load = async () => {
     setLoading(true)
