@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { createClient } from '@/lib/supabase-browser'
 
 const TOTAL_BATCHES = 29 // ceil(1157 / 40)
 
