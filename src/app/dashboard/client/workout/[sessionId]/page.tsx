@@ -71,6 +71,9 @@ interface SessionExercise {
   tracking_type?: string | null
   duration_seconds?: number | null
   exercise_role?: string | null
+  is_open_slot?: boolean | null
+  slot_constraint?: string | null
+  slot_filled_by_client?: boolean | null
 }
 
 type WorkoutCompleteProps = {
@@ -142,6 +145,11 @@ export default function ActiveWorkoutPage() {
   const [skipNote, setSkipNote] = useState<Record<string,string>>({})
   const [skipped, setSkipped] = useState<Record<string,boolean>>({})
   const [swapOpen, setSwapOpen] = useState<Record<string,boolean>>({})
+  // Open slot filling
+  const [slotPickerExId, setSlotPickerExId] = useState<string|null>(null)
+  const [slotSearch,     setSlotSearch]     = useState('')
+  const [slotCustomName, setSlotCustomName] = useState('')
+  const [slotTab,        setSlotTab]        = useState<'library'|'custom'>('library')
   const [swapSearch, setSwapSearch] = useState<Record<string,string>>({})
   const [aiSwapLoading, setAiSwapLoading] = useState<Record<string,boolean>>({})
   const [aiSwapOptions, setAiSwapOptions] = useState<Record<string,ExerciseLibraryItem[]>>({})
@@ -629,6 +637,22 @@ ${candidateList}`
     setAiAddOptions([])
     // Jump to the newly added exercise
     setActiveExIdx(exercises.length)
+  }
+
+  // ── Fill open slot ───────────────────────────────────────────────────────
+  async function fillSlot(exId: string, exerciseName: string, exerciseId?: string | null) {
+    await supabase.from('session_exercises').update({
+      exercise_name: exerciseName,
+      exercise_id: exerciseId || null,
+      is_open_slot: false,
+      slot_filled_by_client: true,
+    }).eq('id', exId)
+    setExercises(prev => prev.map(e => e.id === exId
+      ? { ...e, exercise_name: exerciseName, exercise_id: exerciseId || null, is_open_slot: false, slot_filled_by_client: true }
+      : e
+    ))
+    setSetData(prev => prev[exId] ? prev : { ...prev, [exId]: [defaultSet()] })
+    setSlotPickerExId(null); setSlotSearch(''); setSlotCustomName('')
   }
 
   async function getAIAddSuggestions() {
@@ -1146,6 +1170,24 @@ ${candidateList}`
                   const isSkipped = skipped[ex.id]
                   const isOpen = expandedExId === ex.id
 
+                  // ── Open slot card ──────────────────────────────────────
+                  if (ex.is_open_slot) return (
+                    <div key={ex.id} style={{marginBottom:8,border:`1px dashed ${t.yellow}60`,borderRadius:14,background:t.yellow+'08',padding:'16px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12}}>
+                        <span style={{fontSize:24,flexShrink:0}}>🎲</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:800,color:t.yellow}}>Your Choice</div>
+                          <div style={{fontSize:12,color:t.textMuted,marginTop:2}}>{ex.slot_constraint || 'Pick any exercise'}</div>
+                          <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>{ex.sets_prescribed}×{ex.reps_prescribed}</div>
+                        </div>
+                        <button onClick={()=>{ setSlotPickerExId(ex.id); setSlotSearch(''); setSlotCustomName(''); setSlotTab('library') }}
+                          style={{background:`linear-gradient(135deg,${t.yellow},${t.yellow}cc)`,border:'none',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                          Pick →
+                        </button>
+                      </div>
+                    </div>
+                  )
+
                   return (
                     <div key={ex.id} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
 
@@ -1523,6 +1565,64 @@ ${candidateList}`
           </div>
         )}
       </div>
+
+      {/* Slot Picker Modal */}
+      {slotPickerExId && (
+        <>
+          <div onClick={()=>{ setSlotPickerExId(null); setSlotSearch(''); setSlotCustomName('') }}
+            style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:60,backdropFilter:'blur(4px)'}}/>
+          <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:61,fontFamily:"'DM Sans',sans-serif",padding:'20px 16px',paddingBottom:'calc(24px + env(safe-area-inset-bottom))',maxHeight:'80vh',display:'flex',flexDirection:'column' as const}}>
+            <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 16px'}}/>
+            <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>🎲 Pick Your Exercise</div>
+            <div style={{fontSize:12,color:t.textMuted,marginBottom:16}}>
+              {exercises.find(e=>e.id===slotPickerExId)?.slot_constraint || 'Your choice'}
+            </div>
+            {/* Tabs */}
+            <div style={{display:'flex',gap:6,marginBottom:14}}>
+              {(['library','custom'] as const).map(tab => (
+                <button key={tab} onClick={()=>setSlotTab(tab)}
+                  style={{flex:1,padding:'8px',borderRadius:9,border:`1px solid ${slotTab===tab?t.teal+'60':t.border}`,background:slotTab===tab?t.tealDim:'transparent',color:slotTab===tab?t.teal:t.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
+                  {tab === 'library' ? '📚 Library' : '✏️ Type My Own'}
+                </button>
+              ))}
+            </div>
+            {slotTab === 'library' ? (
+              <>
+                <input value={slotSearch} onChange={e=>setSlotSearch(e.target.value)}
+                  placeholder="Search exercises..." autoFocus
+                  style={{width:'100%',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'10px 14px',fontSize:14,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
+                <div style={{overflowY:'auto',flex:1}}>
+                  {(swapLibrary || [])
+                    .filter(e => !slotSearch || (e.name || '').toLowerCase().includes(slotSearch.toLowerCase()))
+                    .slice(0,40)
+                    .map((ex:any) => (
+                      <div key={ex.id} onClick={()=>fillSlot(slotPickerExId, ex.name, ex.id)}
+                        style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:10,background:t.surfaceHigh,border:'1px solid '+t.border,marginBottom:6,cursor:'pointer'}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:700}}>{ex.name}</div>
+                          {ex.muscles?.length > 0 && <div style={{fontSize:11,color:t.textMuted}}>{ex.muscles.slice(0,3).join(', ')}</div>}
+                        </div>
+                        <span style={{fontSize:11,fontWeight:700,color:t.teal,flexShrink:0}}>Pick →</span>
+                      </div>
+                    ))}
+                </div>
+              </>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+                <input value={slotCustomName} onChange={e=>setSlotCustomName(e.target.value)}
+                  placeholder="e.g. Sled Push, Assault Bike, Box Jumps..." autoFocus
+                  onKeyDown={e=>{ if(e.key==='Enter' && slotCustomName.trim()) fillSlot(slotPickerExId, slotCustomName.trim()) }}
+                  style={{width:'100%',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'12px 14px',fontSize:15,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const,colorScheme:'dark'}}/>
+                <button onClick={()=>{ if(slotCustomName.trim()) fillSlot(slotPickerExId, slotCustomName.trim()) }}
+                  disabled={!slotCustomName.trim()}
+                  style={{width:'100%',padding:'13px',borderRadius:12,border:'none',background:slotCustomName.trim()?`linear-gradient(135deg,${t.teal},${t.teal}cc)`:t.surfaceHigh,color:slotCustomName.trim()?'#000':t.textMuted,fontSize:15,fontWeight:800,cursor:slotCustomName.trim()?'pointer':'default',fontFamily:"'DM Sans',sans-serif"}}>
+                  Use This Exercise
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </>
   )
 }

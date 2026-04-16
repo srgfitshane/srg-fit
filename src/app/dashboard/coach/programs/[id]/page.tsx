@@ -47,7 +47,10 @@ export default function ProgramBuilder() {
   const [view,       setView]       = useState<'builder'|'calendar'>('builder')
   const [activeWeek, setActiveWeek] = useState(1)
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
-  const [groupingEx, setGroupingEx] = useState<string|null>(null) // exercise id with group input open
+  const [groupingEx, setGroupingEx] = useState<string|null>(null)
+  const [openSlotModal, setOpenSlotModal] = useState<{blockId:string}|null>(null)
+  const [slotConstraint, setSlotConstraint] = useState('')
+  const [slotRole, setSlotRole] = useState('main') // exercise id with group input open
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null) // blockId
   const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
@@ -247,6 +250,25 @@ export default function ProgramBuilder() {
       )
     })))
     setSwapExId(null); setShowAddEx(null); setExSearch('')
+  }
+
+  const addOpenSlot = async (blockId: string, constraint: string, role: string) => {
+    const block = blocks.find(b => b.id === blockId)
+    const exCount = (block?.block_exercises || []).length
+    const { data: newEx } = await supabase.from('block_exercises').insert({
+      block_id: blockId,
+      exercise_id: null,
+      is_open_slot: true,
+      slot_constraint: constraint.trim() || 'Client\'s choice',
+      exercise_role: role,
+      sets: 3, reps: '8-10', rest_seconds: 90,
+      order_index: exCount,
+    }).select('*').single()
+    if (newEx) setBlocks(prev => prev.map(b => b.id === blockId
+      ? { ...b, block_exercises: [...(b.block_exercises||[]), { ...newEx, exercise: null }] }
+      : b
+    ))
+    setOpenSlotModal(null); setSlotConstraint(''); setSlotRole('main')
   }
 
   const updateExercise = async (exId: string, field: string, value: any) => {
@@ -461,14 +483,19 @@ export default function ProgramBuilder() {
         await supabase.from('session_exercises').insert(
           exes.map((ex: any) => ({
             session_id: session.id,
-            exercise_id: ex.exercise_id,
-            exercise_name: ex.exercise?.name || '',
+            exercise_id: ex.exercise_id || null,
+            exercise_name: ex.is_open_slot ? '' : (ex.exercise?.name || ''),
             sets_prescribed: ex.sets || 3,
             reps_prescribed: ex.reps || '',
             weight_prescribed: ex.target_weight || '',
             rest_seconds: ex.rest_seconds || null,
             notes_coach: ex.notes || null,
             order_index: ex.order_index,
+            exercise_role: ex.exercise_role || 'main',
+            tracking_type: ex.tracking_type || 'reps',
+            duration_seconds: ex.duration_seconds || null,
+            is_open_slot: ex.is_open_slot || false,
+            slot_constraint: ex.slot_constraint || null,
           }))
         )
       }
@@ -666,122 +693,141 @@ export default function ProgramBuilder() {
                                 const roleMeta = ROLE_COLORS[ex.exercise_role] || t.teal
                                 return (
                                   <div key={ex.id} style={{ marginBottom: 10 }}>
-                                    <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
-                                      {/* Role pill — always visible */}
-                                      <div style={{ paddingTop:2, flexShrink:0 }}>
-                                        <span className="role-pill" style={{ background:roleMeta+'18', border:'1px solid '+roleMeta+'40', color:roleMeta }}>
-                                          {ROLE_LABELS[ex.exercise_role] || ex.exercise_role}
-                                        </span>
-                                      </div>
-                                      <div style={{ flex:1, minWidth:0 }}>
-                                        <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{ex.exercise?.name || 'Exercise'}</div>
-                                        {/* Group badge — tap to assign/change group */}
-                                        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-                                          <button onClick={()=>setGroupingEx(groupingEx===ex.id?null:ex.id)}
-                                            style={{ background: ex.superset_group ? groupColorMap[ex.superset_group]+'22' : t.surfaceHigh, border:'1px solid '+(ex.superset_group ? groupColorMap[ex.superset_group]+'60' : t.border), borderRadius:5, padding:'2px 8px', fontSize:10, fontWeight:800, color: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em' }}>
-                                            {ex.superset_group ? `Group ${ex.superset_group}` : '+ Group'}
-                                          </button>
-                                          {groupingEx === ex.id && (
-                                            <input autoFocus
-                                              defaultValue={ex.superset_group || ''}
-                                              placeholder="A, B, C…"
-                                              onBlur={e => { updateExercise(ex.id, 'superset_group', e.target.value.trim()); setGroupingEx(null) }}
-                                              onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') { updateExercise(ex.id,'superset_group',(e.target as HTMLInputElement).value.trim()); setGroupingEx(null) }}}
-                                              style={{ width:60, background:t.surface, border:'1px solid '+t.teal+'60', borderRadius:5, padding:'2px 7px', fontSize:11, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
-                                            />
-                                          )}
+                                    {ex.is_open_slot ? (
+                                      // Open slot card
+                                      <div style={{ background:t.yellow+'10', border:`1px dashed ${t.yellow}50`, borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+                                        <span style={{ fontSize:18, flexShrink:0 }}>🎲</span>
+                                        <div style={{ flex:1, minWidth:0 }}>
+                                          <div style={{ fontSize:12, fontWeight:800, color:t.yellow }}>Open Slot</div>
+                                          <div style={{ fontSize:11, color:t.textMuted }}>{ex.slot_constraint || "Client's choice"} · {ex.sets}×{ex.reps}</div>
                                         </div>
-                                        <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.6 }}>
-                                          {ex.sets}×{ex.reps}
-                                          {ex.target_weight ? <span style={{ color:t.text }}> @ {ex.target_weight}</span> : ''}
-                                          {ex.rpe ? <span> · <span style={{ color:t.orange }}>RPE {ex.rpe}</span></span> : ''}
-                                          {ex.tut ? <span> · TUT {ex.tut}</span> : ''}
-                                          {ex.rest_seconds ? <span> · {ex.rest_seconds}s rest</span> : ''}
-                                          {ex.progression_note ? <span style={{ color:t.green }}> · {ex.progression_note}</span> : ''}
+                                        <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+                                          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                                            <button onClick={()=>moveExercise(block.id, ex.id, -1)}
+                                              style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▲</button>
+                                            <button onClick={()=>moveExercise(block.id, ex.id, 1)}
+                                              style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▼</button>
+                                          </div>
+                                          <button onClick={()=>deleteExercise(block.id, ex.id)}
+                                            style={{ background:'none', border:'none', color:t.red+'60', cursor:'pointer', fontSize:12 }}>✕</button>
                                         </div>
-                                        {ex.notes && <div style={{ fontSize:10, color:t.textMuted, fontStyle:'italic', marginTop:2 }}>📝 {ex.notes}</div>}
                                       </div>
-                                      <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                                        <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                                          <button onClick={()=>moveExercise(block.id, ex.id, -1)}
-                                            style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▲</button>
-                                          <button onClick={()=>moveExercise(block.id, ex.id, 1)}
-                                            style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▼</button>
-                                        </div>
-                                        <button onClick={()=>setEditingEx(editingEx===ex.id?null:ex.id)}
-                                          style={{ background:t.surfaceHigh, border:'none', borderRadius:6, padding:'4px 8px', fontSize:10, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                                          {editingEx===ex.id?'done':'edit'}
-                                        </button>
-                                        <button onClick={()=>{ setSwapExId(ex.id); setShowAddEx(block.id); setExSearch(''); setAddExTab('exercise') }}
-                                          style={{ background:t.orangeDim, border:`1px solid ${t.orange}40`, borderRadius:6, padding:'4px 8px', fontSize:10, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                                          swap
-                                        </button>
-                                        <button onClick={()=>deleteExercise(block.id, ex.id)}
-                                          style={{ background:'none', border:'none', color:t.red+'60', cursor:'pointer', fontSize:12 }}>✕</button>
-                                      </div>
-                                    </div>
-
-                                    {/* Inline editor */}
-                                    {editingEx===ex.id && (
-                                      <div style={{ background:t.surfaceHigh, borderRadius:12, padding:'12px', marginTop:8 }}>
-                                        {/* Reps / Time toggle */}
-                                        <div style={{ display:'flex', gap:4, marginBottom:8 }}>
-                                          {(['reps','time'] as const).map(type => (
-                                            <button key={type} onClick={()=>updateExercise(ex.id,'tracking_type',type)}
-                                              style={{ padding:'3px 10px', borderRadius:20, border:`1px solid ${(ex.tracking_type||'reps')===type?t.teal:t.border}`, background:(ex.tracking_type||'reps')===type?t.tealDim:'transparent', color:(ex.tracking_type||'reps')===type?t.teal:t.textMuted, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>
-                                              {type==='reps'?'🔢 Reps':'⏱ Time'}
+                                    ) : (
+                                      // Normal exercise card
+                                      <div>
+                                        <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+                                          <div style={{ paddingTop:2, flexShrink:0 }}>
+                                            <span className="role-pill" style={{ background:roleMeta+'18', border:'1px solid '+roleMeta+'40', color:roleMeta }}>
+                                              {ROLE_LABELS[ex.exercise_role] || ex.exercise_role}
+                                            </span>
+                                          </div>
+                                          <div style={{ flex:1, minWidth:0 }}>
+                                            <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{ex.exercise?.name || 'Exercise'}</div>
+                                            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                                              <button onClick={()=>setGroupingEx(groupingEx===ex.id?null:ex.id)}
+                                                style={{ background: ex.superset_group ? groupColorMap[ex.superset_group]+'22' : t.surfaceHigh, border:'1px solid '+(ex.superset_group ? groupColorMap[ex.superset_group]+'60' : t.border), borderRadius:5, padding:'2px 8px', fontSize:10, fontWeight:800, color: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em' }}>
+                                                {ex.superset_group ? `Group ${ex.superset_group}` : '+ Group'}
+                                              </button>
+                                              {groupingEx === ex.id && (
+                                                <input autoFocus
+                                                  defaultValue={ex.superset_group || ''}
+                                                  placeholder="A, B, C..."
+                                                  onBlur={e => { updateExercise(ex.id, 'superset_group', e.target.value.trim()); setGroupingEx(null) }}
+                                                  onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') { updateExercise(ex.id,'superset_group',(e.target as HTMLInputElement).value.trim()); setGroupingEx(null) }}}
+                                                  style={{ width:60, background:t.surface, border:'1px solid '+t.teal+'60', borderRadius:5, padding:'2px 7px', fontSize:11, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
+                                                />
+                                              )}
+                                            </div>
+                                            <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.6 }}>
+                                              {ex.sets}×{ex.reps}
+                                              {ex.target_weight ? <span style={{ color:t.text }}> @ {ex.target_weight}</span> : ''}
+                                              {ex.rpe ? <span> · <span style={{ color:t.orange }}>RPE {ex.rpe}</span></span> : ''}
+                                              {ex.tut ? <span> · TUT {ex.tut}</span> : ''}
+                                              {ex.rest_seconds ? <span> · {ex.rest_seconds}s rest</span> : ''}
+                                              {ex.progression_note ? <span style={{ color:t.green }}> · {ex.progression_note}</span> : ''}
+                                            </div>
+                                            {ex.notes && <div style={{ fontSize:10, color:t.textMuted, fontStyle:'italic', marginTop:2 }}>📝 {ex.notes}</div>}
+                                          </div>
+                                          <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+                                            <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                                              <button onClick={()=>moveExercise(block.id, ex.id, -1)}
+                                                style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▲</button>
+                                              <button onClick={()=>moveExercise(block.id, ex.id, 1)}
+                                                style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▼</button>
+                                            </div>
+                                            <button onClick={()=>setEditingEx(editingEx===ex.id?null:ex.id)}
+                                              style={{ background:t.surfaceHigh, border:'none', borderRadius:6, padding:'4px 8px', fontSize:10, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                              {editingEx===ex.id?'done':'edit'}
                                             </button>
-                                          ))}
-                                        </div>
-                                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
-                                          {([
-                                            ['Sets','sets','number'],
-                                            (ex.tracking_type||'reps')==='time' ? ['Duration (sec)','duration_seconds','number'] : ['Reps','reps','text'],
-                                            ['Weight','target_weight','text']
-                                          ] as [string,string,string][]).map(([lbl,fld,typ])=>(
-                                            <div key={fld}>
-                                              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>{lbl}</div>
-                                              <input type={typ} defaultValue={ex[fld]||''} onBlur={e=>updateExercise(ex.id,fld,e.target.value)}
-                                                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
-                                            </div>
-                                          ))}
-                                        </div>
-                                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
-                                          {([['RPE','rpe','text'],['TUT','tut','text'],['Rest (s)','rest_seconds','number']] as [string,string,string][]).map(([lbl,fld,typ])=>(
-                                            <div key={fld}>
-                                              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>{lbl}</div>
-                                              <input type={typ} defaultValue={ex[fld]||''} onBlur={e=>updateExercise(ex.id,fld,e.target.value)}
-                                                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
-                                            </div>
-                                          ))}
-                                        </div>
-                                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-                                          <div>
-                                            <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Role</div>
-                                            <select defaultValue={ex.exercise_role||'main'} onChange={e=>updateExercise(ex.id,'exercise_role',e.target.value)}
-                                              style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}>
-                                              {ROLE_OPTIONS.map(r=><option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                                            </select>
-                                          </div>
-                                          <div>
-                                            <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Group (A1, B2…)</div>
-                                            <input type="text" defaultValue={ex.superset_group||''} onBlur={e=>updateExercise(ex.id,'superset_group',e.target.value)}
-                                              placeholder="e.g. A1, B2"
-                                              style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                                            <button onClick={()=>{ setSwapExId(ex.id); setShowAddEx(block.id); setExSearch(''); setAddExTab('exercise') }}
+                                              style={{ background:t.orangeDim, border:`1px solid ${t.orange}40`, borderRadius:6, padding:'4px 8px', fontSize:10, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                              swap
+                                            </button>
+                                            <button onClick={()=>deleteExercise(block.id, ex.id)}
+                                              style={{ background:'none', border:'none', color:t.red+'60', cursor:'pointer', fontSize:12 }}>✕</button>
                                           </div>
                                         </div>
-                                        <div style={{ marginBottom:8 }}>
-                                          <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Progression Note</div>
-                                          <input type="text" defaultValue={ex.progression_note||''} onBlur={e=>updateExercise(ex.id,'progression_note',e.target.value)}
-                                            placeholder="e.g. +2.5kg/week, add 1 rep/session"
-                                            style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
-                                        </div>
-                                        <div>
-                                          <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Coach Notes</div>
-                                          <textarea defaultValue={ex.notes||''} onBlur={e=>updateExercise(ex.id,'notes',e.target.value)} rows={2}
-                                            placeholder="Cues, technique reminders..."
-                                            style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5 }} />
-                                        </div>
+                                        {editingEx===ex.id && (
+                                          <div style={{ background:t.surfaceHigh, borderRadius:12, padding:'12px', marginTop:8 }}>
+                                            <div style={{ display:'flex', gap:4, marginBottom:8 }}>
+                                              {(['reps','time'] as const).map(type => (
+                                                <button key={type} onClick={()=>updateExercise(ex.id,'tracking_type',type)}
+                                                  style={{ padding:'3px 10px', borderRadius:20, border:`1px solid ${(ex.tracking_type||'reps')===type?t.teal:t.border}`, background:(ex.tracking_type||'reps')===type?t.tealDim:'transparent', color:(ex.tracking_type||'reps')===type?t.teal:t.textMuted, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>
+                                                  {type==='reps'?'🔢 Reps':'⏱ Time'}
+                                                </button>
+                                              ))}
+                                            </div>
+                                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                                              {([
+                                                ['Sets','sets','number'],
+                                                (ex.tracking_type||'reps')==='time' ? ['Duration (sec)','duration_seconds','number'] : ['Reps','reps','text'],
+                                                ['Weight','target_weight','text']
+                                              ] as [string,string,string][]).map(([lbl,fld,typ])=>(
+                                                <div key={fld}>
+                                                  <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>{lbl}</div>
+                                                  <input type={typ} defaultValue={ex[fld]||''} onBlur={e=>updateExercise(ex.id,fld,e.target.value)}
+                                                    style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                                                </div>
+                                              ))}
+                                            </div>
+                                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                                              {([['RPE','rpe','text'],['TUT','tut','text'],['Rest (s)','rest_seconds','number']] as [string,string,string][]).map(([lbl,fld,typ])=>(
+                                                <div key={fld}>
+                                                  <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>{lbl}</div>
+                                                  <input type={typ} defaultValue={ex[fld]||''} onBlur={e=>updateExercise(ex.id,fld,e.target.value)}
+                                                    style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                                                </div>
+                                              ))}
+                                            </div>
+                                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                                              <div>
+                                                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Role</div>
+                                                <select defaultValue={ex.exercise_role||'main'} onChange={e=>updateExercise(ex.id,'exercise_role',e.target.value)}
+                                                  style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}>
+                                                  {ROLE_OPTIONS.map(r=><option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Group (A1, B2...)</div>
+                                                <input type="text" defaultValue={ex.superset_group||''} onBlur={e=>updateExercise(ex.id,'superset_group',e.target.value)}
+                                                  placeholder="e.g. A1, B2"
+                                                  style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                                              </div>
+                                            </div>
+                                            <div style={{ marginBottom:8 }}>
+                                              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Progression Note</div>
+                                              <input type="text" defaultValue={ex.progression_note||''} onBlur={e=>updateExercise(ex.id,'progression_note',e.target.value)}
+                                                placeholder="e.g. +2.5kg/week, add 1 rep/session"
+                                                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                                            </div>
+                                            <div>
+                                              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Coach Notes</div>
+                                              <textarea defaultValue={ex.notes||''} onBlur={e=>updateExercise(ex.id,'notes',e.target.value)} rows={2}
+                                                placeholder="Cues, technique reminders..."
+                                                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5 }} />
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -805,6 +851,10 @@ export default function ProgramBuilder() {
                           </button>
                         ))}
                       </div>
+                      <button onClick={()=>{ setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main') }}
+                        style={{ marginTop:6, width:'100%', padding:'8px 4px', borderRadius:10, border:`1px dashed ${t.yellow}50`, background:t.yellow+'10', color:t.yellow, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        🎲 + Open Slot (Client Chooses)
+                      </button>
                     </div>
                   </div>
                 )
@@ -1043,6 +1093,59 @@ export default function ProgramBuilder() {
         )}
 
       </div>
+
+      {saving && (
+        <div style={{ position:'fixed', bottom:20, right:20, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, zIndex:100 }}>
+          Saving...
+        </div>
+      )}
+
+      {/* Open Slot Modal */}
+      {openSlotModal && (
+        <>
+          <div onClick={()=>{ setOpenSlotModal(null); setSlotConstraint('') }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:300 }}/>
+          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:28, width:'90%', maxWidth:400, zIndex:301, fontFamily:"'DM Sans',sans-serif" }}>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>🎲 Add Open Slot</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>
+              The client will choose an exercise when they start the workout. Give it a hint so they know what movement you have in mind.
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Hint / Constraint</div>
+              <input autoFocus value={slotConstraint} onChange={e=>setSlotConstraint(e.target.value)}
+                placeholder="e.g. Horizontal Push, Any Cardio, Their Choice..."
+                onKeyDown={e=>{ if(e.key==='Enter' && slotConstraint.trim()) addOpenSlot(openSlotModal.blockId, slotConstraint, slotRole) }}
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const, colorScheme:'dark' }}/>
+            </div>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Role</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const }}>
+                {[
+                  {role:'warmup',role_label:'🔥 Warm-Up',color:t.teal},
+                  {role:'main',role_label:'💪 Main',color:t.orange},
+                  {role:'cooldown',role_label:'🧘 Cool-Down',color:t.purple},
+                  {role:'finisher',role_label:'🔴 Finisher',color:t.red},
+                ].map(({role,role_label,color})=>(
+                  <button key={role} onClick={()=>setSlotRole(role)}
+                    style={{ padding:'6px 12px', borderRadius:8, border:`1px solid ${slotRole===role?color:t.border}`, background:slotRole===role?color+'18':'transparent', color:slotRole===role?color:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {role_label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>{ setOpenSlotModal(null); setSlotConstraint('') }}
+                style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Cancel
+              </button>
+              <button onClick={()=>addOpenSlot(openSlotModal.blockId, slotConstraint, slotRole)}
+                style={{ flex:2, background:`linear-gradient(135deg,${t.yellow},${t.yellow}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                🎲 Add Open Slot
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
     </>
   )
 }
@@ -1168,11 +1271,6 @@ function CalendarView({ blocks, weeks, programId, supabase, onBlocksChange, onEd
         )}
       </div>
 
-      {saving && (
-        <div style={{ position:'fixed', bottom:20, right:20, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, zIndex:100 }}>
-          Saving...
-        </div>
-      )}
     </div>
   )
 }
