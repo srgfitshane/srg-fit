@@ -24,7 +24,6 @@ const TIMEFRAMES = [
 ]
 const METRIC_GROUPS = [
   { key:'weight',       label:'Weight',      color:t.teal,   fields:['weight'],                                    unit:'lbs',   habit:false },
-  { key:'bodyfat',      label:'Body Fat %',  color:t.orange, fields:['body_fat'],                                  unit:'%',     habit:false },
   { key:'measurements', label:'Measurements',color:t.purple, fields:['waist','hips','chest','left_arm','right_arm'],unit:'in',    habit:false },
   { key:'sleep',        label:'Sleep',       color:t.blue,   fields:['sleep'],                                     unit:'hrs',   habit:true  },
   { key:'steps',        label:'Steps',       color:t.green,  fields:['steps'],                                     unit:'steps', habit:true  },
@@ -48,7 +47,6 @@ type MetricEntry = {
   client_id: string
   logged_date: string
   weight?: number | string | null
-  body_fat?: number | string | null
   waist?: number | string | null
   hips?: number | string | null
   chest?: number | string | null
@@ -207,7 +205,6 @@ export default function ClientProgressPage() {
 
   const first = metrics[0], last = metrics[metrics.length-1]
   const weightChange = first?.weight != null && last?.weight != null ? (Number(last.weight) - Number(first.weight)).toFixed(1) : null
-  const bfChange = first?.body_fat != null && last?.body_fat != null ? (Number(last.body_fat) - Number(first.body_fat)).toFixed(1) : null
   const latestPulse = pulseHistory[pulseHistory.length - 1]
   const singlePhotoLightbox = lightbox && !isCompareLightbox(lightbox) ? lightbox : null
 
@@ -270,7 +267,7 @@ export default function ClientProgressPage() {
     if (!clientRecord) return
     setSaving(true)
     const payload: Record<string, number | string> = { client_id: clientRecord.id, logged_date: logForm.date||localDateStr() }
-    ;['weight','body_fat','waist','hips','chest','left_arm','right_arm','neck','shoulders','calves']
+    ;['weight','waist','hips','chest','left_arm','right_arm','neck','shoulders','calves']
       .forEach(f => { if (logForm[f]) payload[f]=parseFloat(logForm[f]) })
     if (logForm.notes) payload.notes = logForm.notes
     await supabase.from('metrics').insert(payload)
@@ -412,9 +409,6 @@ export default function ClientProgressPage() {
             { label:'Current Weight', val: last?.weight ? `${last.weight} lbs` : '—', color:t.teal },
             { label:'Change', val: weightChange ? `${+weightChange>0?'+':''}${weightChange} lbs` : '—',
               color: weightChange ? (+weightChange<0?t.green:t.red) : t.textMuted },
-            { label:'Body Fat', val: last?.body_fat ? `${last.body_fat}%` : '—', color:t.orange, hidden: clientRecord != null && !clientRecord.show_body_metrics },
-            { label:'BF% Change', val: bfChange ? `${+bfChange>0?'+':''}${bfChange}%` : '—',
-              color: bfChange ? (+bfChange<0?t.green:t.red) : t.textMuted, hidden: clientRecord != null && !clientRecord.show_body_metrics },
             { label:'Entries', val: metrics.length, color:t.purple },
           ].filter((s:any) => !s.hidden).map(s => (
             <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
@@ -646,7 +640,6 @@ export default function ClientProgressPage() {
               {[
                 { key:'date', label:'Date', type:'date' },
                 { key:'weight', label:'Weight (lbs)' },
-                { key:'body_fat', label:'Body Fat % (optional)' },
                 { key:'notes', label:'Notes (optional)', type:'text' },
               ].map(f => (
                 <div key={f.key}>

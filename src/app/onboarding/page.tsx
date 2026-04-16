@@ -226,10 +226,6 @@ export default function OnboardingPage() {
                   <input type="number" value={data.goal_weight_lbs||''} onChange={e=>set('goal_weight_lbs',+e.target.value||null)} placeholder="165" style={inp()} />
                 </div>
               </div>
-              <div>
-                <label style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6, display:'block' }}>Body Fat % (if known)</label>
-                <input type="number" value={data.body_fat_pct||''} onChange={e=>set('body_fat_pct',+e.target.value||null)} placeholder="Optional" style={inp()} />
-              </div>
             </div>
           )}
 

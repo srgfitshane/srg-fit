@@ -688,7 +688,7 @@ export default function ClientDetail() {
                 {([
                   { key:'show_nutrition',       label:'Nutrition tab',           desc:'Access to food logging & macros' },
                   { key:'show_macros',           label:'Macro targets',           desc:'See macro rings and targets' },
-                  { key:'show_body_metrics',     label:'Body metrics',            desc:'Body fat % and measurements (weight always shown)' },
+                  { key:'show_body_metrics',     label:'Body metrics',            desc:'Measurements (weight always shown)' },
                   { key:'show_progress_photos',  label:'Progress photos',         desc:'Upload and view progress photos' },
                 ] as const).map(({ key, label, desc }) => (
                   <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', paddingBottom:14, marginBottom:14, borderBottom:'1px solid '+t.border }}>
@@ -1591,7 +1591,6 @@ export default function ClientDetail() {
                     <IntakeRow label="Starting Weight" value={intake.starting_weight_lbs ? `${intake.starting_weight_lbs} lbs` : null} />
                     <IntakeRow label="Current Weight"  value={intake.current_weight_lbs ? `${intake.current_weight_lbs} lbs` : null} />
                     <IntakeRow label="Goal Weight"     value={intake.goal_weight_lbs ? `${intake.goal_weight_lbs} lbs` : null} />
-                    <IntakeRow label="Body Fat %"      value={intake.body_fat_pct ? `${intake.body_fat_pct}%` : null} />
                   </IntakeSection>
 
                   {/* Training */}
@@ -2008,7 +2007,7 @@ export default function ClientDetail() {
 // ── CoachMetricsTab ───────────────────────────────────────────────────────
 function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: any[], t: any, clientId: string, coachId: string | null, onSaved: () => void }) {
   const supabase = createClient()
-  const [activeChart, setActiveChart]   = useState<'weight'|'bodyfat'|'measurements'|'sleep'|'steps'|'water'>('weight')
+  const [activeChart, setActiveChart]   = useState<'weight'|'measurements'|'sleep'|'steps'|'water'>('weight')
   const [logOpen,  setLogOpen]  = useState<'none'|'weight'|'measurements'>('none')
   const [logForm,  setLogForm]  = useState<Record<string,string>>({})
   const [saving,   setSaving]   = useState(false)
@@ -2058,7 +2057,7 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
       coach_id:    coachId,
       logged_date: logForm.date || localDateStr(),
     }
-    const numFields = ['weight','body_fat','waist','hips','chest','left_arm','right_arm','neck','calves','shoulders']
+    const numFields = ['weight','waist','hips','chest','left_arm','right_arm','neck','calves','shoulders']
     for (const f of numFields) {
       if (logForm[f]) entry[f] = parseFloat(logForm[f])
     }
@@ -2091,7 +2090,6 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
   const chartData = sorted.map(m => ({
     date: fmt(m.logged_date),
     weight: m.weight ?? null,
-    body_fat: m.body_fat ?? null,
     waist: m.waist ?? null,
     hips: m.hips ?? null,
     chest: m.chest ?? null,
@@ -2106,11 +2104,9 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
   const latest = sorted[sorted.length - 1]
   const first  = sorted[0]
   const wChange = latest?.weight && first?.weight ? +(latest.weight - first.weight).toFixed(1) : null
-  const bfChange = latest?.body_fat && first?.body_fat ? +(latest.body_fat - first.body_fat).toFixed(1) : null
 
   const TABS = [
     { id: 'weight',       label: 'Weight',       color: t.teal,   habit: false },
-    { id: 'bodyfat',      label: 'Body Fat',     color: t.orange, habit: false },
     { id: 'measurements', label: 'Measurements', color: t.purple, habit: false },
     { id: 'sleep',        label: 'Sleep',        color: '#60a5fa', habit: true, field: 'sleep', unit: 'hrs'   },
     { id: 'steps',        label: 'Steps',        color: t.green,  habit: true, field: 'steps', unit: 'steps' },
@@ -2165,10 +2161,9 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
               {[
-                { key:'date',     label:'Date',                  type:'date'   },
-                { key:'weight',   label:'Weight (lbs)',          type:'number' },
-                { key:'body_fat', label:'Body Fat % (optional)', type:'number' },
-                { key:'notes',    label:'Notes (optional)',      type:'text'   },
+                { key:'date',     label:'Date',             type:'date'   },
+                { key:'weight',   label:'Weight (lbs)',     type:'number' },
+                { key:'notes',    label:'Notes (optional)', type:'text'   },
               ].map(f => (
                 <div key={f.key}>
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>{f.label}</label>
@@ -2236,8 +2231,6 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
         {[
           { label:'Current Weight', val: latest?.weight ? latest.weight+' lbs' : '—', color: t.teal },
           { label:'Weight Change', val: wChange !== null ? (wChange > 0 ? '+' : '')+wChange+' lbs' : '—', color: wChange !== null ? (wChange < 0 ? t.green : t.red) : t.textMuted },
-          { label:'Body Fat', val: latest?.body_fat ? latest.body_fat+'%' : '—', color: t.orange },
-          { label:'BF% Change', val: bfChange !== null ? (bfChange > 0 ? '+' : '')+bfChange+'%' : '—', color: bfChange !== null ? (bfChange < 0 ? t.green : t.red) : t.textMuted },
           { label:'Entries', val: metrics.length, color: t.purple },
         ].map(s => (
           <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px' }}>
@@ -2269,18 +2262,6 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
               <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} unit=" lbs" />
               <Tooltip {...tooltipStyle} />
               <Line type="monotone" dataKey="weight" stroke={t.teal} strokeWidth={2.5} dot={{ r:4, fill:t.teal }} connectNulls activeDot={{ r:6 }} name="Weight (lbs)" />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-
-        {activeChart === 'bodyfat' && (
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={chartData} margin={{ top:5, right:20, left:0, bottom:5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
-              <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} unit="%" />
-              <Tooltip {...tooltipStyle} />
-              <Line type="monotone" dataKey="body_fat" stroke={t.orange} strokeWidth={2.5} dot={{ r:4, fill:t.orange }} connectNulls activeDot={{ r:6 }} name="Body Fat %" />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -2339,7 +2320,7 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
           <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
             <thead>
               <tr style={{ background:t.surfaceHigh }}>
-                {['Date','Weight','BF%','Waist','Hips','Chest','L Arm','R Arm','Neck','Calves'].map(h => (
+                {['Date','Weight','Waist','Hips','Chest','L Arm','R Arm','Neck','Calves'].map(h => (
                   <th key={h} style={{ padding:'10px 14px', textAlign:'left' as const, fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', whiteSpace:'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -2350,7 +2331,6 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
                   <td style={{ padding:'10px 14px', fontWeight:600, color:t.textDim, whiteSpace:'nowrap' }}>{fmt(m.logged_date)}</td>
                   {[
                     m.weight     ? m.weight+'lbs'     : '—',
-                    m.body_fat   ? m.body_fat+'%'     : '—',
                     m.waist      ? m.waist+'"'        : '—',
                     m.hips       ? m.hips+'"'         : '—',
                     m.chest      ? m.chest+'"'        : '—',
