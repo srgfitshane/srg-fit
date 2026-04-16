@@ -186,7 +186,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
     setLoading(true)
     const [{ data: sess }, { data: evts }] = await Promise.all([
       supabase.from('workout_sessions')
-        .select('id, title, scheduled_date, status')
+        .select('id, title, scheduled_date, status, session_exercises(id, is_open_slot, slot_constraint, exercise_name, order_index)')
         .eq('client_id', clientId)
         .not('scheduled_date', 'is', null)
         .neq('status', 'template')
@@ -294,14 +294,18 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
               style={{ minHeight:72, background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'50':t.border), borderRadius:10, padding:'5px 6px', cursor:d?'pointer':'default', opacity:d?1:0.25, position:'relative' }}>
               {d && <>
                 <div style={{ fontSize:11, fontWeight:isToday?900:600, color:isToday?t.teal:t.textDim, marginBottom:3 }}>{d.getDate()}</div>
-                {dayItems.map(item => (
-                  <div key={item.id}
-                    onClick={e => { e.stopPropagation(); setDelConfirm(item) }}
-                    style={{ fontSize:9, fontWeight:700, background:item._color+'22', color:item._color, border:'1px solid '+item._color+'40', borderRadius:4, padding:'2px 5px', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer' }}
-                    title={item.title}>
-                    {item._type==='session' ? '🏋️' : (EVENT_ICON[item.event_type]||'📅')} {item.title}
-                  </div>
-                ))}
+                {dayItems.map(item => {
+                  const openSlots = item._type==='session' ? (item.session_exercises||[]).filter((e:any)=>e.is_open_slot).length : 0
+                  return (
+                    <div key={item.id}
+                      onClick={e => { e.stopPropagation(); setDelConfirm(item) }}
+                      style={{ fontSize:9, fontWeight:700, background:item._color+'22', color:item._color, border:'1px solid '+item._color+'40', borderRadius:4, padding:'2px 5px', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'pointer', display:'flex', alignItems:'center', gap:3 }}
+                      title={item.title}>
+                      {item._type==='session' ? '🏋️' : (EVENT_ICON[item.event_type]||'📅')} {item.title}
+                      {openSlots > 0 && <span style={{fontSize:8,background:'#f5a62333',color:'#f5a623',borderRadius:3,padding:'1px 3px',flexShrink:0}}>🎲{openSlots}</span>}
+                    </div>
+                  )
+                })}
                 {/* + button always visible on hover via JS alternative — show on empty days */}
                 {dayItems.length === 0 && (
                   <div style={{ position:'absolute', bottom:4, right:4, width:16, height:16, borderRadius:'50%', background:t.border, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:t.textMuted, fontWeight:700 }}>+</div>
@@ -353,6 +357,21 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
                 </span>
               </div>
             )}
+            {/* Open slots — show if any */}
+            {delConfirm._type==='session' && (() => {
+              const slots = (delConfirm.session_exercises||[]).filter((e:any)=>e.is_open_slot)
+              if (slots.length === 0) return null
+              return (
+                <div style={{ marginBottom:16, background:'#f5a62310', border:'1px solid #f5a62330', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:'#f5a623', marginBottom:6 }}>🎲 {slots.length} Open Slot{slots.length!==1?'s':''} — Client Chooses</div>
+                  {slots.map((s:any) => (
+                    <div key={s.id} style={{ fontSize:11, color:'#f5a623', opacity:0.8, marginBottom:2 }}>
+                      · {s.slot_constraint || 'Client\'s choice'}
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
             {/* Reschedule — sessions only */}
             {delConfirm._type==='session' && (
               <div style={{ marginBottom:16 }}>
