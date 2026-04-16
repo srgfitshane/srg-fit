@@ -629,27 +629,31 @@ export default function CoachDashboard() {
                   <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Action Queue</div>
                   <div style={{ fontSize:16, fontWeight:800 }}>What needs your attention right now</div>
                 </div>
-                <button onClick={()=>router.push('/dashboard/coach/messages')}
+                <button onClick={()=>setActionQueue([])}
                   style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  Open workspace
+                  Clear all
                 </button>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {actionQueue.map(item => (
-                  <button key={item.id} onClick={item.onClick}
-                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  <div key={item.id} style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
                     <div style={{ width:10, height:10, borderRadius:'50%', background:item.color, flexShrink:0 }} />
-                    <div style={{ flex:1, minWidth:0 }}>
+                    <button onClick={item.onClick}
+                      style={{ flex:1, minWidth:0, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", padding:0 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
-                        <div style={{ fontSize:13, fontWeight:800 }}>{item.title}</div>
+                        <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{item.title}</div>
                         <span style={{ fontSize:10, fontWeight:800, color:queueTypeColor(item.type).color, background:queueTypeColor(item.type).bg, borderRadius:999, padding:'3px 7px' }}>
                           {queueTypeLabel[item.type]}
                         </span>
                       </div>
                       <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{item.detail}</div>
+                    </button>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                      <div style={{ fontSize:11, fontWeight:800, color:item.color, cursor:'pointer', whiteSpace:'nowrap' as const }} onClick={item.onClick}>{item.action} →</div>
+                      <button onClick={()=>setActionQueue(prev => prev.filter(q => q.id !== item.id))}
+                        style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16, lineHeight:1, padding:'0 2px', fontFamily:"'DM Sans',sans-serif" }}>×</button>
                     </div>
-                    <div style={{ fontSize:11, fontWeight:800, color:item.color }}>{item.action} →</div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
