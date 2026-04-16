@@ -717,44 +717,23 @@ export default function CoachWorkoutsPage() {
                   autoFocus
                   style={{...inp,marginBottom:10}}
                 />
-                {/* Muscle filter */}
-                <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:2,msOverflowStyle:'none',scrollbarWidth:'none'}}>
-                  <button onClick={()=>setExGroup('all')}
-                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
-                    💪 All
-                  </button>
-                  {muscleGroups.map(g=>(
-                    <button key={g} onClick={()=>setExGroup(g)}
-                      style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>
-                      {g}
-                    </button>
-                  ))}
-                </div>
-                {/* Movement pattern filter */}
-                <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:2,msOverflowStyle:'none',scrollbarWidth:'none',marginTop:4}}>
-                  <button onClick={()=>setExMovement('all')}
-                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exMovement==='all'?t.orange:t.border}`,background:exMovement==='all'?t.orangeDim:'transparent',color:exMovement==='all'?t.orange:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
-                    🔄 All
-                  </button>
-                  {movementPatterns.map(m=>(
-                    <button key={m} onClick={()=>setExMovement(m)}
-                      style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exMovement===m?t.orange:t.border}`,background:exMovement===m?t.orangeDim:'transparent',color:exMovement===m?t.orange:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-                {/* Equipment filter */}
-                <div className="ex-chips" style={{display:'flex',gap:6,overflowX:'auto',flexWrap:'nowrap',paddingBottom:4,msOverflowStyle:'none',scrollbarWidth:'none',marginTop:4}}>
-                  <button onClick={()=>setExEquipment('all')}
-                    style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exEquipment==='all'?t.purple:t.border}`,background:exEquipment==='all'?t.purple+'20':'transparent',color:exEquipment==='all'?t.purple:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:'nowrap'}}>
-                    🏋️ All
-                  </button>
-                  {equipmentList.map(eq=>(
-                    <button key={eq} onClick={()=>setExEquipment(eq)}
-                      style={{padding:'4px 10px',borderRadius:20,border:`1px solid ${exEquipment===eq?t.purple:t.border}`,background:exEquipment===eq?t.purple+'20':'transparent',color:exEquipment===eq?t.purple:t.textDim,cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
-                      {eq}
-                    </button>
-                  ))}
+                {/* Filters — compact labeled rows */}
+                <div style={{display:'flex',flexDirection:'column' as const,gap:3,marginBottom:6}}>
+                  <div className="ex-chips" style={{display:'flex',gap:4,overflowX:'auto',flexWrap:'nowrap',msOverflowStyle:'none',scrollbarWidth:'none'}}>
+                    <span style={{fontSize:9,fontWeight:800,color:t.teal,textTransform:'uppercase' as const,letterSpacing:'0.06em',alignSelf:'center',flexShrink:0,minWidth:28}}>MUS</span>
+                    <button onClick={()=>setExGroup('all')} style={{padding:'2px 8px',borderRadius:20,border:`1px solid ${exGroup==='all'?t.teal:t.border}`,background:exGroup==='all'?t.tealDim:'transparent',color:exGroup==='all'?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>All</button>
+                    {muscleGroups.map(g=>(<button key={g} onClick={()=>setExGroup(g)} style={{padding:'2px 8px',borderRadius:20,border:`1px solid ${exGroup===g?t.teal:t.border}`,background:exGroup===g?t.tealDim:'transparent',color:exGroup===g?t.teal:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>{g}</button>))}
+                  </div>
+                  <div className="ex-chips" style={{display:'flex',gap:4,overflowX:'auto',flexWrap:'nowrap',msOverflowStyle:'none',scrollbarWidth:'none'}}>
+                    <span style={{fontSize:9,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',alignSelf:'center',flexShrink:0,minWidth:28}}>MOV</span>
+                    <button onClick={()=>setExMovement('all')} style={{padding:'2px 8px',borderRadius:20,border:`1px solid ${exMovement==='all'?t.orange:t.border}`,background:exMovement==='all'?t.orangeDim:'transparent',color:exMovement==='all'?t.orange:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>All</button>
+                    {movementPatterns.map(m=>(<button key={m} onClick={()=>setExMovement(m)} style={{padding:'2px 8px',borderRadius:20,border:`1px solid ${exMovement===m?t.orange:t.border}`,background:exMovement===m?t.orangeDim:'transparent',color:exMovement===m?t.orange:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>{m}</button>))}
+                  </div>
+                  <div className="ex-chips" style={{display:'flex',gap:4,overflowX:'auto',flexWrap:'nowrap',msOverflowStyle:'none',scrollbarWidth:'none'}}>
+                    <span style={{fontSize:9,fontWeight:800,color:t.purple,textTransform:'uppercase' as const,letterSpacing:'0.06em',alignSelf:'center',flexShrink:0,minWidth:28}}>EQP</span>
+                    <button onClick={()=>setExEquipment('all')} style={{padding:'2px 8px',borderRadius:20,border:`1px solid ${exEquipment==='all'?t.purple:t.border}`,background:exEquipment==='all'?t.purple+'20':'transparent',color:exEquipment==='all'?t.purple:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif"}}>All</button>
+                    {equipmentList.map(eq=>(<button key={eq} onClick={()=>setExEquipment(eq)} style={{padding:'2px 8px',borderRadius:20,border:`1px solid ${exEquipment===eq?t.purple:t.border}`,background:exEquipment===eq?t.purple+'20':'transparent',color:exEquipment===eq?t.purple:t.textDim,cursor:'pointer',fontSize:10,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>{eq}</button>))}
+                  </div>
                 </div>
               </div>
               {/* Results */}
