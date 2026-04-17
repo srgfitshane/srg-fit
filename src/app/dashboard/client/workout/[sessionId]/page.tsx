@@ -649,11 +649,30 @@ ${candidateList}`
       is_open_slot: false,
       slot_filled_by_client: true,
     }).eq('id', exId)
-    setExercises(prev => prev.map(e => e.id === exId
-      ? { ...e, exercise_name: exerciseName, exercise_id: exerciseId || null, is_open_slot: false, slot_filled_by_client: true }
-      : e
-    ))
-    setSetData(prev => prev[exId] ? prev : { ...prev, [exId]: [defaultSet()] })
+
+    // Fetch exercise data from library if picked from library
+    let exerciseData = null
+    if (exerciseId) {
+      const { data } = await supabase.from('exercises')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url')
+        .eq('id', exerciseId).single()
+      exerciseData = data
+    }
+
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e
+      const sets = e.sets_prescribed || 3
+      return { ...e, exercise_name: exerciseName, exercise_id: exerciseId || null, is_open_slot: false, slot_filled_by_client: true, exercise: exerciseData }
+    }))
+
+    // Init set rows based on prescribed sets
+    setSetData(prev => {
+      if (prev[exId]) return prev
+      const ex = exercises.find(e => e.id === exId)
+      const sets = ex?.sets_prescribed || 3
+      return { ...prev, [exId]: Array.from({length: sets}, () => defaultSet()) }
+    })
+
     setSlotPickerExId(null); setSlotSearch(''); setSlotCustomName('')
   }
 
@@ -1181,7 +1200,11 @@ ${candidateList}`
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:13,fontWeight:800,color:t.yellow}}>Your Choice</div>
                           <div style={{fontSize:12,color:t.textMuted,marginTop:2}}>{ex.slot_constraint || 'Pick any exercise'}</div>
-                          <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>{ex.sets_prescribed}×{ex.reps_prescribed}</div>
+                          <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>
+                            {ex.tracking_type === 'time'
+                              ? `${ex.sets_prescribed} set${(ex.sets_prescribed||1)>1?'s':''} · ${ex.duration_seconds ? Math.round(ex.duration_seconds/60)+'min' : ''}`
+                              : `${ex.sets_prescribed}×${ex.reps_prescribed}`}
+                          </div>
                         </div>
                         <button onClick={()=>{ setSlotPickerExId(ex.id); setSlotSearch(''); setSlotCustomName(''); setSlotTab('library') }}
                           style={{background:`linear-gradient(135deg,${t.yellow},${t.yellow}cc)`,border:'none',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
