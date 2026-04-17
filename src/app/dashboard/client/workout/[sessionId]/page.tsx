@@ -140,6 +140,7 @@ export default function ActiveWorkoutPage() {
   const [isReopened, setIsReopened] = useState(false)
   const [clientGender, setClientGender] = useState<string|null>(null)
   const [isInPerson,   setIsInPerson]   = useState(false)
+  const [showCancelSheet, setShowCancelSheet] = useState(false)
   // Preview toggle per exercise
   const [previewOpen, setPreviewOpen] = useState<Record<string,boolean>>({})
   // Skip state per exercise
@@ -786,11 +787,16 @@ ${candidateList}`
   }
 
   async function cancelWorkout() {
-    // Reset session back to assigned so it can be started again
+    // Wipe progress — reset session back to assigned
     await supabase.from('workout_sessions').update({
       status: 'assigned',
       started_at: null,
     }).eq('id', sessionId)
+    router.push(returnUrl)
+  }
+
+  async function saveAndExit() {
+    // Keep whatever they logged, just leave in_progress and exit
     router.push(returnUrl)
   }
 
@@ -1058,7 +1064,7 @@ ${candidateList}`
       <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
       <div style={{fontSize:18,fontWeight:800,marginBottom:8,color:t.orange}}>No exercises in this workout</div>
       <div style={{fontSize:13,color:t.textMuted,marginBottom:32,maxWidth:280,lineHeight:1.6}}>This session has no exercises assigned yet. Your coach needs to add exercises to this program first.</div>
-      <button onClick={cancelWorkout} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+      <button onClick={()=>setShowCancelSheet(true)} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
         ← Back to Dashboard
       </button>
     </div>
@@ -1114,7 +1120,7 @@ ${candidateList}`
 
         {/* Top bar */}
         <div style={{background:t.surface,borderBottom:`1px solid ${t.border}`,padding:'12px 16px',display:'flex',alignItems:'center',gap:12,position:'sticky',top:0,zIndex:50}}>
-          <button onClick={cancelWorkout}
+          <button onClick={()=>setShowCancelSheet(true)}
             aria-label="Cancel workout and return to dashboard"
             style={{background:'none',border:'none',color:t.textDim,cursor:'pointer',fontSize:20,lineHeight:1}}>←</button>
           <div style={{flex:1}}>
@@ -1122,7 +1128,7 @@ ${candidateList}`
             {session?.day_label && <div style={{fontSize:11,color:t.textDim}}>{session.day_label}</div>}
           </div>
           <div style={{fontSize:16,fontWeight:800,color:t.teal,fontVariantNumeric:'tabular-nums'}}>⏱ {fmtTime(elapsedSeconds)}</div>
-          <button onClick={cancelWorkout}
+          <button onClick={()=>setShowCancelSheet(true)}
             aria-label="Cancel workout"
             style={{background:t.redDim,border:'1px solid '+t.red+'40',borderRadius:8,padding:'5px 11px',fontSize:11,fontWeight:700,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             Cancel
@@ -1694,6 +1700,35 @@ ${candidateList}`
                 </button>
               </div>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Cancel confirmation bottom sheet */}
+      {showCancelSheet && (
+        <>
+          <div onClick={()=>setShowCancelSheet(false)}
+            style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:100,backdropFilter:'blur(4px)'}}/>
+          <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:'#13131f',borderTop:'1px solid rgba(255,255,255,0.08)',borderRadius:'20px 20px 0 0',zIndex:101,fontFamily:"'DM Sans',sans-serif",padding:'20px 20px',paddingBottom:'calc(24px + env(safe-area-inset-bottom))'}}>
+            <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.15)',margin:'0 auto 20px'}}/>
+            <div style={{fontSize:16,fontWeight:800,marginBottom:6}}>Leave workout?</div>
+            <div style={{fontSize:13,color:'rgba(255,255,255,0.5)',marginBottom:24,lineHeight:1.5}}>
+              Your sets are saved as you go. You can come back and continue anytime.
+            </div>
+            <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+              <button onClick={saveAndExit}
+                style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:`linear-gradient(135deg,#00C9B1,#00a896)`,color:'#000',fontSize:15,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                💾 Save & Exit
+              </button>
+              <button onClick={cancelWorkout}
+                style={{width:'100%',padding:'14px',borderRadius:14,border:'1px solid rgba(255,80,80,0.4)',background:'rgba(255,80,80,0.08)',color:'#ff5050',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                🗑 Clear Workout & Exit
+              </button>
+              <button onClick={()=>setShowCancelSheet(false)}
+                style={{width:'100%',padding:'12px',borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'transparent',color:'rgba(255,255,255,0.4)',fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                Keep Going
+              </button>
+            </div>
           </div>
         </>
       )}
