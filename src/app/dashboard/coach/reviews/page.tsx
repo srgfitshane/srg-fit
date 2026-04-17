@@ -525,7 +525,9 @@ export default function ReviewsPage() {
           .eq('session_exercise_id', ex.id).order('set_number')
         return {
           ...ex,
-          client_video_url: await resolveSignedMediaUrl(supabase, 'form-checks', ex.client_video_url),
+          client_video_url: ex.client_video_url
+            ? (await supabase.storage.from('form-checks').createSignedUrl(ex.client_video_url, 60 * 60)).data?.signedUrl || null
+            : null,
           sets: sets || [],
         }
       }))
