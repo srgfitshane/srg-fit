@@ -76,22 +76,21 @@ export default function ClientCalendarPage() {
   const [reschedPick,  setReschedPick]  = useState<string>('')
   const [clientId,     setClientId]     = useState<string|null>(null)
   // Task add modal
-  const [showAddTask,  setShowAddTask]  = useState(false)
   const [taskIcon, setTaskIcon] = useState('✅')
 
   // Auto-open add task modal if navigated with ?addTask=1
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('addTask') === '1') {
-        setShowAddTask(true)
-        // Clean up the URL param without navigation
-        const url = new URL(window.location.href)
-        url.searchParams.delete('addTask')
-        window.history.replaceState({}, '', url.toString())
-      }
+  const [showAddTask, setShowAddTask] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('addTask') === '1') {
+      // Clean up immediately
+      const url = new URL(window.location.href)
+      url.searchParams.delete('addTask')
+      window.history.replaceState({}, '', url.toString())
+      return true
     }
-  }, [])
+    return false
+  })
   const [taskTitle,    setTaskTitle]    = useState('')
   const [taskRepeat,   setTaskRepeat]   = useState<'once'|'daily'|'weekly'>('once')
   const [taskDate,     setTaskDate]     = useState(todayStr)
