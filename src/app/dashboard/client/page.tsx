@@ -1032,7 +1032,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           <div style={{ fontSize:15, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
           <div style={{ flex:1 }} />
           {/* Calendar & Settings quick access */}
-          <button onClick={()=>router.push('/dashboard/client/calendar?addTask=1')}
+          <button onClick={()=>router.push('/dashboard/client/calendar')}
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', padding:'6px', marginRight:4, display:'flex', alignItems:'center', justifyContent:'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -1252,10 +1252,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{ fontSize:14, fontWeight:800, color:t.green }}>Workout Complete!</div>
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedToday.title} — great work today 💪</div>
                   </div>
-                  <button onClick={()=>router.push(workoutUrl(completedToday.id))}
-                    style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
-                    Review
-                  </button>
                 </div>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -1316,8 +1312,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em' }}>Tasks & Habits</div>
-                <button onClick={()=>router.push('/dashboard/client/calendar?addTask=1')}
-                  style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <button onClick={()=>{ sessionStorage.setItem('openAddTask','1'); router.push('/dashboard/client/calendar') }}                  style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   + Task
                 </button>
               </div>
