@@ -2779,8 +2779,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         await supabase.from('session_exercises').insert(
           exes.map((ex:any) => ({
             session_id: session.id,
-            exercise_id: ex.exercise_id,
-            exercise_name: ex.exercise?.name || '',
+            exercise_id: ex.exercise_id || null,
+            exercise_name: ex.is_open_slot ? '' : (ex.exercise?.name || ''),
             sets_prescribed: ex.sets || 3,
             reps_prescribed: ex.reps || '',
             weight_prescribed: ex.target_weight || '',
@@ -2790,6 +2790,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
             exercise_role: ex.exercise_role || 'main',
             tracking_type: ex.tracking_type || 'reps',
             duration_seconds: ex.duration_seconds || null,
+            is_open_slot: ex.is_open_slot || false,
+            slot_constraint: ex.slot_constraint || null,
           }))
         )
       }
