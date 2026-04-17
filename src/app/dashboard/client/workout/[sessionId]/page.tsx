@@ -137,6 +137,7 @@ export default function ActiveWorkoutPage() {
   const [loading, setLoading] = useState(true)
   const [isReopened, setIsReopened] = useState(false)
   const [clientGender, setClientGender] = useState<string|null>(null)
+  const [isInPerson,   setIsInPerson]   = useState(false)
   // Preview toggle per exercise
   const [previewOpen, setPreviewOpen] = useState<Record<string,boolean>>({})
   // Skip state per exercise
@@ -325,10 +326,11 @@ ${candidateList}`
     const safeSession = sess as WorkoutSession | null
     
 
-    // Fetch client gender to serve correct demo video
+    // Fetch client gender + type to serve correct demo video and skip review for in-person
     if (safeSession?.client_id) {
-      const { data: clientRow } = await supabase.from('clients').select('gender').eq('id', safeSession.client_id).single()
+      const { data: clientRow } = await supabase.from('clients').select('gender, client_type').eq('id', safeSession.client_id).single()
       if (clientRow?.gender) setClientGender(clientRow.gender)
+      if (clientRow?.client_type === 'offline' || clientRow?.client_type === 'hybrid') setIsInPerson(true)
     }
 
     // If client tapped back into a completed session, flag it — don't auto-reopen yet
@@ -775,12 +777,13 @@ ${candidateList}`
     setSaving(true)
     const now = new Date()
     const isCoachMode = returnUrl.includes('/preview/')
+    const skipReview = isCoachMode || isInPerson
     const reviewDue = new Date(now.getTime() + 24 * 60 * 60 * 1000)
     const { error } = await supabase.from('workout_sessions').update({
       status: 'completed',
       completed_at: now.toISOString(),
-      // Skip review countdown when coach is logging — they don't review their own logs
-      ...(isCoachMode ? { coach_reviewed_at: now.toISOString() } : { review_due_at: reviewDue.toISOString() }),
+      // Skip review for coach-logged sessions and in-person clients
+      ...(skipReview ? { coach_reviewed_at: now.toISOString() } : { review_due_at: reviewDue.toISOString() }),
       duration_seconds: elapsedSeconds,
       session_rpe: parseInt(finishForm.session_rpe) || null,
       energy_level: parseInt(finishForm.energy_level),
