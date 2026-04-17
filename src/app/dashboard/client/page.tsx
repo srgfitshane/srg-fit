@@ -374,7 +374,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
   const [workoutsThisWeek, setWorkoutsThisWeek] = useState<number>(0)
   const [nextSession,  setNextSession]  = useState<NextSessionRecord | null>(null)
-  const [completedToday, setCompletedToday] = useState<{id:string,title:string} | null>(null)
+  const [completedToday, setCompletedToday] = useState<{id:string,title:string,coach_reviewed_at:string|null} | null>(null)
   const [pendingReviews, setPendingReviews] = useState<PendingReviewRecord[]>([])
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckinRecord[]>([])
@@ -528,7 +528,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('journal_entries').select('*').eq('client_id', profileId).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
           supabase.from('client_activities').select('*').eq('client_id', cid).eq('activity_date', todayStr).order('created_at', { ascending: false }).limit(5),
-          supabase.from('workout_sessions').select('id, title').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
+          supabase.from('workout_sessions').select('id, title, coach_reviewed_at').eq('client_id', cid).eq('status', 'completed').eq('scheduled_date', todayStr).not('program_id', 'is', null).limit(1).single(),
           supabase.from('metrics').select('weight').eq('client_id', clientData.id).not('weight', 'is', null).order('logged_date', { ascending: false }).limit(1).single(),
           supabase.from('personal_records').select('exercise_id, weight_pr').eq('client_id', cid),
           supabase.from('client_tasks').select('*').eq('client_id', cid).order('created_at'),
@@ -563,7 +563,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         setPastEntries((pastData || []) as JournalEntryRecord[])
         setRecentActivities((activityData || []) as ClientActivityRecord[])
-        setCompletedToday(completedTodayData ? { id: completedTodayData.id, title: completedTodayData.title } : null)
+        setCompletedToday(completedTodayData ? { id: completedTodayData.id, title: completedTodayData.title, coach_reviewed_at: completedTodayData.coach_reviewed_at ?? null } : null)
 
         // Auto-update goal current_value from live metrics + PRs
         const latestWeight = latestMetric?.weight ? Number(latestMetric.weight) : null
@@ -1252,6 +1252,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{ fontSize:14, fontWeight:800, color:t.green }}>Workout Complete!</div>
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedToday.title} — great work today 💪</div>
                   </div>
+                  {completedToday.coach_reviewed_at && (
+                    <button onClick={()=>router.push(workoutUrl(completedToday.id))}
+                      style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                      💬 See Review
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
