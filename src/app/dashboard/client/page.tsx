@@ -368,7 +368,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])
   const [habitLogs,    setHabitLogs]    = useState<Record<string,number>>({})
-  const [clientTasks,  setClientTasks]  = useState<{id:string,title:string,repeat:string,due_date:string|null,last_completed_date:string|null}[]>([])
+  const [clientTasks,  setClientTasks]  = useState<{id:string,title:string,repeat:string,due_date:string|null,last_completed_date:string|null,icon:string|null}[]>([])
   const [milestones,   setMilestones]   = useState<MilestoneRecord[]>([])
   const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
@@ -1032,7 +1032,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           <div style={{ fontSize:15, fontWeight:900, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG FIT</div>
           <div style={{ flex:1 }} />
           {/* Calendar & Settings quick access */}
-          <button onClick={()=>router.push('/dashboard/client/calendar')}
+          <button onClick={()=>router.push('/dashboard/client/calendar?addTask=1')}
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', padding:'6px', marginRight:4, display:'flex', alignItems:'center', justifyContent:'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -1316,7 +1316,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em' }}>Tasks & Habits</div>
-                <button onClick={()=>router.push('/dashboard/client/calendar')}
+                <button onClick={()=>router.push('/dashboard/client/calendar?addTask=1')}
                   style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   + Task
                 </button>
@@ -1326,11 +1326,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 {todayTasks.map(task => {
                   const done = isTaskDoneToday(task)
                   return (
-                    <div key={task.id} style={{ background:t.surface, border:'1px solid '+(done?t.green+'40':t.teal+'30'), borderRadius:13, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
-                      <button onClick={()=> done ? uncompleteTask(task.id) : completeTask(task.id)}
-                        style={{ width:28, height:28, borderRadius:8, border:'2px solid '+(done?t.green:t.teal+'60'), background:done?t.green+'22':t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, fontSize:14, color:done?t.green:t.teal }}>
-                        {done ? '✓' : ''}
-                      </button>
+                    <div key={task.id}
+                      onClick={()=> done ? uncompleteTask(task.id) : completeTask(task.id)}
+                      style={{ background:done?t.green+'10':t.surface, border:'1px solid '+(done?t.green+'40':t.teal+'30'), borderRadius:13, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', transition:'all 0.15s ease' }}>
+                      <div style={{ width:32, height:32, borderRadius:9, background:done?'linear-gradient(135deg,'+t.green+','+t.green+'aa)':t.surfaceHigh, border:'1px solid '+(done?t.green+'60':t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?13:18, flexShrink:0, transition:'all 0.2s ease' }}>
+                        {done ? '✓' : (task.icon || '✅')}
+                      </div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:700, textDecoration:done?'line-through':'none', color:done?t.textMuted:t.text }}>{task.title}</div>
                         {task.repeat !== 'once' && <div style={{ fontSize:11, color:t.textMuted, marginTop:1, textTransform:'capitalize' as const }}>{task.repeat}</div>}
