@@ -170,7 +170,9 @@ export default function ActiveWorkoutPage() {
     const signedExercises = await Promise.all((exs || []).map(async (exerciseRow) => ({
       ...exerciseRow,
       exercise_name: exerciseRow.exercise_name || exerciseRow.exercise?.name || '',
-      client_video_url: await resolveSignedMediaUrl(supabase, 'form-checks', exerciseRow.client_video_url),
+      client_video_url: exerciseRow.client_video_url
+        ? (await supabase.storage.from('form-checks').createSignedUrl(exerciseRow.client_video_url, 60 * 60)).data?.signedUrl || null
+        : null,
     })))
 
     const uploadMap = signedExercises.reduce((acc, exerciseRow) => {
@@ -778,7 +780,8 @@ ${candidateList}`
       console.error('Form check upload error:', error.message)
       alert(`Upload failed: ${error.message}`)
     } else {
-      const signedUrl = await resolveSignedMediaUrl(supabase, 'form-checks', path)
+      const { data: signedData } = await supabase.storage.from('form-checks').createSignedUrl(path, 60 * 60)
+      const signedUrl = signedData?.signedUrl || null
       setVideoUploads(prev => ({ ...prev, [exId]: signedUrl || path }))
       await supabase.from('session_exercises').update({ client_video_url: path }).eq('id', exId)
     }
