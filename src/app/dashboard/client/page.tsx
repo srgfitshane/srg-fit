@@ -2224,6 +2224,14 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
 function CoachReviewVideo({ url }: { url: string }) {
   const [open, setOpen] = useState(false)
   const tc = { teal:'#00c9b1', tealDim:'#00c9b115', border:'#252538', text:'#eeeef8', textMuted:'#5a5a78' }
+  // If it's an external link (Cap, Loom, Drive etc.) open in new tab instead of embedding
+  const isExternalLink = url.startsWith('http') && !url.includes('supabase')
+  if (isExternalLink) return (
+    <a href={url} target='_blank' rel='noreferrer'
+      style={{ display:'inline-flex', alignItems:'center', gap:6, background:tc.tealDim, border:`1px solid ${tc.teal}40`, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:tc.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textDecoration:'none' }}>
+      ▶ Watch Coach Review ↗
+    </a>
+  )
   return (
     <div>
       {!open ? (
