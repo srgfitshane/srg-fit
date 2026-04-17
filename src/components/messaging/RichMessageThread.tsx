@@ -174,6 +174,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       }
     })
     setThread(withReactions)
+    // Force scroll to bottom on initial load
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }, 50)
 
     // Mark incoming as read
     await supabase.from('messages')
@@ -187,12 +191,27 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   }, [loadThread])
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
+  const userScrolledUp = useRef(false)
+
+  // Track if user has intentionally scrolled up
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // Always jump to bottom — instant on load, instant on new message
-    // scrollTop = scrollHeight is reliable regardless of scrollIntoView container issues
-    el.scrollTop = el.scrollHeight
+    const handleScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+      userScrolledUp.current = !atBottom
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Auto-scroll to bottom only if user hasn't scrolled up
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (!userScrolledUp.current) {
+      el.scrollTop = el.scrollHeight
+    }
   }, [thread])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
@@ -242,7 +261,12 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     setDraft('')
     setSending(false)
     notifyRecipient(draft.trim())
-    setTimeout(() => inputRef.current?.focus(), 50)
+    // Always snap to bottom when YOU send
+    userScrolledUp.current = false
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      inputRef.current?.focus()
+    }, 50)
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
