@@ -2223,15 +2223,47 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
 
 function CoachReviewVideo({ url }: { url: string }) {
   const [open, setOpen] = useState(false)
-  const tc = { teal:'#00c9b1', tealDim:'#00c9b115', border:'#252538', text:'#eeeef8', textMuted:'#5a5a78' }
-  // If it's an external link (Cap, Loom, Drive etc.) open in new tab instead of embedding
-  const isExternalLink = url.startsWith('http') && !url.includes('supabase')
-  if (isExternalLink) return (
-    <a href={url} target='_blank' rel='noreferrer'
-      style={{ display:'inline-flex', alignItems:'center', gap:6, background:tc.tealDim, border:`1px solid ${tc.teal}40`, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:tc.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textDecoration:'none' }}>
-      ▶ Watch Coach Review ↗
+  const [meta, setMeta] = useState<{title:string,image:string|null}|null>(null)
+  const tc = { teal:'#00c9b1', tealDim:'#00c9b115', border:'#252538', text:'#eeeef8', textMuted:'#5a5a78', surface:'#13131f' }
+  const isExternal = url.startsWith('http') && !url.includes('supabase')
+
+  useEffect(() => {
+    if (!isExternal) return
+    fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
+      .then(r => r.json()).then(setMeta).catch(() => {})
+  }, [url, isExternal])
+
+  // External link — show preview card
+  if (isExternal) return (
+    <a href={url} target='_blank' rel='noreferrer' style={{ display:'block', textDecoration:'none' }}>
+      <div style={{ borderRadius:12, overflow:'hidden', border:`1px solid ${tc.teal}40`, background:tc.surface, cursor:'pointer' }}>
+        {/* Thumbnail */}
+        <div style={{ position:'relative', background:'#000', aspectRatio:'16/9', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          {meta?.image
+            ? <img src={meta.image} alt='preview' style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+            : <div style={{ width:'100%', aspectRatio:'16/9', background:'linear-gradient(135deg,#0a2a27,#13131f)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <span style={{ fontSize:40 }}>🎥</span>
+              </div>
+          }
+          {/* Play button overlay */}
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.3)' }}>
+            <div style={{ width:52, height:52, borderRadius:'50%', background:tc.teal, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 20px rgba(0,201,177,0.5)' }}>
+              <svg width='20' height='20' viewBox='0 0 24 24' fill='#000'><polygon points='5,3 19,12 5,21'/></svg>
+            </div>
+          </div>
+        </div>
+        {/* Title bar */}
+        <div style={{ padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ flex:1, fontSize:13, fontWeight:700, color:tc.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
+            {meta?.title || 'Watch Coach Review'}
+          </div>
+          <span style={{ fontSize:11, color:tc.teal, fontWeight:700, flexShrink:0 }}>Open ↗</span>
+        </div>
+      </div>
     </a>
   )
+
+  // Supabase storage — play inline
   return (
     <div>
       {!open ? (
@@ -2241,7 +2273,7 @@ function CoachReviewVideo({ url }: { url: string }) {
         </button>
       ) : (
         <div style={{ background:'#000', borderRadius:10, overflow:'hidden', position:'relative' }}>
-          <video src={url} controls autoPlay playsInline style={{ width:'100%', maxHeight:280, display:'block' }}/>
+          <video src={url} controls autoPlay playsInline muted style={{ width:'100%', maxHeight:280, display:'block' }}/>
           <button onClick={()=>setOpen(false)}
             style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', border:'none', borderRadius:6, padding:'4px 8px', fontSize:11, color:'#fff', cursor:'pointer' }}>
             ✕
