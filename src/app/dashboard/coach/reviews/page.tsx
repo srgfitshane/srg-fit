@@ -515,7 +515,7 @@ export default function ReviewsPage() {
     const enriched: Review[] = await Promise.all(sessionRows.map(async (s) => {
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('id, exercise_name, sets_completed, sets_prescribed, reps_prescribed, notes_client, notes_coach, client_video_url, original_exercise_name, swap_reason, swap_note, skipped, skip_reason, skip_note')
+        .select('id, exercise_name, sets_completed, sets_prescribed, reps_prescribed, notes_client, notes_coach, client_video_url, original_exercise_name, swap_reason, swap_note, skipped, skip_reason, skip_note, exercise:exercises!session_exercises_exercise_id_fkey(name)')
         .eq('session_id', s.id).order('order_index')
       const exerciseRows = (exs || []) as SessionExerciseRow[]
       const exercises: Exercise[] = await Promise.all(exerciseRows.map(async (ex) => {
@@ -525,6 +525,7 @@ export default function ReviewsPage() {
           .eq('session_exercise_id', ex.id).order('set_number')
         return {
           ...ex,
+          exercise_name: ex.exercise_name || (ex as any).exercise?.name || '',
           client_video_url: ex.client_video_url
             ? (await supabase.storage.from('form-checks').createSignedUrl(ex.client_video_url, 60 * 60)).data?.signedUrl || null
             : null,
