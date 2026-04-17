@@ -26,11 +26,18 @@ export default function ReviewPopout() {
 
   useEffect(() => {
     async function load() {
-      const { data: ws } = await supabase
+      // Wait for auth session to be available (new window needs to restore from cookies)
+      const { data: { session: authSession } } = await supabase.auth.getSession()
+      if (!authSession) {
+        setLoading(false)
+        return
+      }
+
+      const { data: ws, error } = await supabase
         .from('workout_sessions')
         .select('title, scheduled_date, duration_seconds, session_rpe, notes_client, client:clients!workout_sessions_client_id_fkey(full_name, profile_id)')
         .eq('id', sessionId).single()
-      if (!ws) { setLoading(false); return }
+      if (!ws) { console.error('Session load error:', error); setLoading(false); return }
 
       const { data: exs } = await supabase
         .from('session_exercises')
@@ -73,8 +80,13 @@ export default function ReviewPopout() {
     </div>
   )
   if (!session) return (
-    <div style={{ minHeight:'100vh', background:t.bg, display:'flex', alignItems:'center', justifyContent:'center', color:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>
-      Session not found
+    <div style={{ minHeight:'100vh', background:t.bg, display:'flex', flexDirection:'column' as const, alignItems:'center', justifyContent:'center', color:t.textMuted, fontFamily:"'DM Sans',sans-serif", gap:12 }}>
+      <div style={{ fontSize:32 }}>🔒</div>
+      <div>Session not found or not authorised.</div>
+      <div style={{ fontSize:12 }}>Make sure you are logged in as coach in this browser.</div>
+      <button onClick={()=>window.location.reload()} style={{ marginTop:8, background:t.teal, border:'none', borderRadius:8, padding:'8px 20px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer' }}>
+        Retry
+      </button>
     </div>
   )
 
