@@ -792,6 +792,19 @@ ${candidateList}`
   }
 
   async function cancelWorkout() {
+    // Delete any uploaded form check videos from storage
+    const videoKeys = Object.keys(videoUploads)
+    if (videoKeys.length > 0) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const paths = exercises
+          .filter(e => e.client_video_url)
+          .map(e => e.client_video_url as string)
+        if (paths.length > 0) {
+          await supabase.storage.from('form-checks').remove(paths)
+        }
+      }
+    }
     // Wipe all logged sets for this session
     await supabase.from('exercise_sets').delete().eq('session_id', sessionId)
     // Reset all session_exercises back to unlogged state
