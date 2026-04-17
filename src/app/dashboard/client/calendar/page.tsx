@@ -78,18 +78,12 @@ export default function ClientCalendarPage() {
   // Task add modal
   const [taskIcon, setTaskIcon] = useState('✅')
 
-  // Auto-open add task modal if navigated with ?addTask=1
+  // Auto-open add task modal if navigated from +Task on dashboard
   const [showAddTask, setShowAddTask] = useState(() => {
     if (typeof window === 'undefined') return false
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('addTask') === '1') {
-      // Clean up immediately
-      const url = new URL(window.location.href)
-      url.searchParams.delete('addTask')
-      window.history.replaceState({}, '', url.toString())
-      return true
-    }
-    return false
+    const shouldOpen = sessionStorage.getItem('openAddTask') === '1'
+    if (shouldOpen) sessionStorage.removeItem('openAddTask')
+    return shouldOpen
   })
   const [taskTitle,    setTaskTitle]    = useState('')
   const [taskRepeat,   setTaskRepeat]   = useState<'once'|'daily'|'weekly'>('once')
@@ -388,10 +382,7 @@ export default function ClientCalendarPage() {
                       )
                     )}
                     {e.type==='workout' && e.source_id && e.status==='completed' && (
-                      <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
-                        style={{ marginTop:8, width:'100%', background:'transparent', border:'1px solid '+t.green+'40', borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.green, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        ✏️ Review Session
-                      </button>
+                      <div style={{ marginTop:6, fontSize:11, color:t.green, fontWeight:700 }}>✓ Completed</div>
                     )}
                   </div>
                 ))}
