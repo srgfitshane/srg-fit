@@ -362,6 +362,16 @@ export default function ReviewsPage() {
     if (profileId) {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.access_token) {
+        // Insert in-app notification (shows in bell)
+        Promise.resolve(supabase.from('notifications').insert({
+          user_id: profileId,
+          notification_type: 'review_ready',
+          title: '💬 Coach reviewed your workout',
+          body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
+          link_url: '/dashboard/client',
+        })).catch(() => {})
+
+        // Push notification
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST', headers: {
             'Content-Type': 'application/json',
@@ -369,7 +379,7 @@ export default function ReviewsPage() {
           },
           body: JSON.stringify({
             user_id: profileId,
-            notification_type: 'workout_review',
+            notification_type: 'review_ready',
             title: '💬 Coach reviewed your workout',
             body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
             link_url: '/dashboard/client',

@@ -1169,7 +1169,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                             setExpandedReview(null)
                           }}
                           style={{ width:'100%', marginTop:12, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                          ✓ Got it — dismiss
+                          ✓ Got it — find this in your Training history
                         </button>
                       </div>
                     )}
@@ -2384,16 +2384,24 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
                     {s.coach_reviewed_at && <div style={{ fontSize:10, fontWeight:800, color:t.teal }}>💬 Reviewed</div>}
                   </div>
                 </div>
-                {/* Coach review notes */}
-                {s.coach_review_notes && (
-                  <div style={{ background:'#0a1a1a', border:`1px solid ${t.teal}30`, borderRadius:9, padding:'8px 12px', marginBottom: s.coach_review_video_url ? 8 : 0 }}>
-                    <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:3 }}>Coach Review</div>
-                    <div style={{ fontSize:12, color:t.text, lineHeight:1.6 }}>{s.coach_review_notes}</div>
+                {/* Coach review section */}
+                {(s.coach_review_notes || s.coach_review_video_url) && (
+                  <div style={{ border:`1px solid ${t.teal}40`, borderRadius:10, overflow:'hidden', marginTop:4 }}>
+                    <div style={{ background:t.tealDim, padding:'7px 12px', display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:14 }}>💬</span>
+                      <span style={{ fontSize:11, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Coach Review</span>
+                    </div>
+                    <div style={{ padding:'10px 12px', background:'#0a1a1a' }}>
+                      {s.coach_review_notes && (
+                        <div style={{ fontSize:13, color:t.text, lineHeight:1.6, marginBottom: s.coach_review_video_url ? 10 : 0, whiteSpace:'pre-wrap' }}>
+                          {s.coach_review_notes}
+                        </div>
+                      )}
+                      {s.coach_review_video_url && (
+                        <CoachReviewVideo url={s.coach_review_video_url} />
+                      )}
+                    </div>
                   </div>
-                )}
-                {/* Coach review video */}
-                {s.coach_review_video_url && (
-                  <CoachReviewVideo url={s.coach_review_video_url} />
                 )}
               </div>
             ))}
