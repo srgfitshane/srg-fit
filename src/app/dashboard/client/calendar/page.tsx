@@ -31,6 +31,7 @@ type CalItem = {
   mood?: string
   duration_seconds?: number
   source_id?: string
+  coach_reviewed_at?: string | null
 }
 
 type ClientTask = {
@@ -115,7 +116,7 @@ export default function ClientCalendarPage() {
             .eq('client_id', clientData.id)
             .order('start_at'),
           supabase.from('workout_sessions')
-            .select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client')
+            .select('id, title, status, scheduled_date, session_rpe, mood, duration_seconds, notes_coach, notes_client, coach_reviewed_at')
             .eq('client_id', clientData.id)
             .not('program_id', 'is', null)
             .order('scheduled_date'),
@@ -157,6 +158,7 @@ export default function ClientCalendarPage() {
             duration_seconds: s.duration_seconds,
             description: s.notes_coach || undefined,
             source_id: s.id,
+            coach_reviewed_at: (s as any).coach_reviewed_at || null,
           })
         }
         merged.sort((a,b) => a.date.localeCompare(b.date))
@@ -382,7 +384,14 @@ export default function ClientCalendarPage() {
                       )
                     )}
                     {e.type==='workout' && e.source_id && e.status==='completed' && (
-                      <div style={{ marginTop:6, fontSize:11, color:t.green, fontWeight:700 }}>✓ Completed</div>
+                      e.coach_reviewed_at ? (
+                        <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
+                          style={{ marginTop:8, width:'100%', background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          💬 See Coach Review
+                        </button>
+                      ) : (
+                        <div style={{ marginTop:6, fontSize:11, color:t.green, fontWeight:700 }}>✓ Completed</div>
+                      )
                     )}
                   </div>
                 ))}
