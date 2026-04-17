@@ -36,6 +36,9 @@ interface TemplateEx {
   tracking_type: 'reps' | 'time'
   duration_seconds: number
   exercise_role: 'main' | 'secondary' | 'accessory' | 'variation' | 'warmup' | 'cooldown' | 'finisher'
+  superset_group: string
+  progression_note: string
+  tut: string
 }
 
 type View = 'list' | 'build'
@@ -144,7 +147,7 @@ export default function CoachWorkoutsPage() {
     })
     const exs = (tmpl.workout_template_exercises || [])
       .sort((a:any,b:any) => a.order_index - b.order_index)
-      .map((e:any) => ({ ...e, notes: e.notes || '', tracking_type: e.tracking_type || 'reps', duration_seconds: e.duration_seconds || 30, exercise_role: e.exercise_role || 'main' }))
+      .map((e:any) => ({ ...e, notes: e.notes || '', tracking_type: e.tracking_type || 'reps', duration_seconds: e.duration_seconds || 30, exercise_role: e.exercise_role || 'main', superset_group: e.superset_group || '', progression_note: e.progression_note || '', tut: e.tut || '' }))
     setBuildExercises(exs)
     setView('build')
   }
@@ -159,6 +162,7 @@ export default function CoachWorkoutsPage() {
       notes: '', order_index: prev.length,
       tracking_type: 'reps', duration_seconds: 30,
       exercise_role: 'main',
+      superset_group: '', progression_note: '', tut: '',
     }])
   }
 
@@ -220,6 +224,9 @@ export default function CoachWorkoutsPage() {
           tracking_type: e.tracking_type || 'reps',
           duration_seconds: e.tracking_type === 'time' ? e.duration_seconds : null,
           exercise_role: e.exercise_role || 'main',
+          superset_group: e.superset_group || null,
+          progression_note: e.progression_note || null,
+          tut: e.tut || null,
         }))
       )
     }
@@ -680,7 +687,25 @@ export default function CoachWorkoutsPage() {
                       </div>
                       <div style={{marginTop:8}}>
                         <input value={ex.notes} onChange={e=>updateBuildEx(i,'notes',e.target.value)}
-                          placeholder="Exercise note for client..." style={{...inp,padding:'6px 10px',fontSize:12}}/>
+                          placeholder="Coach note for client..." style={{...inp,padding:'6px 10px',fontSize:12}}/>
+                      </div>
+                      {/* Group / TUT / Progression */}
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:8}}>
+                        <div>
+                          <label style={{fontSize:10,color:t.textDim,display:'block',marginBottom:3}}>Group (A1, B2…)</label>
+                          <input value={ex.superset_group} onChange={e=>updateBuildEx(i,'superset_group',e.target.value)}
+                            placeholder="e.g. A1" style={{...inp,padding:'6px 8px',fontSize:12}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:10,color:t.textDim,display:'block',marginBottom:3}}>TUT</label>
+                          <input value={ex.tut} onChange={e=>updateBuildEx(i,'tut',e.target.value)}
+                            placeholder="e.g. 3-1-3" style={{...inp,padding:'6px 8px',fontSize:12}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:10,color:t.textDim,display:'block',marginBottom:3}}>Progression</label>
+                          <input value={ex.progression_note} onChange={e=>updateBuildEx(i,'progression_note',e.target.value)}
+                            placeholder="e.g. +2.5kg/wk" style={{...inp,padding:'6px 8px',fontSize:12}}/>
+                        </div>
                       </div>
                     </div>
                   ))}
