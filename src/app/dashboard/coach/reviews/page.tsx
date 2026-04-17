@@ -450,20 +450,12 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
   return (
     <div>
       <canvas ref={canvasRef} style={{ display:'none' }}/>
-      <div style={{ display:'grid', gridTemplateColumns: hasDisplayMedia ? '1fr 1fr 1fr' : '1fr 1fr', gap:8, marginBottom: error ? 8 : 0 }}>
-        {hasDisplayMedia && (
-          <button onClick={startScreenAndCam}
-            style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`2px solid ${t.teal}40`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            <span style={{ fontSize:24 }}>🖥️</span>
-            <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Screen + Cam</span>
-            <span style={{ fontSize:10, color:t.textMuted, textAlign:'center' as const }}>Loom-style</span>
-          </button>
-        )}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom: error ? 8 : 0 }}>
         <button onClick={startCamOnly}
-          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`2px solid ${t.teal}40`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
           <span style={{ fontSize:24 }}>🎥</span>
-          <span style={{ fontSize:11, fontWeight:700, color:t.text }}>Camera Only</span>
-          <span style={{ fontSize:10, color:t.textMuted }}>Face cam</span>
+          <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Record Review</span>
+          <span style={{ fontSize:10, color:t.textMuted }}>Camera on</span>
         </button>
         <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 8px', cursor:'pointer', textAlign:'center' as const }}>
           <span style={{ fontSize:24 }}>📁</span>
