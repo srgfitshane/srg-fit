@@ -2792,6 +2792,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
             duration_seconds: ex.duration_seconds || null,
             is_open_slot: ex.is_open_slot || false,
             slot_constraint: ex.slot_constraint || null,
+            slot_filter_type: ex.slot_filter_type || null,
+            slot_filter_value: ex.slot_filter_value || null,
           }))
         )
       }
