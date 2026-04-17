@@ -450,12 +450,18 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
   return (
     <div>
       <canvas ref={canvasRef} style={{ display:'none' }}/>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom: error ? 8 : 0 }}>
-        <button onClick={startCamOnly}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom: error ? 8 : 0 }}>
+        <button onClick={startScreenAndCam}
           style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`2px solid ${t.teal}40`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          <span style={{ fontSize:24 }}>🖥️</span>
+          <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Screen + Cam</span>
+          <span style={{ fontSize:10, color:t.textMuted, textAlign:'center' as const }}>Pop out first ↑</span>
+        </button>
+        <button onClick={startCamOnly}
+          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
           <span style={{ fontSize:24 }}>🎥</span>
-          <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Record Review</span>
-          <span style={{ fontSize:10, color:t.textMuted }}>Camera on</span>
+          <span style={{ fontSize:11, fontWeight:700, color:t.text }}>Camera Only</span>
+          <span style={{ fontSize:10, color:t.textMuted }}>Face cam</span>
         </button>
         <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, padding:'14px 8px', cursor:'pointer', textAlign:'center' as const }}>
           <span style={{ fontSize:24 }}>📁</span>
@@ -740,6 +746,18 @@ export default function ReviewsPage() {
             <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>Your Review</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:14, lineHeight:1.5 }}>
               Leave a video review and/or written notes. {hasFormChecks ? 'Client submitted form check videos above.' : ''}
+            </div>
+
+            {/* Pop out for screen share */}
+            <div style={{ background:t.surfaceHigh, border:`1px solid ${t.teal}30`, borderRadius:12, padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:12, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>📺 Screen Share Mode</div>
+              <div style={{ fontSize:12, color:t.textMuted, marginBottom:10, lineHeight:1.5 }}>
+                Pop out their full session — sets, weights, and form check videos — into a clean window. Screen share that window while recording your review on camera.
+              </div>
+              <button onClick={()=>window.open(`/dashboard/coach/reviews/${selected.id}/popout`, '_blank', 'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no')}
+                style={{ display:'flex', alignItems:'center', gap:8, background:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:10, padding:'10px 18px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                📺 Pop Out Session View
+              </button>
             </div>
 
             {/* Video review section */}
