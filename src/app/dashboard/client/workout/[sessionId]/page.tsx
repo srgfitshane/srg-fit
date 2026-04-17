@@ -297,11 +297,14 @@ ${candidateList}`
     setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
   }
 
-  // Workout elapsed timer
+  // Workout elapsed timer — uses wall clock so backgrounding doesn't skew it
   useEffect(() => {
-    timerRef.current = setInterval(() => setElapsedSeconds(s => s+1), 1000)
+    const startedAt = session?.started_at ? new Date(session.started_at).getTime() : Date.now()
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
     return () => clearInterval(timerRef.current ?? undefined)
-  }, [])
+  }, [session?.started_at])
 
   // Rest countdown
   useEffect(() => {
@@ -760,6 +763,11 @@ ${candidateList}`
   }
 
   async function uploadFormVideo(exId: string, file: File) {
+    const MAX_MB = 200 // ~2 min video at mobile quality
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`Video too large. Please keep clips under 2 minutes (${MAX_MB}MB max). Tip: trim it in your camera roll before uploading.`)
+      return
+    }
     setVideoUploading(prev => ({ ...prev, [exId]: true }))
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setVideoUploading(prev => ({ ...prev, [exId]: false })); return }
@@ -1390,6 +1398,12 @@ ${candidateList}`
                                         Warmup
                                       </label>
                                       {s.logged&&<span style={{fontSize:12,color:t.green,fontWeight:700}}>✓</span>}
+                                      {s.logged&&(
+                                        <button onClick={()=>updateSet(ex.id,idx,'logged',false)}
+                                          style={{marginLeft:'auto',background:'none',border:`1px solid ${t.border}`,borderRadius:7,padding:'2px 8px',fontSize:10,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          edit
+                                        </button>
+                                      )}
                                     </div>
                                     {prior&&(
                                       <div style={{fontSize:11,color:t.textMuted,marginBottom:8,display:'flex',alignItems:'center',gap:4}}>
@@ -1466,7 +1480,7 @@ ${candidateList}`
                           )}
 
                           {/* Add set + form check video */}
-                          {!isSkipped && (
+                          {!isSkipped && (<>
                             <div style={{display:'flex',gap:8,marginBottom:10}}>
                               <button onClick={()=>addSet(ex.id)}
                                 style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
@@ -1485,7 +1499,12 @@ ${candidateList}`
                                 </a>
                               )}
                             </div>
-                          )}
+                            {!videoUploads[ex.id] && (
+                              <div style={{fontSize:10,color:t.textMuted,marginTop:4,textAlign:'center' as const}}>
+                                📹 Max 2 min — trim in your camera roll first if needed
+                              </div>
+                            )}
+                          </> )}
 
                           {/* Add Exercise (last exercise only) */}
                           {exercises.indexOf(ex)===exercises.length-1 && (
