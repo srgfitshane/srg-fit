@@ -422,7 +422,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         />
       )
     }
-    return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word' }}>{msg.body}</span>
+    return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word', whiteSpace:'pre-wrap' }}>{msg.body}</span>
   }
   const groupReactions = (reactions: Reaction[] = []) => {
     const map: Record<string, { count: number, mine: boolean }> = {}
