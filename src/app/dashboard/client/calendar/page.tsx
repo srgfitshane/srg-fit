@@ -39,6 +39,7 @@ type ClientTask = {
   repeat: 'once' | 'daily' | 'weekly'
   due_date: string | null
   last_completed_date: string | null
+  icon: string | null
 }
 
 type JournalEntrySummary = { entry_date: string }
@@ -76,6 +77,21 @@ export default function ClientCalendarPage() {
   const [clientId,     setClientId]     = useState<string|null>(null)
   // Task add modal
   const [showAddTask,  setShowAddTask]  = useState(false)
+  const [taskIcon, setTaskIcon] = useState('✅')
+
+  // Auto-open add task modal if navigated with ?addTask=1
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('addTask') === '1') {
+        setShowAddTask(true)
+        // Clean up the URL param without navigation
+        const url = new URL(window.location.href)
+        url.searchParams.delete('addTask')
+        window.history.replaceState({}, '', url.toString())
+      }
+    }
+  }, [])
   const [taskTitle,    setTaskTitle]    = useState('')
   const [taskRepeat,   setTaskRepeat]   = useState<'once'|'daily'|'weekly'>('once')
   const [taskDate,     setTaskDate]     = useState(todayStr)
@@ -222,7 +238,7 @@ export default function ClientCalendarPage() {
     }).select().single()
     if (data) setTasks(prev => [...prev, data as ClientTask])
     setTaskTitle(''); setTaskRepeat('once'); setTaskDate(todayStr)
-    setShowAddTask(false); setTaskSaving(false)
+    setShowAddTask(false); setTaskSaving(false); setTaskIcon('✅')
   }
 
   // Tasks visible on selected date
@@ -537,6 +553,18 @@ export default function ClientCalendarPage() {
               </div>
             )}
 
+
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Icon</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const }}>
+                {['✅','⭐','💊','💧','📖','🏃','🧘','💪','🥗','😴','🎯','🔔','📝','🛒','💰','🧹','📞','🚗','❤️','🔥'].map(e => (
+                  <button key={e} onClick={()=>setTaskIcon(e)}
+                    style={{ width:38, height:38, borderRadius:9, border:'2px solid '+(taskIcon===e?t.teal:t.border), background:taskIcon===e?t.tealDim:t.surfaceHigh, fontSize:18, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button onClick={saveTask} disabled={!taskTitle.trim() || taskSaving}
               style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: taskTitle.trim() ? `linear-gradient(135deg,${t.teal},${t.teal}cc)` : t.surfaceHigh, color: taskTitle.trim() ? '#000' : t.textMuted, fontSize:15, fontWeight:800, cursor: taskTitle.trim() ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
               {taskSaving ? 'Saving...' : 'Save Task'}
