@@ -186,7 +186,7 @@ function VideoPlayer({ url, label }: { url: string; label: string }) {
         </button>
       ) : (
         <div style={{ background:'#000', borderRadius:10, overflow:'hidden', position:'relative' }}>
-          <video src={url} controls autoPlay playsInline
+          <video src={url} controls autoPlay playsInline muted
             style={{ width:'100%', maxHeight:320, display:'block' }}/>
           <button onClick={()=>setOpen(false)}
             style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', border:'none', borderRadius:6, padding:'4px 8px', fontSize:11, color:'#fff', cursor:'pointer' }}>
@@ -402,7 +402,7 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
 
   if (doneUrl) return (
     <div>
-      <video src={doneUrl} controls playsInline style={{ width:'100%', borderRadius:8, maxHeight:260, background:'#000', display:'block', marginBottom:8 }}/>
+      <video src={doneUrl} controls playsInline muted style={{ width:'100%', borderRadius:8, maxHeight:260, background:'#000', display:'block', marginBottom:8 }}/>
       <div style={{ display:'flex', alignItems:'center', gap:10 }}>
         <span style={{ fontSize:12, color:t.green, fontWeight:700, flex:1 }}>✓ Review video ready</span>
         <button onClick={discard} style={{ fontSize:11, color:t.textMuted, background:'none', border:`1px solid ${t.border}`, borderRadius:6, padding:'4px 10px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Re-record</button>
@@ -416,7 +416,7 @@ function VideoReviewer({ onReady, onClear, uploading, doneUrl }: VideoReviewerPr
 
   if (phase === 'preview') return (
     <div>
-      <video src={previewUrl} controls playsInline style={{ width:'100%', borderRadius:8, maxHeight:260, background:'#000', display:'block', marginBottom:10 }}/>
+      <video src={previewUrl} controls playsInline muted style={{ width:'100%', borderRadius:8, maxHeight:260, background:'#000', display:'block', marginBottom:10 }}/>
       <div style={{ display:'flex', gap:8 }}>
         <button onClick={discard} style={{ flex:1, background:'none', border:`1px solid ${t.border}`, borderRadius:9, padding:'10px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕ Re-record</button>
         <button onClick={()=>{ if(previewBlob) onReady(previewBlob) }} style={{ flex:2, background:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✓ Use This Video</button>
