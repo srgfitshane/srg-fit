@@ -35,6 +35,10 @@ interface WorkoutSession {
   coach_id?: string | null
   day_label?: string | null
   notes_coach?: string | null
+  coach_reviewed_at?: string | null
+  coach_review_notes?: string | null
+  coach_review_video_url?: string | null
+  completed_at?: string | null
 }
 
 interface ExerciseLibraryItem {
@@ -1100,25 +1104,99 @@ ${candidateList}`
   if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase} returnUrl={returnUrl}/>
 
   // ── Re-opened completed workout ──────────────────────────────────────────
-  if (isReopened) return (
-    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
-      <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32,textAlign:'center'}}>
-        <div style={{fontSize:48,marginBottom:16}}>✏️</div>
-        <div style={{fontSize:20,fontWeight:900,marginBottom:8}}>{session?.title}</div>
-        <div style={{fontSize:13,color:t.textMuted,marginBottom:32,lineHeight:1.6,maxWidth:280}}>
-          This workout is already marked complete. Want to go back in and update something?
+  if (isReopened) {
+    const isReviewed = !!session?.coach_reviewed_at
+
+    // ── REVIEWED — locked, show coach feedback ─────────────────────────────
+    if (isReviewed) return (
+      <>
+        <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+        <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',padding:'24px 20px',paddingBottom:'calc(32px + env(safe-area-inset-bottom))'}}>
+          {/* Header */}
+          <button onClick={()=>router.push(returnUrl)}
+            style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:700,marginBottom:20,display:'flex',alignItems:'center',gap:6,padding:0}}>
+            ← Back
+          </button>
+          <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{session?.title}</div>
+          <div style={{fontSize:12,color:t.textMuted,marginBottom:20}}>
+            Completed · {session?.completed_at ? new Date(session.completed_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}
+          </div>
+
+          {/* Locked badge */}
+          <div style={{display:'flex',alignItems:'center',gap:8,background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:10,padding:'10px 14px',marginBottom:20}}>
+            <span style={{fontSize:16}}>🔒</span>
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:t.teal}}>Coach has reviewed this session</div>
+              <div style={{fontSize:11,color:t.textMuted}}>This workout is now locked</div>
+            </div>
+          </div>
+
+          {/* Coach review */}
+          <div style={{border:`1px solid ${t.teal}40`,borderRadius:14,overflow:'hidden',marginBottom:16}}>
+            <div style={{background:t.tealDim,padding:'10px 16px',display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:16}}>💬</span>
+              <span style={{fontSize:12,fontWeight:800,color:t.teal,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>Coach Review</span>
+            </div>
+            <div style={{padding:'14px 16px',background:'#0a1a1a'}}>
+              {session?.coach_review_notes && (
+                <div style={{fontSize:13,color:t.text,lineHeight:1.7,whiteSpace:'pre-wrap',marginBottom:session?.coach_review_video_url?14:0}}>
+                  {session.coach_review_notes}
+                </div>
+              )}
+              {session?.coach_review_video_url && (() => {
+                const url = session.coach_review_video_url
+                const isExternal = url.startsWith('http') && !url.includes('supabase')
+                if (isExternal) return (
+                  <a href={url} target='_blank' rel='noreferrer' style={{display:'block',textDecoration:'none'}}>
+                    <div style={{borderRadius:12,overflow:'hidden',border:`1px solid ${t.teal}40`,background:t.surface,cursor:'pointer'}}>
+                      <div style={{background:'#000',aspectRatio:'16/9',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+                        <div style={{fontSize:40}}>🎥</div>
+                        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.3)'}}>
+                          <div style={{width:48,height:48,borderRadius:'50%',background:t.teal,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#000"><polygon points="5,3 19,12 5,21"/></svg>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{padding:'10px 14px',display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{flex:1,fontSize:13,fontWeight:700,color:t.text}}>Watch Coach Review</div>
+                        <span style={{fontSize:11,color:t.teal,fontWeight:700}}>Open ↗</span>
+                      </div>
+                    </div>
+                  </a>
+                )
+                return <video src={url} controls playsInline muted style={{width:'100%',borderRadius:10,background:'#000',display:'block'}}/>
+              })()}
+              {!session?.coach_review_notes && !session?.coach_review_video_url && (
+                <div style={{fontSize:13,color:t.textMuted,fontStyle:'italic'}}>No written notes left.</div>
+              )}
+            </div>
+          </div>
         </div>
-        <button onClick={reopenWorkout}
-          style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
-          ✏️ Re-open Workout
-        </button>
-        <button onClick={()=>router.push(returnUrl)}
-          style={{width:'100%',background:'none',border:`1px solid ${t.border}`,borderRadius:13,padding:'12px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-          ← Back to Dashboard
-        </button>
-      </div>
-    </>
-  )
+      </>
+    )
+
+    // ── NOT YET REVIEWED — can re-enter ────────────────────────────────────
+    return (
+      <>
+        <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+        <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32,textAlign:'center'}}>
+          <div style={{fontSize:48,marginBottom:16}}>✏️</div>
+          <div style={{fontSize:20,fontWeight:900,marginBottom:8}}>{session?.title}</div>
+          <div style={{fontSize:13,color:t.textMuted,marginBottom:32,lineHeight:1.6,maxWidth:280}}>
+            This workout is already marked complete. Want to go back in and update something?
+          </div>
+          <button onClick={reopenWorkout}
+            style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
+            ✏️ Re-open Workout
+          </button>
+          <button onClick={()=>router.push(returnUrl)}
+            style={{width:'100%',background:'none',border:`1px solid ${t.border}`,borderRadius:13,padding:'12px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+            ← Back to Dashboard
+          </button>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}
