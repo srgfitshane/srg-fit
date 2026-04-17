@@ -786,8 +786,22 @@ ${candidateList}`
     setVideoUploading(prev => ({ ...prev, [exId]: false }))
   }
 
+  async function removeFormVideo(exId: string) {
+    await supabase.from('session_exercises').update({ client_video_url: null }).eq('id', exId)
+    setVideoUploads(prev => { const next = { ...prev }; delete next[exId]; return next })
+  }
+
   async function cancelWorkout() {
-    // Wipe progress — reset session back to assigned
+    // Wipe all logged sets for this session
+    await supabase.from('exercise_sets').delete().eq('session_id', sessionId)
+    // Reset all session_exercises back to unlogged state
+    await supabase.from('session_exercises').update({
+      logged_sets: null,
+      client_video_url: null,
+      skipped: false,
+      notes_client: null,
+    }).eq('session_id', sessionId)
+    // Reset session back to assigned
     await supabase.from('workout_sessions').update({
       status: 'assigned',
       started_at: null,
@@ -1492,17 +1506,28 @@ ${candidateList}`
                                 style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
                                 + Add Set
                               </button>
-                              <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:videoUploads[ex.id]?t.greenDim:t.surfaceHigh,border:`1px solid ${videoUploads[ex.id]?t.green+'50':t.border}`,borderRadius:10,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploads[ex.id]?t.green:t.textDim,textAlign:'center' as const}}>
-                                {videoUploading[ex.id]?'⏳ Uploading...':videoUploads[ex.id]?'✓ Video':'📹 Form Check'}
-                                <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
-                                  disabled={videoUploading[ex.id]}
-                                  onChange={e=>{const f=e.target.files?.[0];if(f)uploadFormVideo(ex.id,f)}}/>
-                              </label>
-                              {videoUploads[ex.id]&&(
+                              {videoUploads[ex.id] ? (<>
                                 <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
-                                  style={{display:'flex',alignItems:'center',padding:'9px 14px',background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:10,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',flexShrink:0}}>
-                                  View ↗
+                                  style={{display:'flex',alignItems:'center',padding:'9px 12px',background:t.greenDim,border:`1px solid ${t.green}50`,borderRadius:10,fontSize:12,fontWeight:700,color:t.green,textDecoration:'none',flexShrink:0,gap:4}}>
+                                  ✓ View
                                 </a>
+                                <label style={{display:'flex',alignItems:'center',padding:'9px 12px',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,fontSize:12,fontWeight:700,color:t.textDim,cursor:'pointer',flexShrink:0}}>
+                                  🔄
+                                  <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
+                                    disabled={videoUploading[ex.id]}
+                                    onChange={e=>{const f=e.target.files?.[0];if(f)uploadFormVideo(ex.id,f)}}/>
+                                </label>
+                                <button onClick={()=>removeFormVideo(ex.id)}
+                                  style={{display:'flex',alignItems:'center',padding:'9px 12px',background:'rgba(255,80,80,0.08)',border:'1px solid rgba(255,80,80,0.3)',borderRadius:10,fontSize:12,fontWeight:700,color:'#ff5050',cursor:'pointer',flexShrink:0}}>
+                                  🗑
+                                </button>
+                              </>) : (
+                                <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploading[ex.id]?t.teal:t.textDim,textAlign:'center' as const}}>
+                                  {videoUploading[ex.id]?'⏳ Uploading...':'📹 Form Check'}
+                                  <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
+                                    disabled={videoUploading[ex.id]}
+                                    onChange={e=>{const f=e.target.files?.[0];if(f)uploadFormVideo(ex.id,f)}}/>
+                                </label>
                               )}
                             </div>
                             {!videoUploads[ex.id] && (
