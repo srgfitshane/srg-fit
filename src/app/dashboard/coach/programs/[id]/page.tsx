@@ -49,12 +49,14 @@ export default function ProgramBuilder() {
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
   const [groupingEx, setGroupingEx] = useState<string|null>(null)
   const [openSlotModal, setOpenSlotModal] = useState<{blockId:string}|null>(null)
-  const [slotConstraint, setSlotConstraint] = useState('')
-  const [slotRole,       setSlotRole]       = useState('main')
-  const [slotTracking,   setSlotTracking]   = useState<'reps'|'time'>('reps')
-  const [slotSets,       setSlotSets]       = useState('3')
-  const [slotReps,       setSlotReps]       = useState('8-10')
-  const [slotDuration,   setSlotDuration]   = useState('30') // exercise id with group input open
+  const [slotConstraint,   setSlotConstraint]   = useState('')
+  const [slotRole,         setSlotRole]         = useState('main')
+  const [slotTracking,     setSlotTracking]     = useState<'reps'|'time'>('reps')
+  const [slotSets,         setSlotSets]         = useState('3')
+  const [slotReps,         setSlotReps]         = useState('8-10')
+  const [slotDuration,     setSlotDuration]     = useState('20')
+  const [slotFilterType,   setSlotFilterType]   = useState<'muscle'|'movement'|'equipment'|'none'>('none')
+  const [slotFilterValue,  setSlotFilterValue]  = useState('')
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null) // blockId
   const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
@@ -266,7 +268,9 @@ export default function ProgramBuilder() {
       block_id: blockId,
       exercise_id: null,
       is_open_slot: true,
-      slot_constraint: constraint.trim() || 'Client\'s choice',
+      slot_constraint: constraint.trim() || 'Your Choice',
+      slot_filter_type: slotFilterType !== 'none' ? slotFilterType : null,
+      slot_filter_value: slotFilterType !== 'none' ? slotFilterValue : null,
       exercise_role: role,
       sets: parseInt(slotSets) || 3,
       reps: slotTracking === 'reps' ? slotReps : '',
@@ -279,8 +283,10 @@ export default function ProgramBuilder() {
       ? { ...b, block_exercises: [...(b.block_exercises||[]), { ...newEx, exercise: null }] }
       : b
     ))
-    setOpenSlotModal(null); setSlotConstraint(''); setSlotRole('main')
-    setSlotTracking('reps'); setSlotSets('3'); setSlotReps('8-10'); setSlotDuration('30')
+    setOpenSlotModal(null)
+    setSlotConstraint(''); setSlotRole('main')
+    setSlotTracking('reps'); setSlotSets('3'); setSlotReps('8-10'); setSlotDuration('20')
+    setSlotFilterType('none'); setSlotFilterValue('')
   }
 
   const updateExercise = async (exId: string, field: string, value: any) => {
@@ -511,6 +517,8 @@ export default function ProgramBuilder() {
             duration_seconds: ex.duration_seconds || null,
             is_open_slot: ex.is_open_slot || false,
             slot_constraint: ex.slot_constraint || null,
+            slot_filter_type: ex.slot_filter_type || null,
+            slot_filter_value: ex.slot_filter_value || null,
           }))
         )
       }
@@ -876,7 +884,7 @@ export default function ProgramBuilder() {
                           </button>
                         ))}
                       </div>
-                      <button onClick={(e)=>{ e.stopPropagation(); setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main'); setSlotTracking('reps'); setSlotSets('3'); setSlotReps('8-10'); setSlotDuration('30') }}
+                      <button onClick={(e)=>{ e.stopPropagation(); setOpenSlotModal({blockId:block.id}); setSlotConstraint(''); setSlotRole('main'); setSlotTracking('reps'); setSlotSets('3'); setSlotReps('8-10'); setSlotDuration('20'); setSlotFilterType('none'); setSlotFilterValue('') }}
                         style={{ marginTop:6, width:'100%', padding:'8px 4px', borderRadius:10, border:`1px dashed ${t.yellow}50`, background:t.yellow+'10', color:t.yellow, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         🎲 + Open Slot (Client Chooses)
                       </button>
@@ -1146,73 +1154,147 @@ export default function ProgramBuilder() {
       {/* Open Slot Modal */}
       {openSlotModal && (
         <>
-          <div onClick={()=>{ setOpenSlotModal(null); setSlotConstraint('') }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:300 }}/>
-          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:28, width:'90%', maxWidth:400, zIndex:301, fontFamily:"'DM Sans',sans-serif" }}>
-            <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>🎲 Add Open Slot</div>
-            <div style={{ fontSize:12, color:t.textMuted, marginBottom:20, lineHeight:1.6 }}>
-              The client will choose an exercise when they start the workout. Give it a hint so they know what movement you have in mind.
-            </div>
+          <div onClick={()=>{ setOpenSlotModal(null); setSlotConstraint(''); setSlotFilterType('none'); setSlotFilterValue('') }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:300 }}/>
+          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'92%', maxWidth:420, zIndex:301, fontFamily:"'DM Sans',sans-serif", maxHeight:'90vh', overflowY:'auto' as const }}>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:16 }}>🎲 Add Open Slot</div>
+
+            {/* Label */}
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Hint / Constraint</div>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Label (what client sees)</div>
               <input autoFocus value={slotConstraint} onChange={e=>setSlotConstraint(e.target.value)}
-                placeholder="e.g. Any Cardio, Horizontal Push, Their Choice..."
-                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const, colorScheme:'dark' }}/>
+                placeholder="e.g. Chest Exercise, Cardio of Choice, Pull Movement..."
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const, colorScheme:'dark' }}/>
             </div>
-            {/* Tracking type toggle */}
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Format</div>
-              <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+
+            {/* Filter type */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Filter Library By</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:5 }}>
+                {([['none','🎯 All'],['muscle','💪 Muscle'],['movement','🔄 Movement'],['equipment','🏋️ Equipment']] as const).map(([type, label]) => (
+                  <button key={type} onClick={()=>{ setSlotFilterType(type as any); setSlotFilterValue('') }}
+                    style={{ padding:'7px 4px', borderRadius:8, border:`1px solid ${slotFilterType===type?t.teal:t.border}`, background:slotFilterType===type?t.tealDim:'transparent', color:slotFilterType===type?t.teal:t.textMuted, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'center' as const }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filter value picker */}
+            {slotFilterType !== 'none' && (
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>
+                  {slotFilterType === 'muscle' ? 'Muscle Group' : slotFilterType === 'movement' ? 'Movement Pattern' : 'Equipment'}
+                </div>
+                <select value={slotFilterValue} onChange={e=>setSlotFilterValue(e.target.value)}
+                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.teal+'60', borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}>
+                  <option value="">-- Pick one --</option>
+                  {slotFilterType === 'muscle' && (<>
+                    <option key="Abductors" value="Abductors">Abductors</option>
+                    <option key="Adductors" value="Adductors">Adductors</option>
+                    <option key="Biceps" value="Biceps">Biceps</option>
+                    <option key="Calves" value="Calves">Calves</option>
+                    <option key="Cardio" value="Cardio">Cardio</option>
+                    <option key="Chest" value="Chest">Chest</option>
+                    <option key="Core" value="Core">Core</option>
+                    <option key="Forearms" value="Forearms">Forearms</option>
+                    <option key="Full Body" value="Full Body">Full Body</option>
+                    <option key="Glutes" value="Glutes">Glutes</option>
+                    <option key="Hamstrings" value="Hamstrings">Hamstrings</option>
+                    <option key="Hip Flexors" value="Hip Flexors">Hip Flexors</option>
+                    <option key="Lats" value="Lats">Lats</option>
+                    <option key="Lower Back" value="Lower Back">Lower Back</option>
+                    <option key="Obliques" value="Obliques">Obliques</option>
+                    <option key="Quads" value="Quads">Quads</option>
+                    <option key="Rear Delts" value="Rear Delts">Rear Delts</option>
+                    <option key="Shoulders" value="Shoulders">Shoulders</option>
+                    <option key="Traps" value="Traps">Traps</option>
+                    <option key="Triceps" value="Triceps">Triceps</option>
+                  </>)}
+                  {slotFilterType === 'movement' && (<>
+                    <option key="carry" value="carry">Carry</option>
+                    <option key="core" value="core">Core</option>
+                    <option key="hinge" value="hinge">Hinge</option>
+                    <option key="isolation" value="isolation">Isolation</option>
+                    <option key="pull" value="pull">Pull</option>
+                    <option key="push" value="push">Push</option>
+                    <option key="squat" value="squat">Squat</option>
+                    <option key="stretch" value="stretch">Stretch</option>
+                    <option key="yoga" value="yoga">Yoga</option>
+                    <option key="general" value="general">General</option>
+                  </>)}
+                  {slotFilterType === 'equipment' && (<>
+                    <option key="barbell" value="barbell">Barbell</option>
+                    <option key="bodyweight" value="bodyweight">Bodyweight</option>
+                    <option key="cable" value="cable">Cable</option>
+                    <option key="dumbbell" value="dumbbell">Dumbbell</option>
+                    <option key="ez bar" value="ez bar">Ez Bar</option>
+                    <option key="kettlebell" value="kettlebell">Kettlebell</option>
+                    <option key="machine" value="machine">Machine</option>
+                    <option key="mat" value="mat">Mat</option>
+                    <option key="pull-up bar" value="pull-up bar">Pull-Up Bar</option>
+                    <option key="resistance band" value="resistance band">Resistance Band</option>
+                    <option key="smith machine" value="smith machine">Smith Machine</option>
+                    <option key="trap bar" value="trap bar">Trap Bar</option>
+                  </>)}
+                </select>
+              </div>
+            )}
+
+            {/* Format */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Format</div>
+              <div style={{ display:'flex', gap:6, marginBottom:8 }}>
                 {(['reps','time'] as const).map(type => (
                   <button key={type} onClick={()=>setSlotTracking(type)}
-                    style={{ flex:1, padding:'8px', borderRadius:9, border:`1px solid ${slotTracking===type?t.teal+'60':t.border}`, background:slotTracking===type?t.tealDim:'transparent', color:slotTracking===type?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    style={{ flex:1, padding:'7px', borderRadius:8, border:`1px solid ${slotTracking===type?t.teal+'60':t.border}`, background:slotTracking===type?t.tealDim:'transparent', color:slotTracking===type?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {type === 'reps' ? '🔢 Sets & Reps' : '⏱ Sets & Time'}
                   </button>
                 ))}
               </div>
-              <div style={{ display:'grid', gridTemplateColumns: slotTracking==='reps' ? '1fr 1fr' : '1fr 1fr', gap:8 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                 <div>
                   <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Sets</div>
                   <input type="number" value={slotSets} onChange={e=>setSlotSets(e.target.value)} min="1" max="10"
-                    style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}/>
+                    style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}/>
                 </div>
                 {slotTracking === 'reps' ? (
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Reps</div>
                     <input value={slotReps} onChange={e=>setSlotReps(e.target.value)} placeholder="e.g. 8-10"
-                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}/>
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}/>
                   </div>
                 ) : (
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Duration (min)</div>
                     <input type="number" value={slotDuration} onChange={e=>setSlotDuration(e.target.value)} min="1"
-                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif', colorScheme:'dark" }}/>
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}/>
                   </div>
                 )}
               </div>
             </div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Role</div>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const }}>
-                {[
-                  {role:'warmup',role_label:'🔥 Warm-Up',color:t.teal},
-                  {role:'main',role_label:'💪 Main',color:t.orange},
-                  {role:'cooldown',role_label:'🧘 Cool-Down',color:t.purple},
-                  {role:'finisher',role_label:'🔴 Finisher',color:t.red},
-                ].map(({role,role_label,color})=>(
-                  <button key={role} onClick={()=>setSlotRole(role)}
-                    style={{ padding:'6px 12px', borderRadius:8, border:`1px solid ${slotRole===role?color:t.border}`, background:slotRole===role?color+'18':'transparent', color:slotRole===role?color:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {role_label}
+
+            {/* Role */}
+            <div style={{ marginBottom:18 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Role</div>
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap' as const }}>
+                {([['warmup','🔥 Warm-Up',t.teal],['main','💪 Main',t.orange],['cooldown','🧘 Cool-Down',t.purple],['finisher','🔴 Finisher',t.red]] as const).map(([role,label,color])=>(
+                  <button key={role} onClick={()=>setSlotRole(role as string)}
+                    style={{ padding:'6px 11px', borderRadius:8, border:`1px solid ${slotRole===role?color:t.border}`, background:slotRole===role?color+'18':'transparent', color:slotRole===role?color:t.textMuted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
+
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={()=>{ setOpenSlotModal(null); setSlotConstraint('') }}
+              <button onClick={()=>{ setOpenSlotModal(null); setSlotConstraint(''); setSlotFilterType('none'); setSlotFilterValue('') }}
                 style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Cancel
               </button>
-              <button onClick={()=>addOpenSlot(openSlotModal.blockId, slotConstraint, slotRole)}
-                style={{ flex:2, background:`linear-gradient(135deg,${t.yellow},${t.yellow}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              <button
+                onClick={()=>addOpenSlot(openSlotModal.blockId, slotConstraint, slotRole)}
+                disabled={slotFilterType !== 'none' && !slotFilterValue}
+                style={{ flex:2, background:slotFilterType !== 'none' && !slotFilterValue ? t.surfaceHigh : `linear-gradient(135deg,${t.yellow},${t.yellow}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:slotFilterType !== 'none' && !slotFilterValue ? t.textMuted : '#000', cursor:slotFilterType !== 'none' && !slotFilterValue ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 🎲 Add Open Slot
               </button>
             </div>

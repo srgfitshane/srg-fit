@@ -73,6 +73,8 @@ interface SessionExercise {
   exercise_role?: string | null
   is_open_slot?: boolean | null
   slot_constraint?: string | null
+  slot_filter_type?: string | null
+  slot_filter_value?: string | null
   slot_filled_by_client?: boolean | null
 }
 
@@ -295,11 +297,14 @@ ${candidateList}`
     setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
   }
 
-  // Workout elapsed timer
+  // Workout elapsed timer — uses wall clock so backgrounding doesn't skew it
   useEffect(() => {
-    timerRef.current = setInterval(() => setElapsedSeconds(s => s+1), 1000)
+    const startedAt = session?.started_at ? new Date(session.started_at).getTime() : Date.now()
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
     return () => clearInterval(timerRef.current ?? undefined)
-  }, [])
+  }, [session?.started_at])
 
   // Rest countdown
   useEffect(() => {
@@ -649,11 +654,30 @@ ${candidateList}`
       is_open_slot: false,
       slot_filled_by_client: true,
     }).eq('id', exId)
-    setExercises(prev => prev.map(e => e.id === exId
-      ? { ...e, exercise_name: exerciseName, exercise_id: exerciseId || null, is_open_slot: false, slot_filled_by_client: true }
-      : e
-    ))
-    setSetData(prev => prev[exId] ? prev : { ...prev, [exId]: [defaultSet()] })
+
+    // Fetch exercise data from library if picked from library
+    let exerciseData = null
+    if (exerciseId) {
+      const { data } = await supabase.from('exercises')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url')
+        .eq('id', exerciseId).single()
+      exerciseData = data
+    }
+
+    setExercises(prev => prev.map(e => {
+      if (e.id !== exId) return e
+      const sets = e.sets_prescribed || 3
+      return { ...e, exercise_name: exerciseName, exercise_id: exerciseId || null, is_open_slot: false, slot_filled_by_client: true, exercise: exerciseData }
+    }))
+
+    // Init set rows based on prescribed sets
+    setSetData(prev => {
+      if (prev[exId]) return prev
+      const ex = exercises.find(e => e.id === exId)
+      const sets = ex?.sets_prescribed || 3
+      return { ...prev, [exId]: Array.from({length: sets}, () => defaultSet()) }
+    })
+
     setSlotPickerExId(null); setSlotSearch(''); setSlotCustomName('')
   }
 
@@ -739,6 +763,11 @@ ${candidateList}`
   }
 
   async function uploadFormVideo(exId: string, file: File) {
+    const MAX_MB = 200 // ~2 min video at mobile quality
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`Video too large. Please keep clips under 2 minutes (${MAX_MB}MB max). Tip: trim it in your camera roll before uploading.`)
+      return
+    }
     setVideoUploading(prev => ({ ...prev, [exId]: true }))
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setVideoUploading(prev => ({ ...prev, [exId]: false })); return }
@@ -1181,7 +1210,11 @@ ${candidateList}`
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:13,fontWeight:800,color:t.yellow}}>Your Choice</div>
                           <div style={{fontSize:12,color:t.textMuted,marginTop:2}}>{ex.slot_constraint || 'Pick any exercise'}</div>
-                          <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>{ex.sets_prescribed}×{ex.reps_prescribed}</div>
+                          <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>
+                            {ex.tracking_type === 'time'
+                              ? `${ex.sets_prescribed} set${(ex.sets_prescribed||1)>1?'s':''} · ${ex.duration_seconds ? Math.round(ex.duration_seconds/60)+'min' : ''}`
+                              : `${ex.sets_prescribed}×${ex.reps_prescribed}`}
+                          </div>
                         </div>
                         <button onClick={()=>{ setSlotPickerExId(ex.id); setSlotSearch(''); setSlotCustomName(''); setSlotTab('library') }}
                           style={{background:`linear-gradient(135deg,${t.yellow},${t.yellow}cc)`,border:'none',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
@@ -1365,6 +1398,12 @@ ${candidateList}`
                                         Warmup
                                       </label>
                                       {s.logged&&<span style={{fontSize:12,color:t.green,fontWeight:700}}>✓</span>}
+                                      {s.logged&&(
+                                        <button onClick={()=>updateSet(ex.id,idx,'logged',false)}
+                                          style={{marginLeft:'auto',background:'none',border:`1px solid ${t.border}`,borderRadius:7,padding:'2px 8px',fontSize:10,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          edit
+                                        </button>
+                                      )}
                                     </div>
                                     {prior&&(
                                       <div style={{fontSize:11,color:t.textMuted,marginBottom:8,display:'flex',alignItems:'center',gap:4}}>
@@ -1441,7 +1480,7 @@ ${candidateList}`
                           )}
 
                           {/* Add set + form check video */}
-                          {!isSkipped && (
+                          {!isSkipped && (<>
                             <div style={{display:'flex',gap:8,marginBottom:10}}>
                               <button onClick={()=>addSet(ex.id)}
                                 style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
@@ -1460,7 +1499,12 @@ ${candidateList}`
                                 </a>
                               )}
                             </div>
-                          )}
+                            {!videoUploads[ex.id] && (
+                              <div style={{fontSize:10,color:t.textMuted,marginTop:4,textAlign:'center' as const}}>
+                                📹 Max 2 min — trim in your camera roll first if needed
+                              </div>
+                            )}
+                          </> )}
 
                           {/* Add Exercise (last exercise only) */}
                           {exercises.indexOf(ex)===exercises.length-1 && (
@@ -1577,9 +1621,18 @@ ${candidateList}`
           <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:61,fontFamily:"'DM Sans',sans-serif",padding:'20px 16px',paddingBottom:'calc(24px + env(safe-area-inset-bottom))',maxHeight:'80vh',display:'flex',flexDirection:'column' as const}}>
             <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 16px'}}/>
             <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>🎲 Pick Your Exercise</div>
-            <div style={{fontSize:12,color:t.textMuted,marginBottom:16}}>
+            <div style={{fontSize:12,color:t.textMuted,marginBottom:4}}>
               {exercises.find(e=>e.id===slotPickerExId)?.slot_constraint || 'Your choice'}
             </div>
+            {(() => {
+              const slotEx = exercises.find(e => e.id === slotPickerExId)
+              if (!slotEx?.slot_filter_type || slotEx.slot_filter_type === 'none' || !slotEx.slot_filter_value) return null
+              return (
+                <div style={{fontSize:11,color:t.teal,fontWeight:700,marginBottom:12,background:t.tealDim,borderRadius:8,padding:'4px 10px',display:'inline-block'}}>
+                  {slotEx.slot_filter_type === 'muscle' ? '💪' : slotEx.slot_filter_type === 'movement' ? '🔄' : '🏋️'} Filtered to: {slotEx.slot_filter_value}
+                </div>
+              )
+            })()}
             {/* Tabs */}
             <div style={{display:'flex',gap:6,marginBottom:14}}>
               {(['library','custom'] as const).map(tab => (
@@ -1595,19 +1648,37 @@ ${candidateList}`
                   placeholder="Search exercises..." autoFocus
                   style={{width:'100%',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'10px 14px',fontSize:14,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
                 <div style={{overflowY:'auto',flex:1}}>
-                  {(swapLibrary || [])
-                    .filter(e => !slotSearch || (e.name || '').toLowerCase().includes(slotSearch.toLowerCase()))
-                    .slice(0,40)
-                    .map((ex:any) => (
-                      <div key={ex.id} onClick={()=>fillSlot(slotPickerExId, ex.name, ex.id)}
-                        style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:10,background:t.surfaceHigh,border:'1px solid '+t.border,marginBottom:6,cursor:'pointer'}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:700}}>{ex.name}</div>
-                          {ex.muscles?.length > 0 && <div style={{fontSize:11,color:t.textMuted}}>{ex.muscles.slice(0,3).join(', ')}</div>}
+                  {(() => {
+                    const slotEx = exercises.find(e => e.id === slotPickerExId)
+                    const filterType = slotEx?.slot_filter_type
+                    const filterVal = slotEx?.slot_filter_value
+                    return (swapLibrary || [])
+                      .filter(e => {
+                        // Apply slot filter
+                        if (filterType === 'muscle' && filterVal) {
+                          const muscles = Array.isArray(e.muscles) ? e.muscles : []
+                          if (!muscles.includes(filterVal)) return false
+                        } else if (filterType === 'movement' && filterVal) {
+                          if ((e as any).movement_pattern !== filterVal) return false
+                        } else if (filterType === 'equipment' && filterVal) {
+                          if ((e as any).equipment !== filterVal) return false
+                        }
+                        // Apply search
+                        if (slotSearch) return (e.name || '').toLowerCase().includes(slotSearch.toLowerCase())
+                        return true
+                      })
+                      .slice(0, 60)
+                      .map((ex: any) => (
+                        <div key={ex.id} onClick={()=>fillSlot(slotPickerExId!, ex.name, ex.id)}
+                          style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:10,background:t.surfaceHigh,border:'1px solid '+t.border,marginBottom:6,cursor:'pointer'}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:700}}>{ex.name}</div>
+                            {ex.muscles?.length > 0 && <div style={{fontSize:11,color:t.textMuted}}>{ex.muscles.slice(0,3).join(', ')}</div>}
+                          </div>
+                          <span style={{fontSize:11,fontWeight:700,color:t.teal,flexShrink:0}}>Pick →</span>
                         </div>
-                        <span style={{fontSize:11,fontWeight:700,color:t.teal,flexShrink:0}}>Pick →</span>
-                      </div>
-                    ))}
+                      ))
+                  })()}
                 </div>
               </>
             ) : (
