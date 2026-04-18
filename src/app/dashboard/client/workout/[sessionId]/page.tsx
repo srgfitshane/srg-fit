@@ -1167,7 +1167,7 @@ ${candidateList}`
                 </div>
               )}
               {reviewVideoUrl && (() => {
-                const isExternal = reviewVideoUrl.startsWith('http') && reviewVideoUrl.includes('cap.so') || reviewVideoUrl.includes('loom.com') || reviewVideoUrl.includes('drive.google')
+                const isExternal = reviewVideoUrl.startsWith('http') && !reviewVideoUrl.includes('supabase')
                 if (isExternal) return (
                   <a href={reviewVideoUrl} target='_blank' rel='noreferrer' style={{display:'block',textDecoration:'none'}}>
                     <div style={{borderRadius:12,overflow:'hidden',border:`1px solid ${t.teal}40`,background:t.surface,cursor:'pointer'}}>
