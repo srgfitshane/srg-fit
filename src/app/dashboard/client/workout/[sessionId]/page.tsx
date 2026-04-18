@@ -305,7 +305,18 @@ ${candidateList}`
     setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
   }
 
-  // Workout elapsed timer — only runs when in_progress, stops when completed
+  const [reviewVideoUrl, setReviewVideoUrl] = useState<string|null>(null)
+
+  // Resolve signed URL for coach review video if it's a storage path
+  useEffect(() => {
+    const raw = session?.coach_review_video_url
+    if (!raw) return
+    if (raw.startsWith('http')) { setReviewVideoUrl(raw); return }
+    // Raw storage path — generate signed URL from workout-reviews bucket
+    supabase.storage.from('workout-reviews').createSignedUrl(raw, 60 * 60)
+      .then(({ data }) => { if (data?.signedUrl) setReviewVideoUrl(data.signedUrl) })
+      .catch(() => {})
+  }, [session?.coach_review_video_url])
   useEffect(() => {
     // Don't run timer if session is completed or not started
     if (!session || session.status !== 'in_progress' || !session.started_at) {
@@ -1155,11 +1166,10 @@ ${candidateList}`
                   {session.coach_review_notes}
                 </div>
               )}
-              {session?.coach_review_video_url && (() => {
-                const url = session.coach_review_video_url
-                const isExternal = url.startsWith('http') && !url.includes('supabase')
+              {reviewVideoUrl && (() => {
+                const isExternal = reviewVideoUrl.startsWith('http') && reviewVideoUrl.includes('cap.so') || reviewVideoUrl.includes('loom.com') || reviewVideoUrl.includes('drive.google')
                 if (isExternal) return (
-                  <a href={url} target='_blank' rel='noreferrer' style={{display:'block',textDecoration:'none'}}>
+                  <a href={reviewVideoUrl} target='_blank' rel='noreferrer' style={{display:'block',textDecoration:'none'}}>
                     <div style={{borderRadius:12,overflow:'hidden',border:`1px solid ${t.teal}40`,background:t.surface,cursor:'pointer'}}>
                       <div style={{background:'#000',aspectRatio:'16/9',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
                         <div style={{fontSize:40}}>🎥</div>
@@ -1176,9 +1186,9 @@ ${candidateList}`
                     </div>
                   </a>
                 )
-                return <video src={url} controls playsInline muted style={{width:'100%',borderRadius:10,background:'#000',display:'block'}}/>
+                return <video src={reviewVideoUrl} controls playsInline muted style={{width:'100%',borderRadius:10,background:'#000',display:'block'}}/>
               })()}
-              {!session?.coach_review_notes && !session?.coach_review_video_url && (
+              {!session?.coach_review_notes && !reviewVideoUrl && (
                 <div style={{fontSize:13,color:t.textMuted,fontStyle:'italic'}}>No written notes left.</div>
               )}
             </div>
