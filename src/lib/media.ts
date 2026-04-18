@@ -36,12 +36,16 @@ export async function resolveSignedMediaUrl(
   expiresIn = 60 * 60
 ) {
   if (!value) return null
+
+  // Already a full external URL (GIF, Cap, Loom etc.) — return as-is
+  if (value.startsWith('http') && !value.includes('supabase')) return value
+
+  // Try to extract storage path from a Supabase public URL
   const storagePath = getStoragePathFromUrl(value)
 
-  if (!storagePath) {
-    return value
-  }
+  // Use whatever path we have — either extracted or the raw path itself
+  const pathToSign = storagePath || value
 
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresIn)
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(pathToSign, expiresIn)
   return data?.signedUrl || null
 }
