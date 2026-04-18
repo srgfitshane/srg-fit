@@ -176,7 +176,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     setThread(withReactions)
     // Force scroll to bottom on initial load
     setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
     }, 50)
 
     // Mark incoming as read
@@ -198,19 +198,17 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     const el = scrollRef.current
     if (!el) return
     const handleScroll = () => {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
       userScrolledUp.current = !atBottom
     }
     el.addEventListener('scroll', handleScroll, { passive: true })
     return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Auto-scroll to bottom only if user hasn't scrolled up
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
     if (!userScrolledUp.current) {
-      el.scrollTop = el.scrollHeight
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
     }
   }, [thread])
 
@@ -264,7 +262,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     // Always snap to bottom when YOU send
     userScrolledUp.current = false
     setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
       inputRef.current?.focus()
     }, 50)
   }
