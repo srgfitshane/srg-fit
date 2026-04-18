@@ -691,26 +691,26 @@ export default function CoachWorkoutsPage() {
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{ex.exercise_name}</div>
                           <div style={{fontSize:11,color:t.textMuted,lineHeight:1.6}}>
-                            {ex.sets_prescribed}\u00d7{ex.tracking_type==='time'?(ex.duration_seconds||'\u2014')+'s':ex.reps_prescribed}
+                            {ex.sets_prescribed}×{ex.tracking_type==='time'?(ex.duration_seconds||'—')+'s':ex.reps_prescribed}
                             {ex.weight_prescribed?<span style={{color:t.text}}> @ {ex.weight_prescribed}</span>:''}
-                            {ex.tut?<span> \u00b7 TUT {ex.tut}</span>:''}
-                            {ex.rest_seconds?<span> \u00b7 {ex.rest_seconds}s rest</span>:''}
-                            {ex.progression_note?<span style={{color:t.green}}> \u00b7 {ex.progression_note}</span>:''}
+                            {ex.tut?<span> · TUT {ex.tut}</span>:''}
+                            {ex.rest_seconds?<span> · {ex.rest_seconds}s rest</span>:''}
+                            {ex.progression_note?<span style={{color:t.green}}> · {ex.progression_note}</span>:''}
                           </div>
-                          {ex.notes&&<div style={{fontSize:10,color:t.textMuted,fontStyle:'italic',marginTop:2}}>\ud83d\udcdd {ex.notes}</div>}
+                          {ex.notes&&<div style={{fontSize:10,color:t.textMuted,fontStyle:'italic',marginTop:2}}>📝 {ex.notes}</div>}
                           {ex.superset_group&&<div style={{fontSize:10,color:t.teal,marginTop:2}}>Group {ex.superset_group}</div>}
                         </div>
                         <div style={{display:'flex',gap:4,flexShrink:0}}>
                           <div style={{display:'flex',flexDirection:'column',gap:2}}>
-                            <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',lineHeight:1}}>\u25b2</button>
-                            <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',lineHeight:1}}>\u25bc</button>
+                            <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',lineHeight:1}}>▲</button>
+                            <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',lineHeight:1}}>▼</button>
                           </div>
                           <button onClick={()=>setEditingBuildEx(isEditing?null:i)}
                             style={{background:t.surfaceHigh,border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                             {isEditing?'done':'edit'}
                           </button>
                           <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }} style={{background:t.orangeDim,border:'1px solid '+t.orange+'40',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
-                          <button onClick={()=>removeBuildEx(i)} style={{background:'none',border:'none',color:t.red+'60',cursor:'pointer',fontSize:12}}>\u2715</button>
+                          <button onClick={()=>removeBuildEx(i)} style={{background:'none',border:'none',color:t.red+'60',cursor:'pointer',fontSize:12}}>✕</button>
                         </div>
                       </div>
                       {isEditing && (
@@ -719,7 +719,7 @@ export default function CoachWorkoutsPage() {
                             {(['reps','time'] as const).map(type=>(
                               <button key={type} onClick={()=>updateBuildEx(i,'tracking_type',type)}
                                 style={{padding:'3px 10px',borderRadius:20,border:'1px solid '+(ex.tracking_type===type?t.teal:t.border),background:ex.tracking_type===type?t.tealDim:'transparent',color:ex.tracking_type===type?t.teal:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
-                                {type==='reps'?'\ud83d\udd22 Reps':'\u23f1 Time'}
+                                {type==='reps'?'🔢 Reps':'⏱ Time'}
                               </button>
                             ))}
                           </div>
