@@ -126,11 +126,19 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
-    const resolvedPosts = await Promise.all(((postData || []) as CommunityPost[]).map(async (post) => ({
-      ...post,
-      image_url: await resolveSignedMediaUrl(supabase, 'community-media', post.image_url),
-      video_url: await resolveSignedMediaUrl(supabase, 'community-media', post.video_url),
-    })))
+    const resolvedPosts = await Promise.all(((postData || []) as CommunityPost[]).map(async (post) => {
+      const resolveUrl = async (url: string | null) => {
+        if (!url) return null
+        if (url.startsWith('http')) return url // already a full URL (GIF etc.)
+        const { data } = await supabase.storage.from('community-media').createSignedUrl(url, 60 * 60)
+        return data?.signedUrl || null
+      }
+      return {
+        ...post,
+        image_url: await resolveUrl(post.image_url),
+        video_url: await resolveUrl(post.video_url),
+      }
+    }))
     setPosts(resolvedPosts)
     if (resolvedPosts.length) {
       const { data: replyData } = await supabase
@@ -250,9 +258,9 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       const { error } = await supabase.storage
         .from('community-media').upload(path, mediaFile, { upsert: false })
       if (!error) {
-        const signedUrl = await resolveSignedMediaUrl(supabase, 'community-media', path)
-        if (mediaType === 'image') imageUrl = signedUrl ? path : null
-        else videoUrl = signedUrl ? path : null
+        const { data: sd } = await supabase.storage.from('community-media').createSignedUrl(path, 60)
+        if (mediaType === 'image') imageUrl = sd?.signedUrl ? path : null
+        else videoUrl = sd?.signedUrl ? path : null
       }
       setUploading(false)
     }
