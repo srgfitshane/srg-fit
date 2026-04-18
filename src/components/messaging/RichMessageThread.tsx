@@ -123,7 +123,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   const [thread,       setThread]       = useState<Message[]>([])
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
-  const [mode,         setMode]         = useState<'text'|'audio'|'video'|'gif'>('text')
+  const [mode,         setMode]         = useState<'text'|'audio'|'video'|'gif'|'exercise'|'resource'>('text')
 
   const [recording,    setRecording]    = useState(false)
   const [recSeconds,   setRecSeconds]   = useState(0)
@@ -134,6 +134,12 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   const [previewFile,  setPreviewFile]  = useState<File|null>(null)
   const [uploading,    setUploading]    = useState(false)
   const [showMacros,   setShowMacros]   = useState(false)
+
+  // Exercise + resource picker state
+  const [exerciseSearch, setExerciseSearch] = useState('')
+  const [exerciseResults, setExerciseResults] = useState<{id:string,name:string,video_url:string|null,muscles:string|null}[]>([])
+  const [exerciseLoading, setExerciseLoading] = useState(false)
+  const [resources, setResources] = useState<{id:string,title:string,content_type:string,file_url:string|null}[]>([])
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const scrollRef    = useRef<HTMLDivElement>(null)
@@ -307,6 +313,52 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     setMode('text')
   }
 
+  // ── Exercise search ───────────────────────────────────────────────────────
+  const searchExercises = useCallback(async (q: string) => {
+    setExerciseLoading(true)
+    const query = supabase.from('exercises').select('id, name, video_url, muscles').order('name').limit(30)
+    if (q.trim()) query.ilike('name', `%${q.trim()}%`)
+    const { data } = await query
+    setExerciseResults((data || []) as {id:string,name:string,video_url:string|null,muscles:string|null}[])
+    setExerciseLoading(false)
+  }, [supabase])
+
+  const sendExercise = async (ex: {id:string,name:string,video_url:string|null,muscles:string|null}) => {
+    const payload = JSON.stringify({ exerciseId: ex.id, name: ex.name, videoUrl: ex.video_url, muscles: ex.muscles })
+    const { data } = await supabase.from('messages').insert({
+      sender_id: myId, recipient_id: otherId,
+      body: payload, message_type: 'exercise', read: false,
+    }).select().single()
+    if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
+    notifyRecipient(`💪 Exercise: ${ex.name}`)
+    setMode('text')
+    setExerciseSearch('')
+    setExerciseResults([])
+    scrollToBottom(true)
+  }
+
+  // ── Resource picker ───────────────────────────────────────────────────────
+  const loadResources = useCallback(async () => {
+    const { data } = await supabase.from('content_items')
+      .select('id, title, content_type, file_url')
+      .eq('coach_id', myId)
+      .not('file_url', 'is', null)
+      .order('created_at', { ascending: false })
+    setResources((data || []) as {id:string,title:string,content_type:string,file_url:string|null}[])
+  }, [supabase, myId])
+
+  const sendResource = async (res: {id:string,title:string,content_type:string,file_url:string|null}) => {
+    const payload = JSON.stringify({ resourceId: res.id, title: res.title, contentType: res.content_type, fileUrl: res.file_url })
+    const { data } = await supabase.from('messages').insert({
+      sender_id: myId, recipient_id: otherId,
+      body: payload, message_type: 'resource', read: false,
+    }).select().single()
+    if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
+    notifyRecipient(`📄 Resource: ${res.title}`)
+    setMode('text')
+    scrollToBottom(true)
+  }
+
   // ── Audio recording ───────────────────────────────────────────────────────
   const startAudio = async () => {
     try {
@@ -457,6 +509,46 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
           onClick={()=>window.open(msg.gif_url ?? undefined,'_blank')}
         />
       )
+    }
+    if (msg.message_type === 'exercise' && msg.body) {
+      try {
+        const ex = JSON.parse(msg.body)
+        return (
+          <div style={{ minWidth:200 }}>
+            <div style={{ fontSize:12, fontWeight:800, color: isMe ? '#00000088' : c.teal, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>💪 Exercise Demo</div>
+            <div style={{ fontSize:15, fontWeight:700, marginBottom:2 }}>{ex.name}</div>
+            {ex.muscles && <div style={{ fontSize:11, opacity:0.7, marginBottom:6 }}>{ex.muscles}</div>}
+            {ex.videoUrl && (
+              <button onClick={async () => {
+                const { data } = await supabase.storage.from('exercise-videos').createSignedUrl(ex.videoUrl, 3600)
+                if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+              }} style={{ background: isMe ? 'rgba(0,0,0,0.15)' : c.tealDim, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, color: isMe ? '#000' : c.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                ▶ Watch Demo
+              </button>
+            )}
+          </div>
+        )
+      } catch { return <span style={{ fontSize:14 }}>{msg.body}</span> }
+    }
+    if (msg.message_type === 'resource' && msg.body) {
+      try {
+        const res = JSON.parse(msg.body)
+        const icon = res.contentType === 'pdf' ? '📄' : res.contentType === 'video' ? '🎥' : '📎'
+        return (
+          <div style={{ minWidth:200 }}>
+            <div style={{ fontSize:12, fontWeight:800, color: isMe ? '#00000088' : c.teal, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>{icon} Resource</div>
+            <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>{res.title}</div>
+            {res.fileUrl && (
+              <button onClick={async () => {
+                const { data } = await supabase.storage.from('resources').createSignedUrl(res.fileUrl, 3600)
+                if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+              }} style={{ background: isMe ? 'rgba(0,0,0,0.15)' : c.tealDim, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, color: isMe ? '#000' : c.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Open {res.contentType === 'pdf' ? 'PDF' : 'Resource'} ↗
+              </button>
+            )}
+          </div>
+        )
+      } catch { return <span style={{ fontSize:14 }}>{msg.body}</span> }
     }
     return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word', whiteSpace:'pre-wrap' }}>{msg.body}</span>
   }
@@ -669,6 +761,14 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                   style={{ ...btnBase, padding:'7px 10px', background:'transparent', color:c.textMuted, border:'1px solid transparent' }}>
                   📎
                 </button>
+                <button title="Send exercise demo" aria-label="Send exercise" onClick={()=>{ setMode(m=>m==='exercise'?'text':'exercise'); if(exerciseResults.length===0) searchExercises('') }}
+                  style={{ ...btnBase, padding:'7px 10px', background:mode==='exercise'?c.tealDim:'transparent', color:mode==='exercise'?c.teal:c.textMuted, border:'1px solid '+(mode==='exercise'?c.teal+'40':'transparent') }}>
+                  💪
+                </button>
+                <button title="Send a resource" aria-label="Send resource or PDF" onClick={()=>{ setMode(m=>m==='resource'?'text':'resource'); if(resources.length===0) loadResources() }}
+                  style={{ ...btnBase, padding:'7px 10px', background:mode==='resource'?c.tealDim:'transparent', color:mode==='resource'?c.teal:c.textMuted, border:'1px solid '+(mode==='resource'?c.teal+'40':'transparent') }}>
+                  📄
+                </button>
                 <button title="Send a GIF" aria-label="Open GIF picker" onClick={()=>{ setMode(m=>m==='gif'?'text':'gif'); if(gifs.length===0) searchGifs('') }}
                   style={{ ...btnBase, padding:'7px 10px', background:mode==='gif'?c.tealDim:'transparent', color:mode==='gif'?c.teal:c.textMuted, border:'1px solid '+(mode==='gif'?c.teal+'40':'transparent') }}>
                   GIF
@@ -715,6 +815,63 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                     </div>
                   )}
                   <div style={{ fontSize:9, color:c.textMuted, textAlign:'right' as const, marginTop:4 }}>Powered by GIPHY</div>
+                </div>
+              )}
+
+              {/* Exercise picker */}
+              {mode === 'exercise' && (
+                <div style={{ borderTop:'1px solid '+c.border, background:c.surfaceUp, padding:'10px' }}>
+                  <input
+                    autoFocus
+                    value={exerciseSearch}
+                    onChange={e=>{ setExerciseSearch(e.target.value); searchExercises(e.target.value) }}
+                    placeholder="Search exercises..."
+                    style={{ width:'100%', background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:10, padding:'8px 12px', fontSize:13, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", marginBottom:8, colorScheme:'dark', boxSizing:'border-box' as const }}
+                  />
+                  {exerciseLoading ? (
+                    <div style={{ textAlign:'center', padding:'12px', fontSize:12, color:c.textMuted }}>Searching...</div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:220, overflowY:'auto' }}>
+                      {exerciseResults.map(ex => (
+                        <button key={ex.id} onClick={()=>sendExercise(ex)}
+                          style={{ background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', gap:10, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                          <span style={{ fontSize:18 }}>💪</span>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:700, color:c.text }}>{ex.name}</div>
+                            {ex.muscles && <div style={{ fontSize:11, color:c.textMuted }}>{ex.muscles}</div>}
+                          </div>
+                        </button>
+                      ))}
+                      {exerciseResults.length === 0 && !exerciseLoading && (
+                        <div style={{ textAlign:'center', padding:'12px', fontSize:12, color:c.textMuted }}>No exercises found</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Resource picker */}
+              {mode === 'resource' && (
+                <div style={{ borderTop:'1px solid '+c.border, background:c.surfaceUp, padding:'10px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:c.textMuted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.06em' }}>Your Resources</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, maxHeight:240, overflowY:'auto' }}>
+                    {resources.map(res => {
+                      const icon = res.content_type === 'pdf' ? '📄' : res.content_type === 'video' ? '🎥' : '📎'
+                      return (
+                        <button key={res.id} onClick={()=>sendResource(res)}
+                          style={{ background:c.surfaceHigh, border:'1px solid '+c.border, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', gap:10, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                          <span style={{ fontSize:18 }}>{icon}</span>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:700, color:c.text }}>{res.title}</div>
+                            <div style={{ fontSize:11, color:c.textMuted, textTransform:'capitalize' }}>{res.content_type}</div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                    {resources.length === 0 && (
+                      <div style={{ textAlign:'center', padding:'12px', fontSize:12, color:c.textMuted }}>No resources found</div>
+                    )}
+                  </div>
                 </div>
               )}
 
