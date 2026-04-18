@@ -146,6 +146,22 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         .in('post_id', resolvedPosts.map((post) => post.id))
         .order('created_at', { ascending: true })
       const grouped: Record<string,CommunityReply[]> = {}
+      // Collect all unique author IDs from posts + replies and fetch their profiles
+      const authorIds = [...new Set([
+        ...resolvedPosts.map(p => p.author_id),
+        ...((replyData || []) as CommunityReply[]).map(r => r.author_id),
+      ])]
+      if (authorIds.length) {
+        const { data: authorProfs } = await supabase
+          .from('profiles').select('id, full_name').in('id', authorIds)
+        if (authorProfs) {
+          setProfiles(prev => {
+            const next = { ...prev }
+            authorProfs.forEach((p: ProfileRecord) => { next[p.id] = p })
+            return next
+          })
+        }
+      }
       ;((replyData || []) as CommunityReply[]).forEach((reply) => {
         if (!grouped[reply.post_id]) grouped[reply.post_id] = []
         grouped[reply.post_id].push(reply)
@@ -173,17 +189,10 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           resolvedCoachId = clientData.coach_id
         }
         setCoachId(resolvedCoachId)
-        const { data: cls } = await supabase.from('clients')
-          .select('profile_id, profiles!profile_id(id, full_name)')
-          .eq('coach_id', resolvedCoachId)
         const { data: coachProf } = await supabase.from('profiles').select('id, full_name').eq('id', resolvedCoachId).single<ProfileRecord>()
         const profMap: Record<string,ProfileRecord> = {}
         if (coachProf) profMap[coachProf.id] = coachProf
         if (prof) profMap[user.id] = prof
-        ;((cls || []) as ClientMembershipRow[]).forEach((client) => {
-          const profile = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles
-          if (profile) profMap[profile.id] = profile
-        })
         setProfiles(profMap)
         await loadPosts(resolvedCoachId)
         setLoading(false)
