@@ -84,8 +84,8 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose, re
 
   // workout screen
   if (mode === 'workout') return (
-    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420 }}>
+    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420, maxHeight:'85vh', overflowY:'auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
           <button onClick={()=>setMode('pick')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13 }}>← Back</button>
           <div style={{ fontSize:13, fontWeight:800 }}>Schedule Workout</div>
@@ -133,8 +133,8 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose, re
 
   // event screen
   return (
-    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420 }}>
+    <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420, maxHeight:'85vh', overflowY:'auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
           <button onClick={()=>setMode('pick')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13 }}>← Back</button>
           <div style={{ fontSize:13, fontWeight:800 }}>Add Event</div>
@@ -253,7 +253,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
   )
 
   return (
-    <div style={{ padding:'20px 24px', maxWidth:900, margin:'0 auto' }}>
+    <div style={{ padding:'16px 12px', maxWidth:900, margin:'0 auto' }}>
 
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
@@ -292,7 +292,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
           return (
             <div key={i}
               onClick={() => { if (d) setAddModal(dateStr) }}
-              style={{ minHeight:72, background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'50':t.border), borderRadius:10, padding:'5px 6px', cursor:d?'pointer':'default', opacity:d?1:0.25, position:'relative' }}>
+              style={{ minHeight:56, background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'50':t.border), borderRadius:8, padding:'4px 4px', cursor:d?'pointer':'default', opacity:d?1:0.25, position:'relative', overflow:'hidden' }}>
               {d && <>
                 <div style={{ fontSize:11, fontWeight:isToday?900:600, color:isToday?t.teal:t.textDim, marginBottom:3 }}>{d.getDate()}</div>
                 {dayItems.map(item => {
@@ -343,8 +343,8 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
 
       {/* Delete / detail confirm */}
       {delConfirm && (
-        <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={()=>{ setDelConfirm(null); setReschedDate('') }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:360 }}>
+        <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }} onClick={()=>{ setDelConfirm(null); setReschedDate('') }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420, maxHeight:'85vh', overflowY:'auto' }}>
             <div style={{ fontSize:14, fontWeight:800, marginBottom:8 }}>
               {delConfirm._type==='session' ? '🏋️' : (EVENT_ICON[delConfirm.event_type]||'📅')} {delConfirm.title}
             </div>
