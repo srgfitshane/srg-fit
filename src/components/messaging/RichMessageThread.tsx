@@ -195,20 +195,27 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   // Track if user has intentionally scrolled up
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const handleScroll = () => {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-      userScrolledUp.current = !atBottom
-    }
-    el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
+    // Use a small delay to ensure scrollRef is attached to DOM
+    const timer = setTimeout(() => {
+      const el = scrollRef.current
+      if (!el) return
+      const handleScroll = () => {
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+        userScrolledUp.current = !atBottom
+      }
+      el.addEventListener('scroll', handleScroll, { passive: true })
+      return () => el.removeEventListener('scroll', handleScroll)
+    }, 100)
+    return () => clearTimeout(timer)
   }, [])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (!userScrolledUp.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+      // Small delay to let React finish painting new messages
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+      }, 50)
     }
   }, [thread])
 
