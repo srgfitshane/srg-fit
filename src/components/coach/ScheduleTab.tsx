@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -327,8 +328,8 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
         ))}
       </div>
 
-      {/* Add modal */}
-      {addModal && (
+      {/* Add modal — portal to body so position:fixed works on mobile */}
+      {addModal && typeof document !== 'undefined' && createPortal(
         <AddDayModal
           date={addModal}
           clientId={clientId}
@@ -338,11 +339,12 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
           onSave={async () => { setAddModal(null); await load() }}
           onClose={() => setAddModal(null)}
           returnUrl={`/dashboard/coach/clients/${clientId}?tab=calendar`}
-        />
+        />,
+        document.body
       )}
 
-      {/* Delete / detail confirm */}
-      {delConfirm && (
+      {/* Delete / detail confirm — portal to body */}
+      {delConfirm && typeof document !== 'undefined' && createPortal(
         <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }} onClick={()=>{ setDelConfirm(null); setReschedDate('') }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420, maxHeight:'85vh', overflowY:'auto' }}>
             <div style={{ fontSize:14, fontWeight:800, marginBottom:8 }}>
@@ -408,7 +410,8 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
