@@ -482,7 +482,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         }
       `}</style>
 
-      <div style={{ display:'flex', flexDirection:'column', height, fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg }}
+      <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, height:'100%', fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg, overflow:'hidden' }}
         onClick={()=>setReactTarget(null)}>
 
         {/* ── Global reaction picker overlay ── */}
