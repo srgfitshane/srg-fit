@@ -257,6 +257,22 @@ function MessagesInner() {
   }
 
   const activeClient = clients.find(c => c.id === activeId)
+
+  // Push history state when opening a thread so Android back button closes it
+  useEffect(() => {
+    if (activeId) {
+      window.history.pushState({ activeId }, '')
+    }
+  }, [activeId])
+
+  // Handle browser/Android back button
+  useEffect(() => {
+    const handlePopState = () => {
+      if (activeId) setActiveId(null)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [activeId])
   const totalUnread  = Object.values(unread).reduce((a, b) => a + b, 0)
   const clientPriority = (client: any) => {
     const count = unread[client.profile?.id] || 0
