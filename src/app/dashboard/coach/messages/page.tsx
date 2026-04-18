@@ -73,6 +73,7 @@ function MessagesInner() {
         .select(`id, profile:profiles!profile_id(id, full_name, avatar_url)`)
         .eq('coach_id', user.id)
         .eq('active', true)
+        .not('profile_id', 'is', null)
         .order('created_at', { ascending: false })
       const normalizedClients = await Promise.all((cls || []).map(async (client: any) => ({
         ...client,
