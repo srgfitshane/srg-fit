@@ -210,7 +210,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     const el = scrollRef.current
     if (!el) return
     const handleScroll = () => {
-      if (justLoaded.current) return // ignore scroll events during initial load
+      if (justLoaded.current) return
       const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
       userScrolledUp.current = !atBottom
     }
@@ -218,19 +218,38 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Auto-scroll to bottom on new messages — use ResizeObserver to catch
-  // image/GIF load layout shifts and mobile keyboard open/close
+  // Auto-scroll: force bottom on load, keep forcing until stable for 500ms
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // Mark as just loaded so ResizeObserver forces scroll for 2s
     justLoaded.current = true
-    scrollToBottom(true)
-    const t = setTimeout(() => { justLoaded.current = false }, 2000)
-    const ro = new ResizeObserver(() => scrollToBottom())
-    ro.observe(el)
-    return () => { ro.disconnect(); clearTimeout(t) }
-  }, [thread, scrollToBottom])
+    userScrolledUp.current = false
+
+    let lastHeight = 0
+    let stableCount = 0
+    const interval = setInterval(() => {
+      if (!el) return
+      el.scrollTop = el.scrollHeight
+      if (el.scrollHeight === lastHeight) {
+        stableCount++
+        if (stableCount >= 5) { // stable for 5 ticks (500ms) — done
+          justLoaded.current = false
+          clearInterval(interval)
+        }
+      } else {
+        stableCount = 0
+        lastHeight = el.scrollHeight
+      }
+    }, 100)
+
+    // Safety cutoff at 5 seconds
+    const cutoff = setTimeout(() => {
+      justLoaded.current = false
+      clearInterval(interval)
+    }, 5000)
+
+    return () => { clearInterval(interval); clearTimeout(cutoff) }
+  }, [thread])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
