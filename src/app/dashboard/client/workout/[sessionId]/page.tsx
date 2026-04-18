@@ -39,6 +39,7 @@ interface WorkoutSession {
   coach_review_notes?: string | null
   coach_review_video_url?: string | null
   completed_at?: string | null
+  duration_seconds?: number | null
 }
 
 interface ExerciseLibraryItem {
@@ -302,14 +303,22 @@ ${candidateList}`
     setAiSwapLoading(prev => ({ ...prev, [exId]: false }))
   }
 
-  // Workout elapsed timer — uses wall clock so backgrounding doesn't skew it
+  // Workout elapsed timer — only runs when in_progress, stops when completed
   useEffect(() => {
-    const startedAt = session?.started_at ? new Date(session.started_at).getTime() : Date.now()
+    // Don't run timer if session is completed or not started
+    if (!session || session.status !== 'in_progress' || !session.started_at) {
+      // If completed, set elapsed to the stored duration
+      if (session?.status === 'completed' && session.duration_seconds) {
+        setElapsedSeconds(session.duration_seconds)
+      }
+      return
+    }
+    const startedAt = new Date(session.started_at).getTime()
     timerRef.current = setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
     }, 1000)
     return () => clearInterval(timerRef.current ?? undefined)
-  }, [session?.started_at])
+  }, [session?.started_at, session?.status])
 
   // Rest countdown
   useEffect(() => {
