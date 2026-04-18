@@ -196,9 +196,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   const userScrolledUp = useRef(false)
+  const justLoaded = useRef(false)
 
   const scrollToBottom = useCallback((force = false) => {
-    if (!force && userScrolledUp.current) return
+    if (!force && !justLoaded.current && userScrolledUp.current) return
     const el = scrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
@@ -209,6 +210,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     const el = scrollRef.current
     if (!el) return
     const handleScroll = () => {
+      if (justLoaded.current) return // ignore scroll events during initial load
       const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
       userScrolledUp.current = !atBottom
     }
@@ -221,13 +223,13 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    scrollToBottom(true) // always force on new messages/initial load
-    // Watch for ANY size change — scrollHeight (new content) or clientHeight (keyboard)
-    const ro = new ResizeObserver(() => {
-      scrollToBottom() // respects userScrolledUp for keyboard events
-    })
+    // Mark as just loaded so ResizeObserver forces scroll for 2s
+    justLoaded.current = true
+    scrollToBottom(true)
+    const t = setTimeout(() => { justLoaded.current = false }, 2000)
+    const ro = new ResizeObserver(() => scrollToBottom())
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => { ro.disconnect(); clearTimeout(t) }
   }, [thread, scrollToBottom])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
