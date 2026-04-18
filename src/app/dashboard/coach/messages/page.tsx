@@ -346,8 +346,8 @@ function MessagesInner() {
 
           {/* Sidebar header */}
           <div style={{ padding:'16px 18px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', gap:10, height:60 }}>
-            <button onClick={()=>router.push('/dashboard/coach')}
-              aria-label="Back to coach dashboard"
+            <button onClick={()=> activeId ? setActiveId(null) : router.push('/dashboard/coach')}
+              aria-label="Back"
               style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", padding:0 }}>←</button>
             <div style={{ fontSize:14, fontWeight:800 }}>Messages</div>
             {totalUnread > 0 && (

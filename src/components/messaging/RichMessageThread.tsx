@@ -175,9 +175,11 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     })
     setThread(withReactions)
     // Force scroll to bottom on initial load
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
-    }, 50)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+      })
+    })
 
     // Mark incoming as read
     await supabase.from('messages')
@@ -212,10 +214,12 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (!userScrolledUp.current) {
-      // Small delay to let React finish painting new messages
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'instant' })
-      }, 50)
+      // Double rAF ensures DOM is fully painted before scrolling
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+        })
+      })
     }
   }, [thread])
 
@@ -268,10 +272,12 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     notifyRecipient(draft.trim())
     // Always snap to bottom when YOU send
     userScrolledUp.current = false
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: 'instant' })
-      inputRef.current?.focus()
-    }, 50)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+        inputRef.current?.focus()
+      })
+    })
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
