@@ -438,7 +438,7 @@ function MessagesInner() {
             </div>
 
             <div className="msg-detail-grid">
-              <div style={{ minWidth:0, minHeight:0 }}>
+              <div style={{ minWidth:0, minHeight:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
                 {coachId && activeClient.profile?.id && (
                   <RichMessageThread
                     myId={coachId}
