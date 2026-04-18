@@ -61,6 +61,7 @@ export default function CoachWorkoutsPage() {
   const [saving,     setSaving]     = useState(false)
   const [showExPicker, setShowExPicker] = useState(false)
   const [swapIdx,      setSwapIdx]      = useState<number|null>(null) // index being swapped
+  const [pendingRole,  setPendingRole]  = useState<'warmup'|'main'|'cooldown'|'finisher'>('main')
   const [actionModal,setActionModal]= useState<any>(null) // {template, action}
   const [actionForm, setActionForm] = useState({ client_id:'', date:'', program_id:'', resource_group_id:'' })
   const [actionSaving,setActionSaving]=useState(false)
@@ -161,7 +162,7 @@ export default function CoachWorkoutsPage() {
       weight_prescribed: '', rest_seconds: 90,
       notes: '', order_index: prev.length,
       tracking_type: 'reps', duration_seconds: 30,
-      exercise_role: 'main',
+      exercise_role: pendingRole,
       superset_group: '', progression_note: '', tut: '',
     }])
   }
@@ -187,6 +188,56 @@ export default function CoachWorkoutsPage() {
   async function saveTemplate() {
     if (!form.title.trim() || buildExercises.length === 0) return
     setSaving(true)
+
+    // Snapshot exercises NOW before any async calls can reset state
+    const exercisesSnapshot = [...buildExercises]
+
+    // If arriving from ScheduleTab, send everything to the API route atomically
+    if (autoAssignClient) {
+      const res = await fetch('/api/workouts/save-and-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: {
+            title: form.title.trim(),
+            category: form.category,
+            difficulty: form.difficulty,
+            estimated_minutes: form.estimated_minutes ? parseInt(form.estimated_minutes) : null,
+            description: form.description || null,
+            notes_coach: form.notes_coach || null,
+            tags: form.tags ? form.tags.split(',').map((s:string)=>s.trim()).filter(Boolean) : [],
+          },
+          exercises: exercisesSnapshot.map((e,i) => ({
+            exercise_id: e.exercise_id,
+            exercise_name: e.exercise_name,
+            exercise_type: e.exercise_type,
+            sets_prescribed: e.sets_prescribed,
+            reps_prescribed: e.reps_prescribed,
+            weight_prescribed: e.weight_prescribed || null,
+            rest_seconds: e.rest_seconds,
+            notes: e.notes || null,
+            order_index: i,
+            tracking_type: e.tracking_type || 'reps',
+            duration_seconds: e.tracking_type === 'time' ? e.duration_seconds : null,
+            exercise_role: e.exercise_role || 'main',
+            superset_group: e.superset_group || null,
+            progression_note: e.progression_note || null,
+            tut: e.tut || null,
+          })),
+          client_id: autoAssignClient,
+          scheduled_date: autoAssignDate || null,
+        }),
+      })
+      if (res.ok) {
+        router.push(autoAssignReturn || '/dashboard/coach')
+      } else {
+        alert('Save failed — please try again')
+        setSaving(false)
+      }
+      return
+    }
+
+    // Normal save (library only — not from calendar)
     const payload = {
       coach_id: coachId,
       title: form.title.trim(),
@@ -195,7 +246,7 @@ export default function CoachWorkoutsPage() {
       estimated_minutes: form.estimated_minutes ? parseInt(form.estimated_minutes) : null,
       description: form.description || null,
       notes_coach: form.notes_coach || null,
-      tags: form.tags ? form.tags.split(',').map(s=>s.trim()).filter(Boolean) : [],
+      tags: form.tags ? form.tags.split(',').map((s:string)=>s.trim()).filter(Boolean) : [],
       updated_at: new Date().toISOString(),
     }
 
@@ -210,7 +261,7 @@ export default function CoachWorkoutsPage() {
 
     if (templateId) {
       await supabase.from('workout_template_exercises').insert(
-        buildExercises.map((e,i) => ({
+        exercisesSnapshot.map((e,i) => ({
           template_id: templateId,
           exercise_id: e.exercise_id,
           exercise_name: e.exercise_name,
@@ -230,24 +281,9 @@ export default function CoachWorkoutsPage() {
         }))
       )
     }
+
     await load()
     setSaving(false)
-
-    // If we arrived from ScheduleTab "Build New", auto-assign to the client then navigate back
-    if (autoAssignClient && templateId) {
-      await fetch('/api/workouts/assign-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          template_id: templateId,
-          client_id: autoAssignClient,
-          scheduled_date: autoAssignDate || null,
-        }),
-      })
-      router.push(autoAssignReturn || '/dashboard/coach')
-      return
-    }
-
     setView('list')
   }
 
@@ -616,45 +652,42 @@ export default function CoachWorkoutsPage() {
               </div>
             </div>
 
-            {/* Exercise list */}
-            {buildExercises.length === 0 ? (
-              <div style={{background:t.surface,border:`2px dashed ${t.border}`,borderRadius:14,padding:'40px 32px',textAlign:'center',marginBottom:16}}>
-                <div style={{fontSize:36,marginBottom:12}}>💪</div>
-                <div style={{fontSize:14,fontWeight:700,marginBottom:6,color:t.textDim}}>No exercises yet</div>
-                <div style={{fontSize:12,color:t.textMuted,marginBottom:20}}>Click the button below to search and add exercises</div>
-                <button onClick={()=>{setSearchEx('');setExGroup('all');setExMovement('all');setExEquipment('all');setShowExPicker(true)}}
-                  style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:10,padding:'10px 24px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                  + Add Exercise
-                </button>
-              </div>
-            ) : (
-              <>
-                <div style={{display:'grid',gap:10,marginBottom:12}}>
-                  {buildExercises.map((ex,i) => (
-                    <div key={i} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'14px 16px'}}>
+            {/* Exercise list — grouped by role */}
+            <div style={{marginBottom:12}}>
+              {buildExercises.length === 0 && (
+                <div style={{background:t.surface,border:`2px dashed ${t.border}`,borderRadius:14,padding:'40px 32px',textAlign:'center',marginBottom:12}}>
+                  <div style={{fontSize:36,marginBottom:12}}>💪</div>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:6,color:t.textDim}}>No exercises yet</div>
+                  <div style={{fontSize:12,color:t.textMuted}}>Use the buttons below to add exercises by section</div>
+                </div>
+              )}
+              {([
+                {role:'warmup',   label:'🔥 Warm-Up',   color:t.teal},
+                {role:'main',     label:'💪 Main',       color:t.orange},
+                {role:'cooldown', label:'🧘 Cool-Down',  color:t.purple},
+                {role:'finisher', label:'🔴 Finisher',   color:t.red},
+              ] as const).map(({role, label, color}) => {
+                const roleExes = buildExercises.filter(e => e.exercise_role === role)
+                if (roleExes.length === 0) return null
+                return (
+                  <div key={role} style={{marginBottom:16}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                      <div style={{fontSize:11,fontWeight:800,color,textTransform:'uppercase',letterSpacing:'0.06em'}}>{label}</div>
+                      <div style={{flex:1,height:1,background:color+'30'}}/>
+                    </div>
+                    <div style={{display:'grid',gap:8}}>
+                  {buildExercises.map((ex,i) => {
+                    if (ex.exercise_role !== role) return null
+                    return (
+                    <div key={i} style={{background:t.surface,border:`1px solid ${color}30`,borderRadius:14,padding:'14px 16px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
                         <div style={{display:'flex',flexDirection:'column',gap:2}}>
                           <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:i===0?'transparent':t.tealDim,border:`1px solid ${i===0?t.border:t.teal+'40'}`,borderRadius:6,color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',fontSize:14,lineHeight:1,padding:'4px 8px',fontFamily:"'DM Sans',sans-serif"}}>▲</button>
                           <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:i===buildExercises.length-1?'transparent':t.tealDim,border:`1px solid ${i===buildExercises.length-1?t.border:t.teal+'40'}`,borderRadius:6,color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',fontSize:14,lineHeight:1,padding:'4px 8px',fontFamily:"'DM Sans',sans-serif"}}>▼</button>
                         </div>
-                        <span style={{fontSize:12,fontWeight:800,color:t.teal,minWidth:20}}>{i+1}.</span>
                         <span style={{fontWeight:700,fontSize:14,flex:1}}>{ex.exercise_name}</span>
                         <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }} style={{background:t.orangeDim,border:`1px solid ${t.orange}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
                         <button onClick={()=>removeBuildEx(i)} style={{background:t.redDim,border:`1px solid ${t.red}40`,borderRadius:6,padding:'3px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>✕</button>
-                      </div>
-                      {/* Section role toggle */}
-                      <div style={{display:'flex',gap:4,marginBottom:10}}>
-                        {([
-                          {role:'warmup',   label:'🔥 Warm-up',  color:t.teal},
-                          {role:'main',     label:'💪 Main',     color:t.orange},
-                          {role:'cooldown', label:'🧘 Cool-down', color:t.purple},
-                          {role:'finisher', label:'🔴 Finisher', color:t.red},
-                        ] as const).map(({role,label,color})=>(
-                          <button key={role} onClick={()=>updateBuildEx(i,'exercise_role',role)}
-                            style={{padding:'3px 10px',borderRadius:20,border:`1px solid ${ex.exercise_role===role?color:t.border}`,background:ex.exercise_role===role?color+'18':'transparent',color:ex.exercise_role===role?color:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
-                            {label}
-                          </button>
-                        ))}
                       </div>
                       {/* Reps / Time toggle */}
                       <div style={{display:'flex',gap:4,marginBottom:10}}>
@@ -708,16 +741,28 @@ export default function CoachWorkoutsPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
+                </div>
+                )
+              })}
 
-                {/* Add more exercises button */}
-                <button onClick={()=>{setSearchEx('');setExGroup('all');setExMovement('all');setExEquipment('all');setShowExPicker(true)}}
-                  style={{width:'100%',background:t.tealDim,border:`1px dashed ${t.teal}60`,borderRadius:12,padding:'12px',fontSize:13,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>
-                  + Add Exercise
-                </button>
-              </>
-            )}
+              {/* Role-based add buttons */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:12}}>
+                {([
+                  {role:'warmup',   label:'🔥 Warm-Up',   color:t.teal},
+                  {role:'main',     label:'💪 Main',       color:t.orange},
+                  {role:'cooldown', label:'🧘 Cool-Down',  color:t.purple},
+                  {role:'finisher', label:'🔴 Finisher',   color:t.red},
+                ] as const).map(({role, label, color}) => (
+                  <button key={role} onClick={()=>{ setPendingRole(role); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setSwapIdx(null); setShowExPicker(true) }}
+                    style={{padding:'9px 4px',borderRadius:10,border:`1px dashed ${color}50`,background:color+'12',color,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
