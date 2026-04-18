@@ -196,7 +196,6 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   const userScrolledUp = useRef(false)
-  const lastScrollHeight = useRef(0)
 
   const scrollToBottom = useCallback((force = false) => {
     if (!force && userScrolledUp.current) return
@@ -218,17 +217,14 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   }, [])
 
   // Auto-scroll to bottom on new messages — use ResizeObserver to catch
-  // image/GIF load layout shifts after initial scroll
+  // image/GIF load layout shifts and mobile keyboard open/close
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    scrollToBottom()
-    // Watch for height changes (images loading) and re-scroll if needed
+    scrollToBottom(true) // always force on new messages/initial load
+    // Watch for ANY size change — scrollHeight (new content) or clientHeight (keyboard)
     const ro = new ResizeObserver(() => {
-      if (el.scrollHeight !== lastScrollHeight.current) {
-        lastScrollHeight.current = el.scrollHeight
-        scrollToBottom()
-      }
+      scrollToBottom() // respects userScrolledUp for keyboard events
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -277,13 +273,14 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       sender_id: myId, recipient_id: otherId,
       body: draft.trim(), message_type: 'text', read: false,
     }).select().single()
-    if (data) setThread(prev => [...prev, { ...data, reactions: [] }])
+    if (data) {
+      setThread(prev => [...prev, { ...data, reactions: [] }])
+      setTimeout(() => scrollToBottom(true), 0)
+    }
     setDraft('')
     setSending(false)
     notifyRecipient(draft.trim())
-    // Always snap to bottom when YOU send
     userScrolledUp.current = false
-    scrollToBottom(true)
     inputRef.current?.focus()
   }
 
