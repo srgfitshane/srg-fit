@@ -22,6 +22,7 @@ interface SetData {
   notes: string
   is_warmup: boolean
   logged: boolean
+  skipped: boolean
 }
 
 interface WorkoutSession {
@@ -105,17 +106,10 @@ interface LoggedSetRow {
 }
 
 function defaultSet(): SetData {
-  return { reps_completed:'', duration_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false }
+  return { reps_completed:'', duration_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false, skipped:false }
 }
 
-const SKIP_REASONS = [
-  'Pain or discomfort',
-  'Equipment unavailable',
-  'Exercise did not feel safe',
-  'Out of time',
-  'Energy too low',
-  'Need coach guidance',
-]
+const SKIP_REASONS: string[] = [] // kept for type compat — dropdown removed
 
 export default function ActiveWorkoutPage() {
   const supabase = createClient()
@@ -404,6 +398,7 @@ ${candidateList}`
           notes:          s.notes || '',
           is_warmup:      s.is_warmup || false,
           logged:         true,
+          skipped:        false,
         }))
         while (rows.length < (ex.sets_prescribed || 3)) rows.push(defaultSet())
         initSets[ex.id] = rows
@@ -469,6 +464,7 @@ ${candidateList}`
         notes:          s.notes || '',
         is_warmup:      s.is_warmup || false,
         logged:         true,   // already in DB — show as logged
+        skipped:        false,
       }))
       // Pad up to prescribed count with blank sets if needed
       while (rows.length < prescribed) rows.push(defaultSet())
@@ -624,6 +620,22 @@ ${candidateList}`
 
   function addSet(exId: string) {
     setSetData(prev => ({ ...prev, [exId]: [...prev[exId], defaultSet()] }))
+  }
+
+  async function skipSet(exId: string, setIdx: number) {
+    // Mark set as skipped locally
+    setSetData(prev => ({
+      ...prev,
+      [exId]: prev[exId].map((s,i) => i===setIdx ? {...s, skipped:true, logged:true} : s)
+    }))
+    // Save to DB with skipped=true
+    await supabase.from('exercise_sets').insert({
+      session_exercise_id: exId,
+      session_id: sessionId,
+      set_number: setIdx + 1,
+      skipped: true,
+      logged_at: new Date().toISOString(),
+    })
   }
 
   async function skipExercise(exId: string) {
@@ -1445,14 +1457,6 @@ ${candidateList}`
                                 ))}
                                 {getSwapOptions(ex).length===0&&<div style={{fontSize:12,color:t.textMuted,textAlign:'center' as const,padding:'8px 0'}}>No matches — try a different search</div>}
                               </div>
-                              <select value={swapReason[ex.id]||''} onChange={e=>setSwapReason(prev=>({...prev,[ex.id]:e.target.value}))}
-                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
-                                <option value="">Why are you swapping?</option>
-                                <option value="Pain or discomfort">Pain or discomfort</option>
-                                <option value="Equipment unavailable">Equipment unavailable</option>
-                                <option value="Exercise felt awkward">Exercise felt awkward</option>
-                                <option value="Need a home-friendly option">Need a home-friendly option</option>
-                              </select>
                               <input value={swapNote[ex.id]||''} onChange={e=>setSwapNote(prev=>({...prev,[ex.id]:e.target.value}))}
                                 placeholder="Optional note for your coach"
                                 style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}}/>
@@ -1462,15 +1466,8 @@ ${candidateList}`
                           {/* Skip panel */}
                           {skipOpen[ex.id] && !isSkipped && (
                             <div style={{background:t.redDim,border:'1px solid '+t.red+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
-                              <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:8}}>Skip this exercise?</div>
-                              <select value={skipReason[ex.id]||''} onChange={e=>setSkipReason(prev=>({...prev,[ex.id]:e.target.value}))}
-                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
-                                <option value="">Choose a reason</option>
-                                {SKIP_REASONS.map(reason=><option key={reason} value={reason}>{reason}</option>)}
-                              </select>
-                              <input value={skipNote[ex.id]||''} onChange={e=>setSkipNote(prev=>({...prev,[ex.id]:e.target.value}))}
-                                placeholder="Required note: what happened?"
-                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const}}/>
+                              <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:6}}>Skip this exercise?</div>
+                              <div style={{fontSize:11,color:t.textMuted,marginBottom:10}}>Add any context in your post-workout notes.</div>
                               <div className="workout-skip-actions">
                                 <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:false}))}
                                   style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'8px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
@@ -1521,16 +1518,25 @@ ${candidateList}`
                               {setsArr.map((s,idx)=>{
                                 const prior = prevSets[ex.id]?.[idx]
                                 return (
-                                  <div key={idx} style={{background:s.logged?t.greenDim:t.surfaceHigh,border:`1px solid ${s.logged?t.green:t.border}`,borderRadius:12,padding:'12px 14px',transition:'all 0.2s'}}>
+                                  <div key={idx} style={{background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:t.surfaceHigh,border:`1px solid ${s.skipped?t.border:s.logged?t.green:t.border}`,borderRadius:12,padding:'12px 14px',transition:'all 0.2s',opacity:s.skipped?0.5:1}}>
                                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:prior?6:8}}>
-                                      <span style={{fontSize:12,fontWeight:800,color:s.logged?t.green:t.textDim,minWidth:40}}>
+                                      <span style={{fontSize:12,fontWeight:800,color:s.skipped?t.textMuted:s.logged?t.green:t.textDim,minWidth:40,textDecoration:s.skipped?'line-through':'none'}}>
                                         {s.is_warmup?'Warm-up':`Set ${idx+1}`}
                                       </span>
-                                      <label style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:t.textMuted,marginLeft:'auto',cursor:'pointer'}}>
-                                        <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
-                                        Warmup
-                                      </label>
-                                      {s.logged&&<span style={{fontSize:12,color:t.green,fontWeight:700}}>✓</span>}
+                                      {!s.logged && !s.skipped && (
+                                        <label style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:t.textMuted,cursor:'pointer'}}>
+                                          <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
+                                          Warmup
+                                        </label>
+                                      )}
+                                      {s.skipped && <span style={{fontSize:11,color:t.textMuted,fontWeight:700}}>⏭ Skipped</span>}
+                                      {!s.logged && !s.skipped && (
+                                        <button onClick={()=>skipSet(ex.id,idx)}
+                                          style={{marginLeft:'auto',background:'transparent',border:`1px solid ${t.border}`,borderRadius:6,padding:'3px 8px',fontSize:10,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          ⏭ Skip
+                                        </button>
+                                      )}
+                                      {s.logged && !s.skipped && <span style={{fontSize:12,color:t.green,fontWeight:700,marginLeft:'auto'}}>✓</span>}
                                       {s.logged&&(
                                         <button onClick={()=>updateSet(ex.id,idx,'logged',false)}
                                           style={{marginLeft:'auto',background:'none',border:`1px solid ${t.border}`,borderRadius:7,padding:'2px 8px',fontSize:10,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
@@ -1538,6 +1544,7 @@ ${candidateList}`
                                         </button>
                                       )}
                                     </div>
+                                    {!s.skipped && (<>
                                     {prior&&(
                                       <div style={{fontSize:11,color:t.textMuted,marginBottom:8,display:'flex',alignItems:'center',gap:4}}>
                                         <span style={{color:t.teal,opacity:0.7}}>↩</span>
@@ -1606,6 +1613,7 @@ ${candidateList}`
                                         </button>
                                       )}
                                     </div>
+                                    </>)}
                                   </div>
                                 )
                               })}
