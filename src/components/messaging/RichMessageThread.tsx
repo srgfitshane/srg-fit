@@ -174,12 +174,8 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       }
     })
     setThread(withReactions)
-    // Force scroll to bottom on initial load
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'instant' })
-      })
-    })
+    // Force scroll on initial load
+    setTimeout(() => scrollToBottom(true), 0)
 
     // Mark incoming as read
     await supabase.from('messages')
@@ -194,34 +190,43 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
   const userScrolledUp = useRef(false)
+  const lastScrollHeight = useRef(0)
+
+  const scrollToBottom = useCallback((force = false) => {
+    if (!force && userScrolledUp.current) return
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [])
 
   // Track if user has intentionally scrolled up
   useEffect(() => {
-    // Use a small delay to ensure scrollRef is attached to DOM
-    const timer = setTimeout(() => {
-      const el = scrollRef.current
-      if (!el) return
-      const handleScroll = () => {
-        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-        userScrolledUp.current = !atBottom
-      }
-      el.addEventListener('scroll', handleScroll, { passive: true })
-      return () => el.removeEventListener('scroll', handleScroll)
-    }, 100)
-    return () => clearTimeout(timer)
+    const el = scrollRef.current
+    if (!el) return
+    const handleScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+      userScrolledUp.current = !atBottom
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages — use ResizeObserver to catch
+  // image/GIF load layout shifts after initial scroll
   useEffect(() => {
-    if (!userScrolledUp.current) {
-      // Double rAF ensures DOM is fully painted before scrolling
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          bottomRef.current?.scrollIntoView({ behavior: 'instant' })
-        })
-      })
-    }
-  }, [thread])
+    const el = scrollRef.current
+    if (!el) return
+    scrollToBottom()
+    // Watch for height changes (images loading) and re-scroll if needed
+    const ro = new ResizeObserver(() => {
+      if (el.scrollHeight !== lastScrollHeight.current) {
+        lastScrollHeight.current = el.scrollHeight
+        scrollToBottom()
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [thread, scrollToBottom])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -272,12 +277,8 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     notifyRecipient(draft.trim())
     // Always snap to bottom when YOU send
     userScrolledUp.current = false
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'instant' })
-        inputRef.current?.focus()
-      })
-    })
+    scrollToBottom(true)
+    inputRef.current?.focus()
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -531,12 +532,34 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             <div style={{ textAlign:'center', marginTop:48, color:c.textMuted, fontSize:13 }}>No messages yet — say something! 👋</div>
           )}
 
-          {thread.map((msg) => {
+          {thread.map((msg, idx) => {
             const isMe = msg.sender_id === myId
             const grouped = groupReactions(msg.reactions)
             const isMedia = ['image','video'].includes(msg.message_type)
+
+            // Date separator logic
+            const msgDate = new Date(msg.created_at)
+            const msgDay = `${msgDate.getFullYear()}-${msgDate.getMonth()}-${msgDate.getDate()}`
+            const prevMsg = thread[idx - 1]
+            const prevDate = prevMsg ? new Date(prevMsg.created_at) : null
+            const prevDay = prevDate ? `${prevDate.getFullYear()}-${prevDate.getMonth()}-${prevDate.getDate()}` : null
+            const showDateSep = msgDay !== prevDay
+            const today = new Date()
+            const isToday = msgDate.getDate() === today.getDate() && msgDate.getMonth() === today.getMonth() && msgDate.getFullYear() === today.getFullYear()
+            const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+            const isYesterday = msgDate.getDate() === yesterday.getDate() && msgDate.getMonth() === yesterday.getMonth() && msgDate.getFullYear() === yesterday.getFullYear()
+            const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: msgDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined })
+
             return (
-              <div key={msg.id} style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation:'fadeUp .15s ease' }}>
+              <div key={msg.id}>
+                {showDateSep && (
+                  <div style={{ display:'flex', alignItems:'center', gap:10, margin:'8px 0' }}>
+                    <div style={{ flex:1, height:1, background:c.border }} />
+                    <span style={{ fontSize:11, color:c.textMuted, fontWeight:600, whiteSpace:'nowrap' }}>{dateLabel}</span>
+                    <div style={{ flex:1, height:1, background:c.border }} />
+                  </div>
+                )}
+              <div style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation:'fadeUp .15s ease' }}>
                 <div style={{ position:'relative', maxWidth: isMedia ? '80%' : '74%', width: isMedia ? '80%' : 'auto' }}>
 
                   {/* Bubble — long-press to react, normal tap for media */}
@@ -579,6 +602,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                   )}
                 </div>
               </div>
+            </div>
             )
           })}
           <div ref={bottomRef} />
