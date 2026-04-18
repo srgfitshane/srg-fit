@@ -752,7 +752,7 @@ export default function CoachWorkoutsPage() {
                               <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Role</div>
                               <select value={ex.exercise_role||'main'} onChange={e=>updateBuildEx(i,'exercise_role',e.target.value)}
                                 style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
-                                <option value="warmup">Warm-up</option><option value="main">Main</option><option value="cooldown">Cool-down</option><option value="finisher">Finisher</option>
+                                <option value="warmup">Warm-up</option><option value="main">Main</option><option value="secondary">Secondary</option><option value="accessory">Accessory</option><option value="cooldown">Cool-down</option><option value="finisher">Finisher</option>
                               </select>
                             </div>
                             <div>
