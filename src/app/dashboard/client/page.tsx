@@ -854,16 +854,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   }
 
   const sharePRToCommunity = async (pr: PersonalRecordSummary) => {
-    if (!clientRecord || pr.shared_to_community) return
+    if (!clientRecord || pr.shared_to_community || !profile || !coachProfileId) return
     const name = pr.exercise?.name || 'an exercise'
     const isRepPR = pr.pr_type === 'rep'
-    const content = isRepPR
+    const body = isRepPR
       ? `💪 Rep PR! Hit ${pr.rep_pr_weight} lbs x ${pr.rep_pr_reps} reps on ${name}!`
       : `🏆 New PR! Just lifted ${pr.weight_pr} lbs on ${name}!`
     const { data: post } = await supabase.from('community_posts').insert({
-      author_id: clientRecord.id,
-      content,
-      post_type: 'pr',
+      author_id: profile.id,
+      author_role: 'client',
+      coach_id: coachProfileId,
+      body,
     }).select('id').single()
     if (post?.id) {
       await supabase.from('personal_records').update({
