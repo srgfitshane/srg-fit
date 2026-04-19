@@ -1181,6 +1181,25 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
+          {/* ── PENDING CHECK-INS ── */}
+          {pendingCheckins.length > 0 && (
+            <div className="fade" style={{ marginBottom:14 }}>
+              {pendingCheckins.map(ci => (
+                <div key={ci.id} style={{ background:'linear-gradient(135deg,'+t.purple+'18,'+t.purple+'08)', border:'1px solid '+t.purple+'40', borderRadius:16, padding:'16px', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ fontSize:28, flexShrink:0 }}>📋</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:14, fontWeight:800, color:t.text, marginBottom:2 }}>{ci.form?.title || 'Weekly Check-In'}</div>
+                    <div style={{ fontSize:12, color:t.textMuted }}>Your check-in is ready to fill out</div>
+                  </div>
+                  <button onClick={() => router.push(`/dashboard/client/forms/${ci.id}`)}
+                    style={{ background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                    Fill Out
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* ── 3. RECENT WINS ── */}
           {(milestones.length > 0 || recentPRs.length > 0) && (
             <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+t.yellow+'35', borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
