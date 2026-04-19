@@ -262,8 +262,8 @@ export default function CoachWorkoutsPage() {
     }
 
     // Normal save (library only — not from calendar)
+    // Uses server-side API to bypass RLS issues with workout_template_exercises
     const payload = {
-      coach_id: coachId,
       title: form.title.trim(),
       category: form.category,
       difficulty: form.difficulty,
@@ -271,22 +271,15 @@ export default function CoachWorkoutsPage() {
       description: form.description || null,
       notes_coach: form.notes_coach || null,
       tags: form.tags ? form.tags.split(',').map((s:string)=>s.trim()).filter(Boolean) : [],
-      updated_at: new Date().toISOString(),
     }
 
-    let templateId = editing?.id
-    if (editing) {
-      await supabase.from('workout_templates').update(payload).eq('id', editing.id)
-      await supabase.from('workout_template_exercises').delete().eq('template_id', editing.id)
-    } else {
-      const { data } = await supabase.from('workout_templates').insert(payload).select().single()
-      templateId = data?.id
-    }
-
-    if (templateId) {
-      const { error: insertErr } = await supabase.from('workout_template_exercises').insert(
-        exercisesSnapshot.map((e,i) => ({
-          template_id: templateId,
+    const res = await fetch('/api/workouts/save-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: payload,
+        template_id: editing?.id || null,
+        exercises: exercisesSnapshot.map((e,i) => ({
           exercise_id: e.exercise_id,
           exercise_name: e.exercise_name,
           exercise_type: e.exercise_type,
@@ -302,10 +295,15 @@ export default function CoachWorkoutsPage() {
           superset_group: e.superset_group || null,
           progression_note: e.progression_note || null,
           tut: e.tut || null,
-        }))
-      )
-      if (insertErr) console.error('[saveTemplate] Exercise insert FAILED:', insertErr.message)
-      else console.log('[saveTemplate] Exercises saved:', exercisesSnapshot.length)
+        })),
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert('Save failed: ' + (err.error || 'Unknown error'))
+      setSaving(false)
+      return
     }
 
     await load()
