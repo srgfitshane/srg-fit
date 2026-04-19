@@ -550,7 +550,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setNextSession(nextSess ? ({ ...nextSess, isToday } as NextSessionRecord) : null)
 
         setPendingReviews((reviewData || []) as PendingReviewRecord[])
-        setPendingCheckins(((pendingCI || []) as PendingCheckinRecord[]).filter((assignment) => assignment.form?.is_checkin_type || assignment.form?.form_type === 'check_in'))
+        console.log('[dashboard] pendingCI raw:', pendingCI)
+        const filteredCheckins = ((pendingCI || []) as PendingCheckinRecord[]).filter((assignment) => assignment.form?.is_checkin_type || assignment.form?.form_type === 'check_in')
+        console.log('[dashboard] filteredCheckins:', filteredCheckins)
+        setPendingCheckins(filteredCheckins)
 
         setPulseData((todayCheckin as DailyCheckinRecord | null) || null)
 
