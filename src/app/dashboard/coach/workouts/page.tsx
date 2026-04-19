@@ -214,6 +214,7 @@ export default function CoachWorkoutsPage() {
 
     // Snapshot exercises NOW before any async calls can reset state
     const exercisesSnapshot = [...buildExercises]
+    console.log('[saveTemplate] autoAssignClient:', autoAssignClient, 'exercises:', exercisesSnapshot.length, 'names:', exercisesSnapshot.map(e=>e.exercise_name))
 
     // If arriving from ScheduleTab, send everything to the API route atomically
     if (autoAssignClient) {
@@ -283,7 +284,7 @@ export default function CoachWorkoutsPage() {
     }
 
     if (templateId) {
-      await supabase.from('workout_template_exercises').insert(
+      const { error: insertErr } = await supabase.from('workout_template_exercises').insert(
         exercisesSnapshot.map((e,i) => ({
           template_id: templateId,
           exercise_id: e.exercise_id,
@@ -303,6 +304,8 @@ export default function CoachWorkoutsPage() {
           tut: e.tut || null,
         }))
       )
+      if (insertErr) console.error('[saveTemplate] Exercise insert FAILED:', insertErr.message)
+      else console.log('[saveTemplate] Exercises saved:', exercisesSnapshot.length)
     }
 
     await load()

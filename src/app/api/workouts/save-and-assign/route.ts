@@ -10,6 +10,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { template, exercises, client_id, scheduled_date } = await req.json()
+  console.log('[save-and-assign] Received:', { title: template?.title, exerciseCount: exercises?.length, client_id, scheduled_date })
   if (!template?.title || !exercises?.length || !client_id) {
     return NextResponse.json({ error: 'template, exercises, and client_id required' }, { status: 400 })
   }
@@ -27,8 +28,10 @@ export async function POST(req: Request) {
     .single()
 
   if (tmplErr || !tmpl) {
+    console.log('[save-and-assign] Template create FAILED:', tmplErr?.message)
     return NextResponse.json({ error: tmplErr?.message || 'Template create failed' }, { status: 500 })
   }
+  console.log('[save-and-assign] Template created:', tmpl.id)
 
   // 2. Save exercises to template
   const { error: exErr } = await adminDb
@@ -36,9 +39,11 @@ export async function POST(req: Request) {
     .insert(exercises.map((e: any) => ({ ...e, template_id: tmpl.id })))
 
   if (exErr) {
+    console.log('[save-and-assign] Exercise save FAILED:', exErr.message)
     await adminDb.from('workout_templates').delete().eq('id', tmpl.id)
     return NextResponse.json({ error: exErr.message || 'Exercise save failed' }, { status: 500 })
   }
+  console.log('[save-and-assign] Exercises saved:', exercises.length)
 
   // 3. Find or create self-service program for this client
   let { data: program } = await adminDb
