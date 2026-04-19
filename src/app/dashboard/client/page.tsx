@@ -144,6 +144,7 @@ type DashboardClientRecord = {
   coach_id?: string | null
   show_nutrition?: boolean | null
   subscription_status?: string | null
+  training_type?: string | null
 }
 
 type DashboardProfile = {
@@ -1091,8 +1092,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             </div>
           )}
 
-          {/* ── 2. MORNING PULSE ── */}
-          {clientRecord && (
+          {/* ── 2. MORNING PULSE (hidden for in-person clients) ── */}
+          {clientRecord && clientRecord.training_type !== 'in_person' && (
             <div className="fade" id="morning-pulse-card" style={{ marginBottom:14 }}>
               <MorningPulse
                 clientId={clientRecord.id}

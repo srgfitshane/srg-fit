@@ -1,6 +1,6 @@
 'use client'
 import Image from 'next/image'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
@@ -82,6 +82,8 @@ interface SessionExercise {
   slot_filter_type?: string | null
   slot_filter_value?: string | null
   slot_filled_by_client?: boolean | null
+  superset_group?: string | null
+  group_type?: string | null
 }
 
 type WorkoutCompleteProps = {
@@ -1338,8 +1340,23 @@ ${candidateList}`
                   <div style={{height:1,background:group.color+'30',flex:1}}/>
                 </div>
 
-                {/* Exercise cards */}
-                {group.exercises.map(ex => {
+                {/* Exercise cards — with superset group headers */}
+                {(() => {
+                  let lastGroup: string | null = null
+                  const GROUP_TYPE_LABELS: Record<string,string> = { straight:'Straight Sets', superset:'Superset', triset:'Tri-Set', circuit:'Circuit', amrap:'AMRAP', emom:'EMOM', cluster:'Cluster Sets', dropset:'Drop Set', contrast:'Contrast/PAP' }
+                  return group.exercises.map(ex => {
+                  const sg = ex.superset_group?.trim() || null
+                  const showGroupHeader = sg && sg !== lastGroup
+                  if (sg) lastGroup = sg
+                  const groupHeader = showGroupHeader ? (
+                    <div key={'gh-'+sg} style={{display:'flex',alignItems:'center',gap:8,margin:'12px 0 6px'}}>
+                      <div style={{background:group.color+'18',border:'1px solid '+group.color+'40',borderRadius:6,padding:'2px 10px',fontSize:10,fontWeight:900,color:group.color,letterSpacing:'0.08em'}}>
+                        {sg}
+                      </div>
+                      <div style={{fontSize:10,fontWeight:700,color:t.textMuted}}>{GROUP_TYPE_LABELS[ex.group_type||'straight']||'Straight Sets'}</div>
+                      <div style={{height:1,background:group.color+'20',flex:1}}/>
+                    </div>
+                  ) : null
                   const setsArr = setData[ex.id] || []
                   const done = setsArr.filter(s=>s.logged).length
                   const total = ex.sets_prescribed || setsArr.length || 0
@@ -1349,7 +1366,9 @@ ${candidateList}`
 
                   // ── Open slot card ──────────────────────────────────────
                   if (ex.is_open_slot) return (
-                    <div key={ex.id} style={{marginBottom:8,border:`1px dashed ${t.yellow}60`,borderRadius:14,background:t.yellow+'08',padding:'16px'}}>
+                    <React.Fragment key={ex.id}>
+                    {groupHeader}
+                    <div style={{marginBottom:8,border:`1px dashed ${t.yellow}60`,borderRadius:14,background:t.yellow+'08',padding:'16px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:12}}>
                         <span style={{fontSize:24,flexShrink:0}}>🎲</span>
                         <div style={{flex:1,minWidth:0}}>
@@ -1367,10 +1386,12 @@ ${candidateList}`
                         </button>
                       </div>
                     </div>
+                    </React.Fragment>
                   )
-
                   return (
-                    <div key={ex.id} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
+                    <React.Fragment key={ex.id}>
+                    {groupHeader}
+                    <div style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
@@ -1700,8 +1721,10 @@ ${candidateList}`
                         </div>
                       )}
                     </div>
+                    </React.Fragment>
                   )
-                })}
+                })
+                })()}
               </div>
             ))
           })()}
