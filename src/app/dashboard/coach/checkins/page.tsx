@@ -108,6 +108,38 @@ export default function CoachCheckins() {
       const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10 : null
       pulseMap[cid] = { sleep: avg(m.sleep), energy: avg(m.energy), stress: avg(m.stress), mood: avg(m.mood), count: m.count }
     })
+
+    // Fetch sleep hours from habit_logs (Sleep habit, last 7 days)
+    const { data: sleepHabits } = await supabase
+      .from('habits')
+      .select('id, client_id')
+      .in('client_id', clientIds)
+      .ilike('label', '%sleep%')
+      .eq('active', true)
+    const sleepHabitIds = (sleepHabits || []).map((h: any) => h.id)
+    const sleepClientMap: Record<string, string> = {}
+    ;(sleepHabits || []).forEach((h: any) => { sleepClientMap[h.id] = h.client_id })
+
+    if (sleepHabitIds.length > 0) {
+      const { data: sleepLogs } = await supabase
+        .from('habit_logs')
+        .select('habit_id, value, logged_date')
+        .in('habit_id', sleepHabitIds)
+        .gte('logged_date', weekStr)
+      const sleepByClient: Record<string, number[]> = {}
+      ;(sleepLogs || []).forEach((l: any) => {
+        const cid = sleepClientMap[l.habit_id]
+        if (!cid) return
+        if (!sleepByClient[cid]) sleepByClient[cid] = []
+        const val = parseFloat(l.value)
+        if (!isNaN(val)) sleepByClient[cid].push(val)
+      })
+      Object.entries(sleepByClient).forEach(([cid, vals]) => {
+        if (!pulseMap[cid]) pulseMap[cid] = {}
+        pulseMap[cid].sleepHours = Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10
+      })
+    }
+
     setWeeklyPulse(pulseMap)
 
     setLoading(false)
@@ -255,7 +287,7 @@ export default function CoachCheckins() {
                         { label:'Mood',          val: pulse?.mood ?? r.mood_score,    color:t.pink   },
                         { label:'Energy',        val: pulse?.energy ?? r.energy_score, color:t.yellow },
                         { label:'Sleep Quality', val: pulse?.sleep ?? r.sleep_quality, color:t.purple },
-                        { label:'Sleep Hours',   val: r.sleep_hours, unit:'hrs', raw:true  },
+                        { label:'Sleep Hours',   val: pulse?.sleepHours ?? r.sleep_hours, unit:'hrs', raw:true  },
                         { label:'Stress',        val: pulse?.stress ?? r.stress_score, color:t.red, invert:true },
                         { label:'Weight',        val:r.weight_lbs || r.weight, unit:'lbs', raw:true  },
                       ].map(s => (
