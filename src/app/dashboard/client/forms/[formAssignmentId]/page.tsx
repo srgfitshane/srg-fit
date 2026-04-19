@@ -161,7 +161,6 @@ export default function ClientFormPage() {
         const { data: clientRec } = await supabase.from('clients').select('coach_id').eq('profile_id', user.id).single()
         if (clientRec) {
           checkinRow.coach_id = clientRec.coach_id
-          await supabase.from('checkins').insert(checkinRow)
           // Update last check-in timestamp on client record
           await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', asgn.client_id)
           // Trigger AI insights
