@@ -551,18 +551,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         setPendingReviews((reviewData || []) as PendingReviewRecord[])
         console.log('[dashboard] pendingCI raw:', JSON.stringify(pendingCI))
-        const filteredCheckins = ((pendingCI || []) as PendingCheckinRecord[]).filter((assignment) => {
-          const f = assignment.form
-          // Supabase may return form as array instead of object — handle both
-          const formObj = Array.isArray(f) ? f[0] : f
-          return formObj?.is_checkin_type || formObj?.form_type === 'check_in'
-        })
-        console.log('[dashboard] filteredCheckins:', filteredCheckins.length)
-        setPendingCheckins(filteredCheckins.map(a => {
-          // Normalize form to always be an object
-          if (Array.isArray(a.form)) return { ...a, form: a.form[0] }
-          return a
-        }))
+        // Skip filter entirely — if the assignment exists and is pending, show it
+        setPendingCheckins((pendingCI || []) as PendingCheckinRecord[])
 
         setPulseData((todayCheckin as DailyCheckinRecord | null) || null)
 
