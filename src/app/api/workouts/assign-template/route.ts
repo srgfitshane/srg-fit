@@ -93,6 +93,11 @@ export async function POST(req: Request) {
         tracking_type: e.tracking_type || 'reps',
         duration_seconds: e.duration_seconds || null,
         exercise_role: e.exercise_role || 'main',
+        superset_group: e.superset_group || null,
+        group_type: e.group_type || null,
+        tut: e.tut || null,
+        rpe: e.rpe || null,
+        progression_note: e.progression_note || null,
       }))
     )
   }
