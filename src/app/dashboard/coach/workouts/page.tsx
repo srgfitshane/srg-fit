@@ -22,6 +22,25 @@ const CATEGORIES = [
 ]
 const catMeta = (c: string) => CATEGORIES.find(x => x.value === c) || CATEGORIES[5]
 
+const GROUP_COLORS_WB = ['#00c9b1', '#f5a623', '#8b5cf6', '#22c55e', '#f472b6', '#ef4444']
+const ROLE_OPTIONS_WB = ['main','secondary','accessory','variation','warmup','cooldown','finisher']
+const ROLE_COLORS_WB: Record<string,string> = {
+  main: '#f5a623', secondary: '#00c9b1', accessory: '#8b5cf6',
+  variation: '#eab308', warmup: '#38bdf8', cooldown: '#f472b6', finisher: '#ef4444',
+}
+const ROLE_LABELS_WB: Record<string,string> = {
+  main:'Main', secondary:'Secondary', accessory:'Accessory',
+  variation:'Variation', warmup:'Warm-up', cooldown:'Cool-down', finisher:'Finisher',
+}
+const GROUP_TYPES_WB = [
+  { value:'straight', label:'Straight Sets', icon:'\u25b6' },
+  { value:'superset', label:'Superset', icon:'\u26a1' },
+  { value:'triset', label:'Tri-Set', icon:'\u25b3' },
+  { value:'circuit', label:'Circuit', icon:'\u21bb' },
+  { value:'amrap', label:'AMRAP', icon:'\u2191' },
+  { value:'emom', label:'EMOM', icon:'\u23f1' },
+]
+
 interface TemplateEx {
   id?: string
   exercise_id: string
@@ -39,6 +58,7 @@ interface TemplateEx {
   superset_group: string
   progression_note: string
   tut: string
+  rpe: string
 }
 
 type View = 'list' | 'build'
@@ -63,6 +83,8 @@ export default function CoachWorkoutsPage() {
   const [swapIdx,      setSwapIdx]      = useState<number|null>(null) // index being swapped
   const [pendingRole,  setPendingRole]  = useState<'warmup'|'main'|'cooldown'|'finisher'>('main')
   const [editingBuildEx, setEditingBuildEx] = useState<number|null>(null)
+  const [groupingBuildEx, setGroupingBuildEx] = useState<number|null>(null)
+  const [buildGroupTypes, setBuildGroupTypes] = useState<Record<string,string>>({})
   const [actionModal,setActionModal]= useState<any>(null) // {template, action}
   const [actionForm, setActionForm] = useState({ client_id:'', date:'', program_id:'', resource_group_id:'' })
   const [actionSaving,setActionSaving]=useState(false)
@@ -164,7 +186,7 @@ export default function CoachWorkoutsPage() {
       notes: '', order_index: prev.length,
       tracking_type: 'reps', duration_seconds: 30,
       exercise_role: pendingRole,
-      superset_group: '', progression_note: '', tut: '',
+      superset_group: '', progression_note: '', tut: '', rpe: '',
     }])
   }
 
@@ -653,130 +675,178 @@ export default function CoachWorkoutsPage() {
               </div>
             </div>
 
-            {/* Exercise list — grouped by role */}
-            <div style={{marginBottom:12}}>
-              {buildExercises.length === 0 && (
+            {/* Exercise list — program builder style with groups */}
+            {(() => {
+              // Group exercises by superset_group
+              const groups: Record<string, {idx:number,ex:typeof buildExercises[0]}[]> = {}
+              const groupOrder: Record<string, number> = {}
+              buildExercises.forEach((ex, idx) => {
+                const g = ex.superset_group?.trim() || '__none__'
+                if (!groups[g]) { groups[g] = []; groupOrder[g] = idx }
+                groups[g].push({idx, ex})
+              })
+              const groupEntries = Object.entries(groups).sort(([a],[b]) => (groupOrder[a]??999) - (groupOrder[b]??999))
+              const namedGroups = groupEntries.filter(([k]) => k !== '__none__')
+              const groupColorMap: Record<string,string> = {}
+              namedGroups.forEach(([k], i) => { groupColorMap[k] = GROUP_COLORS_WB[i % GROUP_COLORS_WB.length] })
+
+              if (buildExercises.length === 0) return (
                 <div style={{background:t.surface,border:`2px dashed ${t.border}`,borderRadius:14,padding:'40px 32px',textAlign:'center',marginBottom:12}}>
                   <div style={{fontSize:36,marginBottom:12}}>💪</div>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:6,color:t.textDim}}>No exercises yet</div>
                   <div style={{fontSize:12,color:t.textMuted}}>Use the buttons below to add exercises by section</div>
                 </div>
-              )}
-              {([
-                {role:'warmup',   label:'🔥 Warm-Up',   color:t.teal},
-                {role:'main',     label:'💪 Main',       color:t.orange},
-                {role:'cooldown', label:'🧘 Cool-Down',  color:t.purple},
-                {role:'finisher', label:'🔴 Finisher',   color:t.red},
-              ] as const).map(({role, label, color}) => {
-                const roleExes = buildExercises.filter(e => e.exercise_role === role)
-                if (roleExes.length === 0) return null
-                return (
-                  <div key={role} style={{marginBottom:16}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                      <div style={{fontSize:11,fontWeight:800,color,textTransform:'uppercase',letterSpacing:'0.06em'}}>{label}</div>
-                      <div style={{flex:1,height:1,background:color+'30'}}/>
-                    </div>
-                    <div style={{display:'grid',gap:8}}>
-                  {buildExercises.map((ex,i) => {
-                    if (ex.exercise_role !== role) return null
-                    const isEditing = editingBuildEx === i
+              )
+
+              return (
+                <div style={{marginBottom:12}}>
+                  {groupEntries.map(([groupKey, groupExes]) => {
+                    const isNamed = groupKey !== '__none__'
+                    const gc = groupColorMap[groupKey] || t.teal
+                    const gType = buildGroupTypes[groupKey] || 'straight'
+
                     return (
-                    <div key={i} style={{marginBottom:4}}>
-                      <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-                        <div style={{paddingTop:2,flexShrink:0}}>
-                          <span style={{display:'inline-block',background:color+'18',border:'1px solid '+color+'40',color,fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:5,textTransform:'uppercase',letterSpacing:'0.04em'}}>
-                            {label.replace(/[^a-zA-Z- ]/g,'')}
-                          </span>
-                        </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{ex.exercise_name}</div>
-                          <div style={{fontSize:11,color:t.textMuted,lineHeight:1.6}}>
-                            {ex.sets_prescribed}×{ex.tracking_type==='time'?(ex.duration_seconds||'—')+'s':ex.reps_prescribed}
-                            {ex.weight_prescribed?<span style={{color:t.text}}> @ {ex.weight_prescribed}</span>:''}
-                            {ex.tut?<span> · TUT {ex.tut}</span>:''}
-                            {ex.rest_seconds?<span> · {ex.rest_seconds}s rest</span>:''}
-                            {ex.progression_note?<span style={{color:t.green}}> · {ex.progression_note}</span>:''}
+                      <div key={groupKey} style={{marginBottom: isNamed ? 16 : 8}}>
+                        {/* Group header with label + type selector */}
+                        {isNamed && (
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                            <div style={{background:gc+'18',border:'1px solid '+gc+'40',borderRadius:6,padding:'3px 10px',fontSize:11,fontWeight:900,color:gc,letterSpacing:'0.08em',flexShrink:0}}>
+                              {groupKey}
+                            </div>
+                            <select value={gType}
+                              onChange={e => setBuildGroupTypes(prev => ({...prev, [groupKey]: e.target.value}))}
+                              style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:7,padding:'3px 8px',fontSize:11,fontWeight:700,color:t.textDim,outline:'none',fontFamily:"'DM Sans',sans-serif",cursor:'pointer',flex:1}}>
+                              {GROUP_TYPES_WB.map(gt => (
+                                <option key={gt.value} value={gt.value}>{gt.icon} {gt.label}</option>
+                              ))}
+                            </select>
+                            <div style={{height:1,background:gc+'20',width:16,flexShrink:0}} />
                           </div>
-                          {ex.notes&&<div style={{fontSize:10,color:t.textMuted,fontStyle:'italic',marginTop:2}}>📝 {ex.notes}</div>}
-                          {ex.superset_group&&<div style={{fontSize:10,color:t.teal,marginTop:2}}>Group {ex.superset_group}</div>}
-                        </div>
-                        <div style={{display:'flex',gap:4,flexShrink:0}}>
-                          <div style={{display:'flex',flexDirection:'column',gap:2}}>
-                            <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',lineHeight:1}}>▲</button>
-                            <button onClick={()=>moveEx(i,1)} disabled={i===buildExercises.length-1} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',lineHeight:1}}>▼</button>
-                          </div>
-                          <button onClick={()=>setEditingBuildEx(isEditing?null:i)}
-                            style={{background:t.surfaceHigh,border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                            {isEditing?'done':'edit'}
-                          </button>
-                          <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }} style={{background:t.orangeDim,border:'1px solid '+t.orange+'40',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
-                          <button onClick={()=>removeBuildEx(i)} style={{background:'none',border:'none',color:t.red+'60',cursor:'pointer',fontSize:12}}>✕</button>
+                        )}
+
+                        {/* Exercises in group */}
+                        <div style={{paddingLeft: isNamed ? 10 : 0, borderLeft: isNamed ? '2px solid '+gc+'30' : 'none'}}>
+                          {groupExes.map(({idx: i, ex}) => {
+                            const roleMeta = ROLE_COLORS_WB[ex.exercise_role] || t.teal
+                            const isEditing = editingBuildEx === i
+                            return (
+                              <div key={i} style={{marginBottom:10}}>
+                                <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+                                  <div style={{paddingTop:2,flexShrink:0}}>
+                                    <span style={{display:'inline-flex',alignItems:'center',padding:'2px 7px',borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:'0.06em',textTransform:'uppercase' as const,background:roleMeta+'18',border:'1px solid '+roleMeta+'40',color:roleMeta}}>
+                                      {ROLE_LABELS_WB[ex.exercise_role] || ex.exercise_role}
+                                    </span>
+                                  </div>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{ex.exercise_name}</div>
+                                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                                      <button onClick={() => setGroupingBuildEx(groupingBuildEx === i ? null : i)}
+                                        style={{background: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal)+'22' : t.surfaceHigh, border:'1px solid '+(ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal)+'60' : t.border), borderRadius:5, padding:'2px 8px', fontSize:10, fontWeight:800, color: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em'}}>
+                                        {ex.superset_group ? `Group ${ex.superset_group}` : '+ Group'}
+                                      </button>
+                                      {groupingBuildEx === i && (
+                                        <input autoFocus defaultValue={ex.superset_group || ''} placeholder="A, B, C..."
+                                          onBlur={e => { updateBuildEx(i, 'superset_group', e.target.value.trim()); setGroupingBuildEx(null) }}
+                                          onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') { updateBuildEx(i,'superset_group',(e.target as HTMLInputElement).value.trim()); setGroupingBuildEx(null) }}}
+                                          style={{width:60,background:t.surface,border:'1px solid '+t.teal+'60',borderRadius:5,padding:'2px 7px',fontSize:11,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}} />
+                                      )}
+                                    </div>
+                                    <div style={{fontSize:11,color:t.textMuted,lineHeight:1.6}}>
+                                      {ex.sets_prescribed}×{ex.tracking_type==='time'?(ex.duration_seconds||'—')+'s':ex.reps_prescribed}
+                                      {ex.weight_prescribed?<span style={{color:t.text}}> @ {ex.weight_prescribed}</span>:''}
+                                      {ex.tut?<span> · TUT {ex.tut}</span>:''}
+                                      {ex.rest_seconds?<span> · {ex.rest_seconds}s rest</span>:''}
+                                      {ex.progression_note?<span style={{color:t.green}}> · {ex.progression_note}</span>:''}
+                                    </div>
+                                    {ex.notes && <div style={{fontSize:10,color:t.textMuted,fontStyle:'italic',marginTop:2}}>📝 {ex.notes}</div>}
+                                  </div>
+                                  <div style={{display:'flex',gap:4,flexShrink:0}}>
+                                    <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                                      <button onClick={()=>moveEx(i,-1)} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===0?t.textMuted:t.teal,cursor:i===0?'default':'pointer',lineHeight:1}}>▲</button>
+                                      <button onClick={()=>moveEx(i,1)} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:5,padding:'2px 6px',fontSize:12,color:i===buildExercises.length-1?t.textMuted:t.teal,cursor:i===buildExercises.length-1?'default':'pointer',lineHeight:1}}>▼</button>
+                                    </div>
+                                    <button onClick={()=>setEditingBuildEx(isEditing?null:i)}
+                                      style={{background:t.surfaceHigh,border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                      {isEditing?'done':'edit'}
+                                    </button>
+                                    <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }}
+                                      style={{background:t.orangeDim,border:'1px solid '+t.orange+'40',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
+                                    <button onClick={()=>removeBuildEx(i)} style={{background:'none',border:'none',color:t.red+'60',cursor:'pointer',fontSize:12}}>✕</button>
+                                  </div>
+                                </div>
+                                {isEditing && (
+                                  <div style={{background:t.surfaceHigh,borderRadius:12,padding:'12px',marginTop:8}}>
+                                    <div style={{display:'flex',gap:4,marginBottom:8}}>
+                                      {(['reps','time'] as const).map(type => (
+                                        <button key={type} onClick={()=>updateBuildEx(i,'tracking_type',type)}
+                                          style={{padding:'3px 10px',borderRadius:20,border:'1px solid '+(ex.tracking_type===type?t.teal:t.border),background:ex.tracking_type===type?t.tealDim:'transparent',color:ex.tracking_type===type?t.teal:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                                          {type==='reps'?'🔢 Reps':'⏱ Time'}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
+                                      {([
+                                        ['Sets','sets_prescribed','number'],
+                                        ex.tracking_type==='time' ? ['Duration (sec)','duration_seconds','number'] : ['Reps','reps_prescribed','text'],
+                                        ['Weight','weight_prescribed','text']
+                                      ] as [string,string,string][]).map(([lbl,fld,typ])=>(
+                                        <div key={fld}>
+                                          <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>{lbl}</div>
+                                          <input type={typ} value={(ex as any)[fld]||''} placeholder={lbl==='Sets'?'3':lbl==='Reps'?'8-12':''}
+                                            onChange={e=>updateBuildEx(i,fld as keyof TemplateEx,typ==='number'?parseInt(e.target.value)||0:e.target.value)}
+                                            style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
+                                      {([['RPE','rpe','text'],['TUT','tut','text'],['Rest (s)','rest_seconds','number']] as [string,string,string][]).map(([lbl,fld,typ])=>(
+                                        <div key={fld}>
+                                          <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>{lbl}</div>
+                                          <input type={typ} value={(ex as any)[fld]||''} placeholder={lbl==='Rest (s)'?'90':''}
+                                            onChange={e=>updateBuildEx(i,fld as keyof TemplateEx,typ==='number'?parseInt(e.target.value)||0:e.target.value)}
+                                            style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                                      <div>
+                                        <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Role</div>
+                                        <select value={ex.exercise_role||'main'} onChange={e=>updateBuildEx(i,'exercise_role',e.target.value)}
+                                          style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
+                                          {ROLE_OPTIONS_WB.map(r=><option key={r} value={r}>{ROLE_LABELS_WB[r]}</option>)}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Group (A, B, C...)</div>
+                                        <input type="text" value={ex.superset_group||''} onChange={e=>updateBuildEx(i,'superset_group',e.target.value)}
+                                          placeholder="e.g. A, B"
+                                          style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}} />
+                                      </div>
+                                    </div>
+                                    <div style={{marginBottom:8}}>
+                                      <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Progression Note</div>
+                                      <input type="text" value={ex.progression_note||''} onChange={e=>updateBuildEx(i,'progression_note',e.target.value)}
+                                        placeholder="e.g. +2.5kg/week, add 1 rep/session"
+                                        style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}} />
+                                    </div>
+                                    <div>
+                                      <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Coach Notes</div>
+                                      <input value={ex.notes||''} onChange={e=>updateBuildEx(i,'notes',e.target.value)}
+                                        placeholder="Cues, technique reminders..."
+                                        style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}} />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
-                      {isEditing && (
-                        <div style={{background:t.surfaceHigh,borderRadius:12,padding:'12px',marginTop:8}}>
-                          <div style={{display:'flex',gap:4,marginBottom:8}}>
-                            {(['reps','time'] as const).map(type=>(
-                              <button key={type} onClick={()=>updateBuildEx(i,'tracking_type',type)}
-                                style={{padding:'3px 10px',borderRadius:20,border:'1px solid '+(ex.tracking_type===type?t.teal:t.border),background:ex.tracking_type===type?t.tealDim:'transparent',color:ex.tracking_type===type?t.teal:t.textMuted,cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
-                                {type==='reps'?'🔢 Reps':'⏱ Time'}
-                              </button>
-                            ))}
-                          </div>
-                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
-                            {([
-                              ['Sets','sets_prescribed','number'],
-                              ex.tracking_type==='time'?['Duration (sec)','duration_seconds','number']:['Reps','reps_prescribed','text'],
-                              ['Weight','weight_prescribed','text']
-                            ] as [string,string,string][]).map(([lbl,fld,typ])=>(
-                              <div key={fld}>
-                                <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>{lbl}</div>
-                                <input type={typ} value={(ex as any)[fld]||''} placeholder={lbl==='Sets'?'3':lbl==='Reps'?'8-12':''}
-                                  onChange={e=>updateBuildEx(i,fld as keyof TemplateEx,typ==='number'?parseInt(e.target.value)||0:e.target.value)}
-                                  style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
-                            {([['TUT','tut','text'],['Rest (s)','rest_seconds','number'],['Progression','progression_note','text']] as [string,string,string][]).map(([lbl,fld,typ])=>(
-                              <div key={fld}>
-                                <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>{lbl}</div>
-                                <input type={typ} value={(ex as any)[fld]||''} placeholder={lbl==='Rest (s)'?'90':''}
-                                  onChange={e=>updateBuildEx(i,fld as keyof TemplateEx,typ==='number'?parseInt(e.target.value)||0:e.target.value)}
-                                  style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Role</div>
-                              <select value={ex.exercise_role||'main'} onChange={e=>updateBuildEx(i,'exercise_role',e.target.value)}
-                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
-                                <option value="warmup">Warm-up</option><option value="main">Main</option><option value="secondary">Secondary</option><option value="accessory">Accessory</option><option value="cooldown">Cool-down</option><option value="finisher">Finisher</option>
-                              </select>
-                            </div>
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Group (A1, B2...)</div>
-                              <input type="text" value={ex.superset_group||''} onChange={e=>updateBuildEx(i,'superset_group',e.target.value)}
-                                placeholder="e.g. A1"
-                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{fontSize:10,fontWeight:700,color:t.textMuted,marginBottom:4}}>Coach Notes</div>
-                            <input value={ex.notes||''} onChange={e=>updateBuildEx(i,'notes',e.target.value)}
-                              placeholder="Cues, technique reminders..."
-                              style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:7,padding:'6px 8px',fontSize:12,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                     )
                   })}
                 </div>
-                </div>
-                )
-              })}
+              )
+            })()}
 
               {/* Role-based add buttons */}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:12}}>
@@ -787,12 +857,11 @@ export default function CoachWorkoutsPage() {
                   {role:'finisher', label:'🔴 Finisher',   color:t.red},
                 ] as const).map(({role, label, color}) => (
                   <button key={role} onClick={()=>{ setPendingRole(role); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setSwapIdx(null); setShowExPicker(true) }}
-                    style={{padding:'9px 4px',borderRadius:10,border:`1px dashed ${color}50`,background:color+'12',color,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                    style={{padding:'9px 4px',borderRadius:10,border:'1px dashed '+color+'50',background:color+'12',color,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                     {label}
                   </button>
                 ))}
               </div>
-            </div>
           </div>
         )}
 
