@@ -29,6 +29,8 @@ export default function CoachCheckins() {
   const [feedback, setFeedback] = useState('')
   const [saving,   setSaving]   = useState(false)
   const [loading,  setLoading]  = useState(true)
+  const [questions, setQuestions] = useState<Record<string, any[]>>({}) // formId -> questions
+  const [weeklyPulse, setWeeklyPulse] = useState<Record<string, any>>({}) // clientId -> avg scores
   const router = useRouter()
   const supabase = createClient()
 
@@ -58,9 +60,56 @@ export default function CoachCheckins() {
 
     // Only show actual check-in type forms
     const checkIns = (data || []).filter(
-      (d:any) => d.form?.is_checkin_type || d.form?.form_type === 'check_in'
+      (d:any) => {
+        const f = Array.isArray(d.form) ? d.form[0] : d.form
+        return f?.is_checkin_type || f?.form_type === 'check_in'
+      }
     )
     setCheckins(checkIns)
+
+    // Fetch questions for all unique form IDs
+    const formIds = [...new Set(checkIns.map((c:any) => c.form_id).filter(Boolean))]
+    if (formIds.length > 0) {
+      const { data: qData } = await supabase
+        .from('onboarding_questions')
+        .select('id, form_id, sort_order, label, question_type, maps_to')
+        .in('form_id', formIds)
+        .order('sort_order')
+      const qMap: Record<string, any[]> = {}
+      ;(qData || []).forEach((q: any) => {
+        if (!qMap[q.form_id]) qMap[q.form_id] = []
+        qMap[q.form_id].push(q)
+      })
+      setQuestions(qMap)
+    }
+
+    // Fetch weekly morning pulse averages per client (last 7 days)
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const weekStr = weekAgo.toISOString().split('T')[0]
+    const { data: pulseData } = await supabase
+      .from('daily_checkins')
+      .select('client_id, sleep_quality, energy_score, stress_score, mood_score')
+      .in('client_id', clientIds)
+      .gte('checkin_date', weekStr)
+    const pulseMap: Record<string, any> = {}
+    ;(pulseData || []).forEach((p: any) => {
+      if (!pulseMap[p.client_id]) pulseMap[p.client_id] = { sleep: [], energy: [], stress: [], mood: [], count: 0 }
+      const m = pulseMap[p.client_id]
+      if (p.sleep_quality != null) m.sleep.push(p.sleep_quality)
+      if (p.energy_score != null) m.energy.push(p.energy_score)
+      if (p.stress_score != null) m.stress.push(p.stress_score)
+      if (p.mood_score != null) m.mood.push(p.mood_score)
+      m.count++
+    })
+    // Compute averages
+    Object.keys(pulseMap).forEach(cid => {
+      const m = pulseMap[cid]
+      const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10 : null
+      pulseMap[cid] = { sleep: avg(m.sleep), energy: avg(m.energy), stress: avg(m.stress), mood: avg(m.mood), count: m.count }
+    })
+    setWeeklyPulse(pulseMap)
+
     setLoading(false)
   }
 
@@ -153,19 +202,22 @@ export default function CoachCheckins() {
                     }
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6 }}>
-                    {[
-                      { label:'Mood',      val:r.mood_score },
-                      { label:'Energy',    val:r.energy_score },
-                      { label:'Sleep Q',   val:r.sleep_quality },
-                      { label:'Stress',    val:r.stress_score, invert:true },
-                      { label:'Workout',   val:r.workout_adherence, max:100 },
-                      { label:'Nutrition', val:r.nutrition_adherence, max:100 },
-                    ].map(s => (
+                    {(() => {
+                      const pulse = weeklyPulse[ci.client_id]
+                      return [
+                        { label:'Mood',      val: pulse?.mood ?? r.mood_score },
+                        { label:'Energy',    val: pulse?.energy ?? r.energy_score },
+                        { label:'Sleep Q',   val: pulse?.sleep ?? r.sleep_quality },
+                        { label:'Stress',    val: pulse?.stress ?? r.stress_score, invert:true },
+                        { label:'Workout',   val:r.workout_adherence, max:100 },
+                        { label:'Nutrition', val:r.nutrition_adherence, max:100 },
+                      ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:8, padding:'7px 8px', textAlign:'center' }}>
                         <div style={{ fontSize:9, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:3 }}>{s.label}</div>
                         <ScorePill val={s.val} max={s.max||10} invert={s.invert} />
                       </div>
-                    ))}
+                    ))
+                    })()}
                   </div>
                   {(r.wins || r.struggles) && (
                     <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:3 }}>
@@ -195,18 +247,20 @@ export default function CoachCheckins() {
                     {selected.form?.title && <span> · {selected.form.title}</span>}
                   </div>
 
-                  {/* Score grid */}
+                  {/* Score grid — weekly pulse averages */}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                    {[
-                      { label:'Mood',          val:r.mood_score,         color:t.pink   },
-                      { label:'Energy',        val:r.energy_score,       color:t.yellow },
-                      { label:'Sleep Quality', val:r.sleep_quality,      color:t.purple },
-                      { label:'Sleep Hours',   val:r.sleep_hours, unit:'hrs', raw:true  },
-                      { label:'Stress',        val:r.stress_score,       color:t.red,  invert:true },
-                      { label:'Hunger',        val:r.hunger_score,       color:t.orange },
-                      { label:'Pain',          val:r.pain_score,         color:t.red,  invert:true },
-                      { label:'Weight',        val:r.weight_lbs, unit:'lbs', raw:true  },
-                    ].map(s => (
+                    {(() => {
+                      const pulse = weeklyPulse[selected.client_id]
+                      return [
+                        { label:'Mood',          val: pulse?.mood ?? r.mood_score,    color:t.pink   },
+                        { label:'Energy',        val: pulse?.energy ?? r.energy_score, color:t.yellow },
+                        { label:'Sleep Quality', val: pulse?.sleep ?? r.sleep_quality, color:t.purple },
+                        { label:'Sleep Hours',   val:r.sleep_hours, unit:'hrs', raw:true  },
+                        { label:'Stress',        val: pulse?.stress ?? r.stress_score, color:t.red, invert:true },
+                        { label:'Hunger',        val:r.hunger_score,       color:t.orange },
+                        { label:'Pain',          val:r.pain_score,         color:t.red,  invert:true },
+                        { label:'Weight',        val:r.weight_lbs || r.weight, unit:'lbs', raw:true  },
+                      ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
                         <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
                         {(s as any).raw
@@ -214,10 +268,9 @@ export default function CoachCheckins() {
                           : <ScorePill val={s.val} invert={s.invert} />
                         }
                       </div>
-                    ))}
+                    ))
+                    })()}
                   </div>
-
-                  {/* Adherence */}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
                     {[
                       { label:'Workout',   val:r.workout_adherence },
@@ -237,19 +290,33 @@ export default function CoachCheckins() {
                   {r.pain_notes      && <div style={{ background:t.redDim,    border:'1px solid '+t.red+'30',    borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red,    marginBottom:8 }}><strong>Pain notes:</strong> {r.pain_notes}</div>}
                   {r.message_to_coach && <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal, marginBottom:8 }}><strong>Message:</strong> {r.message_to_coach}</div>}
 
-                  {/* Custom form questions (UUID-keyed, no maps_to) */}
+                  {/* Form questions with answers — shown in order */}
                   {(() => {
-                    const knownKeys = new Set(['mood_score','energy_score','sleep_quality','sleep_hours','stress_score','stress','hunger_score','pain_score','pain_notes','weight_lbs','weight','workout_adherence','nutrition_adherence','habit_adherence','wins','struggles','goals_next_week','message_to_coach'])
-                    const custom = Object.entries(r).filter(([k, v]) => !knownKeys.has(k) && v != null && String(v).trim() !== '')
-                    if (!custom.length) return null
+                    const formQuestions = questions[selected.form_id] || []
+                    const knownMappedKeys = new Set(['mood_score','energy_score','sleep_quality','sleep_hours','stress_score','stress','hunger_score','pain_score','pain_notes','weight_lbs','weight','workout_adherence','nutrition_adherence','habit_adherence'])
+                    // Show questions that have responses and aren't already shown in the score grid
+                    const qAndA = formQuestions
+                      .filter((q: any) => {
+                        const key = q.maps_to || q.id
+                        const val = r[key] ?? r[q.id]
+                        return val != null && String(val).trim() !== '' && !knownMappedKeys.has(key)
+                      })
+                      .map((q: any) => ({
+                        label: q.label,
+                        value: r[q.maps_to || q.id] ?? r[q.id],
+                        type: q.question_type,
+                      }))
+
+                    if (!qAndA.length) return null
                     return (
                       <div style={{ marginBottom:8 }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Additional Responses</div>
-                        {custom.map(([k, v]) => (
-                          <div key={k} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', fontSize:12, color:t.text, marginBottom:6 }}>
-                            {String(v).startsWith('http') 
-                              ? <a href={String(v)} target="_blank" rel="noreferrer" style={{ color:t.teal }}>📸 View photo</a>
-                              : String(v)
+                        <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Responses</div>
+                        {qAndA.map((qa: any, i: number) => (
+                          <div key={i} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', marginBottom:6 }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:t.teal, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>{qa.label}</div>
+                            {qa.type === 'file' || String(qa.value).startsWith('http')
+                              ? <a href={String(qa.value)} target="_blank" rel="noreferrer" style={{ color:t.teal, fontSize:12 }}>View photo</a>
+                              : <div style={{ fontSize:13, color:t.text, lineHeight:1.5 }}>{String(qa.value)}</div>
                             }
                           </div>
                         ))}
