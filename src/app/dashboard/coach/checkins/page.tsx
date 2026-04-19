@@ -255,10 +255,8 @@ export default function CoachCheckins() {
                         { label:'Mood',          val: pulse?.mood ?? r.mood_score,    color:t.pink   },
                         { label:'Energy',        val: pulse?.energy ?? r.energy_score, color:t.yellow },
                         { label:'Sleep Quality', val: pulse?.sleep ?? r.sleep_quality, color:t.purple },
-                        { label:'Sleep Hours',   val:r.sleep_hours, unit:'hrs', raw:true  },
+                        { label:'Sleep Hours',   val: r.sleep_hours, unit:'hrs', raw:true  },
                         { label:'Stress',        val: pulse?.stress ?? r.stress_score, color:t.red, invert:true },
-                        { label:'Hunger',        val:r.hunger_score,       color:t.orange },
-                        { label:'Pain',          val:r.pain_score,         color:t.red,  invert:true },
                         { label:'Weight',        val:r.weight_lbs || r.weight, unit:'lbs', raw:true  },
                       ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
