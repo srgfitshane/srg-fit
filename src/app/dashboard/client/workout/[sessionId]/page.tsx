@@ -576,8 +576,15 @@ ${candidateList}`
     })
   }
 
+  // Guard against double-tap / React re-render double-fire
+  const loggingSet = useRef<Set<string>>(new Set())
+
   async function logSet(exId: string, setIdx: number) {
     const s = setData[exId][setIdx]
+    if (s.logged) return // Already logged
+    const lockKey = `${exId}-${setIdx}`
+    if (loggingSet.current.has(lockKey)) return // Already in flight
+    loggingSet.current.add(lockKey)
     const ex = exercises.find(e => e.id === exId)
     const isTime = ex?.tracking_type === 'time'
 
@@ -603,6 +610,7 @@ ${candidateList}`
 
     if (!error) {
       updateSet(exId, setIdx, 'logged', true)
+      loggingSet.current.delete(lockKey)
       await supabase.from('session_exercises').update({ sets_completed: setIdx+1 }).eq('id', exId)
       // Auto-start rest timer
       const ex = exercises.find(e=>e.id===exId)
@@ -617,6 +625,8 @@ ${candidateList}`
           [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
         }))
       }
+    } else {
+      loggingSet.current.delete(lockKey)
     }
   }
 
