@@ -81,7 +81,8 @@ export async function POST(req: Request) {
     await adminDb.from('session_exercises').insert(
       exercises.map((e: any, i: number) => ({
         session_id: session.id,
-        exercise_id: e.exercise_id,
+        // Open slots start with no exercise — client fills at runtime
+        exercise_id: e.is_open_slot ? null : e.exercise_id,
         exercise_name: e.exercise_name,
         exercise_type: e.exercise_type,
         sets_prescribed: e.sets_prescribed,
@@ -98,6 +99,10 @@ export async function POST(req: Request) {
         tut: e.tut || null,
         rpe: e.rpe || null,
         progression_note: e.progression_note || null,
+        is_open_slot: !!e.is_open_slot,
+        slot_filter_type: e.is_open_slot ? (e.slot_filter_type || null) : null,
+        slot_filter_value: e.is_open_slot ? (e.slot_filter_value || null) : null,
+        slot_constraint: e.is_open_slot ? (e.slot_constraint || null) : null,
       }))
     )
   }

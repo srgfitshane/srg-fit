@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     .from('workout_template_exercises')
     .insert(exercises.map((e: any, i: number) => ({
       template_id: tmplId,
-      exercise_id: e.exercise_id,
+      // For open slots, exercise_id is NULL and exercise_name describes the slot
+      exercise_id: e.is_open_slot ? null : e.exercise_id,
       exercise_name: e.exercise_name,
       exercise_type: e.exercise_type,
       sets_prescribed: e.sets_prescribed,
@@ -60,6 +61,10 @@ export async function POST(req: Request) {
       superset_group: e.superset_group || null,
       progression_note: e.progression_note || null,
       tut: e.tut || null,
+      is_open_slot: !!e.is_open_slot,
+      slot_filter_type: e.is_open_slot ? (e.slot_filter_type || null) : null,
+      slot_filter_value: e.is_open_slot ? (e.slot_filter_value || null) : null,
+      slot_constraint: e.is_open_slot ? (e.slot_constraint || null) : null,
     })))
 
   if (exErr) {

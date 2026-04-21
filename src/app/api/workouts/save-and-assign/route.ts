@@ -33,10 +33,31 @@ export async function POST(req: Request) {
   }
   console.log('[save-and-assign] Template created:', tmpl.id)
 
-  // 2. Save exercises to template
+  // 2. Save exercises to template (normalize slot fields)
   const { error: exErr } = await adminDb
     .from('workout_template_exercises')
-    .insert(exercises.map((e: any) => ({ ...e, template_id: tmpl.id })))
+    .insert(exercises.map((e: any) => ({
+      template_id: tmpl.id,
+      exercise_id: e.is_open_slot ? null : e.exercise_id,
+      exercise_name: e.exercise_name,
+      exercise_type: e.exercise_type,
+      sets_prescribed: e.sets_prescribed,
+      reps_prescribed: e.reps_prescribed,
+      weight_prescribed: e.weight_prescribed || null,
+      rest_seconds: e.rest_seconds,
+      notes: e.notes || null,
+      order_index: e.order_index,
+      tracking_type: e.tracking_type || 'reps',
+      duration_seconds: e.tracking_type === 'time' ? e.duration_seconds : null,
+      exercise_role: e.exercise_role || 'main',
+      superset_group: e.superset_group || null,
+      progression_note: e.progression_note || null,
+      tut: e.tut || null,
+      is_open_slot: !!e.is_open_slot,
+      slot_filter_type: e.is_open_slot ? (e.slot_filter_type || null) : null,
+      slot_filter_value: e.is_open_slot ? (e.slot_filter_value || null) : null,
+      slot_constraint: e.is_open_slot ? (e.slot_constraint || null) : null,
+    })))
 
   if (exErr) {
     console.log('[save-and-assign] Exercise save FAILED:', exErr.message)
@@ -73,13 +94,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: sessErr?.message || 'Session create failed' }, { status: 500 })
   }
 
-  // 5. Create session exercises
+  // 5. Create session exercises (propagate slot fields)
   await adminDb.from('session_exercises').insert(
     [...exercises]
       .sort((a: any, b: any) => a.order_index - b.order_index)
       .map((e: any, i: number) => ({
         session_id: session.id,
-        exercise_id: e.exercise_id,
+        exercise_id: e.is_open_slot ? null : e.exercise_id,
         exercise_name: e.exercise_name,
         exercise_type: e.exercise_type,
         sets_prescribed: e.sets_prescribed,
@@ -96,6 +117,10 @@ export async function POST(req: Request) {
         tut: e.tut || null,
         rpe: e.rpe || null,
         progression_note: e.progression_note || null,
+        is_open_slot: !!e.is_open_slot,
+        slot_filter_type: e.is_open_slot ? (e.slot_filter_type || null) : null,
+        slot_filter_value: e.is_open_slot ? (e.slot_filter_value || null) : null,
+        slot_constraint: e.is_open_slot ? (e.slot_constraint || null) : null,
       }))
   )
 
