@@ -52,6 +52,11 @@ export default function ClientDetail() {
   const [nutritionEdit, setNutritionEdit] = useState(false)
   const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
   const [nutritionSaving, setNutritionSaving] = useState(false)
+  const [aiMacrosLoading, setAiMacrosLoading] = useState(false)
+  const [aiMacrosRationale, setAiMacrosRationale] = useState('')
+  const [mealPlan, setMealPlan] = useState<any[]>([])
+  const [mealPlanNotes, setMealPlanNotes] = useState('')
+  const [aiPlanLoading, setAiPlanLoading] = useState(false)
   const [monthlyMacros, setMonthlyMacros] = useState<any[]>([])
   const [program,       setProgram]       = useState<any>(null)
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0)
@@ -192,6 +197,8 @@ export default function ClientDetail() {
           water:    String(nutritionData.water_oz || '64'),
           notes:    nutritionData.notes || '',
         })
+        setMealPlan(Array.isArray(nutritionData.meal_plan) ? nutritionData.meal_plan : [])
+        setMealPlanNotes(nutritionData.meal_plan_notes || '')
       }
       setProgram(programData || null)
       setDailyPulse(pulseData || [])
@@ -1153,7 +1160,7 @@ export default function ClientDetail() {
                 {/* View mode — macro tiles */}
                 {!nutritionEdit && nutritionPlan && (
                   <>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom: nutritionPlan.notes ? 16 : 0 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
                       {[
                         { label:'Calories', val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : '—', color:t.orange },
                         { label:'Protein',  val: nutritionPlan.protein_g  ? nutritionPlan.protein_g+'g'  : '—', color:t.teal   },
@@ -1168,8 +1175,40 @@ export default function ClientDetail() {
                       ))}
                     </div>
                     {nutritionPlan.notes && (
-                      <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
+                      <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6, marginTop:16 }}>
                         <strong>Notes:</strong> {nutritionPlan.notes}
+                      </div>
+                    )}
+                    {/* Meal plan view — read-only summary */}
+                    {Array.isArray(nutritionPlan.meal_plan) && nutritionPlan.meal_plan.length > 0 && (
+                      <div style={{ marginTop:16 }}>
+                        <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>🍽️ Sample Meal Plan</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                          {nutritionPlan.meal_plan.map((meal: any, mi: number) => (
+                            <div key={mi} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'12px 14px' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                                <div style={{ fontSize:13, fontWeight:800 }}>{meal.name}</div>
+                                {meal.time && <div style={{ fontSize:11, color:t.textMuted }}>· {meal.time}</div>}
+                                <div style={{ marginLeft:'auto', fontSize:11, fontWeight:700, color:t.orange }}>
+                                  {meal.calories ? `${meal.calories}kcal` : ''}
+                                  {meal.protein_g ? ` · ${meal.protein_g}P` : ''}
+                                  {meal.carbs_g ? ` · ${meal.carbs_g}C` : ''}
+                                  {meal.fat_g ? ` · ${meal.fat_g}F` : ''}
+                                </div>
+                              </div>
+                              {Array.isArray(meal.items) && meal.items.map((item: any, ii: number) => (
+                                <div key={ii} style={{ fontSize:12, color:t.textDim, marginLeft:4 }}>
+                                  · {item.food}{item.qty ? ` — ${item.qty}` : ''}
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                        {nutritionPlan.meal_plan_notes && (
+                          <div style={{ background:t.purpleDim, border:'1px solid '+t.purple+'30', borderRadius:10, padding:'10px 14px', fontSize:12, color:t.purple, lineHeight:1.5, marginTop:10 }}>
+                            💬 {nutritionPlan.meal_plan_notes}
+                          </div>
+                        )}
                       </div>
                     )}
                   </>
@@ -1186,6 +1225,44 @@ export default function ClientDetail() {
                 {/* Edit mode — inline form */}
                 {nutritionEdit && (
                   <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    {/* AI Suggest Macros — reads intake, fills form */}
+                    <button
+                      disabled={aiMacrosLoading || !intake}
+                      onClick={async () => {
+                        setAiMacrosLoading(true)
+                        setAiMacrosRationale('')
+                        try {
+                          const res = await fetch('/api/ai-nutrition/suggest-macros', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ clientId }),
+                          })
+                          const data = await res.json()
+                          if (res.ok && data.calories) {
+                            setNutritionForm(prev => ({
+                              ...prev,
+                              calories: String(data.calories || ''),
+                              protein:  String(data.protein_g || ''),
+                              carbs:    String(data.carbs_g || ''),
+                              fat:      String(data.fat_g || ''),
+                            }))
+                            setAiMacrosRationale(data.rationale || '')
+                          } else {
+                            setAiMacrosRationale(data.error || 'AI request failed')
+                          }
+                        } catch (e) {
+                          setAiMacrosRationale('Network error — try again')
+                        }
+                        setAiMacrosLoading(false)
+                      }}
+                      style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.purple, cursor:aiMacrosLoading||!intake?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!intake?0.5:1 }}>
+                      {aiMacrosLoading ? 'Thinking…' : !intake ? '🤖 Suggest Macros (intake required)' : '🤖 Suggest Macros from Intake'}
+                    </button>
+                    {aiMacrosRationale && (
+                      <div style={{ background:t.purpleDim, border:'1px solid '+t.purple+'30', borderRadius:10, padding:'12px 14px', fontSize:12, color:t.purple, lineHeight:1.6 }}>
+                        <strong>AI rationale:</strong> {aiMacrosRationale}
+                      </div>
+                    )}
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
                       {[
                         { label:'Calories (kcal)', key:'calories', placeholder:'2000', color:t.orange },
@@ -1230,6 +1307,8 @@ export default function ClientDetail() {
                           fat_g:      parseInt(nutritionForm.fat)      || null,
                           water_oz:   parseInt(nutritionForm.water)    || 64,
                           notes:      nutritionForm.notes || null,
+                          meal_plan:  mealPlan.length > 0 ? mealPlan : null,
+                          meal_plan_notes: mealPlanNotes || null,
                           is_active: true,
                         }
                         if (nutritionPlan) {
@@ -1245,6 +1324,127 @@ export default function ClientDetail() {
                       style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:nutritionSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:nutritionSaving?0.6:1 }}>
                       {nutritionSaving ? 'Saving...' : '✓ Save Nutrition Plan'}
                     </button>
+
+                    {/* ── Meal Plan Builder ── */}
+                    <div style={{ marginTop:8, paddingTop:18, borderTop:'1px solid '+t.border }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:800 }}>🍽️ Sample Meal Plan</div>
+                          <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>A reference day — client sees this as guidance, not tracking</div>
+                        </div>
+                        <button
+                          disabled={aiPlanLoading || !nutritionForm.calories}
+                          onClick={async () => {
+                            setAiPlanLoading(true)
+                            try {
+                              const res = await fetch('/api/ai-nutrition/generate-meal-plan', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  clientId,
+                                  calories: parseInt(nutritionForm.calories) || 2000,
+                                  protein_g: parseInt(nutritionForm.protein) || 150,
+                                  carbs_g: parseInt(nutritionForm.carbs) || 200,
+                                  fat_g: parseInt(nutritionForm.fat) || 65,
+                                  meals_per_day: 4,
+                                }),
+                              })
+                              const data = await res.json()
+                              if (res.ok && Array.isArray(data.meals)) {
+                                setMealPlan(data.meals)
+                                if (data.notes) setMealPlanNotes(data.notes)
+                              }
+                            } catch {}
+                            setAiPlanLoading(false)
+                          }}
+                          style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:aiPlanLoading||!nutritionForm.calories?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!nutritionForm.calories?0.5:1 }}>
+                          {aiPlanLoading ? 'Generating…' : mealPlan.length > 0 ? '🤖 Regenerate' : '🤖 Generate Sample Plan'}
+                        </button>
+                      </div>
+
+                      {mealPlan.length === 0 ? (
+                        <div style={{ background:t.surfaceHigh, border:'1px dashed '+t.border, borderRadius:12, padding:'24px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
+                          {!nutritionForm.calories ? 'Set calories first, then generate a plan' : 'No meal plan yet — tap Generate above'}
+                        </div>
+                      ) : (
+                        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                          {mealPlan.map((meal: any, mi: number) => (
+                            <div key={mi} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:14 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                                <input
+                                  value={meal.name || ''}
+                                  onChange={e => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, name: e.target.value } : m))}
+                                  placeholder="Meal name"
+                                  style={{ flex:1, background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', fontSize:13, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
+                                <input
+                                  value={meal.time || ''}
+                                  onChange={e => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, time: e.target.value } : m))}
+                                  placeholder="7:00 AM"
+                                  style={{ width:90, background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', fontSize:12, color:t.textDim, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
+                                <button onClick={() => setMealPlan(prev => prev.filter((_,i) => i !== mi))}
+                                  style={{ background:'none', border:'none', color:t.red, cursor:'pointer', fontSize:16, padding:'4px 8px' }}>×</button>
+                              </div>
+                              {/* Items */}
+                              <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
+                                {(meal.items || []).map((item: any, ii: number) => (
+                                  <div key={ii} style={{ display:'flex', gap:6 }}>
+                                    <input
+                                      value={item.food || ''}
+                                      onChange={e => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, items: m.items.map((it:any,j:number) => j===ii ? { ...it, food: e.target.value } : it) } : m))}
+                                      placeholder="Food"
+                                      style={{ flex:2, background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 9px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
+                                    <input
+                                      value={item.qty || ''}
+                                      onChange={e => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, items: m.items.map((it:any,j:number) => j===ii ? { ...it, qty: e.target.value } : it) } : m))}
+                                      placeholder="Qty"
+                                      style={{ flex:1, background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 9px', fontSize:12, color:t.textDim, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
+                                    <button onClick={() => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, items: m.items.filter((_:any,j:number) => j !== ii) } : m))}
+                                      style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:14, padding:'0 6px' }}>×</button>
+                                  </div>
+                                ))}
+                                <button onClick={() => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, items: [...(m.items||[]), { food:'', qty:'' }] } : m))}
+                                  style={{ background:'none', border:'1px dashed '+t.border, borderRadius:7, padding:'6px', fontSize:11, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                  + Add food
+                                </button>
+                              </div>
+                              {/* Meal macros */}
+                              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6 }}>
+                                {([
+                                  { k:'calories', label:'kcal', color:t.orange },
+                                  { k:'protein_g', label:'P', color:t.teal },
+                                  { k:'carbs_g', label:'C', color:t.yellow },
+                                  { k:'fat_g', label:'F', color:t.purple },
+                                ] as const).map(f => (
+                                  <div key={f.k} style={{ display:'flex', alignItems:'center', gap:4 }}>
+                                    <input
+                                      type="number"
+                                      value={meal[f.k] || ''}
+                                      onChange={e => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, [f.k]: parseInt(e.target.value) || null } : m))}
+                                      style={{ flex:1, background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'5px 8px', fontSize:12, fontWeight:700, color:f.color, outline:'none', fontFamily:"'DM Sans',sans-serif", textAlign:'center' as const }}/>
+                                    <span style={{ fontSize:10, color:t.textMuted, fontWeight:700 }}>{f.label}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          <button onClick={() => setMealPlan(prev => [...prev, { name:'New Meal', time:'', items:[{food:'',qty:''}], calories:null, protein_g:null, carbs_g:null, fat_g:null }])}
+                            style={{ background:'none', border:'1px dashed '+t.border, borderRadius:10, padding:'10px', fontSize:12, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                            + Add meal
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Meal plan notes — client-visible coaching note */}
+                      <div style={{ marginTop:12 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:5, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Meal Plan Note (visible to client)</div>
+                        <textarea
+                          value={mealPlanNotes}
+                          onChange={e => setMealPlanNotes(e.target.value)}
+                          placeholder="Tips on timing, swaps, hydration…"
+                          rows={2}
+                          style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 12px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none' as const, colorScheme:'dark' as const, boxSizing:'border-box' as const }}/>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

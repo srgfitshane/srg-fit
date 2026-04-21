@@ -43,6 +43,16 @@ type NutritionPlan = {
   protein_g?: number | null
   carbs_g?: number | null
   fat_g?: number | null
+  meal_plan?: Array<{
+    name?: string | null
+    time?: string | null
+    items?: Array<{ food?: string | null; qty?: string | null }> | null
+    calories?: number | null
+    protein_g?: number | null
+    carbs_g?: number | null
+    fat_g?: number | null
+  }> | null
+  meal_plan_notes?: string | null
 }
 
 type NutritionDailyLog = {
@@ -605,6 +615,43 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         {plan?.notes && (
           <div style={{ background:'#1a1a0a', border:'1px solid #3a3a1a', borderRadius:12, padding:'10px 14px', marginBottom:14, display:'flex', gap:8 }}>
             <span style={{ fontSize:15 }}>📌</span><p style={{ fontSize:13, color:t.orange, lineHeight:1.5 }}>{plan.notes}</p>
+          </div>
+        )}
+
+        {/* Sample meal plan — coach's reference, read-only */}
+        {plan?.meal_plan && Array.isArray(plan.meal_plan) && plan.meal_plan.length > 0 && (
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:14, marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>
+              🍽️ Sample Meal Plan
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {plan.meal_plan.map((meal, mi) => (
+                <div key={mi} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                    <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{meal.name}</div>
+                    {meal.time && <div style={{ fontSize:11, color:t.textMuted }}>· {meal.time}</div>}
+                    {meal.calories != null && (
+                      <div style={{ marginLeft:'auto', fontSize:11, fontWeight:700, color:t.orange }}>
+                        {meal.calories}kcal{meal.protein_g != null ? ` · ${meal.protein_g}g P` : ''}
+                      </div>
+                    )}
+                  </div>
+                  {Array.isArray(meal.items) && meal.items.map((item, ii) => (
+                    <div key={ii} style={{ fontSize:12, color:t.textDim, marginLeft:2, lineHeight:1.5 }}>
+                      · {item.food}{item.qty ? ` — ${item.qty}` : ''}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {plan.meal_plan_notes && (
+              <div style={{ background:'#0f1a1a', border:'1px solid '+t.teal+'25', borderRadius:9, padding:'9px 12px', fontSize:12, color:t.teal, lineHeight:1.5, marginTop:10 }}>
+                💬 {plan.meal_plan_notes}
+              </div>
+            )}
+            <div style={{ fontSize:10, color:t.textMuted, marginTop:8, textAlign:'center' as const }}>
+              This is a reference — log what you actually eat below
+            </div>
           </div>
         )}
 
