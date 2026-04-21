@@ -136,6 +136,29 @@ const formatCheckInGap = (iso: string | null | undefined) => {
   return `Last check-in ${days} days ago`
 }
 
+// Workout review urgency — based on time remaining until review_due_at (24hr SLA)
+// red: overdue or <2hrs left · yellow: 2-8hrs left · green: 8+hrs left
+type ReviewUrgency = 'red' | 'yellow' | 'green'
+const getReviewUrgency = (dueAt: string | null | undefined): ReviewUrgency => {
+  if (!dueAt) return 'green'
+  const hoursLeft = (new Date(dueAt).getTime() - Date.now()) / (1000 * 60 * 60)
+  if (hoursLeft < 2) return 'red'
+  if (hoursLeft < 8) return 'yellow'
+  return 'green'
+}
+const formatReviewTimeLeft = (dueAt: string | null | undefined): string => {
+  if (!dueAt) return ''
+  const msLeft = new Date(dueAt).getTime() - Date.now()
+  const hoursLeft = msLeft / (1000 * 60 * 60)
+  if (hoursLeft < 0) {
+    const hoursOver = Math.abs(hoursLeft)
+    if (hoursOver < 1) return `overdue ${Math.round(hoursOver * 60)}m`
+    return `overdue ${Math.round(hoursOver)}h`
+  }
+  if (hoursLeft < 1) return `${Math.round(hoursLeft * 60)}m left`
+  return `${Math.round(hoursLeft)}h left`
+}
+
 const queueTypeLabel: Record<QueueItem['type'], string> = {
   review: 'Review',
   insight: 'Insight',
@@ -169,7 +192,9 @@ export default function CoachDashboard() {
   const [clientSearch, setClientSearch] = useState('')
   const [navExpanded, setNavExpanded] = useState(false)
   const [pendingReviews, setPendingReviews] = useState(0)
+  const [reviewUrgency, setReviewUrgency] = useState<{red:number, yellow:number, green:number}>({red:0, yellow:0, green:0})
   const [checkInsDue,    setCheckInsDue]    = useState(0)
+  const [pendingCheckins, setPendingCheckins] = useState(0)
   const [unreadMsgs,     setUnreadMsgs]     = useState(0)
   const [actionQueue,    setActionQueue]    = useState<QueueItem[]>([])
   const [attentionClients, setAttentionClients] = useState<CoachClient[]>([])
@@ -193,15 +218,31 @@ export default function CoachDashboard() {
       setClients(safeClientList)
       const insights = await getUnreadInsights(user.id)
       setAiInsights(insights)
-      // Pending workout reviews
-      const { count } = await supabase
+      // Pending workout reviews + urgency breakdown
+      const { data: allPendingReviews } = await supabase
         .from('workout_sessions')
-        .select('id', { count: 'exact', head: true })
+        .select('id, review_due_at')
         .eq('coach_id', user.id)
         .eq('status', 'completed')
         .is('coach_reviewed_at', null)
         .not('review_due_at', 'is', null)
-      setPendingReviews(count || 0)
+      const pendingReviewsData = allPendingReviews || []
+      setPendingReviews(pendingReviewsData.length)
+      // Count by urgency bucket
+      const urgencyBreakdown = { red: 0, yellow: 0, green: 0 }
+      for (const r of pendingReviewsData) {
+        urgencyBreakdown[getReviewUrgency(r.review_due_at)]++
+      }
+      setReviewUrgency(urgencyBreakdown)
+
+      // Pending check-ins: forms assigned + not yet completed
+      const { count: pendingCi } = await supabase
+        .from('client_form_assignments')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', user.id)
+        .eq('status', 'pending')
+        .not('checkin_schedule_id', 'is', null)
+      setPendingCheckins(pendingCi || 0)
 
       // Check-ins due: clients whose last check-in was > 7 days ago or never
       const sevenDaysAgo = new Date()
@@ -327,16 +368,22 @@ export default function CoachDashboard() {
       }
 
       const queueItems: QueueItem[] = [
-        ...((reviewSessionsRes.data || []) as ReviewQueueSession[]).map((session) => ({
-          id: `review-${session.id}`,
-          type: 'review' as const,
-          priority: new Date(session.review_due_at).getTime() < Date.now() ? 100 : 85,
-          title: `${session.client?.profile?.full_name || 'Client'} workout review due`,
-          detail: `${session.title} · ${new Date(session.completed_at).toLocaleDateString([], { month:'short', day:'numeric' })}`,
-          action: 'Open review',
-          color: t.red,
-          onClick: () => router.push('/dashboard/coach/reviews'),
-        })),
+        ...((reviewSessionsRes.data || []) as ReviewQueueSession[]).map((session) => {
+          const urgency = getReviewUrgency(session.review_due_at)
+          const timeLeft = formatReviewTimeLeft(session.review_due_at)
+          const urgencyColor = urgency === 'red' ? t.red : urgency === 'yellow' ? t.yellow : t.green
+          const urgencyIcon  = urgency === 'red' ? '🔴' : urgency === 'yellow' ? '🟡' : '🟢'
+          return {
+            id: `review-${session.id}`,
+            type: 'review' as const,
+            priority: urgency === 'red' ? 100 : urgency === 'yellow' ? 90 : 80,
+            title: `${session.client?.profile?.full_name || 'Client'} workout review ${urgencyIcon}`,
+            detail: `${session.title} · ${timeLeft} · ${new Date(session.completed_at).toLocaleDateString([], { month:'short', day:'numeric' })}`,
+            action: 'Open review',
+            color: urgencyColor,
+            onClick: () => router.push('/dashboard/coach/reviews'),
+          }
+        }),
         ...((unreadInsightsRes.data || []) as InsightQueueItem[]).map((insight) => ({
           id: `insight-${insight.id}`,
           type: 'insight' as const,
@@ -443,14 +490,26 @@ export default function CoachDashboard() {
       return (a.profile?.full_name || '').localeCompare(b.profile?.full_name || '')
     })
 
+  const reviewFlowColor = reviewUrgency.red > 0 ? t.red
+                        : reviewUrgency.yellow > 0 ? t.yellow
+                        : reviewUrgency.green > 0 ? t.green
+                        : t.green
+  const reviewFlowBg    = reviewUrgency.red > 0 ? t.redDim
+                        : reviewUrgency.yellow > 0 ? t.yellow+'15'
+                        : reviewUrgency.green > 0 ? t.greenDim
+                        : t.greenDim
+  const reviewFlowDetail = pendingReviews > 0
+    ? `${reviewUrgency.red > 0 ? `🔴 ${reviewUrgency.red} urgent · ` : ''}${reviewUrgency.yellow > 0 ? `🟡 ${reviewUrgency.yellow} due soon · ` : ''}${reviewUrgency.green > 0 ? `🟢 ${reviewUrgency.green} on track` : ''}`.replace(/·\s*$/, '')
+    : 'No overdue workout feedback right now.'
+
   const coachFlowCards = [
     {
       id: 'reviews',
       eyebrow: 'Start here',
       title: pendingReviews > 0 ? `${pendingReviews} review${pendingReviews === 1 ? '' : 's'} waiting` : 'Reviews are under control',
-      detail: pendingReviews > 0 ? 'Clear your oldest workout reviews first to protect the coaching SLA.' : 'No overdue workout feedback right now.',
-      color: t.red,
-      bg: t.redDim,
+      detail: reviewFlowDetail,
+      color: reviewFlowColor,
+      bg: reviewFlowBg,
       action: pendingReviews > 0 ? 'Open reviews' : 'View reviews',
       onClick: () => router.push('/dashboard/coach/reviews'),
     },
@@ -603,27 +662,50 @@ export default function CoachDashboard() {
             </div>
           </div>
 
-          {/* Pending reviews banner */}
-          {pendingReviews > 0 && (
-            <button onClick={()=>router.push('/dashboard/coach/reviews')}
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:14, background:'linear-gradient(135deg,#1a0a0a,#1a0808)', border:`1px solid ${t.red}50`, borderRadius:14, padding:'14px 18px', cursor:'pointer', marginBottom:24, fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
-              <div style={{ fontSize:28, flexShrink:0 }}>⏰</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:800, color:t.red, marginBottom:2 }}>
-                  {pendingReviews} workout{pendingReviews !== 1 ? 's' : ''} pending review
+          {/* Pending reviews banner with urgency breakdown */}
+          {pendingReviews > 0 && (() => {
+            const topUrgency = reviewUrgency.red > 0 ? 'red' : reviewUrgency.yellow > 0 ? 'yellow' : 'green'
+            const bannerColor = topUrgency === 'red' ? t.red : topUrgency === 'yellow' ? t.yellow : t.green
+            const bannerBg    = topUrgency === 'red' ? 'linear-gradient(135deg,#1a0a0a,#1a0808)'
+                              : topUrgency === 'yellow' ? 'linear-gradient(135deg,#1a1604,#181404)'
+                              : 'linear-gradient(135deg,#0a1a10,#08180c)'
+            return (
+              <button onClick={()=>router.push('/dashboard/coach/reviews')}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:14, background:bannerBg, border:`1px solid ${bannerColor}50`, borderRadius:14, padding:'14px 18px', cursor:'pointer', marginBottom:24, fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
+                <div style={{ fontSize:28, flexShrink:0 }}>⏰</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:bannerColor, marginBottom:4 }}>
+                    {pendingReviews} workout{pendingReviews !== 1 ? 's' : ''} pending review
+                  </div>
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const, fontSize:11, fontWeight:700 }}>
+                    {reviewUrgency.red > 0 && (
+                      <span style={{ color:t.red, background:t.redDim, borderRadius:20, padding:'2px 9px' }}>
+                        🔴 {reviewUrgency.red} overdue / urgent
+                      </span>
+                    )}
+                    {reviewUrgency.yellow > 0 && (
+                      <span style={{ color:t.yellow, background:t.yellow+'15', borderRadius:20, padding:'2px 9px' }}>
+                        🟡 {reviewUrgency.yellow} due soon
+                      </span>
+                    )}
+                    {reviewUrgency.green > 0 && (
+                      <span style={{ color:t.green, background:t.greenDim, borderRadius:20, padding:'2px 9px' }}>
+                        🟢 {reviewUrgency.green} on track
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontSize:12, color:t.textMuted }}>24-hour SLA — tap to review</div>
-              </div>
-              <div style={{ fontSize:20, color:t.red }}>›</div>
-            </button>
-          )}
+                <div style={{ fontSize:20, color:bannerColor }}>›</div>
+              </button>
+            )
+          })()}
 
           {/* Stats */}
           <div className="coach-stats" style={{ marginBottom:28 }}>
             {[
               { label:'Active Clients', val:clients.filter((c)=>!c.paused).length,                      color:t.teal,   icon:'👥' },
               { label:'Flagged',        val:clients.filter(c=>c.flagged).length, color:t.red,    icon:'🚩' },
-              { label:'Check-ins Due',  val:checkInsDue,                                 color:t.orange, icon:'✅' },
+              { label:'Pending Check-ins',  val:pendingCheckins,                                 color:t.orange, icon:'✅', sub: checkInsDue > 0 ? `${checkInsDue} over 7 days` : null },
               { label:'Unread Msgs',    val:unreadMsgs,                                 color:t.purple, icon:'💬' },
             ].map(s => (
               <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'18px 20px' }}>
@@ -632,6 +714,7 @@ export default function CoachDashboard() {
                   <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{s.label}</div>
                 </div>
                 <div style={{ fontSize:28, fontWeight:900, color:s.color }}>{s.val}</div>
+                {s.sub && <div style={{ fontSize:11, fontWeight:700, color:t.red, marginTop:4 }}>⚠️ {s.sub}</div>}
               </div>
             ))}
           </div>
@@ -816,9 +899,13 @@ export default function CoachDashboard() {
                   {/* Pulse stats inline */}
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     {[
-                      { label:'Reviews', value: pendingReviews, color:t.red },
+                      {
+                        label:'Reviews',
+                        value: pendingReviews,
+                        color: reviewUrgency.red > 0 ? t.red : reviewUrgency.yellow > 0 ? t.yellow : reviewUrgency.green > 0 ? t.green : t.textMuted,
+                      },
                       { label:'Messages', value: unreadMsgs, color:t.teal },
-                      { label:'Check-ins', value: checkInsDue, color:t.orange },
+                      { label:'Check-ins', value: pendingCheckins, color:t.orange },
                       { label:'Insights', value: aiInsights.length, color:t.purple },
                     ].map(item => (
                       <div key={item.label} style={{ display:'flex', alignItems:'center', gap:5, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'4px 10px' }}>
