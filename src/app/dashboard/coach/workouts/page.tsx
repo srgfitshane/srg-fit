@@ -43,7 +43,7 @@ const GROUP_TYPES_WB = [
 
 interface TemplateEx {
   id?: string
-  exercise_id: string
+  exercise_id: string | null
   exercise_name: string
   exercise_type: string
   sets_prescribed: number
@@ -59,6 +59,11 @@ interface TemplateEx {
   progression_note: string
   tut: string
   rpe: string
+  // Open slot fields — coach defines filter, client picks exercise at runtime
+  is_open_slot?: boolean
+  slot_filter_type?: 'muscle' | 'movement' | 'equipment' | null
+  slot_filter_value?: string | null
+  slot_constraint?: string | null
 }
 
 type View = 'list' | 'build'
@@ -80,6 +85,10 @@ export default function CoachWorkoutsPage() {
   const [autoAssignReturn, setAutoAssignReturn] = useState<string|null>(null)
   const [saving,     setSaving]     = useState(false)
   const [showExPicker, setShowExPicker] = useState(false)
+  const [showSlotPicker, setShowSlotPicker] = useState(false)
+  const [slotFilterType, setSlotFilterType] = useState<'muscle'|'movement'|'equipment'>('muscle')
+  const [slotFilterValue, setSlotFilterValue] = useState('')
+  const [slotConstraint, setSlotConstraint] = useState('')
   const [swapIdx,      setSwapIdx]      = useState<number|null>(null) // index being swapped
   const [pendingRole,  setPendingRole]  = useState<'warmup'|'main'|'cooldown'|'finisher'>('main')
   const [editingBuildEx, setEditingBuildEx] = useState<number|null>(null)
@@ -171,7 +180,20 @@ export default function CoachWorkoutsPage() {
     })
     const exs = (tmpl.workout_template_exercises || [])
       .sort((a:any,b:any) => a.order_index - b.order_index)
-      .map((e:any) => ({ ...e, notes: e.notes || '', tracking_type: e.tracking_type || 'reps', duration_seconds: e.duration_seconds || 30, exercise_role: e.exercise_role || 'main', superset_group: e.superset_group || '', progression_note: e.progression_note || '', tut: e.tut || '' }))
+      .map((e:any) => ({
+        ...e,
+        notes: e.notes || '',
+        tracking_type: e.tracking_type || 'reps',
+        duration_seconds: e.duration_seconds || 30,
+        exercise_role: e.exercise_role || 'main',
+        superset_group: e.superset_group || '',
+        progression_note: e.progression_note || '',
+        tut: e.tut || '',
+        is_open_slot: !!e.is_open_slot,
+        slot_filter_type: e.slot_filter_type || null,
+        slot_filter_value: e.slot_filter_value || null,
+        slot_constraint: e.slot_constraint || null,
+      }))
     setBuildExercises(exs)
     setView('build')
   }
@@ -187,6 +209,27 @@ export default function CoachWorkoutsPage() {
       tracking_type: 'reps', duration_seconds: 30,
       exercise_role: pendingRole,
       superset_group: '', progression_note: '', tut: '', rpe: '',
+    }])
+  }
+
+  function addOpenSlot(filterType: 'muscle'|'movement'|'equipment', filterValue: string, constraint: string) {
+    // Build a human label like "Pick a Chest exercise" for the client
+    const verbByType = { muscle: 'Pick a', movement: 'Pick a', equipment: 'Pick an' } as const
+    const slotLabel = `${verbByType[filterType]} ${filterValue} exercise`
+    setBuildExercises(prev => [...prev, {
+      exercise_id: null,
+      exercise_name: slotLabel,
+      exercise_type: filterType === 'movement' ? filterValue : 'strength',
+      sets_prescribed: 3, reps_prescribed: '8-12',
+      weight_prescribed: '', rest_seconds: 90,
+      notes: '', order_index: prev.length,
+      tracking_type: 'reps', duration_seconds: 30,
+      exercise_role: pendingRole,
+      superset_group: '', progression_note: '', tut: '', rpe: '',
+      is_open_slot: true,
+      slot_filter_type: filterType,
+      slot_filter_value: filterValue,
+      slot_constraint: constraint || null,
     }])
   }
 
@@ -249,6 +292,10 @@ export default function CoachWorkoutsPage() {
             progression_note: e.progression_note || null,
             tut: e.tut || null,
             rpe: e.rpe || null,
+            is_open_slot: !!e.is_open_slot,
+            slot_filter_type: e.slot_filter_type || null,
+            slot_filter_value: e.slot_filter_value || null,
+            slot_constraint: e.slot_constraint || null,
           })),
           client_id: autoAssignClient,
           scheduled_date: autoAssignDate || null,
@@ -299,6 +346,10 @@ export default function CoachWorkoutsPage() {
           progression_note: e.progression_note || null,
           tut: e.tut || null,
           rpe: e.rpe || null,
+          is_open_slot: !!e.is_open_slot,
+          slot_filter_type: e.slot_filter_type || null,
+          slot_filter_value: e.slot_filter_value || null,
+          slot_constraint: e.slot_constraint || null,
         })),
       }),
     })
@@ -350,6 +401,10 @@ export default function CoachWorkoutsPage() {
             tracking_type: e.tracking_type || 'reps',
             duration_seconds: e.duration_seconds,
             exercise_role: e.exercise_role || 'main',
+            is_open_slot: !!e.is_open_slot,
+            slot_filter_type: e.slot_filter_type || null,
+            slot_filter_value: e.slot_filter_value || null,
+            slot_constraint: e.slot_constraint || null,
           }))
         )
       }
@@ -577,7 +632,10 @@ export default function CoachWorkoutsPage() {
                             .slice(0,4).map((ex:any,i:number) => (
                               <div key={i} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 0',borderBottom:i<Math.min(3,exCount-1)?`1px solid ${t.border}44`:'none'}}>
                                 <span style={{fontSize:10,fontWeight:800,color:t.teal,minWidth:16}}>{i+1}.</span>
-                                <span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.exercise_name}</span>
+                                <span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                  {ex.is_open_slot && <span style={{color:t.accent,marginRight:4}}>🎯</span>}
+                                  {ex.exercise_name}
+                                </span>
                                 {ex.exercise_role && ex.exercise_role !== 'main' && (
                                   <span style={{fontSize:9,fontWeight:700,padding:'1px 5px',borderRadius:20,
                                     background: ex.exercise_role==='warmup'?t.teal+'18':ex.exercise_role==='finisher'?t.red+'18':t.purple+'18',
@@ -743,7 +801,23 @@ export default function CoachWorkoutsPage() {
                                     </span>
                                   </div>
                                   <div style={{flex:1,minWidth:0}}>
-                                    <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{ex.exercise_name}</div>
+                                    <div style={{fontSize:13,fontWeight:700,marginBottom:2,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                                      {ex.is_open_slot && (
+                                        <span style={{fontSize:10,fontWeight:800,padding:'2px 7px',borderRadius:5,background:t.accent+'20',border:'1px solid '+t.accent+'50',color:t.accent,letterSpacing:'0.04em'}}>
+                                          🎯 OPEN SLOT
+                                        </span>
+                                      )}
+                                      <span>{ex.exercise_name}</span>
+                                    </div>
+                                    {ex.is_open_slot && ex.slot_filter_type && ex.slot_filter_value && (
+                                      <div style={{fontSize:10,color:t.textMuted,marginBottom:4,display:'flex',alignItems:'center',gap:4}}>
+                                        <span>Filter:</span>
+                                        <span style={{color:t.accent,fontWeight:700,textTransform:'capitalize' as const}}>
+                                          {ex.slot_filter_type === 'muscle' ? '💪' : ex.slot_filter_type === 'movement' ? '🔄' : '🏋️'} {ex.slot_filter_value}
+                                        </span>
+                                        {ex.slot_constraint && <span style={{fontStyle:'italic'}}>· &ldquo;{ex.slot_constraint}&rdquo;</span>}
+                                      </div>
+                                    )}
                                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
                                       <button onClick={() => setGroupingBuildEx(groupingBuildEx === i ? null : i)}
                                         style={{background: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal)+'22' : t.surfaceHigh, border:'1px solid '+(ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal)+'60' : t.border), borderRadius:5, padding:'2px 8px', fontSize:10, fontWeight:800, color: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em'}}>
@@ -774,8 +848,10 @@ export default function CoachWorkoutsPage() {
                                       style={{background:t.surfaceHigh,border:'none',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                       {isEditing?'done':'edit'}
                                     </button>
-                                    <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }}
-                                      style={{background:t.orangeDim,border:'1px solid '+t.orange+'40',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
+                                    {!ex.is_open_slot && (
+                                      <button onClick={()=>{ setSwapIdx(i); setSearchEx(''); setExGroup('all'); setExMovement('all'); setExEquipment('all'); setShowExPicker(true) }}
+                                        style={{background:t.orangeDim,border:'1px solid '+t.orange+'40',borderRadius:6,padding:'4px 8px',fontSize:10,color:t.orange,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>swap</button>
+                                    )}
                                     <button onClick={()=>removeBuildEx(i)} style={{background:'none',border:'none',color:t.red+'60',cursor:'pointer',fontSize:12}}>✕</button>
                                   </div>
                                 </div>
@@ -854,7 +930,7 @@ export default function CoachWorkoutsPage() {
             })()}
 
               {/* Role-based add buttons */}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:12}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6,marginBottom:8}}>
                 {([
                   {role:'warmup',   label:'🔥 Warm-Up',   color:t.teal},
                   {role:'main',     label:'💪 Main',       color:t.orange},
@@ -867,6 +943,11 @@ export default function CoachWorkoutsPage() {
                   </button>
                 ))}
               </div>
+              {/* Open Slot — client picks exercise at runtime */}
+              <button onClick={()=>{ setPendingRole('main'); setSlotFilterType('muscle'); setSlotFilterValue(''); setSlotConstraint(''); setShowSlotPicker(true) }}
+                style={{width:'100%',padding:'10px',borderRadius:10,border:'1px dashed '+t.accent+'60',background:t.accentDim,color:t.accent,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12,letterSpacing:'0.04em'}}>
+                🎯 + Open Slot · Client Choice
+              </button>
           </div>
         )}
 
@@ -961,6 +1042,103 @@ export default function CoachWorkoutsPage() {
             </div>
           </div>
         )}
+
+        {/* ── SLOT PICKER MODAL ── */}
+        {showSlotPicker && (() => {
+          const options: string[] =
+            slotFilterType === 'muscle' ? muscleGroups :
+            slotFilterType === 'movement' ? movementPatterns :
+            equipmentList
+          return (
+            <div style={{position:'fixed',inset:0,background:'#000000cc',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}}
+              onClick={()=>setShowSlotPicker(false)}>
+              <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:20,width:'100%',maxWidth:480,maxHeight:'85vh',display:'flex',flexDirection:'column'}}>
+                <div style={{padding:'18px 20px 14px',borderBottom:`1px solid ${t.border}`}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+                    <div style={{fontSize:15,fontWeight:800,color:t.accent}}>🎯 Add Open Slot</div>
+                    <button onClick={()=>setShowSlotPicker(false)} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:20,lineHeight:1}}>✕</button>
+                  </div>
+                  <div style={{fontSize:12,color:t.textMuted,lineHeight:1.5}}>
+                    Client picks an exercise at runtime from the pool matching your filter. PRs track per exercise they choose.
+                  </div>
+                </div>
+                <div style={{overflowY:'auto',flex:1,padding:'16px 20px'}}>
+                  {/* Filter type selector */}
+                  <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:8}}>Filter by</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:16}}>
+                    {([
+                      {v:'muscle',   label:'💪 Muscle',   color:t.teal},
+                      {v:'movement', label:'🔄 Movement', color:t.orange},
+                      {v:'equipment',label:'🏋️ Equipment',color:t.purple},
+                    ] as const).map(opt => {
+                      const active = slotFilterType === opt.v
+                      return (
+                        <button key={opt.v} onClick={()=>{ setSlotFilterType(opt.v); setSlotFilterValue('') }}
+                          style={{padding:'9px 4px',borderRadius:8,border:'1px solid '+(active?opt.color:t.border),background:active?opt.color+'18':'transparent',color:active?opt.color:t.textDim,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Value selector */}
+                  <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:8}}>
+                    Value · <span style={{color:t.textDim}}>{options.length} options</span>
+                  </div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:16,maxHeight:180,overflowY:'auto'}}>
+                    {options.map(v => {
+                      const active = slotFilterValue === v
+                      return (
+                        <button key={v} onClick={()=>setSlotFilterValue(v)}
+                          style={{padding:'5px 11px',borderRadius:20,border:'1px solid '+(active?t.accent:t.border),background:active?t.accentDim:'transparent',color:active?t.accent:t.textDim,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textTransform:slotFilterType==='movement'||slotFilterType==='equipment'?'capitalize' as const:'none' as const}}>
+                          {v}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Optional constraint note */}
+                  <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>
+                    Hint for client <span style={{color:t.textDim,fontWeight:500,textTransform:'none' as const,letterSpacing:'normal'}}>(optional)</span>
+                  </div>
+                  <input value={slotConstraint} onChange={e=>setSlotConstraint(e.target.value)}
+                    placeholder="e.g. Pick one you feel fresh on today"
+                    style={inp}/>
+
+                  {/* Role selector */}
+                  <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginTop:16,marginBottom:6}}>Section</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:5}}>
+                    {([
+                      {role:'warmup',   label:'🔥 Warm-Up',  color:t.teal},
+                      {role:'main',     label:'💪 Main',      color:t.orange},
+                      {role:'cooldown', label:'🧘 Cool-Down', color:t.purple},
+                      {role:'finisher', label:'🔴 Finisher',  color:t.red},
+                    ] as const).map(opt => {
+                      const active = pendingRole === opt.role
+                      return (
+                        <button key={opt.role} onClick={()=>setPendingRole(opt.role)}
+                          style={{padding:'7px 3px',borderRadius:7,border:'1px solid '+(active?opt.color:t.border),background:active?opt.color+'18':'transparent',color:active?opt.color:t.textDim,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div style={{padding:'14px 20px',borderTop:`1px solid ${t.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+                  <div style={{fontSize:11,color:t.textMuted}}>
+                    {slotFilterValue ? <>Client picks: <span style={{color:t.accent,fontWeight:700}}>{slotFilterValue}</span> exercise</> : 'Pick a filter value'}
+                  </div>
+                  <button
+                    disabled={!slotFilterValue}
+                    onClick={()=>{ addOpenSlot(slotFilterType, slotFilterValue, slotConstraint); setShowSlotPicker(false) }}
+                    style={{background:slotFilterValue?`linear-gradient(135deg,${t.accent},${t.accent}cc)`:t.surfaceHigh,border:'none',borderRadius:9,padding:'8px 20px',fontSize:12,fontWeight:800,color:slotFilterValue?'#0f0f0f':t.textMuted,cursor:slotFilterValue?'pointer':'default',fontFamily:"'DM Sans',sans-serif"}}>
+                    Add Slot ✓
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── ACTION MODAL ── */}
         {actionModal && (
