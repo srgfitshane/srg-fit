@@ -197,6 +197,7 @@ export default function CoachDashboard() {
   const [pendingCheckins, setPendingCheckins] = useState(0)
   const [unreadMsgs,     setUnreadMsgs]     = useState(0)
   const [actionQueue,    setActionQueue]    = useState<QueueItem[]>([])
+  const [dismissedQueueIds, setDismissedQueueIds] = useState<Set<string>>(new Set())
   const [attentionClients, setAttentionClients] = useState<CoachClient[]>([])
   const [weeklyDigests, setWeeklyDigests]   = useState<any[]>([])
   const [digestExpanded, setDigestExpanded] = useState<string|null>(null)
@@ -209,6 +210,22 @@ export default function CoachDashboard() {
       if (!user) { router.push('/login'); return }
       const { data: prof } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single()
       setProfile(prof)
+
+      // Load dismissed action queue IDs from localStorage (per-coach, expires after 7 days)
+      const dismissKey = `srg_dismissed_queue_${user.id}`
+      let dismissed = new Set<string>()
+      try {
+        const raw = localStorage.getItem(dismissKey)
+        if (raw) {
+          const parsed = JSON.parse(raw) as { ids: string[]; expiresAt: number }
+          if (parsed.expiresAt > Date.now()) {
+            dismissed = new Set(parsed.ids)
+          } else {
+            localStorage.removeItem(dismissKey)
+          }
+        }
+      } catch { /* ignore corrupt state */ }
+      setDismissedQueueIds(dismissed)
       const { data: clientList } = await supabase
         .from('clients')
         .select(`*, display_name, client_type, training_type, contact_email, contact_phone, profile:profiles!profile_id(full_name, email, avatar_url)`)
@@ -406,6 +423,7 @@ export default function CoachDashboard() {
         })),
         ...frictionQueueItems,
       ]
+        .filter((item) => !dismissed.has(item.id))
         .sort((a, b) => b.priority - a.priority)
         .slice(0, 8)
 
@@ -433,6 +451,29 @@ export default function CoachDashboard() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  // Persist dismissed action queue IDs to localStorage (per-coach, 7-day expiry)
+  // Expiry auto-clears stale dismissals so the queue stays meaningful over time
+  const persistDismissals = (ids: Set<string>) => {
+    if (!profile?.id) return
+    const key = `srg_dismissed_queue_${profile.id}`
+    const payload = { ids: Array.from(ids), expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }
+    try { localStorage.setItem(key, JSON.stringify(payload)) } catch { /* ignore quota errors */ }
+  }
+
+  const dismissQueueItem = (id: string) => {
+    setDismissedQueueIds(prev => {
+      const next = new Set(prev); next.add(id); persistDismissals(next); return next
+    })
+    setActionQueue(prev => prev.filter(q => q.id !== id))
+  }
+
+  const clearAllQueue = () => {
+    const allIds = new Set([...dismissedQueueIds, ...actionQueue.map(q => q.id)])
+    setDismissedQueueIds(allIds)
+    persistDismissals(allIds)
+    setActionQueue([])
   }
 
   const confirmLifecycle = async () => {
@@ -726,7 +767,7 @@ export default function CoachDashboard() {
                   <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Action Queue</div>
                   <div style={{ fontSize:16, fontWeight:800 }}>What needs your attention right now</div>
                 </div>
-                <button onClick={()=>setActionQueue([])}
+                <button onClick={clearAllQueue}
                   style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   Clear all
                 </button>
@@ -747,7 +788,7 @@ export default function CoachDashboard() {
                     </button>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
                       <div style={{ fontSize:11, fontWeight:800, color:item.color, cursor:'pointer', whiteSpace:'nowrap' as const }} onClick={item.onClick}>{item.action} →</div>
-                      <button onClick={()=>setActionQueue(prev => prev.filter(q => q.id !== item.id))}
+                      <button onClick={()=>dismissQueueItem(item.id)}
                         style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16, lineHeight:1, padding:'0 2px', fontFamily:"'DM Sans',sans-serif" }}>×</button>
                     </div>
                   </div>
