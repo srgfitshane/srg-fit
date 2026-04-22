@@ -181,8 +181,38 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
   const [addModal,   setAddModal]   = useState<string|null>(null) // date string or null
   const [delConfirm, setDelConfirm] = useState<any>(null) // item to delete
   const [reschedDate, setReschedDate] = useState('')      // new date when rescheduling
+  const [clipboard, setClipboard] = useState<{ sessionId: string; title: string; sourceDate: string } | null>(null)
+  const [pasting, setPasting] = useState(false)
 
   useEffect(() => { load() }, [clientId, refreshKey])
+
+  const handlePaste = async (targetDate: string) => {
+    if (!clipboard || pasting) return
+    setPasting(true)
+    try {
+      const res = await fetch('/api/workouts/clone-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_session_id: clipboard.sessionId,
+          target_date: targetDate,
+          target_client_id: clientId,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('Paste failed: ' + (err.error || 'Unknown error'))
+        setPasting(false)
+        return
+      }
+      setClipboard(null)
+      await load()
+    } catch (e: any) {
+      alert('Paste failed: ' + e.message)
+    } finally {
+      setPasting(false)
+    }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -277,6 +307,24 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
           style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 12px', color:t.text, cursor:'pointer', fontSize:16 }}>›</button>
       </div>
 
+      {/* Clipboard banner — shown only when a session has been copied */}
+      {clipboard && (
+        <div style={{ display:'flex', alignItems:'center', gap:10, background:t.tealDim, border:'1px solid '+t.teal+'60', borderRadius:10, padding:'10px 14px', marginBottom:10 }}>
+          <span style={{ fontSize:14 }}>📋</span>
+          <div style={{ flex:1, fontSize:12, fontWeight:700, color:t.teal, lineHeight:1.4 }}>
+            {pasting ? (
+              <>Pasting {clipboard.title}...</>
+            ) : (
+              <>Copied <strong>{clipboard.title}</strong> — tap any day to paste</>
+            )}
+          </div>
+          <button onClick={()=>setClipboard(null)} disabled={pasting}
+            style={{ background:'transparent', border:'1px solid '+t.teal+'40', borderRadius:6, padding:'4px 10px', color:t.teal, fontSize:11, fontWeight:700, cursor:pasting?'not-allowed':'pointer', opacity:pasting?0.5:1 }}>
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Day headers */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
@@ -292,7 +340,11 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
           const dateStr   = d ? toDateStr(d) : ''
           return (
             <div key={i}
-              onClick={() => { if (d) setAddModal(dateStr) }}
+              onClick={() => {
+                if (!d) return
+                if (clipboard) { handlePaste(dateStr); return }
+                setAddModal(dateStr)
+              }}
               style={{ minHeight:56, background:isToday?t.surfaceHigh:t.surface, border:'1px solid '+(isToday?t.teal+'50':t.border), borderRadius:8, padding:'4px 4px', cursor:d?'pointer':'default', opacity:d?1:0.25, position:'relative', overflow:'hidden' }}>
               {d && <>
                 <div style={{ fontSize:11, fontWeight:isToday?900:600, color:isToday?t.teal:t.textDim, marginBottom:3 }}>{d.getDate()}</div>
@@ -389,6 +441,22 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
                 )}
               </div>
             )}
+            {/* Copy to another day — sessions only */}
+            {delConfirm._type==='session' && (
+              <button onClick={()=>{
+                setClipboard({
+                  sessionId: delConfirm.id,
+                  title: delConfirm.title,
+                  sourceDate: delConfirm.scheduled_date,
+                })
+                setDelConfirm(null)
+                setReschedDate('')
+              }}
+                style={{ width:'100%', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:8 }}>
+                📋 Copy to Another Day
+              </button>
+            )}
+
             {/* Log Workout — assigned/in_progress sessions only */}
             {delConfirm._type==='session' && (delConfirm.status==='assigned'||delConfirm.status==='in_progress') && (
               <button onClick={()=>{
