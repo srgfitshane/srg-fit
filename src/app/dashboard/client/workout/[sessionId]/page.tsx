@@ -111,8 +111,6 @@ function defaultSet(): SetData {
   return { reps_completed:'', duration_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false, skipped:false }
 }
 
-const SKIP_REASONS: string[] = [] // kept for type compat — dropdown removed
-
 export default function ActiveWorkoutPage() {
   const supabase = createClient()
   const [videoUploads, setVideoUploads]   = useState<Record<string,string>>({})
@@ -146,7 +144,6 @@ export default function ActiveWorkoutPage() {
   const [previewOpen, setPreviewOpen] = useState<Record<string,boolean>>({})
   // Skip state per exercise
   const [skipOpen, setSkipOpen] = useState<Record<string,boolean>>({})
-  const [skipReason, setSkipReason] = useState<Record<string,string>>({})
   const [skipNote, setSkipNote] = useState<Record<string,string>>({})
   const [skipped, setSkipped] = useState<Record<string,boolean>>({})
   const [swapOpen, setSwapOpen] = useState<Record<string,boolean>>({})
@@ -158,7 +155,6 @@ export default function ActiveWorkoutPage() {
   const [swapSearch, setSwapSearch] = useState<Record<string,string>>({})
   const [aiSwapLoading, setAiSwapLoading] = useState<Record<string,boolean>>({})
   const [aiSwapOptions, setAiSwapOptions] = useState<Record<string,ExerciseLibraryItem[]>>({})
-  const [swapReason, setSwapReason] = useState<Record<string,string>>({})
   const [swapNote, setSwapNote] = useState<Record<string,string>>({})
   const [swapLibrary, setSwapLibrary] = useState<ExerciseLibraryItem[]>([])
   const [addExOpen,      setAddExOpen]      = useState(false)
@@ -651,18 +647,13 @@ ${candidateList}`
   }
 
   async function skipExercise(exId: string) {
-    const reason = skipReason[exId] || ''
     const note = skipNote[exId] || ''
-    if (!reason || !note.trim()) {
-      alert('Please choose a reason and leave a quick note before skipping.')
-      return
-    }
     await supabase.from('session_exercises').update({
-      notes_client: `[SKIPPED] ${reason}: ${note}`,
+      notes_client: note.trim() ? `[SKIPPED] ${note.trim()}` : '[SKIPPED]',
       sets_completed: 0,
       skipped: true,
-      skip_reason: reason,
-      skip_note: note,
+      skip_reason: null,
+      skip_note: note.trim() || null,
       skipped_at: new Date().toISOString(),
     }).eq('id', exId)
     setSkipped(prev => ({ ...prev, [exId]: true }))
@@ -771,12 +762,7 @@ ${candidateList}`
     const replacement = swapLibrary.find(option => option.id === replacementId)
     if (!replacement) return
 
-    const reason = swapReason[exerciseRow.id] || ''
     const note = swapNote[exerciseRow.id] || ''
-    if (!reason) {
-      alert('Pick a swap reason so your coach can see what happened.')
-      return
-    }
 
     const originalExerciseId = exerciseRow.original_exercise_id || exerciseRow.exercise_id || null
     const originalExerciseName = exerciseRow.original_exercise_name || exerciseRow.exercise_name
@@ -787,8 +773,8 @@ ${candidateList}`
       exercise_id: replacement.id,
       exercise_name: replacement.name,
       swap_exercise_id: replacement.id,
-      swap_reason: reason,
-      swap_note: note || null,
+      swap_reason: null,
+      swap_note: note.trim() || null,
       swapped_at: new Date().toISOString(),
       skipped: false,
       skip_reason: null,
@@ -803,8 +789,8 @@ ${candidateList}`
       original_exercise_id: originalExerciseId,
       original_exercise_name: originalExerciseName,
       swap_exercise_id: replacement.id,
-      swap_reason: reason,
-      swap_note: note || null,
+      swap_reason: null,
+      swap_note: note.trim() || null,
       swapped_at: new Date().toISOString(),
       skipped: false,
       exercise: replacement,
@@ -1509,7 +1495,10 @@ ${candidateList}`
                           {skipOpen[ex.id] && !isSkipped && (
                             <div style={{background:t.redDim,border:'1px solid '+t.red+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
                               <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:6}}>Skip this exercise?</div>
-                              <div style={{fontSize:11,color:t.textMuted,marginBottom:10}}>Add any context in your post-workout notes.</div>
+                              <div style={{fontSize:11,color:t.textMuted,marginBottom:10}}>Add a note for your coach if you want — totally optional.</div>
+                              <input value={skipNote[ex.id]||''} onChange={e=>setSkipNote(prev=>({...prev,[ex.id]:e.target.value}))}
+                                placeholder="e.g. shoulder felt off, equipment unavailable..."
+                                style={{width:'100%',background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const}}/>
                               <div className="workout-skip-actions">
                                 <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:false}))}
                                   style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:8,padding:'8px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
