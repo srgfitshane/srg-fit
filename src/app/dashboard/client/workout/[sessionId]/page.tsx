@@ -844,13 +844,31 @@ ${candidateList}`
     }
     // Wipe all logged sets for this session
     await supabase.from('exercise_sets').delete().eq('session_id', sessionId)
-    // Reset all session_exercises back to unlogged state
+    // Reset all session_exercises: unlog, unskip, clear all skip/swap tracking
     await supabase.from('session_exercises').update({
       logged_sets: null,
       client_video_url: null,
       skipped: false,
+      skip_reason: null,
+      skip_note: null,
+      skipped_at: null,
       notes_client: null,
     }).eq('session_id', sessionId)
+    // Revert any swapped exercises back to the original — per-row because each
+    // needs its own original_exercise_id/name to restore from
+    const swappedRows = exercises.filter(e => e.original_exercise_id || e.original_exercise_name)
+    for (const row of swappedRows) {
+      await supabase.from('session_exercises').update({
+        exercise_id: row.original_exercise_id || null,
+        exercise_name: row.original_exercise_name || row.exercise_name,
+        original_exercise_id: null,
+        original_exercise_name: null,
+        swap_exercise_id: null,
+        swap_reason: null,
+        swap_note: null,
+        swapped_at: null,
+      }).eq('id', row.id)
+    }
     // Revert any filled open slots back to unfilled so client can pick again
     // Done per-row because each slot restores its own slot_constraint as the display name
     const filledSlots = exercises.filter(e => e.slot_filled_by_client)
