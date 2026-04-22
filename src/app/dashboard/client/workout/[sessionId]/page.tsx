@@ -1546,6 +1546,12 @@ ${candidateList}`
                                     onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
                                     style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain',marginBottom:8}}/>
                                 )}
+                                {ex.exercise?.description && (
+                                  <div style={{padding:'10px 12px',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,marginBottom:8}}>
+                                    <div style={{fontSize:10,fontWeight:800,color:t.textDim,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>About this movement</div>
+                                    <div style={{fontSize:12,color:t.text,lineHeight:1.6,whiteSpace:'pre-line' as const}}>{ex.exercise.description}</div>
+                                  </div>
+                                )}
                                 {ex.exercise?.cues && (
                                   <div style={{padding:'10px 12px',background:t.orange+'15',border:'1px solid '+t.orange+'30',borderRadius:10,marginBottom:8}}>
                                     <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>📌 Cues</div>
