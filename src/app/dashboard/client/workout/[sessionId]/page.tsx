@@ -844,7 +844,12 @@ ${candidateList}`
     }
     // Wipe all logged sets for this session
     await supabase.from('exercise_sets').delete().eq('session_id', sessionId)
-    // Reset all session_exercises: unlog, unskip, clear all skip/swap tracking
+    // Delete any exercises the client added mid-workout — they weren't part
+    // of the original prescription, so Clear should remove them entirely
+    await supabase.from('session_exercises').delete()
+      .eq('session_id', sessionId)
+      .eq('added_by_client', true)
+    // Reset all remaining session_exercises: unlog, unskip, clear all skip/swap tracking
     await supabase.from('session_exercises').update({
       logged_sets: null,
       client_video_url: null,
