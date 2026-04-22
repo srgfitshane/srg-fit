@@ -865,6 +865,17 @@ ${candidateList}`
       skipped: false,
       notes_client: null,
     }).eq('session_id', sessionId)
+    // Revert any filled open slots back to unfilled so client can pick again
+    // Done per-row because each slot restores its own slot_constraint as the display name
+    const filledSlots = exercises.filter(e => e.slot_filled_by_client)
+    for (const slot of filledSlots) {
+      await supabase.from('session_exercises').update({
+        exercise_id: null,
+        exercise_name: slot.slot_constraint || "Client's Choice",
+        is_open_slot: true,
+        slot_filled_by_client: false,
+      }).eq('id', slot.id)
+    }
     // Reset session back to assigned
     await supabase.from('workout_sessions').update({
       status: 'assigned',
