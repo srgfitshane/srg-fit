@@ -226,6 +226,7 @@ type PersonalRecordSummary = {
   weight_pr?: number | null
   rep_pr_reps?: number | null
   rep_pr_weight?: number | null
+  rep_count?: number | null
   pr_type?: string | null
   shared_to_community?: boolean | null
   logged_date?: string | null
@@ -862,7 +863,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     const isRepPR = pr.pr_type === 'rep'
     const body = isRepPR
       ? `💪 Rep PR! Hit ${pr.rep_pr_weight} lbs x ${pr.rep_pr_reps} reps on ${name}!`
-      : `🏆 New PR! Just lifted ${pr.weight_pr} lbs on ${name}!`
+      : `🏆 New PR! Just lifted ${pr.weight_pr} lbs${pr.rep_count ? ` x ${pr.rep_count} reps` : ''} on ${name}!`
     const { data: post } = await supabase.from('community_posts').insert({
       author_id: profile.id,
       author_role: 'client',
@@ -1218,7 +1219,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       <div style={{ fontSize:11, color:t.textMuted }}>
                         {pr.pr_type === 'rep'
                           ? `${pr.rep_pr_weight} lbs × ${pr.rep_pr_reps} reps`
-                          : `${pr.weight_pr} lbs`}
+                          : `${pr.weight_pr} lbs${pr.rep_count ? ` x ${pr.rep_count} reps` : ''}`}
                       </div>
                     </div>
                     {pr.shared_to_community

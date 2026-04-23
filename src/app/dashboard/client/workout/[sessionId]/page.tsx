@@ -94,6 +94,20 @@ type WorkoutCompleteProps = {
   sessionId: string
   supabase: ReturnType<typeof createClient>
   returnUrl: string
+  summary: SessionSummary | null
+}
+
+type SessionPR = {
+  exercise_name: string
+  pr_type: 'weight' | 'rep'
+  weight: number
+  reps: number
+}
+
+type SessionSummary = {
+  totalWeightMoved: number
+  totalLoggedSets: number
+  prs: SessionPR[]
 }
 
 interface LoggedSetRow {
@@ -129,11 +143,16 @@ export default function ActiveWorkoutPage() {
   const [prevSets, setPrevSets] = useState<Record<string, {reps:number|null, weight:number|null, unit:string}[]>>({})
   const [activeExIdx, setActiveExIdx] = useState(0)
   const [expandedExId, setExpandedExId] = useState<string|null>(null) // which exercise card is open
+  // Refs to each exercise card so we can scroll the newly-opened one into view.
+  // Without this the browser keeps the previous scroll position and the
+  // expanded content ends up off-screen below the fold.
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [restTimer, setRestTimer] = useState<number|null>(null)
   const [restActive, setRestActive] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [phase, setPhase] = useState<'warmup'|'workout'|'complete'>('workout')
   const [finishForm, setFinishForm] = useState({ session_rpe:'', energy_level:'3', mood:'good', notes_client:'' })
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isReopened, setIsReopened] = useState(false)
@@ -533,6 +552,19 @@ ${candidateList}`
     const timeoutId = setTimeout(() => { void loadSession() }, 0)
     return () => clearTimeout(timeoutId)
   }, [loadSession])
+
+  // Scroll the expanded exercise card into view whenever it changes.
+  // The card is tall (prescription + sets + actions) so we align to top with
+  // a small margin so the card header is just below the sticky top bar.
+  useEffect(() => {
+    if (!expandedExId) return
+    const el = cardRefs.current[expandedExId]
+    if (!el) return
+    // requestAnimationFrame lets the DOM finish expanding before we measure
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [expandedExId])
 
   function updateSet(exId: string, setIdx: number, field: keyof SetData, val: SetData[keyof SetData]) {
     setSetData(prev => ({
@@ -985,19 +1017,56 @@ ${candidateList}`
     }
 
     setSaving(false)
-    setPhase('complete')
 
-    // Detect PRs and milestones fire-and-forget
+    // Build the post-workout summary BEFORE switching to the complete phase so
+    // the summary screen can render it immediately instead of racing the DB.
+    // Total weight moved + PR detection both need the just-saved session state,
+    // so this happens after the status update above.
     if (session?.client_id) {
       const today = new Date()
       const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-      detectPRsAndMilestones(session.client_id, todayStr).catch(() => {})
+      try {
+        const [totalWeight, prs] = await Promise.all([
+          computeTotalWeightMoved(),
+          detectPRsAndMilestones(session.client_id, todayStr),
+        ])
+        setSessionSummary({
+          totalWeightMoved: totalWeight,
+          totalLoggedSets,
+          prs,
+        })
+      } catch (err) {
+        // If the summary fetch fails we still want the user to reach the
+        // complete screen — they just won't see the fancy stats.
+        console.error('Session summary build failed:', err)
+        setSessionSummary({ totalWeightMoved: 0, totalLoggedSets, prs: [] })
+      }
     }
+
+    setPhase('complete')
+  }
+
+  // Sum weight_value x reps_completed across all logged non-warmup sets in
+  // this session. Warmup sets are excluded because they don't count as "moved."
+  async function computeTotalWeightMoved(): Promise<number> {
+    const { data, error } = await supabase
+      .from('exercise_sets')
+      .select('weight_value, reps_completed')
+      .eq('session_id', sessionId)
+      .eq('is_warmup', false)
+      .not('weight_value', 'is', null)
+    if (error || !data) return 0
+    return data.reduce((sum, s) => {
+      const w = Number(s.weight_value) || 0
+      const r = Number(s.reps_completed) || 0
+      return sum + w * r
+    }, 0)
   }
 
 
   // Detect PRs and milestones after workout completion
-  async function detectPRsAndMilestones(clientId: string, today: string) {
+  async function detectPRsAndMilestones(clientId: string, today: string): Promise<SessionPR[]> {
+    const sessionPRs: SessionPR[] = []
     try {
       // 1. Get all sets from this session with exercise info
       const { data: sessionExs } = await supabase
@@ -1005,7 +1074,7 @@ ${candidateList}`
         .select('id, exercise_id, exercise_name')
         .eq('session_id', sessionId)
 
-      if (!sessionExs?.length) return
+      if (!sessionExs?.length) return sessionPRs
 
       const newMilestones: string[] = []
 
@@ -1069,6 +1138,7 @@ ${candidateList}`
             logged_date: today,
           }, { onConflict: 'client_id,exercise_id' })
 
+          sessionPRs.push({ exercise_name: exerciseName, pr_type: 'weight', weight: bestWeight, reps: bestReps })
           newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
 
           // Check if this PR completes a weight_lifted goal
@@ -1103,6 +1173,7 @@ ${candidateList}`
             logged_date: today,
           }, { onConflict: 'client_id,exercise_id' })
 
+          sessionPRs.push({ exercise_name: exerciseName, pr_type: 'rep', weight: bestWeight, reps: bestReps })
           newMilestones.push(`💪 Rep PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
         }
       }
@@ -1171,6 +1242,7 @@ ${candidateList}`
     } catch (e) {
       console.error('PR/milestone detection error:', e)
     }
+    return sessionPRs
   }
 
   const fmtTime = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
@@ -1200,7 +1272,7 @@ ${candidateList}`
     </div>
   )
 
-  if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase} returnUrl={returnUrl}/>
+  if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase} returnUrl={returnUrl} summary={sessionSummary}/>
 
   // ── Re-opened completed workout ──────────────────────────────────────────
   if (isReopened) {
@@ -1453,7 +1525,7 @@ ${candidateList}`
                   return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
+                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
@@ -1976,25 +2048,17 @@ ${candidateList}`
   )
 }
 
-function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, returnUrl }: WorkoutCompleteProps) {
-  const fmtTime = (s: number) => `${Math.floor(s/60)}m ${s%60}s`
-  const [countdown, setCountdown] = useState(4)
+function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, returnUrl, summary }: WorkoutCompleteProps) {
+  const fmtTime = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}m ${sec}s`
+  }
+  const fmtWeight = (n: number) => {
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}k lbs`
+    return `${Math.round(n)} lbs`
+  }
   const [cancelled, setCancelled] = useState(false)
-
-  useEffect(() => {
-    if (cancelled) return
-    const interval = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) {
-          clearInterval(interval)
-          router.push(returnUrl)
-          return 0
-        }
-        return c - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [cancelled, router])
 
   const goBack = async () => {
     setCancelled(true)
@@ -2010,26 +2074,65 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, ret
     }
     router.back()
   }
+
   return (
-    <>      <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'32px',textAlign:'center'}}>
-        <div style={{fontSize:64,marginBottom:16}}>🎉</div>
-        <h1 style={{fontSize:28,fontWeight:900,background:`linear-gradient(135deg,${t.teal},${t.accent})`,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:8}}>
+    <>
+      <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",display:'flex',flexDirection:'column',alignItems:'center',padding:'32px 20px',textAlign:'center'}}>
+        <div style={{fontSize:64,marginBottom:16,marginTop:24}}>🏆</div>
+        <h1 style={{fontSize:28,fontWeight:900,background:`linear-gradient(135deg,${t.teal},${t.accent})`,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:4}}>
           Workout Complete!
         </h1>
-        <p style={{color:t.textDim,fontSize:16,marginBottom:8}}>{session?.title}</p>
-        <p style={{fontSize:24,fontWeight:800,color:t.orange,marginBottom:32}}>⏱ {fmtTime(elapsed)}</p>
-        <p style={{fontSize:13,color:t.textDim,marginBottom:32,maxWidth:280,lineHeight:1.6}}>
-          Crushed it. Your coach will review this session and leave feedback. Be Kind to Yourself & Stay Awesome 💪
+        <p style={{color:t.textDim,fontSize:15,marginBottom:28}}>{session?.title}</p>
+
+        {/* Stats row — time + weight moved */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,width:'100%',maxWidth:360,marginBottom:20}}>
+          <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'16px 12px'}}>
+            <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Time</div>
+            <div style={{fontSize:22,fontWeight:800,color:t.orange}}>{fmtTime(elapsed)}</div>
+          </div>
+          <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:14,padding:'16px 12px'}}>
+            <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:6}}>Weight Moved</div>
+            <div style={{fontSize:22,fontWeight:800,color:t.teal}}>
+              {summary ? fmtWeight(summary.totalWeightMoved) : '—'}
+            </div>
+          </div>
+        </div>
+
+        {/* PRs hit this session */}
+        {summary && summary.prs.length > 0 && (
+          <div style={{width:'100%',maxWidth:360,marginBottom:20}}>
+            <div style={{fontSize:11,fontWeight:800,color:t.yellow,textTransform:'uppercase' as const,letterSpacing:'0.08em',marginBottom:10,textAlign:'left' as const}}>
+              🏆 Personal Records
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {summary.prs.map((pr, idx) => (
+                <div key={idx} style={{background:`linear-gradient(135deg,${t.yellow}18,${t.orange}0a)`,border:`1px solid ${t.yellow}35`,borderRadius:12,padding:'12px 14px',textAlign:'left' as const}}>
+                  <div style={{fontSize:10,fontWeight:800,color:t.yellow,textTransform:'uppercase' as const,letterSpacing:'0.08em',marginBottom:3}}>
+                    {pr.pr_type === 'rep' ? 'Rep PR' : 'New PR'}
+                  </div>
+                  <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:2}}>{pr.exercise_name}</div>
+                  <div style={{fontSize:12,color:t.textDim}}>{pr.weight} lbs x {pr.reps} reps</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Closing message */}
+        <p style={{fontSize:14,color:t.textDim,marginTop:4,marginBottom:28,maxWidth:300,lineHeight:1.6}}>
+          You got this 💪 Be kind to yourself and stay awesome.
         </p>
+
         <button onClick={()=>router.push(returnUrl)}
-          style={{background:t.accent,border:'none',borderRadius:14,padding:'14px 32px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
-          Back to Dashboard {!cancelled && countdown > 0 ? `(${countdown})` : ''}
+          style={{background:t.accent,border:'none',borderRadius:14,padding:'14px 32px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12,width:'100%',maxWidth:360}}>
+          Back to Dashboard
         </button>
-        <button onClick={goBack}
-          style={{background:'none',border:'1px solid '+t.border,borderRadius:14,padding:'10px 24px',fontSize:13,fontWeight:600,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+        <button onClick={goBack} disabled={cancelled}
+          style={{background:'none',border:'1px solid '+t.border,borderRadius:14,padding:'10px 24px',fontSize:13,fontWeight:600,color:t.textMuted,cursor:cancelled?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
           Wait — I&apos;m not done yet
         </button>
       </div>
     </>
   )
 }
+
