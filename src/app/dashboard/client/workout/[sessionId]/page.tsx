@@ -851,7 +851,7 @@ ${candidateList}`
       .eq('added_by_client', true)
     // Reset all remaining session_exercises: unlog, unskip, clear all skip/swap tracking
     await supabase.from('session_exercises').update({
-      logged_sets: null,
+      sets_completed: 0,
       client_video_url: null,
       skipped: false,
       skip_reason: null,
