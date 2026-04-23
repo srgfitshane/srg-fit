@@ -637,18 +637,19 @@ ${candidateList}`
       [exId]: prev[exId].map((s,i) => i===setIdx ? {...s, skipped:true, logged:true} : s)
     }))
     // Save to DB with skipped=true
-    await supabase.from('exercise_sets').insert({
+    const { error } = await supabase.from('exercise_sets').insert({
       session_exercise_id: exId,
       session_id: sessionId,
       set_number: setIdx + 1,
       skipped: true,
       logged_at: new Date().toISOString(),
     })
+    if (error) alert('Could not save skipped set: ' + error.message)
   }
 
   async function skipExercise(exId: string) {
     const note = skipNote[exId] || ''
-    await supabase.from('session_exercises').update({
+    const { error } = await supabase.from('session_exercises').update({
       notes_client: note.trim() ? `[SKIPPED] ${note.trim()}` : '[SKIPPED]',
       sets_completed: 0,
       skipped: true,
@@ -656,6 +657,10 @@ ${candidateList}`
       skip_note: note.trim() || null,
       skipped_at: new Date().toISOString(),
     }).eq('id', exId)
+    if (error) {
+      alert('Could not skip exercise: ' + error.message)
+      return
+    }
     setSkipped(prev => ({ ...prev, [exId]: true }))
     setSkipOpen(prev => ({ ...prev, [exId]: false }))
     // Auto-advance to next non-skipped exercise
@@ -669,7 +674,7 @@ ${candidateList}`
     const ex = swapLibrary.find(e => e.id === exerciseId)
     if (!ex) return
     const nextOrder = exercises.length
-    const { data: newRow } = await supabase.from('session_exercises').insert({
+    const { data: newRow, error } = await supabase.from('session_exercises').insert({
       session_id: sessionId,
       exercise_id: ex.id,
       exercise_name: ex.name,
@@ -678,7 +683,10 @@ ${candidateList}`
       reps_prescribed: 10,
       added_by_client: true,
     }).select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)').single()
-    if (!newRow) return
+    if (error || !newRow) {
+      if (error) alert('Could not add exercise: ' + error.message)
+      return
+    }
     setExercises(prev => [...prev, { ...newRow, exercise_name: ex.name }])
     setSetData(prev => ({ ...prev, [newRow.id]: [defaultSet()] }))
     setAddExOpen(false)
@@ -690,12 +698,16 @@ ${candidateList}`
 
   // ── Fill open slot ───────────────────────────────────────────────────────
   async function fillSlot(exId: string, exerciseName: string, exerciseId?: string | null) {
-    await supabase.from('session_exercises').update({
+    const { error } = await supabase.from('session_exercises').update({
       exercise_name: exerciseName,
       exercise_id: exerciseId || null,
       is_open_slot: false,
       slot_filled_by_client: true,
     }).eq('id', exId)
+    if (error) {
+      alert('Could not fill slot: ' + error.message)
+      return
+    }
 
     // Fetch exercise data from library if picked from library
     let exerciseData = null
@@ -767,7 +779,7 @@ ${candidateList}`
     const originalExerciseId = exerciseRow.original_exercise_id || exerciseRow.exercise_id || null
     const originalExerciseName = exerciseRow.original_exercise_name || exerciseRow.exercise_name
 
-    await supabase.from('session_exercises').update({
+    const { error } = await supabase.from('session_exercises').update({
       original_exercise_id: originalExerciseId,
       original_exercise_name: originalExerciseName,
       exercise_id: replacement.id,
@@ -781,6 +793,11 @@ ${candidateList}`
       skip_note: null,
       skipped_at: null,
     }).eq('id', exerciseRow.id)
+
+    if (error) {
+      alert('Could not swap exercise: ' + error.message)
+      return
+    }
 
     setExercises(prev => prev.map(ex => ex.id === exerciseRow.id ? {
       ...ex,
@@ -818,79 +835,90 @@ ${candidateList}`
       const { data: signedData } = await supabase.storage.from('form-checks').createSignedUrl(path, 60 * 60)
       const signedUrl = signedData?.signedUrl || null
       setVideoUploads(prev => ({ ...prev, [exId]: signedUrl || path }))
-      await supabase.from('session_exercises').update({ client_video_url: path }).eq('id', exId)
+      const { error: updateErr } = await supabase.from('session_exercises').update({ client_video_url: path }).eq('id', exId)
+      if (updateErr) alert('Video uploaded but could not link it to the exercise: ' + updateErr.message)
     }
     setVideoUploading(prev => ({ ...prev, [exId]: false }))
   }
 
   async function removeFormVideo(exId: string) {
-    await supabase.from('session_exercises').update({ client_video_url: null }).eq('id', exId)
+    const { error } = await supabase.from('session_exercises').update({ client_video_url: null }).eq('id', exId)
+    if (error) {
+      alert('Could not remove video: ' + error.message)
+      return
+    }
     setVideoUploads(prev => { const next = { ...prev }; delete next[exId]; return next })
   }
 
   async function cancelWorkout() {
-    // Delete any uploaded form check videos from storage
-    const videoKeys = Object.keys(videoUploads)
-    if (videoKeys.length > 0) {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const paths = exercises
-          .filter(e => e.client_video_url)
-          .map(e => e.client_video_url as string)
-        if (paths.length > 0) {
-          await supabase.storage.from('form-checks').remove(paths)
+    try {
+      // Delete any uploaded form check videos from storage
+      const videoKeys = Object.keys(videoUploads)
+      if (videoKeys.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const paths = exercises
+            .filter(e => e.client_video_url)
+            .map(e => e.client_video_url as string)
+          if (paths.length > 0) {
+            await supabase.storage.from('form-checks').remove(paths)
+          }
         }
       }
-    }
-    // Wipe all logged sets for this session
-    await supabase.from('exercise_sets').delete().eq('session_id', sessionId)
-    // Delete any exercises the client added mid-workout — they weren't part
-    // of the original prescription, so Clear should remove them entirely
-    await supabase.from('session_exercises').delete()
-      .eq('session_id', sessionId)
-      .eq('added_by_client', true)
-    // Reset all remaining session_exercises: unlog, unskip, clear all skip/swap tracking
-    await supabase.from('session_exercises').update({
-      sets_completed: 0,
-      client_video_url: null,
-      skipped: false,
-      skip_reason: null,
-      skip_note: null,
-      skipped_at: null,
-      notes_client: null,
-    }).eq('session_id', sessionId)
-    // Revert any swapped exercises back to the original — per-row because each
-    // needs its own original_exercise_id/name to restore from
-    const swappedRows = exercises.filter(e => e.original_exercise_id || e.original_exercise_name)
-    for (const row of swappedRows) {
+      // Wipe all logged sets for this session
+      await supabase.from('exercise_sets').delete().eq('session_id', sessionId).throwOnError()
+      // Delete any exercises the client added mid-workout — they weren't part
+      // of the original prescription, so Clear should remove them entirely
+      await supabase.from('session_exercises').delete()
+        .eq('session_id', sessionId)
+        .eq('added_by_client', true)
+        .throwOnError()
+      // Reset all remaining session_exercises: unlog, unskip, clear all skip/swap tracking
       await supabase.from('session_exercises').update({
-        exercise_id: row.original_exercise_id || null,
-        exercise_name: row.original_exercise_name || row.exercise_name,
-        original_exercise_id: null,
-        original_exercise_name: null,
-        swap_exercise_id: null,
-        swap_reason: null,
-        swap_note: null,
-        swapped_at: null,
-      }).eq('id', row.id)
+        sets_completed: 0,
+        client_video_url: null,
+        skipped: false,
+        skip_reason: null,
+        skip_note: null,
+        skipped_at: null,
+        notes_client: null,
+      }).eq('session_id', sessionId).throwOnError()
+      // Revert any swapped exercises back to the original — per-row because each
+      // needs its own original_exercise_id/name to restore from
+      const swappedRows = exercises.filter(e => e.original_exercise_id || e.original_exercise_name)
+      for (const row of swappedRows) {
+        await supabase.from('session_exercises').update({
+          exercise_id: row.original_exercise_id || null,
+          exercise_name: row.original_exercise_name || row.exercise_name,
+          original_exercise_id: null,
+          original_exercise_name: null,
+          swap_exercise_id: null,
+          swap_reason: null,
+          swap_note: null,
+          swapped_at: null,
+        }).eq('id', row.id).throwOnError()
+      }
+      // Revert any filled open slots back to unfilled so client can pick again
+      // Done per-row because each slot restores its own slot_constraint as the display name
+      const filledSlots = exercises.filter(e => e.slot_filled_by_client)
+      for (const slot of filledSlots) {
+        await supabase.from('session_exercises').update({
+          exercise_id: null,
+          exercise_name: slot.slot_constraint || "Client's Choice",
+          is_open_slot: true,
+          slot_filled_by_client: false,
+        }).eq('id', slot.id).throwOnError()
+      }
+      // Reset session back to assigned
+      await supabase.from('workout_sessions').update({
+        status: 'assigned',
+        started_at: null,
+      }).eq('id', sessionId).throwOnError()
+      router.push(returnUrl)
+    } catch (err: any) {
+      console.error('cancelWorkout failed:', err)
+      alert('Could not clear the workout: ' + (err?.message || 'Unknown error') + '. Please try again.')
     }
-    // Revert any filled open slots back to unfilled so client can pick again
-    // Done per-row because each slot restores its own slot_constraint as the display name
-    const filledSlots = exercises.filter(e => e.slot_filled_by_client)
-    for (const slot of filledSlots) {
-      await supabase.from('session_exercises').update({
-        exercise_id: null,
-        exercise_name: slot.slot_constraint || "Client's Choice",
-        is_open_slot: true,
-        slot_filled_by_client: false,
-      }).eq('id', slot.id)
-    }
-    // Reset session back to assigned
-    await supabase.from('workout_sessions').update({
-      status: 'assigned',
-      started_at: null,
-    }).eq('id', sessionId)
-    router.push(returnUrl)
   }
 
   async function saveAndExit() {
@@ -899,10 +927,14 @@ ${candidateList}`
   }
 
   async function reopenWorkout() {
-    await supabase.from('workout_sessions').update({
+    const { error } = await supabase.from('workout_sessions').update({
       status: 'in_progress',
       completed_at: null,
     }).eq('id', sessionId)
+    if (error) {
+      alert('Could not reopen workout: ' + error.message)
+      return
+    }
     setIsReopened(false)
   }
 
@@ -1967,10 +1999,15 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, ret
   const goBack = async () => {
     setCancelled(true)
     // Revert session back to in_progress so they can finish
-    await supabase.from('workout_sessions').update({
+    const { error } = await supabase.from('workout_sessions').update({
       status: 'in_progress',
       completed_at: null,
     }).eq('id', sessionId)
+    if (error) {
+      alert('Could not reopen workout: ' + error.message)
+      setCancelled(false)
+      return
+    }
     router.back()
   }
   return (
