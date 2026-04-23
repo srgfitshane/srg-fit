@@ -250,7 +250,7 @@ export default function ClientDetail() {
   const assignForm = async () => {
     if (!assignFormId || !coachId) return
     setAssigning(true)
-    await supabase.from('client_form_assignments').insert({
+    const { error } = await supabase.from('client_form_assignments').insert({
       coach_id: coachId,
       client_id: clientId,
       form_id: assignFormId,
@@ -258,6 +258,7 @@ export default function ClientDetail() {
       status: 'pending',
     })
     setAssigning(false)
+    if (error) { alert('Could not assign form: ' + error.message); return }
     setAssignedDone(true)
     setTimeout(() => { setShowAssignForm(false); setAssignedDone(false); setAssignFormId(''); setAssignNote('') }, 1800)
   }
@@ -277,17 +278,19 @@ export default function ClientDetail() {
         .limit(1)
         .single()
       if (inv) {
-        await supabase.from('client_invites').update({
+        const { error } = await supabase.from('client_invites').update({
           status: 'pending',
           expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString()
         }).eq('id', inv.id)
+        if (error) { setResending(false); alert('Could not refresh invite: ' + error.message); return }
         await supabase.functions.invoke('send-invite-email', { body: { invite_id: inv.id } })
       } else {
         // Create a fresh invite if none found
-        const { data: newInv } = await supabase.from('client_invites').insert({
+        const { data: newInv, error } = await supabase.from('client_invites').insert({
           coach_id: coachId, email, full_name: client?.profile?.full_name
         }).select().single()
-        if (newInv) await supabase.functions.invoke('send-invite-email', { body: { invite_id: newInv.id } })
+        if (error || !newInv) { setResending(false); alert('Could not create invite: ' + (error?.message || 'unknown error')); return }
+        await supabase.functions.invoke('send-invite-email', { body: { invite_id: newInv.id } })
       }
     }
     setResending(false)
@@ -297,33 +300,39 @@ export default function ClientDetail() {
 
   const saveAndBack = async () => {
     if (coachNotes.trim()) {
-      await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId)
+      const { error } = await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId)
+      if (error) { alert('Could not save notes: ' + error.message); return }
     }
     router.push('/dashboard/coach')
   }
 
   const handleFlag = async () => {
-    await supabase.from('clients').update({ flagged: true, flag_note: flagNote }).eq('id', clientId)
+    const { error } = await supabase.from('clients').update({ flagged: true, flag_note: flagNote }).eq('id', clientId)
+    if (error) { alert('Could not flag client: ' + error.message); return }
     setClient((prev:any) => ({ ...prev, flagged: true, flag_note: flagNote }))
     setShowFlag(false)
   }
 
   const handleUnflag = async () => {
-    await supabase.from('clients').update({ flagged: false, flag_note: null }).eq('id', clientId)
+    const { error } = await supabase.from('clients').update({ flagged: false, flag_note: null }).eq('id', clientId)
+    if (error) { alert('Could not unflag client: ' + error.message); return }
     setClient((prev:any) => ({ ...prev, flagged: false, flag_note: null }))
   }
 
   const handleArchive = async () => {
     setActioning(true)
-    await supabase.from('clients').update({ active: false }).eq('id', clientId)
+    const { error } = await supabase.from('clients').update({ active: false }).eq('id', clientId)
+    if (error) { setActioning(false); alert('Could not archive client: ' + error.message); return }
     router.push('/dashboard/coach')
   }
 
   const handleDelete = async () => {
     setActioning(true)
     // Deactivate habits, then remove client record (keeps auth user + profile intact)
-    await supabase.from('habits').update({ active: false }).eq('client_id', clientId)
-    await supabase.from('clients').delete().eq('id', clientId)
+    const { error: habitsErr } = await supabase.from('habits').update({ active: false }).eq('client_id', clientId)
+    if (habitsErr) { setActioning(false); alert('Could not deactivate habits: ' + habitsErr.message); return }
+    const { error: clientErr } = await supabase.from('clients').delete().eq('id', clientId)
+    if (clientErr) { setActioning(false); alert('Could not delete client: ' + clientErr.message); return }
     router.push('/dashboard/coach')
   }
 
@@ -388,7 +397,8 @@ export default function ClientDetail() {
           {client.training_type === 'in_person' && (
             <button onClick={async () => {
               if (!confirm('Send this client an invite to create their app account? They will be upgraded to Hybrid.')) return
-              await supabase.from('clients').update({ training_type: 'hybrid', client_type: 'online' }).eq('id', clientId)
+              const { error } = await supabase.from('clients').update({ training_type: 'hybrid', client_type: 'online' }).eq('id', clientId)
+              if (error) { alert('Could not upgrade client type: ' + error.message); return }
               setTrainingType('hybrid')
               await resendInvite()
             }}
@@ -488,7 +498,11 @@ export default function ClientDetail() {
                   rows={4}
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box', marginBottom:10, colorScheme:'dark' }}
                 />
-                <button onClick={async()=>{ await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId); setNotesSaved(true) }}
+                <button onClick={async()=>{
+                    const { error } = await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId)
+                    if (error) { alert('Could not save notes: ' + error.message); return }
+                    setNotesSaved(true)
+                  }}
                   style={{ background:coachNotes.trim()?t.orange:'transparent', border:`1px solid ${coachNotes.trim()?t.orange:t.border}`, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:coachNotes.trim()?'#000':t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   Save Notes
                 </button>
@@ -646,7 +660,8 @@ export default function ClientDetail() {
                       <option value="in_person">🏋️ In-Person</option>
                     </select>
                     <button onClick={async () => {
-                      await supabase.from('clients').update({ training_type: trainingType }).eq('id', clientId)
+                      const { error } = await supabase.from('clients').update({ training_type: trainingType }).eq('id', clientId)
+                      if (error) { alert('Could not save training type: ' + error.message); return }
                       setTrainingTypeSaved(true)
                       setTimeout(() => setTrainingTypeSaved(false), 2000)
                     }}
@@ -669,7 +684,8 @@ export default function ClientDetail() {
                       <option value="prefer_not_to_say">Prefer not to say</option>
                     </select>
                     <button onClick={async () => {
-                      await supabase.from('clients').update({ gender: clientGender || null }).eq('id', clientId)
+                      const { error } = await supabase.from('clients').update({ gender: clientGender || null }).eq('id', clientId)
+                      if (error) { alert('Could not save gender: ' + error.message); return }
                       setGenderSaved(true)
                       setTimeout(() => setGenderSaved(false), 2000)
                     }}
@@ -684,7 +700,11 @@ export default function ClientDetail() {
                   value={coachNotes}
                   onChange={e=>{ setCoachNotes(e.target.value); setNotesSaved(false) }}
                   style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.6 }} />
-                <button onClick={async ()=>{ await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId); setNotesSaved(true); setTimeout(()=>setNotesSaved(false),2000) }}
+                <button onClick={async ()=>{
+                    const { error } = await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId)
+                    if (error) { alert('Could not save notes: ' + error.message); return }
+                    setNotesSaved(true); setTimeout(()=>setNotesSaved(false),2000)
+                  }}
                   style={{ marginTop:10, background:notesSaved?t.green:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
                   {notesSaved ? '✓ Saved!' : 'Save Note'}
                 </button>
@@ -707,7 +727,11 @@ export default function ClientDetail() {
                     <div onClick={async () => {
                       const next = { ...perms, [key]: !perms[key] }
                       setPerms(next)
-                      await supabase.from('clients').update({ [key]: next[key] }).eq('id', clientId)
+                      const { error } = await supabase.from('clients').update({ [key]: next[key] }).eq('id', clientId)
+                      if (error) {
+                        alert('Could not save toggle: ' + error.message)
+                        setPerms(perms) // rollback
+                      }
                     }} style={{ width:44, height:24, borderRadius:12, background: perms[key] ? t.teal : t.surfaceHigh, border:'1px solid '+(perms[key] ? t.teal : t.border), cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
                       <div style={{ position:'absolute', top:3, left: perms[key] ? 22 : 3, width:16, height:16, borderRadius:8, background: perms[key] ? '#000' : t.textMuted, transition:'left 0.2s' }}/>
                     </div>
@@ -746,16 +770,17 @@ export default function ClientDetail() {
                       const [h, m] = scheduleForm.send_time.split(':')
                       next.setHours(+h, +m, 0, 0)
                       if (checkinSchedule) {
-                        await supabase.from('check_in_schedules').update({
+                        const { error } = await supabase.from('check_in_schedules').update({
                           send_day:  scheduleForm.send_day,
                           send_time: scheduleForm.send_time,
                           active:    scheduleForm.active,
                           form_id:   scheduleForm.form_id || null,
                           next_send_at: next.toISOString(),
                         }).eq('id', checkinSchedule.id)
+                        if (error) { setScheduleSaving(false); alert('Could not save schedule: ' + error.message); return }
                         setCheckinSchedule((p:any) => ({ ...p, ...scheduleForm, next_send_at: next.toISOString() }))
                       } else {
-                        const { data: newSched } = await supabase.from('check_in_schedules').insert({
+                        const { data: newSched, error } = await supabase.from('check_in_schedules').insert({
                           coach_id: coachId, client_id: clientId,
                           send_day:  scheduleForm.send_day,
                           send_time: scheduleForm.send_time,
@@ -764,6 +789,7 @@ export default function ClientDetail() {
                           frequency: 'weekly',
                           next_send_at: next.toISOString(),
                         }).select().single()
+                        if (error || !newSched) { setScheduleSaving(false); alert('Could not create schedule: ' + (error?.message || 'unknown error')); return }
                         setCheckinSchedule(newSched)
                       }
                       setScheduleSaving(false)
@@ -848,14 +874,16 @@ export default function ClientDetail() {
                         ciFormId = ciForm?.id
                       }
                       if (ciFormId) {
-                        const { data: newAssign } = await supabase.from('client_form_assignments').insert({
+                        const { data: newAssign, error } = await supabase.from('client_form_assignments').insert({
                           coach_id: coachId, client_id: clientId,
                           form_id: ciFormId,
                           checkin_schedule_id: checkinSchedule.id,
                           status: 'pending',
                           note: 'Sent manually by coach',
                         }).select().single()
-                        if (newAssign) {
+                        if (error || !newAssign) {
+                          alert('Could not send check-in: ' + (error?.message || 'unknown error'))
+                        } else {
                           setCheckinAssignments(p => [newAssign, ...p])
                           // Push notification to client
                           const clientProfile = client?.profile_id
@@ -961,10 +989,11 @@ export default function ClientDetail() {
                               <button disabled={savingResponse || !responseText.trim()}
                                 onClick={async () => {
                                   setSavingResponse(true)
-                                  await supabase.from('client_form_assignments').update({
+                                  const { error } = await supabase.from('client_form_assignments').update({
                                     coach_response: responseText,
                                     coach_responded_at: new Date().toISOString(),
                                   }).eq('id', a.id)
+                                  if (error) { setSavingResponse(false); alert('Could not send response: ' + error.message); return }
                                   setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: responseText } : x))
                                   setRespondingTo(null); setResponseText(''); setSavingResponse(false)
                                 }}
@@ -1312,10 +1341,12 @@ export default function ClientDetail() {
                           is_active: true,
                         }
                         if (nutritionPlan) {
-                          await supabase.from('nutrition_plans').update(payload).eq('id', nutritionPlan.id)
+                          const { error } = await supabase.from('nutrition_plans').update(payload).eq('id', nutritionPlan.id)
+                          if (error) { setNutritionSaving(false); alert('Could not save nutrition plan: ' + error.message); return }
                           setNutritionPlan({ ...nutritionPlan, ...payload })
                         } else {
-                          const { data: newPlan } = await supabase.from('nutrition_plans').insert(payload).select().single()
+                          const { data: newPlan, error } = await supabase.from('nutrition_plans').insert(payload).select().single()
+                          if (error || !newPlan) { setNutritionSaving(false); alert('Could not create nutrition plan: ' + (error?.message || 'unknown error')); return }
                           setNutritionPlan(newPlan)
                         }
                         setNutritionSaving(false)
@@ -1543,9 +1574,10 @@ export default function ClientDetail() {
                             Cancel
                           </button>
                           <button disabled={!zoomLink.trim()} onClick={async()=>{
-                            await supabase.from('call_requests').update({
+                            const { error } = await supabase.from('call_requests').update({
                               status:'approved', zoom_link: zoomLink.trim(), updated_at: new Date().toISOString()
                             }).eq('id', req.id)
+                            if (error) { alert('Could not approve call request: ' + error.message); return }
                             setCallRequests(p=>p.filter(r=>r.id!==req.id))
                             setApprovingCall(null); setZoomLink('')
                           }}
@@ -1557,7 +1589,8 @@ export default function ClientDetail() {
                     ) : (
                       <div style={{ display:'flex', gap:8 }}>
                         <button onClick={async()=>{
-                          await supabase.from('call_requests').update({status:'declined',updated_at:new Date().toISOString()}).eq('id',req.id)
+                          const { error } = await supabase.from('call_requests').update({status:'declined',updated_at:new Date().toISOString()}).eq('id',req.id)
+                          if (error) { alert('Could not decline call request: ' + error.message); return }
                           setCallRequests(p=>p.filter(r=>r.id!==req.id))
                         }}
                           style={{ flex:1, padding:'9px', borderRadius:9, border:'1px solid #ef444430', background:'#ef444415', color:'#ef4444', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -1692,7 +1725,7 @@ export default function ClientDetail() {
                   <button disabled={!goalForm.title.trim()||goalSaving} onClick={async()=>{
                     if (!goalForm.title.trim()) return
                     setGoalSaving(true)
-                    const { data: newGoal } = await supabase.from('client_goals').insert({
+                    const { data: newGoal, error } = await supabase.from('client_goals').insert({
                       client_id: clientId,
                       coach_id: coachId,
                       title: goalForm.title.trim(),
@@ -1705,7 +1738,12 @@ export default function ClientDetail() {
                       status: 'active',
                       suggested_by: 'coach',
                     }).select().single()
-                    if (newGoal) setGoals(p => [newGoal, ...p])
+                    if (error || !newGoal) {
+                      setGoalSaving(false)
+                      alert('Could not save goal: ' + (error?.message || 'unknown error'))
+                      return
+                    }
+                    setGoals(p => [newGoal, ...p])
                     setGoalSaving(false)
                     setShowAddGoal(false)
                     setGoalForm({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
@@ -1935,7 +1973,8 @@ export default function ClientDetail() {
                                 <button onClick={async () => {
                                   const num = parseFloat(editingGoalVal)
                                   if (isNaN(num)) return
-                                  await supabase.from('client_goals').update({ current_value: num, updated_at: new Date().toISOString() }).eq('id', goal.id)
+                                  const { error } = await supabase.from('client_goals').update({ current_value: num, updated_at: new Date().toISOString() }).eq('id', goal.id)
+                                  if (error) { alert('Could not update goal: ' + error.message); return }
                                   setGoals(p => p.map(g => g.id === goal.id ? {...g, current_value: num} : g))
                                   setEditingGoalId(null); setEditingGoalVal('')
                                 }} style={{ padding:'5px 10px', borderRadius:8, border:'none', background:t.teal, color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -1956,9 +1995,10 @@ export default function ClientDetail() {
                               <button onClick={async()=>{
                                 if (!confirm('Mark "' + goal.title + '" as complete?')) return
                                 const now = new Date().toISOString()
-                                await supabase.from('client_goals').update({ status:'completed', completed_at: now, current_value: goal.target_value, updated_at: now }).eq('id', goal.id)
-                                // Fire milestone
-                                await supabase.from('milestones').insert({ client_id: clientId, milestone_type:'goal', message: '🏆 Goal achieved: ' + goal.title + '!', seen: false })
+                                const { error } = await supabase.from('client_goals').update({ status:'completed', completed_at: now, current_value: goal.target_value, updated_at: now }).eq('id', goal.id)
+                                if (error) { alert('Could not mark goal complete: ' + error.message); return }
+                                // Fire milestone (fire-and-forget — celebration is nice-to-have)
+                                supabase.from('milestones').insert({ client_id: clientId, milestone_type:'goal', message: '🏆 Goal achieved: ' + goal.title + '!', seen: false }).then(()=>{}, ()=>{})
                                 setGoals(p => p.map(g => g.id === goal.id ? {...g, status:'completed', completed_at: now} : g))
                               }}
                                 style={{ padding:'6px 10px', borderRadius:8, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -1967,7 +2007,8 @@ export default function ClientDetail() {
                             )}
                             <button onClick={async()=>{
                               if (!confirm('Delete this goal?')) return
-                              await supabase.from('client_goals').delete().eq('id', goal.id)
+                              const { error } = await supabase.from('client_goals').delete().eq('id', goal.id)
+                              if (error) { alert('Could not delete goal: ' + error.message); return }
                               setGoals(p => p.filter(g => g.id !== goal.id))
                             }}
                               style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+t.red+'30', background:t.red+'10', color:t.red, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -2265,8 +2306,9 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
       if (logForm[f]) entry[f] = parseFloat(logForm[f])
     }
     if (logForm.notes) entry.notes = logForm.notes
-    await supabase.from('metrics').upsert(entry, { onConflict: 'client_id,logged_date' })
+    const { error } = await supabase.from('metrics').upsert(entry, { onConflict: 'client_id,logged_date' })
     setSaving(false)
+    if (error) { alert('Could not save metrics: ' + error.message); return }
     setLogOpen('none')
     setLogForm({})
     onSaved()
@@ -2586,23 +2628,26 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
   const saveSchedule = async () => {
     if (!schedFormId || !coachId) return
     setScheduling(true)
-    const { data } = await supabase.from('check_in_schedules').upsert({
+    const { data, error } = await supabase.from('check_in_schedules').upsert({
       coach_id: coachId, client_id: clientId, form_id: schedFormId,
       frequency: schedFreq, active: true, note: schedNote || null,
     }, { onConflict: 'client_id,form_id' }).select('*, form:onboarding_forms(title)').single()
-    if (data) setSchedules(p => { const exists = p.find(s=>s.form_id===schedFormId); return exists ? p.map(s=>s.form_id===schedFormId?data:s) : [...p,data] })
     setScheduling(false)
+    if (error) { alert('Could not save check-in schedule: ' + error.message); return }
+    if (data) setSchedules(p => { const exists = p.find(s=>s.form_id===schedFormId); return exists ? p.map(s=>s.form_id===schedFormId?data:s) : [...p,data] })
     setShowSchedule(false)
     setSchedFormId(''); setSchedFreq('weekly'); setSchedNote('')
   }
 
   const deleteSchedule = async (id: string) => {
-    await supabase.from('check_in_schedules').delete().eq('id', id)
+    const { error } = await supabase.from('check_in_schedules').delete().eq('id', id)
+    if (error) { alert('Could not delete schedule: ' + error.message); return }
     setSchedules(p => p.filter(s => s.id !== id))
   }
 
   const deleteAssignment = async (id: string) => {
-    await supabase.from('client_form_assignments').delete().eq('id', id)
+    const { error } = await supabase.from('client_form_assignments').delete().eq('id', id)
+    if (error) { alert('Could not delete assignment: ' + error.message); return }
     setAssignments(p => p.filter(a => a.id !== id))
   }
 
@@ -2898,7 +2943,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const saveRename = async (id: string) => {
     if (!editName.trim()) return
     setEditSaving(true)
-    await supabase.from('programs').update({ name: editName.trim() }).eq('id', id)
+    const { error } = await supabase.from('programs').update({ name: editName.trim() }).eq('id', id)
+    if (error) { setEditSaving(false); alert('Could not rename program: ' + error.message); return }
     setClientPrograms(prev => prev.map(p => p.id === id ? { ...p, name: editName.trim() } : p))
     if (program?.id === id) onProgramChange({ ...program, name: editName.trim() })
     setEditingId(null)
@@ -2906,7 +2952,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   }
 
   const saveStartDate = async (id: string, date: string) => {
-    await supabase.from('programs').update({ start_date: date || null }).eq('id', id)
+    const { error } = await supabase.from('programs').update({ start_date: date || null }).eq('id', id)
+    if (error) { alert('Could not save start date: ' + error.message); return }
     setClientPrograms(prev => prev.map(p => p.id === id ? { ...p, start_date: date } : p))
   }
 
@@ -2916,11 +2963,13 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     setScheduling(progId)
     const mode = scheduleMode[progId] || 'add'
 
+    try {
     // Fetch blocks for this program
     const { data: blocks } = await supabase.from('workout_blocks')
       .select('*, block_exercises(*)')
       .eq('program_id', progId)
       .order('week_number').order('order_index')
+      .throwOnError()
 
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -2928,10 +2977,11 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     if (mode === 'replace') {
       const { data: oldSessions } = await supabase.from('workout_sessions').select('id')
         .eq('program_id', progId).eq('status', 'assigned')
+        .throwOnError()
       for (const sess of (oldSessions || [])) {
-        await supabase.from('session_exercises').delete().eq('session_id', sess.id)
+        await supabase.from('session_exercises').delete().eq('session_id', sess.id).throwOnError()
       }
-      await supabase.from('workout_sessions').delete().eq('program_id', progId).eq('status', 'assigned')
+      await supabase.from('workout_sessions').delete().eq('program_id', progId).eq('status', 'assigned').throwOnError()
     }
 
     // Calculate week start (Monday of the start date's week)
@@ -2970,7 +3020,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     }
 
     if (sessionsToInsert.length > 0) {
-      const { data: insertedSessions } = await supabase.from('workout_sessions').insert(sessionsToInsert).select()
+      const { data: insertedSessions } = await supabase.from('workout_sessions').insert(sessionsToInsert).select().throwOnError()
       // Populate session_exercises from each block
       for (const session of (insertedSessions || [])) {
         const block = (blocks || []).find((b:any) => b.id === session.block_id)
@@ -2995,7 +3045,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
             slot_filter_type: ex.slot_filter_type || null,
             slot_filter_value: ex.slot_filter_value || null,
           }))
-        )
+        ).throwOnError()
       }
       // Save the start date on the program
       await saveStartDate(progId, startDate)
@@ -3005,77 +3055,101 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     setScheduleDone(progId)
     setTimeout(() => setScheduleDone(null), 3000)
     onScheduled?.()
+    } catch (err: any) {
+      console.error('scheduleProgram failed:', err)
+      setScheduling(null)
+      alert('Could not schedule program: ' + (err?.message || 'Unknown error'))
+    }
   }
 
   const deleteProgram = async (id: string) => {
     setDeleting(true)
-    const { data: sessions } = await supabase.from('workout_sessions').select('id').eq('program_id', id)
-    for (const sess of (sessions || [])) {
-      await supabase.from('session_exercises').delete().eq('session_id', sess.id)
-      await supabase.from('exercise_sets').delete().eq('session_id', sess.id)
+    try {
+      const { data: sessions } = await supabase.from('workout_sessions').select('id').eq('program_id', id).throwOnError()
+      for (const sess of (sessions || [])) {
+        await supabase.from('session_exercises').delete().eq('session_id', sess.id).throwOnError()
+        await supabase.from('exercise_sets').delete().eq('session_id', sess.id).throwOnError()
+      }
+      await supabase.from('workout_sessions').delete().eq('program_id', id).throwOnError()
+      const { data: blocks } = await supabase.from('workout_blocks').select('id').eq('program_id', id).throwOnError()
+      for (const b of (blocks || [])) {
+        await supabase.from('block_exercises').delete().eq('block_id', b.id).throwOnError()
+      }
+      await supabase.from('workout_blocks').delete().eq('program_id', id).throwOnError()
+      await supabase.from('programs').delete().eq('id', id).throwOnError()
+      setClientPrograms(prev => prev.filter(p => p.id !== id))
+      if (program?.id === id) onProgramChange(null)
+      setDeleteConfirm(null)
+    } catch (err: any) {
+      console.error('deleteProgram failed:', err)
+      alert('Could not delete program: ' + (err?.message || 'Unknown error') + '. Some pieces may have been removed — please refresh and try again.')
+    } finally {
+      setDeleting(false)
     }
-    await supabase.from('workout_sessions').delete().eq('program_id', id)
-    const { data: blocks } = await supabase.from('workout_blocks').select('id').eq('program_id', id)
-    for (const b of (blocks || [])) {
-      await supabase.from('block_exercises').delete().eq('block_id', b.id)
-    }
-    await supabase.from('workout_blocks').delete().eq('program_id', id)
-    await supabase.from('programs').delete().eq('id', id)
-    setClientPrograms(prev => prev.filter(p => p.id !== id))
-    if (program?.id === id) onProgramChange(null)
-    setDeleteConfirm(null)
-    setDeleting(false)
   }
 
   const assignProgram = async () => {
     if (!assignId) return
     setAssigning(true)
-    await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId).neq('id', assignId)
-    await supabase.from('programs').update({ client_id: clientId }).eq('id', assignId)
-    const { data: newProg } = await supabase.from('programs').select('*').eq('id', assignId).single()
-    onProgramChange(newProg)
-    await load()
-    setShowAssign(false)
-    setAssignId('')
-    setAssigning(false)
+    try {
+      await supabase.from('programs').update({ client_id: null }).eq('client_id', clientId).neq('id', assignId).throwOnError()
+      await supabase.from('programs').update({ client_id: clientId }).eq('id', assignId).throwOnError()
+      const { data: newProg } = await supabase.from('programs').select('*').eq('id', assignId).single().throwOnError()
+      onProgramChange(newProg)
+      await load()
+      setShowAssign(false)
+      setAssignId('')
+    } catch (err: any) {
+      console.error('assignProgram failed:', err)
+      alert('Could not assign program: ' + (err?.message || 'Unknown error'))
+    } finally {
+      setAssigning(false)
+    }
   }
 
   const createFromTemplate = async () => {
     if (!newName.trim()) return
     setCreating(true)
-    const srcId = assignId
-    const { data: newProg } = await supabase.from('programs').insert({
-      coach_id: coachId, client_id: clientId,
-      name: newName.trim(), is_template: false, status: 'active',
-    }).select().single()
-    if (newProg && srcId) {
-      const { data: srcBlocks } = await supabase.from('workout_blocks')
-        .select('*, block_exercises(*)')
-        .eq('program_id', srcId)
-      for (const b of (srcBlocks || [])) {
-        const { data: nb } = await supabase.from('workout_blocks').insert({
-          program_id: newProg.id, name: b.name, day_label: b.day_label,
-          week_number: b.week_number, order_index: b.order_index,
-          day_of_week: b.day_of_week, group_types: b.group_types || {},
-        }).select().single()
-        if (nb) {
-          for (const ex of (b.block_exercises || [])) {
-            await supabase.from('block_exercises').insert({
-              block_id: nb.id, exercise_id: ex.exercise_id,
-              sets: ex.sets, reps: ex.reps, target_weight: ex.target_weight,
-              rest_seconds: ex.rest_seconds, rpe: ex.rpe, notes: ex.notes,
-              order_index: ex.order_index, exercise_role: ex.exercise_role,
-            })
+    try {
+      const srcId = assignId
+      const { data: newProg } = await supabase.from('programs').insert({
+        coach_id: coachId, client_id: clientId,
+        name: newName.trim(), is_template: false, status: 'active',
+      }).select().single().throwOnError()
+      if (newProg && srcId) {
+        const { data: srcBlocks } = await supabase.from('workout_blocks')
+          .select('*, block_exercises(*)')
+          .eq('program_id', srcId)
+          .throwOnError()
+        for (const b of (srcBlocks || [])) {
+          const { data: nb } = await supabase.from('workout_blocks').insert({
+            program_id: newProg.id, name: b.name, day_label: b.day_label,
+            week_number: b.week_number, order_index: b.order_index,
+            day_of_week: b.day_of_week, group_types: b.group_types || {},
+          }).select().single().throwOnError()
+          if (nb) {
+            for (const ex of (b.block_exercises || [])) {
+              await supabase.from('block_exercises').insert({
+                block_id: nb.id, exercise_id: ex.exercise_id,
+                sets: ex.sets, reps: ex.reps, target_weight: ex.target_weight,
+                rest_seconds: ex.rest_seconds, rpe: ex.rpe, notes: ex.notes,
+                order_index: ex.order_index, exercise_role: ex.exercise_role,
+              }).throwOnError()
+            }
           }
         }
       }
+      if (newProg) onProgramChange(newProg)
+      await load()
+      setShowCreate(false)
+      setNewName('')
+      setAssignId('')
+    } catch (err: any) {
+      console.error('createFromTemplate failed:', err)
+      alert('Could not create program: ' + (err?.message || 'Unknown error'))
+    } finally {
+      setCreating(false)
     }
-    if (newProg) onProgramChange(newProg)
-    await load()
-    setShowCreate(false)
-    setNewName('')
-    setAssignId('')
-    setCreating(false)
   }
 
   if (loading) return <div style={{ color:t.textMuted, fontSize:13, padding:20 }}>Loading programs...</div>
@@ -3213,11 +3287,15 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                     <>
                       {!isActive && (
                         <button onClick={async ()=>{
-                          await supabase.from('programs').update({ active: false }).eq('client_id', clientId).neq('id', p.id)
-                          await supabase.from('programs').update({ active: true }).eq('id', p.id)
-                          const { data: newProg } = await supabase.from('programs').select('*').eq('id', p.id).single()
-                          onProgramChange(newProg)
-                          await load()
+                          try {
+                            await supabase.from('programs').update({ active: false }).eq('client_id', clientId).neq('id', p.id).throwOnError()
+                            await supabase.from('programs').update({ active: true }).eq('id', p.id).throwOnError()
+                            const { data: newProg } = await supabase.from('programs').select('*').eq('id', p.id).single().throwOnError()
+                            onProgramChange(newProg)
+                            await load()
+                          } catch (err: any) {
+                            alert('Could not activate program: ' + (err?.message || 'Unknown error'))
+                          }
                         }}
                           style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                           Set Active
