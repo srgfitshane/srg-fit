@@ -2619,7 +2619,9 @@ function WorkoutsTab({ clientRecord, supabase, router, t, overrideClientId }: { 
               </p>
               <div style={{ display:'grid', gap:8 }}>
                 {completed.map(s => (
-                  <div key={s.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+                  <div key={s.id}
+                    onClick={() => router.push(workoutUrl(s.id))}
+                    style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
                     <span style={{ fontSize:18 }}>✅</span>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, fontSize:14 }}>{s.title}</div>
