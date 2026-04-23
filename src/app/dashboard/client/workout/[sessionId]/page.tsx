@@ -41,6 +41,10 @@ interface WorkoutSession {
   coach_review_video_url?: string | null
   completed_at?: string | null
   duration_seconds?: number | null
+  notes_client?: string | null
+  session_rpe?: number | null
+  energy_level?: number | null
+  mood?: string | null
 }
 
 interface ExerciseLibraryItem {
@@ -379,6 +383,16 @@ ${candidateList}`
     // If client tapped back into a completed session, flag it — don't auto-reopen yet
     if (safeSession?.status === 'completed') {
       setSession(safeSession)
+      // Rehydrate finish form so their existing notes/RPE/mood/energy don't
+      // get wiped if they re-open and re-finish. Without this, the finish
+      // screen would show empty defaults and saving would null out their
+      // original answers.
+      setFinishForm({
+        session_rpe: safeSession.session_rpe != null ? String(safeSession.session_rpe) : '',
+        energy_level: safeSession.energy_level != null ? String(safeSession.energy_level) : '3',
+        mood: safeSession.mood || 'good',
+        notes_client: safeSession.notes_client || '',
+      })
       const { data: exs } = await supabase
         .from('session_exercises')
         .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
@@ -604,6 +618,9 @@ ${candidateList}`
     })
   }
 
+  // Tracks whether the client is re-opening a previously completed session.
+  // Used to avoid re-firing the coach push notification when they re-finish.
+  const wasReopenedRef = useRef(false)
   // Guard against double-tap / React re-render double-fire
   const loggingSet = useRef<Set<string>>(new Set())
 
@@ -959,14 +976,27 @@ ${candidateList}`
   }
 
   async function reopenWorkout() {
+    // Preserve the original duration so the timer keeps ticking from where
+    // they left off instead of resetting to 0. We shift started_at backwards
+    // by the saved duration so (now - started_at) matches their previous
+    // elapsed time.
+    const preservedDuration = session?.duration_seconds || 0
+    const newStartedAt = new Date(Date.now() - preservedDuration * 1000).toISOString()
     const { error } = await supabase.from('workout_sessions').update({
       status: 'in_progress',
       completed_at: null,
+      started_at: newStartedAt,
     }).eq('id', sessionId)
     if (error) {
       alert('Could not reopen workout: ' + error.message)
       return
     }
+    // Sync local session state — without this, the timer useEffect won't run
+    // and the normal workout UI branches won't render because status is still
+    // 'completed' in React state even though the DB is updated.
+    setSession(prev => prev ? { ...prev, status: 'in_progress', completed_at: null, started_at: newStartedAt } : prev)
+    // Mark this session as re-opened so re-finishing skips the coach push.
+    wasReopenedRef.current = true
     setIsReopened(false)
   }
 
@@ -996,7 +1026,7 @@ ${candidateList}`
     }
 
     // Fire-and-forget push notification — never block completion on this
-    if (session?.coach_id) {
+    if (session?.coach_id && !wasReopenedRef.current) {
       const { data: { session: authSession } } = await supabase.auth.getSession()
       if (authSession?.access_token) {
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
