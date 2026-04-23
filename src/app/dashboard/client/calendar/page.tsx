@@ -390,7 +390,10 @@ export default function ClientCalendarPage() {
                           💬 See Coach Review
                         </button>
                       ) : (
-                        <div style={{ marginTop:6, fontSize:11, color:t.green, fontWeight:700 }}>✓ Completed</div>
+                        <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
+                          style={{ marginTop:6, width:'100%', background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'8px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          Edit
+                        </button>
                       )
                     )}
                   </div>

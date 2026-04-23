@@ -1276,10 +1276,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <div style={{ fontSize:14, fontWeight:800, color:t.green }}>Workout Complete!</div>
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedToday.title} — great work today 💪</div>
                   </div>
-                  {completedToday.coach_reviewed_at && (
+                  {completedToday.coach_reviewed_at ? (
                     <button onClick={()=>router.push(workoutUrl(completedToday.id))}
                       style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                       💬 See Review
+                    </button>
+                  ) : (
+                    <button onClick={()=>router.push(workoutUrl(completedToday.id))}
+                      style={{ background:'none', border:`1px solid ${t.border}`, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                      Edit
                     </button>
                   )}
                 </div>
