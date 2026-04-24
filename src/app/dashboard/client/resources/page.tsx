@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -242,7 +243,7 @@ export default function ClientResourcesPage() {
                                 )}
                                 {item.file_url && (
                                   <a href={item.file_url} target="_blank" rel="noreferrer"
-                                    style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+t.teal+'30',padding:'5px 12px',borderRadius:8}}>
+                                    style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+alpha(t.teal, 19),padding:'5px 12px',borderRadius:8}}>
                                     Open ↗
                                   </a>
                                 )}
@@ -278,7 +279,7 @@ export default function ClientResourcesPage() {
                             {item.description && <div style={{fontSize:12,color:t.textDim,lineHeight:1.5,marginBottom:6}}>{item.description}</div>}
                             {item.file_url && (
                               <a href={item.file_url} target="_blank" rel="noreferrer"
-                                style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+t.teal+'30',padding:'5px 12px',borderRadius:8}}>
+                                style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:t.teal,textDecoration:'none',background:t.tealDim,border:'1px solid '+alpha(t.teal, 19),padding:'5px 12px',borderRadius:8}}>
                                 Open ↗
                               </a>
                             )}

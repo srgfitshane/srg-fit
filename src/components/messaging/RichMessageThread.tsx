@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
+import { alpha } from '@/lib/theme'
 
 const c = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -728,7 +729,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                       {grouped.map(([emoji, {count, mine}]) => (
                         <button key={emoji} className="rmt-reaction-pill"
                           onClick={()=>toggleReaction(msg.id, emoji)}
-                          style={{ ...btnBase, padding:'3px 8px', fontSize:13, background: mine ? c.tealDim : c.surfaceHigh, border:'1px solid '+(mine?c.teal+'40':c.border), color: mine?c.teal:c.textDim }}>
+                          style={{ ...btnBase, padding:'3px 8px', fontSize:13, background: mine ? c.tealDim : c.surfaceHigh, border:'1px solid '+(mine?alpha(c.teal, 25):c.border), color: mine?c.teal:c.textDim }}>
                           {emoji}{count > 1 ? ` ${count}` : ''}
                         </button>
                       ))}
@@ -787,16 +788,16 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
               <div className="rmt-toolbar">
                 {quickReplies.length > 0 && (
                   <button title="Saved replies" aria-label="Toggle saved replies" aria-expanded={showMacros} onClick={()=>setShowMacros(s => !s)}
-                    style={{ ...btnBase, padding:'7px 10px', background: showMacros?c.orange+'22':'transparent', color:showMacros?c.orange:c.textMuted, border:'1px solid '+(showMacros?c.orange+'40':'transparent') }}>
+                    style={{ ...btnBase, padding:'7px 10px', background: showMacros?alpha(c.orange, 13):'transparent', color:showMacros?c.orange:c.textMuted, border:'1px solid '+(showMacros?alpha(c.orange, 25):'transparent') }}>
                     ⚡
                   </button>
                 )}
                 <button title="Voice message" aria-label="Record voice message" onClick={()=>{ setMode('audio'); startAudio() }}
-                  style={{ ...btnBase, padding:'7px 10px', background: mode==='audio'?c.tealDim:'transparent', color:mode==='audio'?c.teal:c.textMuted, border:'1px solid '+(mode==='audio'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background: mode==='audio'?c.tealDim:'transparent', color:mode==='audio'?c.teal:c.textMuted, border:'1px solid '+(mode==='audio'?alpha(c.teal, 25):'transparent') }}>
                   🎙️
                 </button>
                 <button title="Video message" aria-label="Record video message" onClick={()=>{ setMode('video'); startVideo() }}
-                  style={{ ...btnBase, padding:'7px 10px', background: mode==='video'?c.tealDim:'transparent', color:mode==='video'?c.teal:c.textMuted, border:'1px solid '+(mode==='video'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background: mode==='video'?c.tealDim:'transparent', color:mode==='video'?c.teal:c.textMuted, border:'1px solid '+(mode==='video'?alpha(c.teal, 25):'transparent') }}>
                   📹
                 </button>
                 <button title="Send image or file" aria-label="Upload image, video, audio, or file" onClick={()=>fileInputRef.current?.click()}
@@ -804,15 +805,15 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                   📎
                 </button>
                 <button title="Send exercise demo" aria-label="Send exercise" onClick={()=>{ setMode(m=>m==='exercise'?'text':'exercise'); if(exerciseResults.length===0) searchExercises('') }}
-                  style={{ ...btnBase, padding:'7px 10px', background:mode==='exercise'?c.tealDim:'transparent', color:mode==='exercise'?c.teal:c.textMuted, border:'1px solid '+(mode==='exercise'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background:mode==='exercise'?c.tealDim:'transparent', color:mode==='exercise'?c.teal:c.textMuted, border:'1px solid '+(mode==='exercise'?alpha(c.teal, 25):'transparent') }}>
                   💪
                 </button>
                 <button title="Send a resource" aria-label="Send resource or PDF" onClick={()=>{ setMode(m=>m==='resource'?'text':'resource'); if(resources.length===0) loadResources() }}
-                  style={{ ...btnBase, padding:'7px 10px', background:mode==='resource'?c.tealDim:'transparent', color:mode==='resource'?c.teal:c.textMuted, border:'1px solid '+(mode==='resource'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background:mode==='resource'?c.tealDim:'transparent', color:mode==='resource'?c.teal:c.textMuted, border:'1px solid '+(mode==='resource'?alpha(c.teal, 25):'transparent') }}>
                   📄
                 </button>
                 <button title="Send a GIF" aria-label="Open GIF picker" onClick={()=>{ setMode(m=>m==='gif'?'text':'gif'); if(gifs.length===0) searchGifs('') }}
-                  style={{ ...btnBase, padding:'7px 10px', background:mode==='gif'?c.tealDim:'transparent', color:mode==='gif'?c.teal:c.textMuted, border:'1px solid '+(mode==='gif'?c.teal+'40':'transparent') }}>
+                  style={{ ...btnBase, padding:'7px 10px', background:mode==='gif'?c.tealDim:'transparent', color:mode==='gif'?c.teal:c.textMuted, border:'1px solid '+(mode==='gif'?alpha(c.teal, 25):'transparent') }}>
                   GIF
                 </button>
               </div>

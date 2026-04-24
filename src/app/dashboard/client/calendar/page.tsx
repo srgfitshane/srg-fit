@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { alpha } from '@/lib/theme'
 
 const localDateStr = (d: Date = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -295,8 +296,8 @@ export default function ClientCalendarPage() {
                 return (
                   <div key={i} onClick={() => setSelectedDate(ds)}
                     style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 4px', borderRadius:12,
-                      background: isSel ? t.teal+'20' : isToday ? t.surfaceHigh : 'transparent',
-                      border: '1px solid ' + (isSel ? t.teal+'60' : isToday ? t.teal+'25' : 'transparent'),
+                      background: isSel ? alpha(t.teal, 13) : isToday ? t.surfaceHigh : 'transparent',
+                      border: '1px solid ' + (isSel ? alpha(t.teal, 38) : isToday ? alpha(t.teal, 15) : 'transparent'),
                       cursor:'pointer' }}>
                     <div style={{ fontSize:10, fontWeight:700, color: isSel ? t.teal : t.textMuted }}>{FULL_DAYS[i]}</div>
                     <div style={{ fontSize:15, fontWeight:900, color: isSel ? t.teal : isToday ? t.text : t.textDim }}>{d.getDate()}</div>
@@ -317,7 +318,7 @@ export default function ClientCalendarPage() {
                 {selectedLabel}
               </div>
               <button onClick={()=>{ setTaskDate(selectedDate); setShowAddTask(true) }}
-                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 12px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'5px 12px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 + Add Task
               </button>
             </div>
@@ -362,7 +363,7 @@ export default function ClientCalendarPage() {
                           <div style={{ fontSize:11, fontWeight:700, color:t.textMuted }}>Move to:</div>
                           <input type="date" value={reschedPick} min={todayStr}
                             onChange={e2=>setReschedPick(e2.target.value)}
-                            style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.teal+'50', borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}
+                            style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+alpha(t.teal, 31), borderRadius:8, padding:'8px 10px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }}
                           />
                           <div style={{ display:'flex', gap:6 }}>
                             <button
@@ -387,7 +388,7 @@ export default function ClientCalendarPage() {
                     {e.type==='workout' && e.source_id && e.status==='completed' && (
                       e.coach_reviewed_at ? (
                         <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
-                          style={{ marginTop:8, width:'100%', background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          style={{ marginTop:8, width:'100%', background:t.tealDim, border:`1px solid ${alpha(t.teal, 25)}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                           💬 See Coach Review
                         </button>
                       ) : (
@@ -401,7 +402,7 @@ export default function ClientCalendarPage() {
                 ))}
                 {hasJournal && (
                   <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:10, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>✍️</div>
+                    <div style={{ width:36, height:36, borderRadius:10, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>✍️</div>
                     <div style={{ fontSize:13, fontWeight:700 }}>Journal entry</div>
                   </div>
                 )}
@@ -410,9 +411,9 @@ export default function ClientCalendarPage() {
                   const done = isTaskDoneToday(task)
                   const REPEAT_LABEL = { once:'One-time', daily:'Daily', weekly:'Weekly' }
                   return (
-                    <div key={task.id} style={{ background:t.surfaceHigh, border:'1px solid '+(done ? t.green+'40' : t.teal+'30'), borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
+                    <div key={task.id} style={{ background:t.surfaceHigh, border:'1px solid '+(done ? alpha(t.green, 25) : alpha(t.teal, 19)), borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
                       <button onClick={()=> done ? uncompleteTask(task) : completeTask(task)}
-                        style={{ width:28, height:28, borderRadius:8, border:'2px solid '+(done?t.green:t.teal+'60'), background:done?t.green:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, fontSize:14 }}>
+                        style={{ width:28, height:28, borderRadius:8, border:'2px solid '+(done?t.green:alpha(t.teal, 38)), background:done?t.green:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, fontSize:14 }}>
                         {done ? '✓' : ''}
                       </button>
                       <div style={{ flex:1 }}>
@@ -436,7 +437,7 @@ export default function ClientCalendarPage() {
               <div style={{ fontSize:14, fontWeight:900, flex:1, textAlign:'center' }}>{MONTHS[viewMonth]} {viewYear}</div>
               <button onClick={nextMonth} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'5px 12px', color:t.text, cursor:'pointer', fontSize:16, lineHeight:1 }}>›</button>
               <button onClick={()=>{ setViewMonth(today.getMonth()); setViewYear(today.getFullYear()); setSelectedDate(todayStr) }}
-                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer' }}>
+                style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer' }}>
                 Today
               </button>
             </div>
@@ -459,8 +460,8 @@ export default function ClientCalendarPage() {
                   <div key={i} onClick={() => setSelectedDate(ds)}
                     className="cal-cell"
                     style={{
-                      background: isSel ? t.teal+'20' : isToday ? t.surfaceHigh : t.surfaceUp,
-                      border: '1px solid '+(isSel ? t.teal+'60' : isToday ? t.teal+'30' : t.border),
+                      background: isSel ? alpha(t.teal, 13) : isToday ? t.surfaceHigh : t.surfaceUp,
+                      border: '1px solid '+(isSel ? alpha(t.teal, 38) : isToday ? alpha(t.teal, 19) : t.border),
                       borderRadius:8, cursor:'pointer',
                     }}>
                     <div style={{ fontSize:11, fontWeight: isToday ? 900 : 600, color: isSel ? t.teal : isToday ? t.text : t.textDim, lineHeight:1 }}>{d.getDate()}</div>
@@ -541,7 +542,7 @@ export default function ClientCalendarPage() {
               <div style={{ display:'flex', gap:8 }}>
                 {(['once','daily','weekly'] as const).map(r => (
                   <button key={r} onClick={()=>setTaskRepeat(r)}
-                    style={{ flex:1, padding:'9px', borderRadius:10, border:'1px solid '+(taskRepeat===r?t.teal+'60':t.border), background:taskRepeat===r?t.tealDim:'transparent', fontSize:13, fontWeight:700, color:taskRepeat===r?t.teal:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' as const }}>
+                    style={{ flex:1, padding:'9px', borderRadius:10, border:'1px solid '+(taskRepeat===r?alpha(t.teal, 38):t.border), background:taskRepeat===r?t.tealDim:'transparent', fontSize:13, fontWeight:700, color:taskRepeat===r?t.teal:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' as const }}>
                     {r}
                   </button>
                 ))}
@@ -569,7 +570,7 @@ export default function ClientCalendarPage() {
               </div>
             </div>
             <button onClick={saveTask} disabled={!taskTitle.trim() || taskSaving}
-              style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: taskTitle.trim() ? `linear-gradient(135deg,${t.teal},${t.teal}cc)` : t.surfaceHigh, color: taskTitle.trim() ? '#000' : t.textMuted, fontSize:15, fontWeight:800, cursor: taskTitle.trim() ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
+              style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: taskTitle.trim() ? `linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})` : t.surfaceHigh, color: taskTitle.trim() ? '#000' : t.textMuted, fontSize:15, fontWeight:800, cursor: taskTitle.trim() ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
               {taskSaving ? 'Saving...' : 'Save Task'}
             </button>
           </div>

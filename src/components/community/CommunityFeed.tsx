@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -355,7 +356,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   )
 
   return (
-    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}textarea{resize:none;}.reply-input:focus{outline:none;border-color:${t.teal}60 !important;}`}</style>
+    <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}textarea{resize:none;}.reply-input:focus{outline:none;border-color:${alpha(t.teal, 38)} !important;}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:480, margin:'0 auto' }}
         onClick={() => { setReactOpen(null); setCoachMenu(null) }}>
 
@@ -446,7 +447,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
             const postReplies = replies[p.id] || []
             const showReplyBox = replyOpen === p.id
             return (
-              <div key={p.id} style={{ background:t.surface, border:'1px solid '+(p.pinned?t.teal+'40':t.border), borderRadius:14, overflow:'hidden' }}>
+              <div key={p.id} style={{ background:t.surface, border:'1px solid '+(p.pinned?alpha(t.teal, 25):t.border), borderRadius:14, overflow:'hidden' }}>
                 {p.pinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>📌 Pinned</div>}
                 <div style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
@@ -503,7 +504,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
                     {grouped.map(([emoji, { count, mine }]) => (
                       <button key={emoji} onClick={()=>toggleReaction(p.id, emoji)}
-                        style={{ padding:'3px 8px', borderRadius:20, border:'1px solid '+(mine?t.teal+'60':t.border), background:mine?t.tealDim:'transparent', cursor:'pointer', fontSize:12, fontFamily:"'DM Sans',sans-serif", color:mine?t.teal:t.textDim }}>
+                        style={{ padding:'3px 8px', borderRadius:20, border:'1px solid '+(mine?alpha(t.teal, 38):t.border), background:mine?t.tealDim:'transparent', cursor:'pointer', fontSize:12, fontFamily:"'DM Sans',sans-serif", color:mine?t.teal:t.textDim }}>
                         {emoji}{count > 1 ? ` ${count}` : ''}
                       </button>
                     ))}
@@ -519,7 +520,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       )}
                     </div>
                     <button onClick={()=>{ setReplyOpen(showReplyBox?null:p.id); setTimeout(()=>replyInputRef.current?.focus(),50) }}
-                      style={{ background:'none', border:'1px solid '+(showReplyBox?t.teal+'40':t.border), borderRadius:20, padding:'3px 9px', cursor:'pointer', fontSize:11, fontWeight:600, color:showReplyBox?t.teal:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>
+                      style={{ background:'none', border:'1px solid '+(showReplyBox?alpha(t.teal, 25):t.border), borderRadius:20, padding:'3px 9px', cursor:'pointer', fontSize:11, fontWeight:600, color:showReplyBox?t.teal:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>
                       💬 {postReplies.length > 0 ? `${postReplies.length} ${postReplies.length===1?'reply':'replies'}` : 'Reply'}
                     </button>
                   </div>
@@ -531,9 +532,9 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       const rAuthor = profiles[r.author_id]
                       const rColor  = getColor(r.author_id, r.author_role)
                       return (
-                        <div key={r.id} style={{ display:'flex', gap:8, padding:'9px 14px', borderBottom:(i<postReplies.length-1||showReplyBox)?'1px solid '+t.border+'44':'none', alignItems:'flex-start' }}>
+                        <div key={r.id} style={{ display:'flex', gap:8, padding:'9px 14px', borderBottom:(i<postReplies.length-1||showReplyBox)?'1px solid '+alpha(t.border, 27):'none', alignItems:'flex-start' }}>
                           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
-                            <div style={{ width:2, height:5, background:t.border+'88' }}/>
+                            <div style={{ width:2, height:5, background:alpha(t.border, 53) }}/>
                             <Avatar name={rAuthor?.full_name||'?'} role={r.author_role} color={rColor} size={22}/>
                           </div>
                           <div style={{ flex:1, minWidth:0 }}>
@@ -550,7 +551,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     {showReplyBox && (
                       <div style={{ display:'flex', gap:8, padding:'9px 14px', alignItems:'flex-start' }}>
                         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
-                          <div style={{ width:2, height:5, background:t.border+'88' }}/>
+                          <div style={{ width:2, height:5, background:alpha(t.border, 53) }}/>
                           <Avatar name={me?.full_name||'You'} role={role} color={me?.id ? clientColors[me.id] : undefined} size={22}/>
                         </div>
                         <div style={{ flex:1 }}>

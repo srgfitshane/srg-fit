@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { triggerAiInsight } from '@/lib/ai-insights'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -132,7 +133,7 @@ function QuestionField({ q, value, onChange }: { q: Question; value: unknown; on
         <label style={{ display:'block', fontSize:13, fontWeight:700, marginBottom:8 }}>{q.label}{q.required && <span style={{ color:t.red }}> *</span>}</label>
         <div onClick={() => fileRef.current?.click()}
           style={{ border:`2px dashed ${t.border}`, borderRadius:12, padding:'20px 16px', textAlign:'center',
-            cursor:'pointer', color:t.textMuted, fontSize:13, background: fileName ? t.teal+'11' : 'transparent' }}>
+            cursor:'pointer', color:t.textMuted, fontSize:13, background: fileName ? alpha(t.teal, 7) : 'transparent' }}>
           {fileName ? `✅ ${fileName}` : '📷 Tap to select photo'}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:'none' }}
             onChange={e => {

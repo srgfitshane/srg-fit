@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { alpha } from '@/lib/theme'
 
 interface Notification {
   id: string
@@ -192,7 +193,7 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
                 <div key={n.id} onClick={() => handleNotifClick(n)}
                   style={{
                     padding: '12px 16px', borderBottom: `1px solid ${t.border}`,
-                    background: n.is_read ? 'transparent' : t.accent + '0a',
+                    background: n.is_read ? 'transparent' : alpha(t.accent, 4),
                     cursor: n.link_url ? 'pointer' : 'default',
                     display: 'flex', gap: 10, alignItems: 'flex-start',
                   }}

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
@@ -1296,7 +1297,7 @@ ${candidateList}`
       <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
       <div style={{fontSize:18,fontWeight:800,marginBottom:8,color:t.orange}}>No exercises in this workout</div>
       <div style={{fontSize:13,color:t.textMuted,marginBottom:32,maxWidth:280,lineHeight:1.6}}>This session has no exercises assigned yet. Your coach needs to add exercises to this program first.</div>
-      <button onClick={()=>setShowCancelSheet(true)} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+      <button onClick={()=>setShowCancelSheet(true)} style={{background:t.tealDim,border:'1px solid '+alpha(t.teal, 25),borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
         ← Back to Dashboard
       </button>
     </div>
@@ -1324,7 +1325,7 @@ ${candidateList}`
           </div>
 
           {/* Locked badge */}
-          <div style={{display:'flex',alignItems:'center',gap:8,background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:10,padding:'10px 14px',marginBottom:20}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,background:t.tealDim,border:`1px solid ${alpha(t.teal, 25)}`,borderRadius:10,padding:'10px 14px',marginBottom:20}}>
             <span style={{fontSize:16}}>🔒</span>
             <div>
               <div style={{fontSize:12,fontWeight:800,color:t.teal}}>Coach has reviewed this session</div>
@@ -1333,7 +1334,7 @@ ${candidateList}`
           </div>
 
           {/* Coach review */}
-          <div style={{border:`1px solid ${t.teal}40`,borderRadius:14,overflow:'hidden',marginBottom:16}}>
+          <div style={{border:`1px solid ${alpha(t.teal, 25)}`,borderRadius:14,overflow:'hidden',marginBottom:16}}>
             <div style={{background:t.tealDim,padding:'10px 16px',display:'flex',alignItems:'center',gap:8}}>
               <span style={{fontSize:16}}>💬</span>
               <span style={{fontSize:12,fontWeight:800,color:t.teal,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>Coach Review</span>
@@ -1348,7 +1349,7 @@ ${candidateList}`
                 const isExternal = reviewVideoUrl.startsWith('http') && !reviewVideoUrl.includes('supabase')
                 if (isExternal) return (
                   <a href={reviewVideoUrl} target='_blank' rel='noreferrer' style={{display:'block',textDecoration:'none'}}>
-                    <div style={{borderRadius:12,overflow:'hidden',border:`1px solid ${t.teal}40`,background:t.surface,cursor:'pointer'}}>
+                    <div style={{borderRadius:12,overflow:'hidden',border:`1px solid ${alpha(t.teal, 25)}`,background:t.surface,cursor:'pointer'}}>
                       <div style={{background:'#000',aspectRatio:'16/9',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
                         <div style={{fontSize:40}}>🎥</div>
                         <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.3)'}}>
@@ -1386,7 +1387,7 @@ ${candidateList}`
             This workout is already marked complete. Want to go back in and update something?
           </div>
           <button onClick={reopenWorkout}
-            style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
+            style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
             ✏️ Re-open Workout
           </button>
           <button onClick={()=>router.push(returnUrl)}
@@ -1435,14 +1436,14 @@ ${candidateList}`
           <div style={{fontSize:16,fontWeight:800,color:t.teal,fontVariantNumeric:'tabular-nums'}}>⏱ {fmtTime(elapsedSeconds)}</div>
           <button onClick={()=>setShowCancelSheet(true)}
             aria-label="Cancel workout"
-            style={{background:t.redDim,border:'1px solid '+t.red+'40',borderRadius:8,padding:'5px 11px',fontSize:11,fontWeight:700,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+            style={{background:t.redDim,border:'1px solid '+alpha(t.red, 25),borderRadius:8,padding:'5px 11px',fontSize:11,fontWeight:700,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             Cancel
           </button>
         </div>
 
         {/* Rest timer banner */}
         {restActive && restTimer !== null && (
-          <div style={{background:`linear-gradient(135deg,${t.teal}20,${t.teal}08)`,borderBottom:`1px solid ${t.teal}40`,padding:'10px 16px',display:'flex',alignItems:'center',gap:12}}>
+          <div style={{background:`linear-gradient(135deg,${alpha(t.teal, 13)},${alpha(t.teal, 3)})`,borderBottom:`1px solid ${alpha(t.teal, 25)}`,padding:'10px 16px',display:'flex',alignItems:'center',gap:12}}>
             <span style={{fontSize:20}}>⏸</span>
             <div style={{flex:1}}>
               <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Rest Time</div>
@@ -1451,7 +1452,7 @@ ${candidateList}`
             <span style={{fontSize:24,fontWeight:900,color:t.teal,fontVariantNumeric:'tabular-nums'}}>{restTimer}s</span>
             <button onClick={()=>{setRestActive(false);setRestTimer(null)}}
               aria-label="Skip rest timer"
-              style={{background:t.tealDim,border:`1px solid ${t.teal}40`,borderRadius:8,padding:'5px 12px',fontSize:12,fontWeight:700,color:t.teal,cursor:'pointer'}}>
+              style={{background:t.tealDim,border:`1px solid ${alpha(t.teal, 25)}`,borderRadius:8,padding:'5px 12px',fontSize:12,fontWeight:700,color:t.teal,cursor:'pointer'}}>
               Skip
             </button>
           </div>
@@ -1532,7 +1533,7 @@ ${candidateList}`
                   if (ex.is_open_slot) return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div style={{marginBottom:8,border:`1px dashed ${t.yellow}60`,borderRadius:14,background:t.yellow+'08',padding:'16px'}}>
+                    <div style={{marginBottom:8,border:`1px dashed ${alpha(t.yellow, 38)}`,borderRadius:14,background:alpha(t.yellow, 3),padding:'16px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:12}}>
                         <span style={{fontSize:24,flexShrink:0}}>🎲</span>
                         <div style={{flex:1,minWidth:0}}>
@@ -1545,7 +1546,7 @@ ${candidateList}`
                           </div>
                         </div>
                         <button onClick={()=>{ setSlotPickerExId(ex.id); setSlotSearch(''); setSlotCustomName(''); setSlotTab('library') }}
-                          style={{background:`linear-gradient(135deg,${t.yellow},${t.yellow}cc)`,border:'none',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                          style={{background:`linear-gradient(135deg,${t.yellow},${alpha(t.yellow, 80)})`,border:'none',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
                           Pick →
                         </button>
                       </div>
@@ -1555,7 +1556,7 @@ ${candidateList}`
                   return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?t.green+'40':t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
+                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
@@ -1593,11 +1594,11 @@ ${candidateList}`
                           {!isSkipped && (
                             <div style={{display:'flex',gap:6,marginBottom:12}}>
                               <button onClick={()=>setSwapOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                                style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?t.teal+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?alpha(t.teal, 31):t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                 Swap
                               </button>
                               <button onClick={()=>setSkipOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
-                                style={{background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?t.red+'50':t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                style={{background:skipOpen[ex.id]?t.redDim:'transparent',border:'1px solid '+(skipOpen[ex.id]?alpha(t.red, 31):t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:skipOpen[ex.id]?t.red:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                 ⏭ Skip
                               </button>
                               <button onClick={()=>setPreviewOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
@@ -1612,14 +1613,14 @@ ${candidateList}`
 
                           {/* Swap panel */}
                           {swapOpen[ex.id] && !isSkipped && (
-                            <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+                            <div style={{background:t.tealDim,border:'1px solid '+alpha(t.teal, 19),borderRadius:12,padding:'12px 14px',marginBottom:12}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
                                 <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Swap exercise</div>
                                 <div style={{display:'flex',gap:6}}>
                                   {!aiSwapOptions[ex.id]?.length && (
                                     <button onClick={()=>getAISwap(ex)}
                                       disabled={aiSwapLoading[ex.id]}
-                                      style={{fontSize:11,fontWeight:700,color:'#000',background:aiSwapLoading[ex.id]?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiSwapLoading[ex.id]?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                      style={{fontSize:11,fontWeight:700,color:'#000',background:aiSwapLoading[ex.id]?alpha(t.teal, 50):t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiSwapLoading[ex.id]?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                       {aiSwapLoading[ex.id]?'✨ Thinking...':'✨ AI Pick'}
                                     </button>
                                   )}
@@ -1628,7 +1629,7 @@ ${candidateList}`
                               </div>
                               <input value={swapSearch[ex.id]||''} onChange={e=>setSwapSearch(prev=>({...prev,[ex.id]:e.target.value}))}
                                 placeholder="Search by name or equipment..."
-                                style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
+                                style={{width:'100%',background:t.surface,border:'1px solid '+alpha(t.teal, 25),borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
                               <div style={{display:'flex',flexDirection:'column' as const,gap:6,marginBottom:10}}>
                                 {getSwapOptions(ex).map(option=>(
                                   <button key={option.id} onClick={()=>swapExercise(ex,option.id)}
@@ -1650,7 +1651,7 @@ ${candidateList}`
 
                           {/* Skip panel */}
                           {skipOpen[ex.id] && !isSkipped && (
-                            <div style={{background:t.redDim,border:'1px solid '+t.red+'30',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+                            <div style={{background:t.redDim,border:'1px solid '+alpha(t.red, 19),borderRadius:12,padding:'12px 14px',marginBottom:12}}>
                               <div style={{fontSize:13,fontWeight:700,color:t.red,marginBottom:6}}>Skip this exercise?</div>
                               <div style={{fontSize:11,color:t.textMuted,marginBottom:10}}>Add a note for your coach if you want — totally optional.</div>
                               <input value={skipNote[ex.id]||''} onChange={e=>setSkipNote(prev=>({...prev,[ex.id]:e.target.value}))}
@@ -1687,7 +1688,7 @@ ${candidateList}`
                                   </div>
                                 )}
                                 {ex.exercise?.cues && (
-                                  <div style={{padding:'10px 12px',background:t.orange+'15',border:'1px solid '+t.orange+'30',borderRadius:10,marginBottom:8}}>
+                                  <div style={{padding:'10px 12px',background:alpha(t.orange, 8),border:'1px solid '+alpha(t.orange, 19),borderRadius:10,marginBottom:8}}>
                                     <div style={{fontSize:10,fontWeight:800,color:t.orange,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>📌 Cues</div>
                                     <div style={{fontSize:12,color:t.orange,lineHeight:1.6,whiteSpace:'pre-line' as const}}>{ex.exercise.cues}</div>
                                   </div>
@@ -1695,7 +1696,7 @@ ${candidateList}`
                                 {((ex.exercise?.muscles?.length??0)>0||(ex.exercise?.secondary_muscles?.length??0)>0) && (
                                   <div style={{display:'flex',flexWrap:'wrap' as const,gap:5}}>
                                     {(ex.exercise?.muscles||[]).map((m:string)=>(
-                                      <span key={m} style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700,color:t.teal}}>{m}</span>
+                                      <span key={m} style={{background:t.tealDim,border:'1px solid '+alpha(t.teal, 19),borderRadius:6,padding:'2px 8px',fontSize:11,fontWeight:700,color:t.teal}}>{m}</span>
                                     ))}
                                     {(ex.exercise?.secondary_muscles||[]).map((m:string)=>(
                                       <span key={m} style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:6,padding:'2px 8px',fontSize:11,color:t.textDim}}>{m}</span>
@@ -1823,7 +1824,7 @@ ${candidateList}`
                               </button>
                               {videoUploads[ex.id] ? (<>
                                 <a href={videoUploads[ex.id]} target="_blank" rel="noreferrer"
-                                  style={{display:'flex',alignItems:'center',padding:'9px 12px',background:t.greenDim,border:`1px solid ${t.green}50`,borderRadius:10,fontSize:12,fontWeight:700,color:t.green,textDecoration:'none',flexShrink:0,gap:4}}>
+                                  style={{display:'flex',alignItems:'center',padding:'9px 12px',background:t.greenDim,border:`1px solid ${alpha(t.green, 31)}`,borderRadius:10,fontSize:12,fontWeight:700,color:t.green,textDecoration:'none',flexShrink:0,gap:4}}>
                                   ✓ View
                                 </a>
                                 <label style={{display:'flex',alignItems:'center',padding:'9px 12px',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,fontSize:12,fontWeight:700,color:t.textDim,cursor:'pointer',flexShrink:0}}>
@@ -1856,16 +1857,16 @@ ${candidateList}`
                           {exercises.indexOf(ex)===exercises.length-1 && (
                             <div style={{marginTop:4}}>
                               <button onClick={()=>{setAddExOpen(o=>!o);if(!aiAddOptions.length)getAIAddSuggestions()}}
-                                style={{width:'100%',background:addExOpen?t.tealDim:'none',border:`1px dashed ${addExOpen?t.teal+'60':t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:addExOpen?t.teal:t.textDim,cursor:'pointer'}}>
+                                style={{width:'100%',background:addExOpen?t.tealDim:'none',border:`1px dashed ${addExOpen?alpha(t.teal, 38):t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:addExOpen?t.teal:t.textDim,cursor:'pointer'}}>
                                 + Add Exercise
                               </button>
                               {addExOpen&&(
-                                <div style={{background:t.tealDim,border:'1px solid '+t.teal+'30',borderRadius:12,padding:'12px 14px',marginTop:8}}>
+                                <div style={{background:t.tealDim,border:'1px solid '+alpha(t.teal, 19),borderRadius:12,padding:'12px 14px',marginTop:8}}>
                                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
                                     <div style={{fontSize:13,fontWeight:700,color:t.teal}}>Add an exercise</div>
                                     {!aiAddOptions.length&&(
                                       <button onClick={getAIAddSuggestions} disabled={aiAddLoading}
-                                        style={{fontSize:11,fontWeight:700,color:'#000',background:aiAddLoading?t.teal+'80':t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiAddLoading?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                        style={{fontSize:11,fontWeight:700,color:'#000',background:aiAddLoading?alpha(t.teal, 50):t.teal,border:'none',borderRadius:8,padding:'4px 10px',cursor:aiAddLoading?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                         {aiAddLoading?'✨ Thinking...':'✨ AI Suggest'}
                                       </button>
                                     )}
@@ -1873,7 +1874,7 @@ ${candidateList}`
                                   </div>
                                   <input value={addExSearch} onChange={e=>{setAddExSearch(e.target.value);setAiAddOptions([])}}
                                     placeholder="Search exercises..."
-                                    style={{width:'100%',background:t.surface,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
+                                    style={{width:'100%',background:t.surface,border:'1px solid '+alpha(t.teal, 25),borderRadius:8,padding:'8px 10px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8,boxSizing:'border-box' as const,colorScheme:'dark'}}/>
                                   <div style={{display:'grid',gap:8}}>
                                     {getAddExOptions().map(option=>(
                                       <button key={option.id} onClick={()=>addExercise(option.id)}
@@ -1936,7 +1937,7 @@ ${candidateList}`
                     <button key={n} onClick={()=>setFinishForm(f=>({...f,energy_level:String(n)}))}
                       aria-label={`Set workout energy to ${n} out of 5`}
                       aria-pressed={finishForm.energy_level===String(n)}
-                      style={{flex:1,padding:'7px',borderRadius:8,border:'none',background:parseInt(finishForm.energy_level)>=n?t.orange+'30':'#1d1d2e',cursor:'pointer',fontSize:16}}>
+                      style={{flex:1,padding:'7px',borderRadius:8,border:'none',background:parseInt(finishForm.energy_level)>=n?alpha(t.orange, 19):'#1d1d2e',cursor:'pointer',fontSize:16}}>
                       ⚡
                     </button>
                   ))}
@@ -1985,7 +1986,7 @@ ${candidateList}`
             <div style={{display:'flex',gap:6,marginBottom:14}}>
               {(['library','custom'] as const).map(tab => (
                 <button key={tab} onClick={()=>setSlotTab(tab)}
-                  style={{flex:1,padding:'8px',borderRadius:9,border:`1px solid ${slotTab===tab?t.teal+'60':t.border}`,background:slotTab===tab?t.tealDim:'transparent',color:slotTab===tab?t.teal:t.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
+                  style={{flex:1,padding:'8px',borderRadius:9,border:`1px solid ${slotTab===tab?alpha(t.teal, 38):t.border}`,background:slotTab===tab?t.tealDim:'transparent',color:slotTab===tab?t.teal:t.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textTransform:'capitalize' as const}}>
                   {tab === 'library' ? '📚 Library' : '✏️ Type My Own'}
                 </button>
               ))}
@@ -2037,7 +2038,7 @@ ${candidateList}`
                   style={{width:'100%',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'12px 14px',fontSize:15,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const,colorScheme:'dark'}}/>
                 <button onClick={()=>{ if(slotCustomName.trim()) fillSlot(slotPickerExId, slotCustomName.trim()) }}
                   disabled={!slotCustomName.trim()}
-                  style={{width:'100%',padding:'13px',borderRadius:12,border:'none',background:slotCustomName.trim()?`linear-gradient(135deg,${t.teal},${t.teal}cc)`:t.surfaceHigh,color:slotCustomName.trim()?'#000':t.textMuted,fontSize:15,fontWeight:800,cursor:slotCustomName.trim()?'pointer':'default',fontFamily:"'DM Sans',sans-serif"}}>
+                  style={{width:'100%',padding:'13px',borderRadius:12,border:'none',background:slotCustomName.trim()?`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`:t.surfaceHigh,color:slotCustomName.trim()?'#000':t.textMuted,fontSize:15,fontWeight:800,cursor:slotCustomName.trim()?'pointer':'default',fontFamily:"'DM Sans',sans-serif"}}>
                   Use This Exercise
                 </button>
               </div>
@@ -2136,7 +2137,7 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, ret
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {summary.prs.map((pr, idx) => (
-                <div key={idx} style={{background:`linear-gradient(135deg,${t.yellow}18,${t.orange}0a)`,border:`1px solid ${t.yellow}35`,borderRadius:12,padding:'12px 14px',textAlign:'left' as const}}>
+                <div key={idx} style={{background:`linear-gradient(135deg,${alpha(t.yellow, 9)},${alpha(t.orange, 4)})`,border:`1px solid ${alpha(t.yellow, 21)}`,borderRadius:12,padding:'12px 14px',textAlign:'left' as const}}>
                   <div style={{fontSize:10,fontWeight:800,color:t.yellow,textTransform:'uppercase' as const,letterSpacing:'0.08em',marginBottom:3}}>
                     {pr.pr_type === 'rep' ? 'Rep PR' : 'New PR'}
                   </div>

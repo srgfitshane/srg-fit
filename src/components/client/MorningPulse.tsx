@@ -7,6 +7,7 @@
  */
 import { createClient } from '@/lib/supabase-browser'
 import { useState } from 'react'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -73,11 +74,11 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
       energy ? '⚡'.repeat(energy) : null,
     ].filter(Boolean).join('  ')
     return (
-      <div style={{ background:t.surface, border:'1px solid '+t.green+'40', borderRadius:16, overflow:'hidden', marginBottom:14 }}>
+      <div style={{ background:t.surface, border:'1px solid '+alpha(t.green, 25), borderRadius:16, overflow:'hidden', marginBottom:14 }}>
         <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
         <button onClick={()=>setCollapsed(c=>!c)}
           style={{ ...btnBase, width:'100%', padding:'14px 16px', display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🌅</div>
+          <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🌅</div>
           <div style={{ flex:1, textAlign:'left' as const }}>
             <div style={{ fontSize:14, fontWeight:800, color:t.text }}>Morning Pulse</div>
             <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
@@ -115,7 +116,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
                 style={{ ...btnBase, border:'1px solid '+t.border, borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted }}>
                 Edit today&apos;s check-in
               </button>
-              <a href="/dashboard/client/progress" style={{ border:'1px solid '+t.teal+'40', borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, textDecoration:'none', display:'inline-block' }}>
+              <a href="/dashboard/client/progress" style={{ border:'1px solid '+alpha(t.teal, 25), borderRadius:10, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, textDecoration:'none', display:'inline-block' }}>
                 View Trends →
               </a>
             </div>
@@ -145,14 +146,14 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
 
         {/* Header + step dots */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
-          <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🌅</div>
+          <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🌅</div>
           <div>
             <div style={{ fontSize:15, fontWeight:800 }}>Morning Pulse</div>
             <div style={{ fontSize:11, color:t.textMuted }}>Daily check-in</div>
           </div>
           <div style={{ marginLeft:'auto', display:'flex', gap:5 }}>
             {STEPS.map((s,i) => (
-              <div key={s} style={{ width:6, height:6, borderRadius:'50%', background: i===stepIdx ? t.teal : i<stepIdx ? t.teal+'60' : t.border }}/>
+              <div key={s} style={{ width:6, height:6, borderRadius:'50%', background: i===stepIdx ? t.teal : i<stepIdx ? alpha(t.teal, 38) : t.border }}/>
             ))}
           </div>
         </div>
@@ -239,7 +240,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
             />
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <button onClick={()=>setIsPrivate(p=>!p)}
-                style={{ ...btnBase, display:'flex', alignItems:'center', gap:6, background:isPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(isPrivate?t.border:t.teal+'40'), borderRadius:20, padding:'5px 12px', transition:'all 0.2s' }}>
+                style={{ ...btnBase, display:'flex', alignItems:'center', gap:6, background:isPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(isPrivate?t.border:alpha(t.teal, 25)), borderRadius:20, padding:'5px 12px', transition:'all 0.2s' }}>
                 <span style={{ fontSize:12 }}>{isPrivate?'🔒':'👁️'}</span>
                 <span style={{ fontSize:11, fontWeight:700, color:isPrivate?t.textMuted:t.teal }}>{isPrivate?'Private':'Share with Coach'}</span>
               </button>

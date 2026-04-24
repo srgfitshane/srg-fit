@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
@@ -203,7 +204,7 @@ export default function ClientFormPage() {
             Your responses have been submitted. Your coach will review them shortly.
           </div>
           <button onClick={()=>router.push('/dashboard/client')}
-            style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            style={{ background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             Back to Dashboard
           </button>
         </div>
@@ -224,7 +225,7 @@ export default function ClientFormPage() {
               <div style={{ fontSize:14, color:t.textDim, lineHeight:1.6 }}>{form.description}</div>
             )}
             {assignment?.note && (
-              <div style={{ marginTop:12, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px', fontSize:13, color:t.teal, lineHeight:1.5 }}>
+              <div style={{ marginTop:12, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'10px 14px', fontSize:13, color:t.teal, lineHeight:1.5 }}>
                 📝 {assignment.note}
               </div>
             )}
@@ -233,7 +234,7 @@ export default function ClientFormPage() {
           {/* Questions */}
           <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
             {questions.map((q, idx) => (
-              <div key={q.id} style={{ background:t.surface, border:'1px solid '+(errors[q.id]?t.red+'60':t.border), borderRadius:14, padding:'18px 20px' }}>
+              <div key={q.id} style={{ background:t.surface, border:'1px solid '+(errors[q.id]?alpha(t.red, 38):t.border), borderRadius:14, padding:'18px 20px' }}>
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:q.helper_text?4:10, display:'flex', gap:6, alignItems:'flex-start' }}>
                   <span style={{ color:t.textMuted, fontWeight:500 }}>{idx+1}.</span>
                   <span>{q.label}</span>
@@ -291,7 +292,7 @@ export default function ClientFormPage() {
                   <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     {(q.options||[]).map(opt => (
                       <button key={opt} onClick={()=>setAnswer(q.id,opt)}
-                        style={{ padding:'11px 14px', borderRadius:10, border:'1px solid '+(answers[q.id]===opt?t.teal+'60':t.border), background:answers[q.id]===opt?t.tealDim:'transparent', color:answers[q.id]===opt?t.teal:t.text, fontSize:13, fontWeight:answers[q.id]===opt?700:500, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, display:'flex', alignItems:'center', gap:10 }}>
+                        style={{ padding:'11px 14px', borderRadius:10, border:'1px solid '+(answers[q.id]===opt?alpha(t.teal, 38):t.border), background:answers[q.id]===opt?t.tealDim:'transparent', color:answers[q.id]===opt?t.teal:t.text, fontSize:13, fontWeight:answers[q.id]===opt?700:500, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, display:'flex', alignItems:'center', gap:10 }}>
                         <div style={{ width:16, height:16, borderRadius:'50%', border:'2px solid '+(answers[q.id]===opt?t.teal:t.border), background:answers[q.id]===opt?t.teal:'transparent', flexShrink:0 }} />
                         {opt}
                       </button>
@@ -309,7 +310,7 @@ export default function ClientFormPage() {
                       const toggle = () => setAnswer(q.id, checked ? sel.filter(x=>x!==opt) : [...sel, opt])
                       return (
                         <button key={opt} onClick={toggle}
-                          style={{ padding:'11px 14px', borderRadius:10, border:'1px solid '+(checked?t.teal+'60':t.border), background:checked?t.tealDim:'transparent', color:checked?t.teal:t.text, fontSize:13, fontWeight:checked?700:500, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, display:'flex', alignItems:'center', gap:10 }}>
+                          style={{ padding:'11px 14px', borderRadius:10, border:'1px solid '+(checked?alpha(t.teal, 38):t.border), background:checked?t.tealDim:'transparent', color:checked?t.teal:t.text, fontSize:13, fontWeight:checked?700:500, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, display:'flex', alignItems:'center', gap:10 }}>
                           <div style={{ width:16, height:16, borderRadius:4, border:'2px solid '+(checked?t.teal:t.border), background:checked?t.teal:'transparent', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
                             {checked && <span style={{ color:'#000', fontSize:10, fontWeight:900 }}>✓</span>}
                           </div>
@@ -337,7 +338,7 @@ export default function ClientFormPage() {
           {/* Submit */}
           <div style={{ marginTop:28 }}>
             <button onClick={submit} disabled={submitting}
-              style={{ width:'100%', background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:14, padding:'15px', fontSize:15, fontWeight:900, color:'#000', cursor:submitting?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:submitting?.6:1 }}>
+              style={{ width:'100%', background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border:'none', borderRadius:14, padding:'15px', fontSize:15, fontWeight:900, color:'#000', cursor:submitting?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:submitting?.6:1 }}>
               {submitting ? 'Submitting...' : '✓ Submit Responses'}
             </button>
             <div style={{ fontSize:12, color:t.textMuted, textAlign:'center', marginTop:10 }}>

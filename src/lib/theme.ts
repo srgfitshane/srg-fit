@@ -87,6 +87,25 @@ export const themeLight: ThemeTokens = {
 export type ThemePreference = 'dark' | 'light' | 'system'
 
 /**
+ * Apply an alpha (transparency) to a CSS var color reference.
+ *
+ * Original codebase pattern was `t.orange + 'cc'` — concatenating a
+ * 2-char hex alpha suffix onto a hex color to get `#f5a623cc` (80% alpha).
+ * That pattern broke after we migrated color values to CSS vars because
+ * `var(--orange) + 'cc'` produces `var(--orange)cc` which is invalid CSS.
+ *
+ * color-mix() is the modern fix. `color-mix(in srgb, X 80%, transparent)`
+ * gives you X at the requested alpha regardless of whether X is hex, var,
+ * or named. Supported in every browser since 2023.
+ *
+ * pct is opacity percentage 0-100.
+ */
+export function alpha(color: string, pct: number): string {
+  const safe = Math.max(0, Math.min(100, pct))
+  return `color-mix(in srgb, ${color} ${safe}%, transparent)`
+}
+
+/**
  * Generate a CSS string that defines every theme token as a custom
  * property, scoped to a selector. Used to inject theme vars globally
  * without relying on a React context.

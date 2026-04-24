@@ -6,6 +6,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
 } from 'recharts'
+import { alpha } from '@/lib/theme'
 
 const localDateStr = (d: Date = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -314,7 +315,7 @@ export default function ClientProgressPage() {
           <p style={{ color:t.textMuted, margin:'4px 0 0', fontSize:13 }}>Track your transformation over time</p>
         </div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {clientRecord?.show_progress_photos !== false && <button onClick={()=>setPhotoOpen(true)} style={{ background:t.purple+'22', color:t.purple, border:'1px solid '+t.purple+'44',
+          {clientRecord?.show_progress_photos !== false && <button onClick={()=>setPhotoOpen(true)} style={{ background:alpha(t.purple, 13), color:t.purple, border:'1px solid '+alpha(t.purple, 27),
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
           </button>}
@@ -346,7 +347,7 @@ export default function ClientProgressPage() {
                 ? Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / 86400000)
                 : null
               return (
-                <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? t.teal+'40' : color+'30'}`, borderRadius:13, padding:'12px 14px' }}>
+                <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? alpha(t.teal, 25) : color+'30'}`, borderRadius:13, padding:'12px 14px' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom: pct !== null ? 8 : 0 }}>
                     <div style={{ width:32, height:32, borderRadius:9, background:color+'18', border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
                       {icon}
@@ -385,7 +386,7 @@ export default function ClientProgressPage() {
             <div style={{ marginTop:10, display:'flex', gap:8 }}>
               <input value={suggestGoalText} onChange={e=>setSuggestGoalText(e.target.value)}
                 placeholder="e.g. Hit 225lb squat, Run a 5K..."
-                style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.teal+'50', borderRadius:10, padding:'9px 12px', fontSize:13, color:t.text, fontFamily:'system-ui,sans-serif', outline:'none' }}/>
+                style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+alpha(t.teal, 31), borderRadius:10, padding:'9px 12px', fontSize:13, color:t.text, fontFamily:'system-ui,sans-serif', outline:'none' }}/>
               <button onClick={suggestGoal} disabled={!suggestGoalText.trim()||suggestGoalSaving}
                 style={{ background:t.teal, border:'none', borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:'system-ui,sans-serif' }}>
                 {suggestGoalSaving ? '...' : 'Send'}
@@ -445,7 +446,7 @@ export default function ClientProgressPage() {
             <button key={tf.label} onClick={()=>setTimeframe(tf)}
               style={{ padding:'5px 10px', borderRadius:8, border:'1px solid',
                 borderColor: timeframe.label===tf.label?t.teal:t.border,
-                background: timeframe.label===tf.label?t.teal+'22':'transparent',
+                background: timeframe.label===tf.label?alpha(t.teal, 13):'transparent',
                 color: timeframe.label===tf.label?t.teal:t.textMuted,
                 cursor:'pointer', fontSize:11, fontWeight:700 }}>
               {tf.label}
@@ -500,7 +501,7 @@ export default function ClientProgressPage() {
               {[30,60,90].map(d => (
                 <button key={d} onClick={()=>setPulseTimeframe(d)}
                   style={{ padding:'4px 10px', borderRadius:8, border:'1px solid '+(pulseTimeframe===d?t.teal:t.border),
-                    background:pulseTimeframe===d?t.teal+'20':'transparent',
+                    background:pulseTimeframe===d?alpha(t.teal, 13):'transparent',
                     color:pulseTimeframe===d?t.teal:t.textMuted,
                     fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   {d}d
@@ -569,7 +570,7 @@ export default function ClientProgressPage() {
 
         {/* Compare mode instructions */}
         {compareMode && (
-          <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:t.teal }}>
+          <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:t.teal }}>
             {compareSelection.length === 0 && 'Select two photos to compare side by side'}
             {compareSelection.length === 1 && 'Good — now select a second photo'}
             {compareSelection.length === 2 && (
@@ -710,7 +711,7 @@ export default function ClientProgressPage() {
             <div onClick={()=>fileRef.current?.click()}
               style={{ border:'2px dashed '+t.border, borderRadius:12, padding:32, textAlign:'center',
                 cursor:'pointer', marginBottom:16, color:t.textMuted, fontSize:13,
-                background: photoFile ? t.green+'11' : 'transparent' }}>
+                background: photoFile ? alpha(t.green, 7) : 'transparent' }}>
               {photoFile ? `✅ ${photoFile.name}` : '📁 Click to select photo'}
               <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
                 onChange={e => setPhotoFile(e.target.files?.[0]||null)} />

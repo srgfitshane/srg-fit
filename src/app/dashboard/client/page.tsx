@@ -18,6 +18,7 @@ import {
   type ClientActivityType,
   type ClientActivityIntensity,
 } from '@/lib/client-activities'
+import { alpha } from '@/lib/theme'
 
 
 const t = {
@@ -1017,7 +1018,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         {/* Coach preview banner */}
         {overrideClientId && (
-          <div style={{ background:`linear-gradient(135deg,${t.orange}ee,${t.orange}bb)`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
+          <div style={{ background:`linear-gradient(135deg,${alpha(t.orange, 93)},${alpha(t.orange, 73)})`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:18 }}>🎽</span>
               <div>
@@ -1072,7 +1073,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── STREAK ── */}
           {workoutStreak > 0 && (
-            <div className="fade" style={{ marginBottom:14, background:t.surfaceUp, border:'1px solid '+t.orange+'30', borderRadius:14, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+            <div className="fade" style={{ marginBottom:14, background:t.surfaceUp, border:'1px solid '+alpha(t.orange, 19), borderRadius:14, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:22 }}>🔥</span>
               <div>
                 <div style={{ fontSize:13, fontWeight:800, color:t.orange }}>
@@ -1122,7 +1123,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               {pendingReviews.map(r => {
                 const isOpen = expandedReview === r.id
                 return (
-                  <div key={r.id} style={{ background:`linear-gradient(135deg,${t.teal}18,${t.teal}08)`, border:`2px solid ${t.teal}50`, borderRadius:16, marginBottom:8, overflow:'hidden' }}>
+                  <div key={r.id} style={{ background:`linear-gradient(135deg,${alpha(t.teal, 9)},${alpha(t.teal, 3)})`, border:`2px solid ${alpha(t.teal, 31)}`, borderRadius:16, marginBottom:8, overflow:'hidden' }}>
                     {/* Header row — always visible, tap to expand */}
                     <div onClick={async () => {
                         if (!isOpen) {
@@ -1137,9 +1138,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       style={{ padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
                       {/* Pulsing dot — only when not yet seen */}
                       {!r._seen && !isOpen && (
-                        <div style={{ width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${t.teal}30`, flexShrink:0 }}/>
+                        <div style={{ width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${alpha(t.teal, 19)}`, flexShrink:0 }}/>
                       )}
-                      <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:`1px solid ${t.teal}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                      <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:`1px solid ${alpha(t.teal, 25)}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
                         💬
                       </div>
                       <div style={{ flex:1 }}>
@@ -1155,9 +1156,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
                     {/* Expanded review content */}
                     {isOpen && (
-                      <div style={{ borderTop:`1px solid ${t.teal}30`, padding:'14px 16px' }}>
+                      <div style={{ borderTop:`1px solid ${alpha(t.teal, 19)}`, padding:'14px 16px' }}>
                         {r.coach_review_notes && (
-                          <div style={{ background:'#0a1a1a', border:`1px solid ${t.teal}30`, borderRadius:10, padding:'10px 14px', marginBottom: r.coach_review_video_url ? 12 : 0 }}>
+                          <div style={{ background:'#0a1a1a', border:`1px solid ${alpha(t.teal, 19)}`, borderRadius:10, padding:'10px 14px', marginBottom: r.coach_review_video_url ? 12 : 0 }}>
                             <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Written notes</div>
                             <div style={{ fontSize:13, color:t.text, lineHeight:1.6 }}>{r.coach_review_notes}</div>
                           </div>
@@ -1188,14 +1189,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {pendingCheckins.length > 0 && (
             <div className="fade" style={{ marginBottom:14 }}>
               {pendingCheckins.map(ci => (
-                <div key={ci.id} style={{ background:'linear-gradient(135deg,'+t.purple+'18,'+t.purple+'08)', border:'1px solid '+t.purple+'40', borderRadius:16, padding:'16px', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
+                <div key={ci.id} style={{ background:'linear-gradient(135deg,'+t.purple+'18,'+t.purple+'08)', border:'1px solid '+alpha(t.purple, 25), borderRadius:16, padding:'16px', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ fontSize:28, flexShrink:0 }}>📋</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, fontWeight:800, color:t.text, marginBottom:2 }}>{ci.form?.title || 'Weekly Check-In'}</div>
                     <div style={{ fontSize:12, color:t.textMuted }}>Your check-in is ready to fill out</div>
                   </div>
                   <button onClick={() => router.push(`/dashboard/client/forms/${ci.id}`)}
-                    style={{ background:`linear-gradient(135deg,${t.purple},${t.purple}cc)`, border:'none', borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                    style={{ background:`linear-gradient(135deg,${t.purple},${alpha(t.purple, 80)})`, border:'none', borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                     Fill Out
                   </button>
                 </div>
@@ -1205,7 +1206,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── 3. RECENT WINS ── */}
           {(milestones.length > 0 || recentPRs.length > 0) && (
-            <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+t.yellow+'35', borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
+            <div className="fade" style={{ background:'linear-gradient(135deg,'+t.yellow+'18,'+t.orange+'0a)', border:'1px solid '+alpha(t.yellow, 21), borderRadius:16, padding:'14px 16px', marginBottom:14, position:'relative', overflow:'hidden' }}>
               <div style={{ position:'absolute', top:-10, right:-10, fontSize:64, opacity:0.06, lineHeight:1 }}>🏆</div>
               <div style={{ fontSize:11, fontWeight:800, color:t.yellow, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>🏆 Recent Wins</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -1225,7 +1226,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     {pr.shared_to_community
                       ? <div style={{ fontSize:10, color:t.textMuted, fontWeight:600 }}>Shared ✓</div>
                       : <button onClick={()=>sharePRToCommunity(pr)}
-                          style={{ fontSize:10, fontWeight:700, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                          style={{ fontSize:10, fontWeight:700, color:t.teal, background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:6, padding:'3px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                           Share 🏆
                         </button>
                     }
@@ -1249,7 +1250,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               {nextSession ? (
                 <>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                    <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
+                    <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:800 }}>{nextSession.title}</div>
                       <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
@@ -1271,14 +1272,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </>
               ) : completedToday ? (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>✅</div>
+                  <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+alpha(t.green, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>✅</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:14, fontWeight:800, color:t.green }}>Workout Complete!</div>
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedToday.title} — great work today 💪</div>
                   </div>
                   {completedToday.coach_reviewed_at ? (
                     <button onClick={()=>router.push(workoutUrl(completedToday.id))}
-                      style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                      style={{ background:t.tealDim, border:`1px solid ${alpha(t.teal, 25)}`, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                       💬 See Review
                     </button>
                   ) : (
@@ -1290,7 +1291,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </div>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>🛏️</div>
+                  <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>🛏️</div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:14, fontWeight:800 }}>Rest Day!</div>
                     <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Recovery is part of the program — enjoy it 💜</div>
@@ -1306,7 +1307,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ height:3, background:'linear-gradient(90deg,'+t.green+','+t.teal+')' }}/>
             <div style={{ padding:'14px 16px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+t.green+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🌿</div>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.greenDim, border:'1px solid '+alpha(t.green, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🌿</div>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:14, fontWeight:800 }}>Extra activity</div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Outside your programmed sessions</div>
@@ -1319,7 +1320,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     return (
                       <div key={activity.id} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
                         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                          <div style={{ width:32, height:32, borderRadius:10, background:t.greenDim, border:'1px solid '+t.green+'25', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                          <div style={{ width:32, height:32, borderRadius:10, background:t.greenDim, border:'1px solid '+alpha(t.green, 15), display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
                             {config.icon}
                           </div>
                           <div style={{ flex:1, minWidth:0 }}>
@@ -1347,7 +1348,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ marginBottom:14 }} className="fade" id="daily-habits-card">
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em' }}>Tasks & Habits</div>
-                <button onClick={()=>{ sessionStorage.setItem('openAddTask','1'); router.push('/dashboard/client/calendar') }}                  style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <button onClick={()=>{ sessionStorage.setItem('openAddTask','1'); router.push('/dashboard/client/calendar') }}                  style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:6, padding:'3px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   + Task
                 </button>
               </div>
@@ -1358,8 +1359,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   return (
                     <div key={task.id}
                       onClick={()=> done ? uncompleteTask(task.id) : completeTask(task.id)}
-                      style={{ background:done?t.green+'10':t.surface, border:'1px solid '+(done?t.green+'40':t.teal+'30'), borderRadius:13, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', transition:'all 0.15s ease' }}>
-                      <div style={{ width:32, height:32, borderRadius:9, background:done?'linear-gradient(135deg,'+t.green+','+t.green+'aa)':t.surfaceHigh, border:'1px solid '+(done?t.green+'60':t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?13:18, flexShrink:0, transition:'all 0.2s ease' }}>
+                      style={{ background:done?alpha(t.green, 6):t.surface, border:'1px solid '+(done?alpha(t.green, 25):alpha(t.teal, 19)), borderRadius:13, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', transition:'all 0.15s ease' }}>
+                      <div style={{ width:32, height:32, borderRadius:9, background:done?'linear-gradient(135deg,'+t.green+','+t.green+'aa)':t.surfaceHigh, border:'1px solid '+(done?alpha(t.green, 38):t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?13:18, flexShrink:0, transition:'all 0.2s ease' }}>
                         {done ? '✓' : (task.icon || '✅')}
                       </div>
                       <div style={{ flex:1 }}>
@@ -1423,7 +1424,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
             <div style={{ padding:'14px 16px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>✍️</div>
+                <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>✍️</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:800 }}>How did today go?</div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>Your daily journal</div>
@@ -1444,7 +1445,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               />
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10 }}>
                 <button onClick={()=>setJournalPrivate(p=>!p)}
-                  style={{ display:'flex', alignItems:'center', gap:7, background:journalPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(journalPrivate?t.border:t.teal+'40'), borderRadius:20, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+                  style={{ display:'flex', alignItems:'center', gap:7, background:journalPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(journalPrivate?t.border:alpha(t.teal, 25)), borderRadius:20, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={journalPrivate?t.textMuted:t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     {journalPrivate
                       ? <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>
@@ -1459,7 +1460,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     <span style={{ fontSize:11, color:t.teal, fontWeight:600 }}>✓ Saved today</span>
                   )}
                   <button onClick={saveJournal} disabled={journalSaving||!journalText.trim()}
-                    style={{ background:journalSaved?t.tealDim:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':t.surfaceHigh, border:journalSaved?'1px solid '+t.teal+'40':'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalSaved?t.teal:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+                    style={{ background:journalSaved?t.tealDim:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':t.surfaceHigh, border:journalSaved?'1px solid '+alpha(t.teal, 25):'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalSaved?t.teal:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
                     {journalSaved ? '✓ Saved!' : journalSaving ? 'Saving...' : journalDate === today ? 'Update' : 'Save'}
                   </button>
                 </div>
@@ -1469,7 +1470,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* Empty state */}
           {habits.length === 0 && !nextSession && (
-            <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+t.teal+'25', borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
+            <div style={{ background:'linear-gradient(135deg,'+t.teal+'12,'+t.orange+'08)', border:'1px solid '+alpha(t.teal, 15), borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
               <div style={{ fontSize:32, marginBottom:10 }}>🚀</div>
               <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>You&apos;re all set!</div>
               <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6 }}>Shane is setting up your program. Check back soon and let&apos;s get to work.</div>
@@ -1502,11 +1503,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
               {/* Coach message card */}
               <button onClick={()=>{ setUnreadMsgCount(0); setMessagesView('coach') }}
-                style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadMsgCount > 0 ? t.teal+'80' : t.border), borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadMsgCount > 0 ? alpha(t.teal, 50) : t.border), borderRadius:20, overflow:'hidden', marginBottom:14, cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                 <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.orange+')' }} />
                 <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
                   <div style={{ position:'relative', flexShrink:0 }}>
-                    <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.teal+'30,'+t.orange+'18)', border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.teal+'30,'+t.orange+'18)', border:'1px solid '+alpha(t.teal, 19), display:'flex', alignItems:'center', justifyContent:'center' }}>
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
                       </svg>
@@ -1535,10 +1536,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 setUnreadCommunityCount(0)
                 router.push('/dashboard/client/community')
               }}
-                style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadCommunityCount > 0 ? t.purple+'80' : t.border), borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
+                style={{ width:'100%', background:t.surface, border:'1px solid '+(unreadCommunityCount > 0 ? alpha(t.purple, 50) : t.border), borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block' }}>
                 <div style={{ height:3, background:'linear-gradient(90deg,'+t.purple+','+t.pink+')' }} />
                 <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
-                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.purple+'30,'+t.pink+'18)', border:'1px solid '+t.purple+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.purple+'30,'+t.pink+'18)', border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
                     </svg>
@@ -1564,7 +1565,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block', marginTop:14 }}>
                 <div style={{ height:3, background:'linear-gradient(90deg,'+t.orange+','+t.yellow+')' }}/>
                 <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
-                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.orange+'30,'+t.yellow+'18)', border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+t.orange+'30,'+t.yellow+'18)', border:'1px solid '+alpha(t.orange, 19), display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.1 19.79 19.79 0 01.1 .46 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.29 6.29"/>
                     </svg>
@@ -1636,14 +1637,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {plusOpen && (
             <div className="plus-action" style={{ position:'absolute', bottom:60, right:0, display:'flex', flexDirection:'column', gap:10, alignItems:'flex-end', pointerEvents:'all' }}>
               <button onClick={()=>openTab('nutrition')}
-                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+alpha(t.teal, 25), borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
                 </svg>
                 Log Food
               </button>
               <button onClick={openActivityLog}
-                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.green+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+alpha(t.green, 25), borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 21s-6.7-4.35-8.78-9.31C1.55 7.79 3.86 4 7.89 4c1.84 0 3.06.87 4.11 2.13C13.05 4.87 14.27 4 16.11 4c4.03 0 6.34 3.79 4.67 7.69C18.7 16.65 12 21 12 21z"/>
                 </svg>
@@ -1657,7 +1658,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 }
                 openTab('training')
               }}
-                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+alpha(t.orange, 25), borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
                 </svg>
@@ -1668,7 +1669,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           {/* + button */}
           <button onClick={()=>setPlusOpen(o=>!o)}
             aria-label={plusOpen ? 'Close quick actions' : 'Open quick actions'}
-            style={{ width:52, height:52, borderRadius:26, background:plusOpen ? t.surfaceHigh : `linear-gradient(135deg,${t.teal},${t.teal}cc)`, border: plusOpen ? '1px solid '+t.border : 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 4px 20px rgba(0,201,177,0.35)', transition:'all 0.2s ease', transform: plusOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>
+            style={{ width:52, height:52, borderRadius:26, background:plusOpen ? t.surfaceHigh : `linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border: plusOpen ? '1px solid '+t.border : 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 4px 20px rgba(0,201,177,0.35)', transition:'all 0.2s ease', transform: plusOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={plusOpen ? t.textMuted : '#000'} strokeWidth="2.5" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -1829,7 +1830,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         <button
                           key={option.id}
                           onClick={()=>setActivityDraft(prev => ({ ...prev, activity_type: option.id }))}
-                          style={{background:active?t.greenDim:t.surfaceUp,border:'1px solid '+(active?t.green+'40':t.border),borderRadius:12,padding:'10px 8px',color:active?t.green:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}
+                          style={{background:active?t.greenDim:t.surfaceUp,border:'1px solid '+(active?alpha(t.green, 25):t.border),borderRadius:12,padding:'10px 8px',color:active?t.green:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}
                         >
                           <div style={{fontSize:18,marginBottom:4}}>{option.icon}</div>
                           <div style={{fontSize:11,fontWeight:700}}>{option.label}</div>
@@ -1946,7 +1947,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     Shane will review your availability and confirm a time. You&apos;ll get a message with the Zoom link once it&apos;s set.
                   </div>
                   <button onClick={()=>{setShowCallRequest(false);setCallSubmitted(false);setCallSlots([{date:'',time:''},{date:'',time:''},{date:'',time:''}]);setCallNote('')}}
-                    style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                    style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                     Done
                   </button>
                 </div>
@@ -1998,7 +1999,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         setCallSubmitting(false)
                         setCallSubmitted(true)
                       }}
-                      style={{flex:2,padding:'12px',borderRadius:11,border:'none',background:callSlots.some(s=>s.date&&s.time)?`linear-gradient(135deg,${t.orange},${t.orange}cc)`:'#1d1d2e',color:callSlots.some(s=>s.date&&s.time)?'#000':t.textMuted,fontSize:13,fontWeight:800,cursor:callSlots.some(s=>s.date&&s.time)?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif"}}>
+                      style={{flex:2,padding:'12px',borderRadius:11,border:'none',background:callSlots.some(s=>s.date&&s.time)?`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`:'#1d1d2e',color:callSlots.some(s=>s.date&&s.time)?'#000':t.textMuted,fontSize:13,fontWeight:800,cursor:callSlots.some(s=>s.date&&s.time)?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif"}}>
                       {callSubmitting?'Sending...':'Send Request'}
                     </button>
                   </div>
@@ -2401,7 +2402,7 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
             {completed.map(s => (
               <div key={s.id}
                 onClick={() => router.push(workoutUrl(s.id))}
-                style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? t.teal+'40' : t.border}`, borderRadius:12, padding:'12px 16px', cursor:'pointer' }}>
+                style={{ background:t.surface, border:`1px solid ${s.coach_reviewed_at ? alpha(t.teal, 25) : t.border}`, borderRadius:12, padding:'12px 16px', cursor:'pointer' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: (s.coach_review_notes || s.coach_review_video_url) ? 10 : 0 }}>
                   <span style={{ fontSize:18 }}>✅</span>
                   <div style={{ flex:1 }}>
@@ -2416,7 +2417,7 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
                 </div>
                 {/* Coach review section */}
                 {(s.coach_review_notes || s.coach_review_video_url) && (
-                  <div style={{ border:`1px solid ${t.teal}40`, borderRadius:10, overflow:'hidden', marginTop:4 }}>
+                  <div style={{ border:`1px solid ${alpha(t.teal, 25)}`, borderRadius:10, overflow:'hidden', marginTop:4 }}>
                     <div style={{ background:t.tealDim, padding:'7px 12px', display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:14 }}>💬</span>
                       <span style={{ fontSize:11, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Coach Review</span>
@@ -2453,11 +2454,11 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
       ) : (
         <>
           {/* Program card */}
-          <div style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
+          <div style={{ background:t.surface, border:'1px solid '+alpha(t.teal, 19), borderRadius:16, overflow:'hidden', marginBottom:16 }}>
             <div style={{ height:4, background:`linear-gradient(90deg,${t.teal},${t.orange})` }} />
             <div style={{ padding:'20px 20px 16px' }}>
               <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:16 }}>
-                <div style={{ width:48, height:48, borderRadius:14, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>💪</div>
+                <div style={{ width:48, height:48, borderRadius:14, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>💪</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:18, fontWeight:900, marginBottom:4 }}>{program.name}</div>
                   {program.description && <div style={{ fontSize:13, color:t.textDim, lineHeight:1.6 }}>{program.description}</div>}
@@ -2495,7 +2496,7 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
                   )}
                 </div>
                 <button onClick={() => setView('workouts')}
-                  style={{ background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'10px 18px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                  style={{ background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border:'none', borderRadius:10, padding:'10px 18px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
                   View All →
                 </button>
               </div>
@@ -2505,10 +2506,10 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
           {/* Quick-start: next session */}
           {upcoming.length > 0 && (
             <div onClick={() => router.push(workoutUrl(upcoming[0].id))}
-              style={{ background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:16, overflow:'hidden', cursor:'pointer' }}>
+              style={{ background:t.surface, border:'1px solid '+alpha(t.orange, 25), borderRadius:16, overflow:'hidden', cursor:'pointer' }}>
               <div style={{ height:3, background:`linear-gradient(90deg,${t.orange},${t.yellow})` }} />
               <div style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
-                <div style={{ width:44, height:44, borderRadius:12, background:t.orangeDim, border:'1px solid '+t.orange+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
                   {upcoming[0].status === 'in_progress' ? '▶️' : '💪'}
                 </div>
                 <div style={{ flex:1 }}>
@@ -2518,7 +2519,7 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
                   <div style={{ fontSize:13, color:t.text, marginTop:2 }}>{upcoming[0].title}</div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{upcoming[0].scheduled_date}{upcoming[0].day_label ? ` · ${upcoming[0].day_label}` : ''}</div>
                 </div>
-                <div style={{ background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#000', whiteSpace:'nowrap' as const }}>
+                <div style={{ background:`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`, borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, color:'#000', whiteSpace:'nowrap' as const }}>
                   {upcoming[0].status === 'in_progress' ? 'Resume ▶' : 'Start 💪'}
                 </div>
               </div>
@@ -2590,7 +2591,7 @@ function WorkoutsTab({ clientRecord, supabase, router, t, overrideClientId }: { 
               <div key={s.id}
                 onClick={() => router.push(workoutUrl(s.id))}
                 style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px', marginBottom:10, cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ width:44, height:44, borderRadius:12, background:t.tealDim, border:'1px solid '+t.teal+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
                   {s.status === 'in_progress' ? '▶️' : '💪'}
                 </div>
                 <div style={{ flex:1 }}>
@@ -2704,7 +2705,7 @@ function ProgramsTab({ clientRecord, supabase, t }: { clientRecord: DashboardCli
             ))}
           </div>
           {p.goal && (
-            <div style={{ marginTop:12, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 14px' }}>
+            <div style={{ marginTop:12, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'10px 14px' }}>
               <span style={{ fontSize:12, color:t.teal }}>🎯 Goal: {p.goal}</span>
             </div>
           )}

@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import type { ThemePreference } from '@/lib/theme'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -110,7 +111,7 @@ const Select = ({field,options,placeholder}:{field:string,options:SelectOption[]
 const ChipGroup = ({field,options}:{field:string,options:string[]}) => {
   const {intake,toggleArray,t}=_uc(_Ctx)
   const selected: string[] = Array.isArray(intake[field]) ? intake[field].filter((value): value is string => typeof value === 'string') : []
-  return <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{options.map(o=>{const on=selected.includes(o);return <button key={o} onClick={()=>toggleArray(field,o)} style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid '+(on?t.teal+'60':t.border),background:on?t.tealDim:'transparent',color:on?t.teal:t.textDim,fontFamily:"'DM Sans',sans-serif",transition:'all .1s'}}>{o}</button>})}</div>
+  return <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{options.map(o=>{const on=selected.includes(o);return <button key={o} onClick={()=>toggleArray(field,o)} style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid '+(on?alpha(t.teal, 38):t.border),background:on?t.tealDim:'transparent',color:on?t.teal:t.textDim,fontFamily:"'DM Sans',sans-serif",transition:'all .1s'}}>{o}</button>})}</div>
 }
 const SliderField = ({field,min,max,label}:{field:string,min:number,max:number,label:string}) => {
   const {intake,set,t}=_uc(_Ctx)
@@ -271,7 +272,7 @@ function ProfilePageInner() {
         <div style={{ display:'flex', overflowX:'auto', gap:6, padding:'14px 20px', scrollbarWidth:'none' }}>
           {SECTIONS.map(s => (
             <button key={s.id} onClick={()=>setSection(s.id)}
-              style={{ flexShrink:0, padding:'7px 14px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid '+(section===s.id?t.teal+'60':t.border), background: section===s.id?t.tealDim:'transparent', color: section===s.id?t.teal:t.textDim, fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:5, whiteSpace:'nowrap' }}>
+              style={{ flexShrink:0, padding:'7px 14px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid '+(section===s.id?alpha(t.teal, 38):t.border), background: section===s.id?t.tealDim:'transparent', color: section===s.id?t.teal:t.textDim, fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:5, whiteSpace:'nowrap' }}>
               <span>{s.icon}</span>{s.label}
             </button>
           ))}
@@ -285,7 +286,7 @@ function ProfilePageInner() {
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               {/* Photo upload */}
               <div style={{ display:'flex', alignItems:'center', gap:16, background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:16 }}>
-                <div style={{ width:72, height:72, borderRadius:'50%', background:t.surfaceHigh, overflow:'hidden', flexShrink:0, border:'2px solid '+t.teal+'40', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+                <div style={{ width:72, height:72, borderRadius:'50%', background:t.surfaceHigh, overflow:'hidden', flexShrink:0, border:'2px solid '+alpha(t.teal, 25), cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
                   role="button"
                   tabIndex={0}
                   aria-label="Upload profile photo"
@@ -299,7 +300,7 @@ function ProfilePageInner() {
                   <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>Profile Photo</div>
                   <button onClick={()=>photoRef.current?.click()} disabled={photoUploading}
                     aria-label="Open profile photo upload"
-                    style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'5px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {photoUploading ? 'Uploading...' : '📸 Upload Photo'}
                   </button>
                   <input ref={photoRef} type="file" accept="image/*" style={{ display:'none' }} onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadPhoto(f) }} />
@@ -331,7 +332,7 @@ function ProfilePageInner() {
           {/* ── STATS ── */}
           {section === 'stats' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:12, padding:'10px 14px', fontSize:12, color:t.teal }}>
+              <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:12, padding:'10px 14px', fontSize:12, color:t.teal }}>
                 📏 These are your <strong>starting</strong> numbers — a baseline to measure your progress. Be honest, nobody&apos;s judging.
               </div>
               <FieldRow>
@@ -547,7 +548,7 @@ function ProfilePageInner() {
               </div>
 
               {/* Save / complete CTA */}
-              <div style={{ background:'linear-gradient(135deg,'+t.teal+'15,'+t.green+'08)', border:'1px solid '+t.teal+'30', borderRadius:16, padding:20, textAlign:'center', marginTop:8 }}>
+              <div style={{ background:'linear-gradient(135deg,'+t.teal+'15,'+t.green+'08)', border:'1px solid '+alpha(t.teal, 19), borderRadius:16, padding:20, textAlign:'center', marginTop:8 }}>
                 <div style={{ fontSize:18, marginBottom:8 }}>🎯</div>
                 <div style={{ fontSize:14, fontWeight:800, marginBottom:6 }}>Ready to submit your intake?</div>
                 <div style={{ fontSize:12, color:t.textMuted, marginBottom:14 }}>Make sure you&apos;ve filled out what you can across all sections, then hit Save above.</div>
@@ -567,7 +568,7 @@ function ProfilePageInner() {
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px' }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Signed In As</div>
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:44, height:44, borderRadius:'50%', background:t.tealDim, border:'1px solid '+t.teal+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
+                  <div style={{ width:44, height:44, borderRadius:'50%', background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
                     {profile?.avatar_url
                       ? <Image src={profile.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" width={44} height={44} />
                       : profile?.full_name?.charAt(0) || '?'}
@@ -630,7 +631,7 @@ function ProfilePageInner() {
                       <button key={opt} onClick={() => updateTheme(opt)}
                         style={{
                           background: active ? t.tealDim : 'transparent',
-                          border: '1px solid ' + (active ? t.teal + '60' : t.border),
+                          border: '1px solid ' + (active ? alpha(t.teal, 38) : t.border),
                           borderRadius: 10,
                           padding: '10px 8px',
                           cursor: 'pointer',
@@ -653,11 +654,11 @@ function ProfilePageInner() {
                 await supabase.auth.signOut()
                 router.push('/login')
               }}
-                style={{ display:'flex', alignItems:'center', gap:14, background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:14, padding:'16px 18px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%', marginTop:8 }}>
-                <div style={{ width:40, height:40, borderRadius:11, background:t.red+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🚪</div>
+                style={{ display:'flex', alignItems:'center', gap:14, background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:14, padding:'16px 18px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const, width:'100%', marginTop:8 }}>
+                <div style={{ width:40, height:40, borderRadius:11, background:alpha(t.red, 13), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🚪</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:t.red }}>Log Out</div>
-                  <div style={{ fontSize:12, color:t.red+'99', marginTop:1 }}>Sign out of your account</div>
+                  <div style={{ fontSize:12, color:alpha(t.red, 60), marginTop:1 }}>Sign out of your account</div>
                 </div>
               </button>
 
