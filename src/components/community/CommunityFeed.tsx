@@ -38,6 +38,99 @@ function Avatar({ name, role, size=32, color }:{ name:string, role:string, size?
   )
 }
 
+/**
+ * ImageGrid — renders 1 to 4 images in a social-media-style layout.
+ *   1 image  → full width, max 320px tall
+ *   2 images → side by side, each 50% width
+ *   3 images → one tall left (50%), two stacked right (each 25% height)
+ *   4 images → 2×2 grid
+ *
+ * Images with `giphy.com` in the URL are treated as GIFs and rendered
+ * via a plain <img> (Next's Image component refuses external hosts
+ * without explicit remotePatterns config). All other URLs go through
+ * next/image unoptimized for consistency.
+ *
+ * editable: when true, each tile gets a small × button that calls
+ * onRemove(index). Used only by the composer preview.
+ */
+function ImageGrid({
+  images,
+  editable = false,
+  onRemove,
+}: {
+  images: { url: string; key: string }[]
+  editable?: boolean
+  onRemove?: (idx: number) => void
+}) {
+  const count = images.length
+  if (count === 0) return null
+
+  const Tile = ({ url, idx, style }: { url: string; idx: number; style?: React.CSSProperties }) => (
+    <div style={{ position:'relative', overflow:'hidden', background:'#000', ...style }}>
+      {url.includes('giphy.com') ? (
+        <img
+          src={url}
+          alt="Community post image"
+          onClick={()=>!editable && window.open(url, '_blank')}
+          style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', cursor: editable ? 'default' : 'pointer' }}
+        />
+      ) : (
+        <Image
+          src={url}
+          alt="Community post image"
+          width={640}
+          height={640}
+          unoptimized
+          onClick={()=>!editable && window.open(url, '_blank')}
+          style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', cursor: editable ? 'default' : 'pointer' }}
+        />
+      )}
+      {editable && onRemove && (
+        <button
+          onClick={(e)=>{ e.stopPropagation(); onRemove(idx) }}
+          aria-label="Remove image"
+          style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.75)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1, zIndex:2 }}>×</button>
+      )}
+    </div>
+  )
+
+  // Single-image layout matches the old design: full width, capped
+  // height, no grid wrapper — keeps existing posts visually identical.
+  if (count === 1) {
+    return (
+      <div style={{ borderRadius:10, overflow:'hidden', maxHeight:320 }}>
+        <Tile url={images[0].url} idx={0} style={{ height:'100%', maxHeight:320 }} />
+      </div>
+    )
+  }
+
+  if (count === 2) {
+    return (
+      <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gap:2, aspectRatio:'2 / 1' }}>
+        {images.map((img, i) => <Tile key={img.key} url={img.url} idx={i} />)}
+      </div>
+    )
+  }
+
+  if (count === 3) {
+    return (
+      <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gap:2, aspectRatio:'1 / 1' }}>
+        {/* Left column — tall primary. Spans both rows. */}
+        <Tile url={images[0].url} idx={0} style={{ gridRow:'1 / 3' }} />
+        <Tile url={images[1].url} idx={1} />
+        <Tile url={images[2].url} idx={2} />
+      </div>
+    )
+  }
+
+  // count === 4
+  return (
+    <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', gap:2, aspectRatio:'1 / 1' }}>
+      {images.slice(0, 4).map((img, i) => <Tile key={img.key} url={img.url} idx={i} />)}
+    </div>
+  )
+}
+
 interface Props {
   role: 'coach' | 'client'
   backPath: string
@@ -68,6 +161,13 @@ type CommunityPost = {
   author_role: 'coach' | 'client'
   body: string | null
   image_url: string | null
+  // Support up to 4 images per post. image_url_2..4 are additional
+  // slots populated when the coach attaches multiple photos. Each
+  // column is a raw storage path (same as image_url) OR a full GIPHY
+  // URL when a GIF was attached. Signed on read in loadPosts.
+  image_url_2: string | null
+  image_url_3: string | null
+  image_url_4: string | null
   video_url: string | null
   pinned?: boolean | null
   archived?: boolean | null
@@ -108,11 +208,17 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [replyOpen,    setReplyOpen]    = useState<string|null>(null)
   const [replyPosting, setReplyPosting] = useState<string|null>(null)
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
-  const [mediaFile,    setMediaFile]    = useState<File|null>(null)
-  const [mediaPreview, setMediaPreview] = useState<string|null>(null)
-  const [mediaType,    setMediaType]    = useState<'image'|'video'|null>(null)
-  const [uploading,    setUploading]    = useState(false)
+  // Compose media — images and video are mutually exclusive. A post can
+  // have up to 4 images OR one video OR one GIF. Each imageFiles[i] has
+  // a matching imagePreviews[i] (object URL for <Image src>); revoke the
+  // URL when removed to avoid memory leaks.
+  const [imageFiles,    setImageFiles]    = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [videoFile,     setVideoFile]     = useState<File|null>(null)
+  const [videoPreview,  setVideoPreview]  = useState<string|null>(null)
+  const [uploading,     setUploading]     = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const MAX_IMAGES = 4
   const [showGifPicker, setShowGifPicker] = useState(false)
   const [gifUrl,        setGifUrl]        = useState<string|null>(null)
   const [gifQuery,      setGifQuery]      = useState('')
@@ -142,10 +248,23 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         const { data } = await supabase.storage.from('community-media').createSignedUrl(url, 60 * 60)
         return data?.signedUrl || null
       }
+      // Sign all four image slots in parallel. Each is independent —
+      // one missing image shouldn't block the others. Same TTL as
+      // before (60min), matching the original single-image flow.
+      const [img1, img2, img3, img4, vid] = await Promise.all([
+        resolveUrl(post.image_url),
+        resolveUrl(post.image_url_2),
+        resolveUrl(post.image_url_3),
+        resolveUrl(post.image_url_4),
+        resolveUrl(post.video_url),
+      ])
       return {
         ...post,
-        image_url: await resolveUrl(post.image_url),
-        video_url: await resolveUrl(post.video_url),
+        image_url: img1,
+        image_url_2: img2,
+        image_url_3: img3,
+        image_url_4: img4,
+        video_url: vid,
       }
     }))
     setPosts(resolvedPosts)
@@ -228,19 +347,58 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     return () => clearInterval(intervalId)
   }, [])
 
+  // File input supports multiple when adding images. For video we keep
+  // single-selection. Image attachments append up to MAX_IMAGES; beyond
+  // that we silently drop the overflow — simpler than shouting.
   const attachMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const isVideo = file.type.startsWith('video/')
-    const isImage = file.type.startsWith('image/')
-    if (!isVideo && !isImage) return
-    setMediaFile(file); setMediaType(isVideo ? 'video' : 'image')
-    setMediaPreview(URL.createObjectURL(file)); e.target.value = ''
+    const files = Array.from(e.target.files || [])
+    if (!files.length) { e.target.value = ''; return }
+    const first = files[0]
+    const isVideo = first.type.startsWith('video/')
+    const isImage = first.type.startsWith('image/')
+    if (!isVideo && !isImage) { e.target.value = ''; return }
+
+    if (isVideo) {
+      // Video replaces any existing attachments — can't mix with images.
+      clearAllMedia()
+      setVideoFile(first)
+      setVideoPreview(URL.createObjectURL(first))
+      setGifUrl(null)
+    } else {
+      // Append images up to MAX_IMAGES. If a video was previously staged,
+      // clear it (images take over).
+      if (videoPreview) { URL.revokeObjectURL(videoPreview); setVideoFile(null); setVideoPreview(null) }
+      setGifUrl(null)
+      const imageOnly = files.filter(f => f.type.startsWith('image/'))
+      const remaining = MAX_IMAGES - imageFiles.length
+      const toAdd = imageOnly.slice(0, Math.max(0, remaining))
+      if (toAdd.length) {
+        setImageFiles(prev => [...prev, ...toAdd])
+        setImagePreviews(prev => [...prev, ...toAdd.map(f => URL.createObjectURL(f))])
+      }
+    }
+    e.target.value = ''
   }
 
-  const clearMedia = () => {
-    if (mediaPreview) URL.revokeObjectURL(mediaPreview)
-    setMediaFile(null); setMediaPreview(null); setMediaType(null)
+  const removeImageAt = (idx: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== idx))
+    setImagePreviews(prev => {
+      const url = prev[idx]
+      if (url) URL.revokeObjectURL(url)
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+
+  const clearVideo = () => {
+    if (videoPreview) URL.revokeObjectURL(videoPreview)
+    setVideoFile(null); setVideoPreview(null)
+  }
+
+  const clearAllMedia = () => {
+    imagePreviews.forEach(url => URL.revokeObjectURL(url))
+    setImageFiles([]); setImagePreviews([])
+    if (videoPreview) URL.revokeObjectURL(videoPreview)
+    setVideoFile(null); setVideoPreview(null)
   }
 
   const searchGifs = async (q: string) => {
@@ -260,52 +418,79 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     setShowGifPicker(false)
     setGifQuery('')
     setGifs([])
-    clearMedia()
+    clearAllMedia()
   }
 
   const post = async () => {
-    if (!draft.trim() && !mediaFile && !gifUrl) return
+    const hasContent = draft.trim() || imageFiles.length > 0 || videoFile || gifUrl
+    if (!hasContent) return
     if (!me || !coachId) return
     setPosting(true)
-    let imageUrl: string|null = null
-    let videoUrl: string|null = null
-    if (mediaFile && mediaType) {
+
+    // Upload every staged image in parallel. Each returns its storage
+    // path or null on failure; we drop nulls rather than silently
+    // advance-failing a post (an orphaned image is worse than one
+    // image quietly missing from a 4-pic post — but at least the post
+    // is clearly broken, prompting user to retry). If ALL uploads fail
+    // we abort the post.
+    let imagePaths: string[] = []
+    if (imageFiles.length > 0) {
       setUploading(true)
-      const ext  = mediaFile.name.split('.').pop()
+      const results = await Promise.all(imageFiles.map(async (file) => {
+        const ext = file.name.split('.').pop() || 'jpg'
+        const path = `${me.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`
+        const { error } = await supabase.storage
+          .from('community-media').upload(path, file, { upsert: false })
+        return error ? null : path
+      }))
+      setUploading(false)
+      imagePaths = results.filter((p): p is string => !!p)
+      if (imagePaths.length === 0 && !draft.trim() && !videoFile && !gifUrl) {
+        alert('All image uploads failed. Please try again.')
+        setPosting(false)
+        return
+      }
+    }
+
+    // Video upload — separate path since video is mutually exclusive
+    // with images and has its own column.
+    let videoPath: string | null = null
+    if (videoFile) {
+      setUploading(true)
+      const ext = videoFile.name.split('.').pop() || 'mp4'
       const path = `${me.id}/${Date.now()}.${ext}`
       const { error } = await supabase.storage
-        .from('community-media').upload(path, mediaFile, { upsert: false })
-      if (!error) {
-        const { data: sd } = await supabase.storage.from('community-media').createSignedUrl(path, 60)
-        if (mediaType === 'image') imageUrl = sd?.signedUrl ? path : null
-        else videoUrl = sd?.signedUrl ? path : null
-      }
+        .from('community-media').upload(path, videoFile, { upsert: false })
+      if (!error) videoPath = path
       setUploading(false)
     }
-    // Announcement flag: only honored on the coach side. The DB has a
-    // check constraint enforcing (is_announcement=false OR author_role=
-    // 'coach'), so a compromised client session can't spoof this.
+
+    // Distribute image paths across image_url / image_url_2/3/4.
+    // Position 0 goes to image_url so existing clients (mobile app
+    // caching an old query, etc.) still see at least the cover image.
+    // If a GIF was attached and no images, image_url holds the GIF URL.
+    const [p1, p2, p3, p4] = imagePaths
+    const coverImage = p1 ?? (gifUrl && !p1 ? gifUrl : null)
+
     const isAnnouncement = role === 'coach' && asAnnouncement
     const postBody = draft.trim()
     const { data: inserted, error: insertErr } = await supabase.from('community_posts').insert({
       coach_id: coachId, author_id: me.id, author_role: role,
       body: postBody,
       is_announcement: isAnnouncement,
-      ...(imageUrl && { image_url: imageUrl }),
-      ...(gifUrl && !imageUrl && { image_url: gifUrl }),
-      ...(videoUrl && { video_url: videoUrl }),
+      image_url:   coverImage,
+      image_url_2: p2 ?? null,
+      image_url_3: p3 ?? null,
+      image_url_4: p4 ?? null,
+      video_url:   videoPath,
     }).select('id').single()
     if (insertErr) {
       alert('Could not post: ' + insertErr.message)
       setPosting(false)
       return
     }
-    // Announcement → fan out push to every active client under this
-    // coach. Rule 8: push is fire-and-forget. We don't await per-client
-    // invocations, and every one has a .catch(()=>{}) so a single
-    // failed send doesn't block the rest. At current scale (handful
-    // of clients) a client-side loop is fine; at 100+ clients this
-    // belongs in a broadcast Edge Function.
+
+    // Announcement → fan out push. Fire-and-forget per rule 8.
     if (isAnnouncement && inserted) {
       const { data: activeClients } = await supabase.from('clients')
         .select('profile_id')
@@ -328,7 +513,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         }).catch(() => {})
       }
     }
-    setDraft(''); clearMedia(); setGifUrl(null); setAsAnnouncement(false); setPosting(false); await loadPosts()
+    setDraft(''); clearAllMedia(); setGifUrl(null); setAsAnnouncement(false); setPosting(false); await loadPosts()
   }
 
   const deletePost = async (postId: string) => {
@@ -427,16 +612,31 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   placeholder="Share a win, ask a question, hype someone up... 🔥"
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", lineHeight:1.5 }}
                 />
-                {mediaPreview && (
-                  <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
-                    {mediaType === 'image'
-                      ? <Image src={mediaPreview} alt="Attachment preview" width={600} height={240} unoptimized style={{ width:'100%', maxHeight:240, height:'auto', objectFit:'cover', display:'block' }}/>
-                      : <video src={mediaPreview} controls style={{ width:'100%', maxHeight:240, display:'block' }}/>
-                    }
-                    <button onClick={clearMedia} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
+                {/* Multi-image composer preview. Renders the same grid
+                    layout the post card uses so the coach sees exactly
+                    what clients will see. Each tile has its own × to
+                    remove; the grid auto-collapses as tiles leave. */}
+                {imagePreviews.length > 0 && (
+                  <div style={{ marginTop:8 }}>
+                    <ImageGrid
+                      images={imagePreviews.map((url, i) => ({ url, key: `preview-${i}` }))}
+                      editable
+                      onRemove={removeImageAt}
+                    />
+                    {imagePreviews.length < MAX_IMAGES && (
+                      <div style={{ fontSize:10, color:t.textMuted, marginTop:6, textAlign:'center' }}>
+                        {imagePreviews.length} of {MAX_IMAGES} images · tap 🖼️ to add more
+                      </div>
+                    )}
                   </div>
                 )}
-                {gifUrl && !mediaPreview && (
+                {videoPreview && (
+                  <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
+                    <video src={videoPreview} controls style={{ width:'100%', maxHeight:240, display:'block' }}/>
+                    <button onClick={clearVideo} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
+                  </div>
+                )}
+                {gifUrl && imagePreviews.length === 0 && !videoPreview && (
                   <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
                     <img src={gifUrl} alt="GIF" style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }}/>
                     <button onClick={()=>setGifUrl(null)} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
@@ -465,9 +665,27 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                 )}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
                   <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-                    <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={attachMedia} style={{ display:'none' }}/>
-                    <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','image/*'); fileInputRef.current?.click() }} title="Add photo" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🖼️</button>
-                    <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','video/*'); fileInputRef.current?.click() }} title="Add video" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🎥</button>
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple onChange={attachMedia} style={{ display:'none' }}/>
+                    <button
+                      onClick={()=>{
+                        const el = fileInputRef.current
+                        if (!el) return
+                        // Images: allow multi-select, up to the remaining
+                        // slots. Video: always single.
+                        el.setAttribute('accept', 'image/*')
+                        el.setAttribute('multiple', 'multiple')
+                        el.click()
+                      }}
+                      disabled={imageFiles.length >= MAX_IMAGES}
+                      title={imageFiles.length >= MAX_IMAGES ? `Max ${MAX_IMAGES} images per post` : 'Add photo(s)'}
+                      style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:imageFiles.length >= MAX_IMAGES ? 'not-allowed' : 'pointer', color:t.textMuted, lineHeight:1, opacity: imageFiles.length >= MAX_IMAGES ? 0.4 : 1 }}>🖼️</button>
+                    <button onClick={()=>{
+                        const el = fileInputRef.current
+                        if (!el) return
+                        el.setAttribute('accept', 'video/*')
+                        el.removeAttribute('multiple')
+                        el.click()
+                      }} title="Add video" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🎥</button>
                     <button onClick={()=>{ setShowGifPicker(p=>!p); if(!gifs.length) searchGifs('') }} title="Add GIF" style={{ background:showGifPicker?t.tealDim:'none', border:'1px solid '+(showGifPicker?t.teal:t.border), borderRadius:8, padding:'5px 10px', fontSize:12, fontWeight:800, cursor:'pointer', color:showGifPicker?t.teal:t.textMuted, lineHeight:1 }}>GIF</button>
                     {/* Coach-only announcement toggle — when on, post gets
                         prominent styling + push notifications to every
@@ -493,8 +711,8 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       </button>
                     )}
                   </div>
-                  <button onClick={post} disabled={posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl)}
-                    style={{ background:(draft.trim()||mediaFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':'transparent', border:'1px solid '+((draft.trim()||mediaFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  <button onClick={post} disabled={posting||uploading||(!draft.trim()&&imageFiles.length===0&&!videoFile&&!gifUrl)}
+                    style={{ background:(draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':'transparent', border:'1px solid '+((draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&imageFiles.length===0&&!videoFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {uploading?'Uploading...':posting?'...':'Post 🔥'}
                   </button>
                 </div>
@@ -582,15 +800,21 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     )}
                   </div>
                   {p.body && <div style={{ fontSize:13, lineHeight:1.65, marginBottom:10 }}>{p.body}</div>}
-                  {p.image_url && (
-                    <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
-                      {p.image_url?.includes('giphy.com') ? (
-                        <img src={p.image_url} alt="GIF" style={{ width:'100%', maxHeight:320, objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url || undefined,'_blank')}/>
-                      ) : (
-                        <Image src={p.image_url!} alt="Community post image" width={640} height={320} unoptimized style={{ width:'100%', maxHeight:320, height:'auto', objectFit:'cover', display:'block', cursor:'pointer' }} onClick={()=>window.open(p.image_url || undefined,'_blank')}/>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    // Collect non-null images into an array. If only
+                    // image_url is set (legacy single-image post or
+                    // GIF), ImageGrid still renders the one-up layout
+                    // identical to the old single-image case.
+                    const imgs = [p.image_url, p.image_url_2, p.image_url_3, p.image_url_4]
+                      .filter((u): u is string => !!u)
+                      .map((url, i) => ({ url, key: `${p.id}-${i}` }))
+                    if (imgs.length === 0) return null
+                    return (
+                      <div style={{ marginBottom:10 }}>
+                        <ImageGrid images={imgs} />
+                      </div>
+                    )
+                  })()}
                   {p.video_url && (
                     <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
                       <video src={p.video_url} controls playsInline style={{ width:'100%', maxHeight:320, display:'block', background:'#000' }}/>
