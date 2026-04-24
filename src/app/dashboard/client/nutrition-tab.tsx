@@ -175,6 +175,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const videoRef = useRef<HTMLVideoElement>(null)
   const cameraStreamRef = useRef<MediaStream | null>(null)
   const scanningRef = useRef(false)
+  // zxing reader lives in a ref so stopCamera can actually dispose it.
+  // Without this, each startCamera() created a new local reader whose
+  // internal decode loop kept running after the local went out of scope —
+  // next scan would fire the OLD reader's callback with a cached result,
+  // making it look like the previous barcode was scanned again. Typed as
+  // any because @zxing/browser is imported dynamically.
+  const zxingReaderRef = useRef<{ reset?: () => void } | null>(null)
   // Photo log state (replaces old AI recognition)
   const imageInputRef     = useRef<HTMLInputElement>(null)
   const imageGalleryRef   = useRef<HTMLInputElement>(null)
@@ -556,8 +563,16 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         try {
           const { BrowserMultiFormatReader } = await import('@zxing/browser')
           const reader = new BrowserMultiFormatReader()
+          zxingReaderRef.current = reader as unknown as { reset?: () => void }
           if (videoRef.current) {
-            reader.decodeFromVideoElement(videoRef.current, (result, err) => {
+            reader.decodeFromVideoElement(videoRef.current, (result, _err) => {
+              // Guard against stale callbacks firing after stopCamera.
+              // decodeFromVideoElement keeps its own internal loop alive
+              // until reader.reset() is called, and we can't always
+              // guarantee reset has finished when the next scan starts.
+              // scanningRef flips false in stopCamera, so checking it
+              // here prevents the old reader from smuggling a cached
+              // result into the new session.
               if (result && scanningRef.current) {
                 const code = result.getText()
                 stopCamera()
@@ -579,6 +594,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
 
   function stopCamera() {
     scanningRef.current = false
+    // Dispose the zxing reader if one is active. Without this, its
+    // internal decode loop keeps running and can fire a cached detection
+    // into the next camera session, re-popping the previous scan.
+    if (zxingReaderRef.current) {
+      try { zxingReaderRef.current.reset?.() } catch { /* ignore */ }
+      zxingReaderRef.current = null
+    }
     cameraStreamRef.current?.getTracks().forEach(t => t.stop())
     cameraStreamRef.current = null
     setCameraOpen(false)
@@ -890,7 +912,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             </div>
             <div style={{ display:'flex', gap:8 }}>
               <button
-                onClick={()=>{ setAddMode(returnMode) }}
+                onClick={()=>{
+                  // Clear per-mode state before reopening so we don't
+                  // show stale values (barcode input prefilled with the
+                  // last scanned code, an old search query, etc.).
+                  setBarcodeVal(''); setBarcodeErr('')
+                  setSearchQ(''); setSearchResults([]); setSearchError('')
+                  setAddMode(returnMode)
+                }}
                 style={{ flex:1, background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'11px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 + Add More
               </button>

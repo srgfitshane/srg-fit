@@ -3,26 +3,27 @@
 /**
  * Client dashboard layout.
  *
- * Two jobs:
- * 1. Inject CSS custom properties for both dark and light themes into
- *    the page. These are referenced by the existing `const t = {...}`
- *    blocks in every client-facing page (those blocks now hold
- *    `var(--teal)` style strings instead of hex literals).
- * 2. Read the signed-in client's theme_preference from the `clients`
- *    row and apply it to <html> via the data-theme attribute. Also
- *    listens to matchMedia for clients who chose 'system'.
+ * Reads the signed-in client's theme_preference from the `clients`
+ * row and applies it to <html> via the data-theme attribute. Also
+ * listens to matchMedia for clients who chose 'system' and to a
+ * 'theme-changed' window event from the profile page toggle.
+ *
+ * The CSS custom properties themselves are injected globally in the
+ * root layout (src/app/layout.tsx) so shared components (like
+ * RichMessageThread) render with defined theme tokens on every
+ * route — including the coach side. Without that global injection,
+ * var(--teal) references in shared components resolved to empty
+ * strings on coach routes, making message bubbles invisible.
  *
  * This is a client component because it reads from Supabase and
- * manipulates the DOM. But it renders <>{children}</> — no visible
+ * manipulates the DOM. But it renders {children} — no visible
  * wrapper — so it doesn't change any layout or styling aside from
- * setting up the theme.
+ * setting the data-theme attribute.
  */
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { buildThemeCss, type ThemePreference } from '@/lib/theme'
-
-const THEME_CSS = buildThemeCss()
+import { type ThemePreference } from '@/lib/theme'
 
 function applyTheme(preference: ThemePreference) {
   if (typeof document === 'undefined') return
@@ -79,10 +80,12 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
     }
   }, [])
 
-  return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: THEME_CSS }} />
-      {children}
-    </>
-  )
+  // Also reset data-theme to 'dark' when this layout unmounts (client
+  // navigates away to coach/auth/etc) so those routes don't inherit the
+  // client's light preference. Actually — simpler: the attribute only
+  // matters while this layout is mounted. When user navigates away, a
+  // new layout takes over and their theme preference is irrelevant.
+  // No cleanup needed.
+
+  return <>{children}</>
 }

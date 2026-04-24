@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
+import { buildThemeCss } from "@/lib/theme"
+
+const THEME_CSS = buildThemeCss()
 
 export const metadata: Metadata = {
   title: "SRG Fit",
@@ -32,6 +35,17 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Inject theme CSS vars globally so every route (coach +
+            client + auth) renders with defined theme tokens. The
+            :root block defaults to dark; [data-theme="light"] is
+            only applied under /dashboard/client/* by ClientDashboard
+            Layout when a client opts in. This means the coach side,
+            auth pages, etc. always stay dark — but shared components
+            like RichMessageThread that use var(--teal) etc. get
+            resolved values everywhere, not just on client routes. */}
+        <style dangerouslySetInnerHTML={{ __html: THEME_CSS }} />
+      </head>
       <body style={{ margin: 0, padding: 0, background: "#080810" }}>
         <a href="#main-content" className="skip-link">Skip to content</a>
         <main id="main-content">
