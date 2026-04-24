@@ -252,8 +252,10 @@ export default function CheckinForm() {
           const { data: uploadData } = await supabase.storage
             .from('workout-reviews').upload(path, val, { upsert: true })
           if (uploadData) {
-            const { data: urlData } = supabase.storage.from('workout-reviews').getPublicUrl(path)
-            responseData[key] = urlData?.publicUrl || null
+            // Store the raw storage path. Bucket is private; any URL
+            // generated here either expires (signed, 1hr TTL) or 403s
+            // (public). Whoever reads this response should sign on read.
+            responseData[key] = path
           }
         } catch { responseData[key] = null }
       } else {

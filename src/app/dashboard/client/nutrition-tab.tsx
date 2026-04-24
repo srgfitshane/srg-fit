@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
@@ -194,7 +195,21 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     if (dailyLog) {
       setLog(dailyLog)
       const { data: ents } = await supabase.from('food_entries').select('*').eq('daily_log_id', dailyLog.id).order('logged_at')
-      setEntries(ents || [])
+      // photo_url holds a raw storage path for new photo entries, or a
+      // legacy Supabase public URL for entries saved before the security
+      // migration. Either way resolveSignedMediaUrl handles it — it strips
+      // the public-URL prefix if present and signs. Bucket is private so
+      // getPublicUrl would 403, and a signed URL written at save time
+      // would expire in an hour. One signer call per photo entry, in
+      // parallel.
+      const signedEnts = await Promise.all((ents || []).map(async (e: FoodEntry) => {
+        if (e.source === 'photo' && e.photo_url) {
+          const signed = await resolveSignedMediaUrl(supabase, 'workout-reviews', e.photo_url)
+          return { ...e, photo_url: signed }
+        }
+        return e
+      }))
+      setEntries(signedEnts)
     } else { setLog(null); setEntries([]) }
     const { data: prev } = await supabase.from('food_entries')
       .select('food_name,calories,protein_g,carbs_g,fat_g,serving_size,serving_qty,logged_at,source')
@@ -467,8 +482,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       const path = `food-photos/${clientRecord.id}/${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage.from('workout-reviews').upload(path, file, { upsert: false })
       if (upErr) throw new Error(upErr.message)
-      const { data: urlData } = supabase.storage.from('workout-reviews').getPublicUrl(path)
-      setPhotoStorageUrl(urlData.publicUrl)
+      // Store the raw storage path — not a URL. The bucket is private,
+      // so any URL we generate here would either expire (signed) or
+      // 403 (public). photo_url in food_entries holds the path; loadData
+      // signs it on read. Preview in the meal picker uses the local
+      // object URL via photoPreviewUrl instead of this value.
+      setPhotoStorageUrl(path)
     } catch (e) {
       setPhotoErr('Upload failed — try again.')
       setPhotoPreviewUrl(null)
@@ -908,9 +927,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         {/* PENDING FOOD — meal picker (shared by all modes) */}
         {pendingFood && (
           <div style={{ background:t.surface, border:`1px solid ${t.teal}40`, borderRadius:16, padding:16, marginBottom:16 }}>
-            {/* Photo preview in meal picker */}
-            {pendingFood.source === 'photo' && pendingFood.photo_url && (
-              <img src={pendingFood.photo_url} alt="Food"
+            {/* Photo preview in meal picker — use the local object URL
+                (still alive in state); pendingFood.photo_url is a raw
+                storage path, not a displayable URL. */}
+            {pendingFood.source === 'photo' && photoPreviewUrl && (
+              <img src={photoPreviewUrl} alt="Food"
                 style={{ width:'100%', borderRadius:10, marginBottom:12, maxHeight:200, objectFit:'cover', display:'block' }}/>
             )}
             <div style={{ fontSize:13, fontWeight:800, marginBottom:12 }}>
