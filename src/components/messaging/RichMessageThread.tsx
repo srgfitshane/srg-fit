@@ -389,13 +389,30 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
-      const rec = new MediaRecorder(stream)
+      // iOS Safari does not support audio/webm on MediaRecorder. Prefer mp4
+      // if available (that's what iOS will actually record) and fall back to
+      // webm for Chrome/Firefox. Without this, iOS records audio/mp4 anyway
+      // but our code labels it audio/webm — browsers then refuse to play it
+      // back because the container doesn't match the declared Content-Type.
+      const preferredTypes = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+      const chosenType = preferredTypes.find(tp =>
+        typeof MediaRecorder !== 'undefined' &&
+        typeof MediaRecorder.isTypeSupported === 'function' &&
+        MediaRecorder.isTypeSupported(tp)
+      ) || ''
+      const rec = chosenType ? new MediaRecorder(stream, { mimeType: chosenType }) : new MediaRecorder(stream)
       mediaRecRef.current = rec
       chunksRef.current = []
       rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       rec.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' })
+        // Use whatever mime type the recorder actually produced (rec.mimeType
+        // is the ground truth, even if it differs from what we requested).
+        const actualMime = rec.mimeType || chosenType || 'audio/webm'
+        const ext = actualMime.includes('mp4') ? 'mp4'
+                  : actualMime.includes('ogg') ? 'ogg'
+                  : 'webm'
+        const blob = new Blob(chunksRef.current, { type: actualMime })
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: actualMime })
         await uploadAndSend(file, 'audio')
         stream.getTracks().forEach(t => t.stop())
         streamRef.current = null
