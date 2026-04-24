@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -198,7 +199,7 @@ export default function ClientMetrics() {
           </div>
 
           <button onClick={handleSave} disabled={saving}
-            style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
+            style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
             {saving ? 'Saving...' : '💾 Save Measurements'}
           </button>
 

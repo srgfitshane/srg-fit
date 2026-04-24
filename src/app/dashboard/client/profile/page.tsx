@@ -256,7 +256,7 @@ function ProfilePageInner() {
             <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedSections}/{INTAKE_SECTIONS.length} sections complete</div>
           </div>
           <button onClick={save} disabled={saving}
-            style={{ background: saved?t.green:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', opacity:saving?.6:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
+            style={{ background: saved?t.green:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', opacity:saving?.6:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
             {saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save'}
           </button>
         </div>
@@ -548,7 +548,7 @@ function ProfilePageInner() {
               </div>
 
               {/* Save / complete CTA */}
-              <div style={{ background:'linear-gradient(135deg,'+t.teal+'15,'+t.green+'08)', border:'1px solid '+alpha(t.teal, 19), borderRadius:16, padding:20, textAlign:'center', marginTop:8 }}>
+              <div style={{ background:'linear-gradient(135deg,'+alpha(t.teal, 8) + ','+alpha(t.green, 3) + ')', border:'1px solid '+alpha(t.teal, 19), borderRadius:16, padding:20, textAlign:'center', marginTop:8 }}>
                 <div style={{ fontSize:18, marginBottom:8 }}>🎯</div>
                 <div style={{ fontSize:14, fontWeight:800, marginBottom:6 }}>Ready to submit your intake?</div>
                 <div style={{ fontSize:12, color:t.textMuted, marginBottom:14 }}>Make sure you&apos;ve filled out what you can across all sections, then hit Save above.</div>

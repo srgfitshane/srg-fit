@@ -306,7 +306,7 @@ export default function CheckinForm() {
         <div style={{ fontSize:22, fontWeight:900, marginBottom:8 }}>Check-in submitted!</div>
         <div style={{ fontSize:14, color:t.textMuted, lineHeight:1.6, marginBottom:28 }}>Your coach will review it shortly. Keep crushing it!</div>
         <button onClick={()=>router.push('/dashboard/client')}
-          style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+          style={{ background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
           Back to Dashboard
         </button>
       </div>
@@ -416,7 +416,7 @@ export default function CheckinForm() {
               </div>
             )}
             <button onClick={handleSubmit} disabled={submitting || !canSubmit}
-              style={{ width:'100%', background: canSubmit ? 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)' : t.surfaceHigh,
+              style={{ width:'100%', background: canSubmit ? 'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')' : t.surfaceHigh,
                 border:'none', borderRadius:14, padding:'15px', fontSize:15, fontWeight:900,
                 color: canSubmit ? '#000' : t.textMuted, cursor: canSubmit ? 'pointer' : 'not-allowed',
                 fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>

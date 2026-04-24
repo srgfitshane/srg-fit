@@ -424,7 +424,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     <button onClick={()=>{ setShowGifPicker(p=>!p); if(!gifs.length) searchGifs('') }} title="Add GIF" style={{ background:showGifPicker?t.tealDim:'none', border:'1px solid '+(showGifPicker?t.teal:t.border), borderRadius:8, padding:'5px 10px', fontSize:12, fontWeight:800, cursor:'pointer', color:showGifPicker?t.teal:t.textMuted, lineHeight:1 }}>GIF</button>
                   </div>
                   <button onClick={post} disabled={posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl)}
-                    style={{ background:(draft.trim()||mediaFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)':'transparent', border:'1px solid '+((draft.trim()||mediaFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    style={{ background:(draft.trim()||mediaFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':'transparent', border:'1px solid '+((draft.trim()||mediaFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {uploading?'Uploading...':posting?'...':'Post 🔥'}
                   </button>
                 </div>

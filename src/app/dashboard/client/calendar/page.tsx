@@ -353,7 +353,7 @@ export default function ClientCalendarPage() {
                     )}
                     {e.type==='workout' && e.source_id && e.status !== 'completed' && (
                       <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
-                        style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'11px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:10, padding:'11px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         {e.status==='in_progress' ? '▶ Continue Workout' : '💪 Start Workout'}
                       </button>
                     )}

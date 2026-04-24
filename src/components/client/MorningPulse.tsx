@@ -217,7 +217,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
               </div>
             ))}
             <button onClick={()=>setStep('journal')}
-              style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', color:'#fff', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
+              style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80) + ')', color:'#fff', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
               Next →
             </button>
           </div>
@@ -250,7 +250,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
                   Skip
                 </button>
                 <button onClick={()=>save(journal, isPrivate)} disabled={saving}
-                  style={{ ...btnBase, background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1 }}>
+                  style={{ ...btnBase, background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1 }}>
                   {saving?'Saving...':'Done ✓'}
                 </button>
               </div>
