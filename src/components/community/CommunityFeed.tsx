@@ -71,6 +71,7 @@ type CommunityPost = {
   video_url: string | null
   pinned?: boolean | null
   archived?: boolean | null
+  is_announcement?: boolean | null
   created_at: string
   reactions?: CommunityReaction[]
 }
@@ -96,6 +97,12 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [loading,      setLoading]      = useState(true)
   const [draft,        setDraft]        = useState('')
   const [posting,      setPosting]      = useState(false)
+  // Coach-only: flag the compose as an announcement. Checked → insert
+  // with is_announcement=true and fan out a push to every active
+  // client under this coach. State is kept unconditional (even on
+  // client role) so React hooks order stays stable; the toggle UI
+  // only renders when role === 'coach'.
+  const [asAnnouncement, setAsAnnouncement] = useState(false)
   const [reactOpen,    setReactOpen]    = useState<string|null>(null)
   const [replyDrafts,  setReplyDrafts]  = useState<Record<string,string>>({})
   const [replyOpen,    setReplyOpen]    = useState<string|null>(null)
@@ -124,6 +131,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .select('*, reactions:community_reactions(*)')
       .eq('coach_id', id)
       .eq('archived', false)
+      .order('is_announcement', { ascending: false })
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
@@ -274,14 +282,53 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       }
       setUploading(false)
     }
-    await supabase.from('community_posts').insert({
+    // Announcement flag: only honored on the coach side. The DB has a
+    // check constraint enforcing (is_announcement=false OR author_role=
+    // 'coach'), so a compromised client session can't spoof this.
+    const isAnnouncement = role === 'coach' && asAnnouncement
+    const postBody = draft.trim()
+    const { data: inserted, error: insertErr } = await supabase.from('community_posts').insert({
       coach_id: coachId, author_id: me.id, author_role: role,
-      body: draft.trim(),
+      body: postBody,
+      is_announcement: isAnnouncement,
       ...(imageUrl && { image_url: imageUrl }),
       ...(gifUrl && !imageUrl && { image_url: gifUrl }),
       ...(videoUrl && { video_url: videoUrl }),
-    })
-    setDraft(''); clearMedia(); setGifUrl(null); setPosting(false); await loadPosts()
+    }).select('id').single()
+    if (insertErr) {
+      alert('Could not post: ' + insertErr.message)
+      setPosting(false)
+      return
+    }
+    // Announcement → fan out push to every active client under this
+    // coach. Rule 8: push is fire-and-forget. We don't await per-client
+    // invocations, and every one has a .catch(()=>{}) so a single
+    // failed send doesn't block the rest. At current scale (handful
+    // of clients) a client-side loop is fine; at 100+ clients this
+    // belongs in a broadcast Edge Function.
+    if (isAnnouncement && inserted) {
+      const { data: activeClients } = await supabase.from('clients')
+        .select('profile_id')
+        .eq('coach_id', coachId)
+        .not('profile_id', 'is', null)
+      const recipientIds = (activeClients || [])
+        .map(c => c.profile_id)
+        .filter((pid): pid is string => !!pid && pid !== me.id)
+      const coachName = me.full_name?.split(' ')[0] || 'Coach Shane'
+      const snippet = postBody.length > 80 ? postBody.slice(0, 80) + '…' : postBody
+      for (const uid of recipientIds) {
+        supabase.functions.invoke('send-notification', {
+          body: {
+            user_id: uid,
+            notification_type: 'announcement',
+            title: `📣 ${coachName} posted an announcement`,
+            body: snippet || 'New announcement',
+            link_url: '/dashboard/client/community',
+          }
+        }).catch(() => {})
+      }
+    }
+    setDraft(''); clearMedia(); setGifUrl(null); setAsAnnouncement(false); setPosting(false); await loadPosts()
   }
 
   const deletePost = async (postId: string) => {
@@ -417,11 +464,34 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   </div>
                 )}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
-                  <div style={{ display:'flex', gap:6 }}>
+                  <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
                     <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={attachMedia} style={{ display:'none' }}/>
                     <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','image/*'); fileInputRef.current?.click() }} title="Add photo" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🖼️</button>
                     <button onClick={()=>{ fileInputRef.current?.setAttribute('accept','video/*'); fileInputRef.current?.click() }} title="Add video" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🎥</button>
                     <button onClick={()=>{ setShowGifPicker(p=>!p); if(!gifs.length) searchGifs('') }} title="Add GIF" style={{ background:showGifPicker?t.tealDim:'none', border:'1px solid '+(showGifPicker?t.teal:t.border), borderRadius:8, padding:'5px 10px', fontSize:12, fontWeight:800, cursor:'pointer', color:showGifPicker?t.teal:t.textMuted, lineHeight:1 }}>GIF</button>
+                    {/* Coach-only announcement toggle — when on, post gets
+                        prominent styling + push notifications to every
+                        active client. */}
+                    {role === 'coach' && (
+                      <button
+                        onClick={()=>setAsAnnouncement(v => !v)}
+                        title={asAnnouncement ? 'Will post as announcement + notify all clients' : 'Mark as announcement (notifies all clients)'}
+                        style={{
+                          background: asAnnouncement ? `linear-gradient(135deg, ${alpha(t.orange, 25)}, ${alpha(t.teal, 19)})` : 'none',
+                          border: '1px solid ' + (asAnnouncement ? t.orange : t.border),
+                          borderRadius: 8,
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          color: asAnnouncement ? t.orange : t.textMuted,
+                          lineHeight: 1,
+                          letterSpacing: 0.3,
+                          fontFamily: "'DM Sans',sans-serif",
+                        }}>
+                        📣 {asAnnouncement ? 'Announcement ON' : 'Announce'}
+                      </button>
+                    )}
                   </div>
                   <button onClick={post} disabled={posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl)}
                     style={{ background:(draft.trim()||mediaFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':'transparent', border:'1px solid '+((draft.trim()||mediaFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||mediaFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&!mediaFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -442,13 +512,38 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           {posts.map((p) => {
             const author      = profiles[p.author_id]
             const isCoach     = p.author_role === 'coach'
+            const isAnnounce  = !!p.is_announcement
             const color       = getColor(p.author_id, p.author_role)
             const grouped     = groupReactions(p.reactions)
             const postReplies = replies[p.id] || []
             const showReplyBox = replyOpen === p.id
+            // Announcement cards get a prominent gradient border. We use
+            // the double-gradient trick (padding-box for body, border-box
+            // for the border image) so the border renders as a filled
+            // gradient, not a muted solid.
+            const cardStyle: React.CSSProperties = isAnnounce
+              ? {
+                  border: '2px solid transparent',
+                  borderRadius: 14,
+                  overflow: 'hidden',
+                  backgroundImage: `linear-gradient(${t.surface}, ${t.surface}), linear-gradient(135deg, ${t.orange}, ${t.teal})`,
+                  backgroundOrigin: 'border-box',
+                  backgroundClip: 'padding-box, border-box',
+                }
+              : {
+                  background: t.surface,
+                  border: '1px solid ' + (p.pinned ? alpha(t.teal, 25) : t.border),
+                  borderRadius: 14,
+                  overflow: 'hidden',
+                }
             return (
-              <div key={p.id} style={{ background:t.surface, border:'1px solid '+(p.pinned?alpha(t.teal, 25):t.border), borderRadius:14, overflow:'hidden' }}>
-                {p.pinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>📌 Pinned</div>}
+              <div key={p.id} style={cardStyle}>
+                {isAnnounce && (
+                  <div style={{ background:`linear-gradient(135deg, ${alpha(t.orange, 80)}, ${alpha(t.teal, 60)})`, padding:'5px 12px', fontSize:10, fontWeight:800, color:'#000', letterSpacing:0.5, display:'flex', alignItems:'center', gap:6 }}>
+                    📣 COACH ANNOUNCEMENT
+                  </div>
+                )}
+                {!isAnnounce && p.pinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>📌 Pinned</div>}
                 <div style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
                     <Avatar name={author?.full_name||'?'} role={p.author_role} color={color} size={30}/>
