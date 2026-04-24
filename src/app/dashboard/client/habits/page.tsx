@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 
 const t = {
-  bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
-  teal:"#00c9b1", tealDim:"#00c9b115", orange:"#f5a623", orangeDim:"#f5a62315",
-  purple:"#8b5cf6", purpleDim:"#8b5cf615", red:"#ef4444", redDim:"#ef444415",
-  yellow:"#eab308", yellowDim:"#eab30815", green:"#22c55e", greenDim:"#22c55e15",
-  text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
+  bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
+  teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)", orangeDim:"var(--orange-dim)",
+  purple:"var(--purple)", purpleDim:"var(--purple-dim)", red:"var(--red)", redDim:"var(--red-dim)",
+  yellow:"var(--yellow)", yellowDim:"var(--yellow-dim)", green:"var(--green)", greenDim:"var(--green-dim)",
+  text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
 }
 
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']

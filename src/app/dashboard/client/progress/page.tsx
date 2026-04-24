@@ -11,12 +11,12 @@ const localDateStr = (d: Date = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 
 const t = {
-  bg:'#0f0f0f', surface:'#1a1a1a', surfaceHigh:'#242424', border:'#2a2a2a',
-  text:'#f0f0f0', textMuted:'#888', textDim:'#aaa',
-  green:'#4ade80', teal:'#2dd4bf', tealDim:'#2dd4bf15',
-  blue:'#60a5fa', purple:'#a78bfa', purpleDim:'#a78bfa15',
-  orange:'#fb923c', pink:'#f472b6',
-  red:'#f87171', yellow:'#facc15',
+  bg:"var(--bg)", surface:"var(--surface)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
+  text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
+  green:"var(--green)", teal:"var(--teal)", tealDim:"var(--teal-dim)",
+  blue:"var(--blue)", purple:"var(--purple)", purpleDim:"var(--purple-dim)",
+  orange:"var(--orange)", pink:"var(--pink)",
+  red:"var(--red)", yellow:"var(--yellow)",
 }
 const TIMEFRAMES = [
   { label:'1M', days:30 }, { label:'3M', days:90 },

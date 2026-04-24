@@ -6,11 +6,11 @@ import { useRouter, useParams } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
-  bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
-  border:'#252538', teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623',
-  accent:'#c8f545', accentDim:'#c8f54515', text:'#f0f0f0', textDim:'#888',
-  textMuted:'#555', red:'#ff4d6d', redDim:'#ff4d6d15', green:'#22c55e',
-  greenDim:'#22c55e15', yellow:'#facc15'
+  bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
+  border:"var(--border)", teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)",
+  accent:"var(--accent)", accentDim:"var(--accent-dim)", text:"var(--text)", textDim:"var(--text-dim)",
+  textMuted:"var(--text-muted)", red:"var(--red)", redDim:"var(--red-dim)", green:"var(--green)",
+  greenDim:"var(--green-dim)", yellow:"var(--yellow)"
 }
 
 interface SetData {

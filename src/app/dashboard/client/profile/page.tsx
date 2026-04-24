@@ -7,13 +7,14 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import type { ThemePreference } from '@/lib/theme'
 
 const t = {
-  bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
-  teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', orangeDim:'#f5a62315',
-  purple:'#8b5cf6', purpleDim:'#8b5cf615', red:'#ef4444', redDim:'#ef444415',
-  green:'#22c55e', greenDim:'#22c55e15',
-  text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
+  bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
+  teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)", orangeDim:"var(--orange-dim)",
+  purple:"var(--purple)", purpleDim:"var(--purple-dim)", red:"var(--red)", redDim:"var(--red-dim)",
+  green:"var(--green)", greenDim:"var(--green-dim)",
+  text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
 }
 
 const SECTIONS = [
@@ -47,6 +48,7 @@ type ProfileRecord = {
 
 type ClientRecord = {
   id: string
+  theme_preference?: ThemePreference | null
 }
 
 export default function ClientProfilePage() {
@@ -130,6 +132,7 @@ function ProfilePageInner() {
   const [saved,     setSaved]     = useState(false)
   const [loading,   setLoading]   = useState(true)
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [themePreference, setThemePreference] = useState<ThemePreference>('dark')
   const photoRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -141,9 +144,10 @@ function ProfilePageInner() {
       const signedAvatar = await resolveSignedMediaUrl(supabase, 'avatars', prof?.avatar_url)
       setProfile(prof ? { ...prof, avatar_url: signedAvatar } : null)
 
-      const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).eq('active', true).single<ClientRecord>()
+      const { data: cl } = await supabase.from('clients').select('id, theme_preference').eq('profile_id', user.id).eq('active', true).single<ClientRecord>()
       if (!cl) { router.push('/dashboard/client'); return }
       setClientId(cl.id)
+      if (cl.theme_preference) setThemePreference(cl.theme_preference)
 
       const { data: existing } = await supabase.from('client_intake_profiles').select('*').eq('client_id', cl.id).single()
       if (existing) {
@@ -160,6 +164,18 @@ function ProfilePageInner() {
   const toggleArray = (field: string, val: string) => {
     const arr: string[] = Array.isArray(intake[field]) ? intake[field].filter((item): item is string => typeof item === 'string') : []
     set(field, arr.includes(val) ? arr.filter((x: string) => x !== val) : [...arr, val])
+  }
+
+  const updateTheme = async (p: ThemePreference) => {
+    // Optimistic: flip the UI immediately via the event, persist in the
+    // background. If the DB write fails we still keep the in-memory state;
+    // next reload will snap back to the DB value.
+    setThemePreference(p)
+    window.dispatchEvent(new CustomEvent('theme-changed', { detail: p }))
+    if (!clientId) return
+    const { error } = await supabase.from('clients')
+      .update({ theme_preference: p }).eq('id', clientId)
+    if (error) console.error('Theme save failed:', error.message)
   }
 
   const save = async () => {
@@ -595,6 +611,42 @@ function ProfilePageInner() {
                 </div>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
+
+              {/* Appearance */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'16px 18px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
+                  <div style={{ width:40, height:40, borderRadius:11, background:t.purpleDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🎨</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:t.text }}>Appearance</div>
+                    <div style={{ fontSize:12, color:t.textMuted, marginTop:1 }}>Choose your vibe — dark, light, or match your device</div>
+                  </div>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                  {(['dark','light','system'] as const).map(opt => {
+                    const active = themePreference === opt
+                    const label = opt === 'dark' ? 'Dark' : opt === 'light' ? 'Light' : 'System'
+                    const icon = opt === 'dark' ? '🌙' : opt === 'light' ? '☀️' : '🔄'
+                    return (
+                      <button key={opt} onClick={() => updateTheme(opt)}
+                        style={{
+                          background: active ? t.tealDim : 'transparent',
+                          border: '1px solid ' + (active ? t.teal + '60' : t.border),
+                          borderRadius: 10,
+                          padding: '10px 8px',
+                          cursor: 'pointer',
+                          fontFamily: "'DM Sans',sans-serif",
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}>
+                        <div style={{ fontSize:18 }}>{icon}</div>
+                        <div style={{ fontSize:11, fontWeight:700, color: active ? t.teal : t.textMuted }}>{label}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
               {/* Log Out */}
               <button onClick={async () => {

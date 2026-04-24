@@ -44,9 +44,9 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
   const unreadCount = notifications.filter(n => !n.is_read).length
 
   const t = {
-    bg: '#0f0f0f', surface: '#1a1a1a', surfaceHigh: '#242424',
-    border: '#2a2a2a', text: '#f0f0f0', textDim: '#888', textMuted: '#555',
-    accent: accentColor
+    bg:"var(--bg)", surface:"var(--surface)", surfaceHigh:"var(--surface-high)",
+    border:"var(--border)", text:"var(--text)", textDim:"var(--text-dim)", textMuted:"var(--text-muted)",
+    accent: accentColor,
   }
 
   const fetchNotifications = useCallback(async () => {

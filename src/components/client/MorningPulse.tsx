@@ -9,10 +9,10 @@ import { createClient } from '@/lib/supabase-browser'
 import { useState } from 'react'
 
 const t = {
-  bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
-  teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', purple:'#8b5cf6', purpleDim:'#8b5cf615',
-  pink:'#f472b6', yellow:'#facc15', green:'#22c55e', red:'#ef4444',
-  text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
+  bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
+  teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)", purple:"var(--purple)", purpleDim:"var(--purple-dim)",
+  pink:"var(--pink)", yellow:"var(--yellow)", green:"var(--green)", red:"var(--red)",
+  text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
 }
 
 interface Props {

@@ -15,10 +15,10 @@ import { resolveSignedMediaUrl } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
 
 const t = {
-  bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
-  teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', purple:'#8b5cf6',
-  green:'#22c55e', pink:'#f472b6', yellow:'#facc15', red:'#ef4444',
-  text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
+  bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
+  teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)", purple:"var(--purple)",
+  green:"var(--green)", pink:"var(--pink)", yellow:"var(--yellow)", red:"var(--red)",
+  text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
 }
 const QUICK_REACTIONS = ['💪','🔥','❤️','🎉','👏','😤','🏆','⚡']
 const CLIENT_COLORS   = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]

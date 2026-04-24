@@ -6,10 +6,10 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 
 const t = {
-  bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
-  teal:"#00c9b1", tealDim:"#00c9b115", orange:"#f5a623",
-  purple:"#8b5cf6", red:"#ef4444", green:"#22c55e", greenDim:"#22c55e15",
-  text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
+  bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
+  teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)",
+  purple:"var(--purple)", red:"var(--red)", green:"var(--green)", greenDim:"var(--green-dim)",
+  text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
 }
 
 const METRICS = [
