@@ -257,15 +257,18 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   useEffect(() => {
     const channel = supabase.channel(`thread-${myId}-${otherId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages',
-        filter: `recipient_id=eq.${myId}` }, (p) => {
+        filter: `recipient_id=eq.${myId}` }, async (p) => {
         const msg = p.new as Message
         if (msg.sender_id === otherId) {
           let mediaUrl = msg.media_url
           if (msg.media_url && !msg.media_url.startsWith('http')) {
             const bucket = MEDIA_BUCKETS[msg.message_type]
             if (bucket) {
-              const { data } = supabase.storage.from(bucket).getPublicUrl(msg.media_url)
-              mediaUrl = data.publicUrl
+              // Private bucket — needs a signed URL, not a public one.
+              // Realtime payload hits us before loadThread would run, so
+              // we sign right here. Async inside the callback is fine;
+              // we just setThread once the URL resolves.
+              mediaUrl = await resolveSignedMediaUrl(supabase, bucket, msg.media_url)
             }
           }
           setThread(prev => [...prev, { ...msg, media_url: mediaUrl, reactions: [] }])
