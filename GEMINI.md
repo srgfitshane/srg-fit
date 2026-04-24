@@ -133,6 +133,11 @@ Light/dark/system theme preference per client, added April 2026.
   `src/lib/theme.ts`, then reference it as `var(--new-key)`.
 - Coach pages intentionally stay on dark-only. The
   `ThemeProvider`-equivalent layout is scoped to `/dashboard/client/*`.
+- **Alpha transparency**: the old pattern `t.orange + 'cc'` (concat
+  a hex alpha) does NOT work with CSS vars. Use the `alpha(color, pct)`
+  helper from `@/lib/theme` instead: `alpha(t.orange, 80)` gives you
+  80% opacity orange. It wraps `color-mix(in srgb, X pct%, transparent)`.
+  Works equally well for hex, var, and named colors.
 
 ## Silent failures are the enemy
 
