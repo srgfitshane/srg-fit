@@ -230,6 +230,7 @@ export default function ClientCalendarPage() {
       title: taskTitle.trim(),
       repeat: taskRepeat,
       due_date: taskRepeat === 'once' ? taskDate : null,
+      icon: taskIcon,
     }).select().single()
     if (data) setTasks(prev => [...prev, data as ClientTask])
     setTaskTitle(''); setTaskRepeat('once'); setTaskDate(todayStr)

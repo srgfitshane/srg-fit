@@ -166,19 +166,21 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       ? await supabase.from('message_reactions').select('*').in('message_id', msgIds)
       : { data: [] }
 
-    const withReactions = msgs.map((m) => {
+    // message-media bucket went private during the security audit, so
+    // getPublicUrl returns 403s. Sign each media URL individually — still
+    // one query per media message but only a signer call, not a fetch.
+    const withReactions = await Promise.all(msgs.map(async (m) => {
       const bucket = MEDIA_BUCKETS[m.message_type]
       let mediaUrl = m.media_url
       if (bucket && m.media_url && !m.media_url.startsWith('http')) {
-        const { data } = supabase.storage.from(bucket).getPublicUrl(m.media_url)
-        mediaUrl = data.publicUrl
+        mediaUrl = await resolveSignedMediaUrl(supabase, bucket, m.media_url)
       }
       return {
         ...m,
         media_url: mediaUrl,
         reactions: (reactions || []).filter(r => r.message_id === m.id),
       }
-    })
+    }))
     setThread(withReactions)
     // Force scroll on initial load
     setTimeout(() => scrollToBottom(true), 0)
@@ -317,14 +319,16 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     const path = `${myId}/${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage.from('message-media').upload(path, file)
     if (upErr) { setUploading(false); alert('Upload failed: ' + upErr.message); return }
-    const { data: urlData } = supabase.storage.from('message-media').getPublicUrl(path)
-    const publicUrl = urlData.publicUrl
+    // Sign the URL so the bubble can play it back immediately (bucket is
+    // private, so getPublicUrl would 403). Null fallback just means the
+    // bubble won't have a playable src until the thread reloads and signs.
+    const signedUrl = await resolveSignedMediaUrl(supabase, 'message-media', path)
     const { data } = await supabase.from('messages').insert({
       sender_id: myId, recipient_id: otherId,
       body: null, message_type: msgType,
       media_url: path, media_type: file.type, read: false,
     }).select().single()
-    if (data) setThread(prev => [...prev, { ...data, media_url: publicUrl, reactions: [] }])
+    if (data) setThread(prev => [...prev, { ...data, media_url: signedUrl, reactions: [] }])
     notifyRecipient(msgType === 'image' ? '📷 Image' : msgType === 'video' ? '🎥 Video' : '📎 File')
     setPreviewFile(null)
     setUploading(false)
