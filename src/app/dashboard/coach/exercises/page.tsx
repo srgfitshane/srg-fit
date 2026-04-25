@@ -335,6 +335,27 @@ export default function ExerciseLibrary() {
                 )}
               </div>
 
+              {/* Demo Image / GIF — used when video is missing */}
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:6}}>Demo Image / GIF (optional)</div>
+                {newEx._imageFile ? (
+                  <div style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:10,padding:'10px 14px',display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:18}}>🖼️</span>
+                    <div style={{flex:1,fontSize:12,color:t.teal}}>{newEx._imageFile.name} • {(newEx._imageFile.size/1024/1024).toFixed(1)}MB</div>
+                    <button onClick={()=>setNewEx(p=>({...p,_imageFile:null}))} style={{background:'none',border:'none',color:t.red,cursor:'pointer',fontSize:16}}>✕</button>
+                  </div>
+                ) : (
+                  <label style={{cursor:'pointer',display:'block'}}>
+                    <input type="file" accept="image/*,image/gif" style={{display:'none'}} onChange={e=>{if(e.target.files?.[0])setNewEx(p=>({...p,_imageFile:e.target.files![0]}))}}/>
+                    <div style={{background:t.surfaceHigh,border:'2px dashed '+t.border,borderRadius:10,padding:'14px',fontSize:13,color:t.textMuted,textAlign:'center'}}
+                      onMouseEnter={e=>(e.currentTarget.style.borderColor=t.teal+'60')}
+                      onMouseLeave={e=>(e.currentTarget.style.borderColor=t.border)}>
+                      🖼️ Upload image or GIF
+                    </div>
+                  </label>
+                )}
+              </div>
+
               {/* Name */}
               <div>
                 <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:6}}>Name *</div>
@@ -445,7 +466,9 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       description: ex.description || '',
       cues: ex.cues || '',
       video_url: ex.video_url || '',
+      image_url: ex.image_url || '',
       _videoFile: null,
+      _imageFile: null,
     })
     onEdit()
   }
@@ -468,7 +491,9 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       description: draft.description || null,
       cues: draft.cues || null,
       video_url: draft._videoFile ? ex.video_url : (draft.video_url || null),
+      image_url: draft._imageFile ? ex.image_url : (draft.image_url || null),
       _videoFile: draft._videoFile || null,
+      _imageFile: draft._imageFile || null,
     })
     setDraft(null)
   }
@@ -711,6 +736,27 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
                   <label style={{cursor:'pointer',flexShrink:0}}>
                     <input type="file" accept="video/*" style={{display:'none'}} onChange={e=>{if(e.target.files?.[0])setDraft((p:any)=>({...p,_videoFile:e.target.files![0]}))}}/>
                     <span style={{display:'inline-block',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:11,color:t.textMuted,cursor:'pointer'}}>📹 Upload</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Image / GIF */}
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>Image / GIF</div>
+              {draft._imageFile ? (
+                <div style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:8,padding:'8px 12px',display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:12,color:t.teal,flex:1}}>🖼️ {draft._imageFile.name}</span>
+                  <button onClick={()=>setDraft((p:any)=>({...p,_imageFile:null}))} style={{background:'none',border:'none',color:t.red,cursor:'pointer'}}>✕</button>
+                </div>
+              ) : (
+                <div style={{display:'flex',gap:8}}>
+                  <input value={draft.image_url} onChange={e=>setDraft((p:any)=>({...p,image_url:e.target.value}))}
+                    placeholder={ex.image_url?'Current image URL (change to replace)':'Paste URL or upload...'}
+                    style={{...inp2(),flex:1,fontSize:11}}/>
+                  <label style={{cursor:'pointer',flexShrink:0}}>
+                    <input type="file" accept="image/*,image/gif" style={{display:'none'}} onChange={e=>{if(e.target.files?.[0])setDraft((p:any)=>({...p,_imageFile:e.target.files![0]}))}}/>
+                    <span style={{display:'inline-block',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'8px 10px',fontSize:11,color:t.textMuted,cursor:'pointer'}}>🖼️ Upload</span>
                   </label>
                 </div>
               )}
