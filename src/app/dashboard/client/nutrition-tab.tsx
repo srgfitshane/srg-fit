@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import { alpha } from '@/lib/theme'
 
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
@@ -968,7 +969,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               </button>
               <button
                 onClick={resetAdd}
-                style={{ flex:1, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                style={{ flex:1, background:`linear-gradient(135deg,${t.teal},${alpha(t.teal,80)})`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#0f0f0f', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Done
               </button>
             </div>
