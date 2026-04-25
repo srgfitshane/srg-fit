@@ -60,7 +60,15 @@ export default function ProgramBuilder() {
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null) // blockId
   const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
-  const [addExTab,   setAddExTab]   = useState<'exercise'|'template'>('exercise')
+  const [addExTab,   setAddExTab]   = useState<'exercise'|'template'|'create'>('exercise')
+  // Quick-create form state for the Create New tab. Pre-fills name from
+  // the current search box so 'searched but missing' becomes 'create it'
+  // in one tap with the name already there.
+  const [newExName,      setNewExName]      = useState('')
+  const [newExEquipment, setNewExEquipment] = useState('')
+  const [newExMuscle,    setNewExMuscle]    = useState('')
+  const [newExMovement,  setNewExMovement]  = useState('')
+  const [newExSaving,    setNewExSaving]    = useState(false)
   const [exSearch,    setExSearch]    = useState('')
   const [exGroup,     setExGroup]     = useState('all')
   const [exMovement,  setExMovement]  = useState('all')
@@ -931,8 +939,8 @@ export default function ProgramBuilder() {
 
               {/* Tab switcher */}
               <div style={{ display:'flex', background:t.surfaceHigh, borderRadius:10, padding:3, gap:2, marginBottom:16 }}>
-                {([['exercise','🏋️ Exercise Library'],['template','💪 From Workout Library']] as const).map(([id,label])=>(
-                  <button key={id} onClick={()=>setAddExTab(id)}
+                {([['exercise','🏋️ Exercise Library'],['template','💪 From Workout Library'],['create','✏️ Create New']] as const).map(([id,label])=>(
+                  <button key={id} onClick={()=>{ setAddExTab(id); if(id==='create') setNewExName(exSearch) }}
                     style={{ flex:1, padding:'7px', borderRadius:8, border:'none', background:addExTab===id?t.teal:'transparent', color:addExTab===id?'#000':t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {label}
                   </button>
@@ -978,6 +986,79 @@ export default function ProgramBuilder() {
                     ))}
                   </div>
                 </>
+              )}
+
+              {/* Create New Exercise tab */}
+              {addExTab === 'create' && (
+                <div style={{ display:'flex', flexDirection:'column' as const, gap:14, overflowY:'auto', flex:1 }}>
+                  <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>
+                    Name is required. Fill in the rest later from the exercise library.
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', display:'block', marginBottom:5 }}>Name *</label>
+                    <input value={newExName} onChange={e=>setNewExName(e.target.value)}
+                      placeholder="e.g. Half Kneeling Pallof Press" autoFocus
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', display:'block', marginBottom:5 }}>Equipment</label>
+                    <select value={newExEquipment} onChange={e=>setNewExEquipment(e.target.value)}
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+                      <option value="">none / unspecified</option>
+                      {['barbell','bodyweight','cable','dumbbell','ez bar','kettlebell','machine','mat','pull-up bar','resistance band','smith machine','trap bar'].map(eq=>(
+                        <option key={eq} value={eq}>{eq.charAt(0).toUpperCase()+eq.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', display:'block', marginBottom:5 }}>Primary Muscle</label>
+                    <select value={newExMuscle} onChange={e=>setNewExMuscle(e.target.value)}
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+                      <option value="">select</option>
+                      {muscleGroups.map(g=>(<option key={g} value={g}>{g}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', display:'block', marginBottom:5 }}>Movement Pattern</label>
+                    <select value={newExMovement} onChange={e=>setNewExMovement(e.target.value)}
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+                      <option value="">select</option>
+                      {movementPatterns.map(m=>(<option key={m} value={m} style={{textTransform:'capitalize'}}>{m}</option>))}
+                    </select>
+                  </div>
+                  <button
+                    disabled={!newExName.trim() || newExSaving}
+                    onClick={async () => {
+                      if (!newExName.trim()) return
+                      setNewExSaving(true)
+                      const { data: created, error } = await supabase.from('exercises').insert({
+                        coach_id: program?.coach_id,
+                        name: newExName.trim(),
+                        muscles: newExMuscle ? [newExMuscle] : [],
+                        ...(newExEquipment && { equipment: newExEquipment }),
+                        ...(newExMovement  && { movement_pattern: newExMovement }),
+                      }).select('id, name').single()
+                      if (error) { alert('Could not create: ' + error.message); setNewExSaving(false); return }
+                      // Reload exercises so the new one appears in search.
+                      const [{ data: p1 }, { data: p2 }] = await Promise.all([
+                        supabase.from('exercises').select('*').order('name').range(0, 999),
+                        supabase.from('exercises').select('*').order('name').range(1000, 1999),
+                      ])
+                      setExercises([...(p1 || []), ...(p2 || [])])
+                      setNewExName(''); setNewExEquipment(''); setNewExMuscle(''); setNewExMovement('')
+                      setNewExSaving(false)
+                      // Switch to library with new name pre-filled so coach can add immediately.
+                      setExSearch(created?.name || '')
+                      setAddExTab('exercise')
+                    }}
+                    style={{ width:'100%', padding:'12px', borderRadius:11, border:'none',
+                      background: newExName.trim() ? 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)' : t.surfaceHigh,
+                      color: newExName.trim() ? '#000' : t.textMuted,
+                      fontSize:14, fontWeight:800, cursor: newExName.trim() ? 'pointer' : 'not-allowed',
+                      fontFamily:"'DM Sans',sans-serif" }}>
+                    {newExSaving ? 'Creating...' : '+ Create Exercise'}
+                  </button>
+                </div>
               )}
 
               {/* Workout Library tab */}
