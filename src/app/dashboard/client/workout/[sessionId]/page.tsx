@@ -58,6 +58,7 @@ interface ExerciseLibraryItem {
   equipment?: string | null
   video_url?: string | null
   video_url_female?: string | null
+  image_url?: string | null
   thumbnail_url?: string | null
   movement_pattern?: string | null
 }
@@ -396,14 +397,14 @@ ${candidateList}`
       })
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
+        .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)')
         .eq('session_id', sessionId).order('order_index')
       const [{ data: exLib1 }, { data: exLib2 }] = await Promise.all([
       supabase.from('exercises')
-        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url')
         .range(0, 999),
       supabase.from('exercises')
-        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url')
         .range(1000, 1999),
     ])
     const exerciseLibrary = [...(exLib1 || []), ...(exLib2 || [])]
@@ -452,7 +453,7 @@ ${candidateList}`
     // Join exercise detail for preview
     const { data: exs } = await supabase
       .from('session_exercises')
-      .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)')
+      .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)')
       .eq('session_id', sessionId)
       .order('order_index')
 
@@ -460,10 +461,10 @@ ${candidateList}`
 
     const [{ data: exLib1 }, { data: exLib2 }] = await Promise.all([
       supabase.from('exercises')
-        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url')
         .range(0, 999),
       supabase.from('exercises')
-        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, thumbnail_url')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url')
         .range(1000, 1999),
     ])
     const exerciseLibrary = [...(exLib1 || []), ...(exLib2 || [])]
@@ -732,7 +733,7 @@ ${candidateList}`
       sets_prescribed: 3,
       reps_prescribed: 10,
       added_by_client: true,
-    }).select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url)').single()
+    }).select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)').single()
     if (error || !newRow) {
       if (error) alert('Could not add exercise: ' + error.message)
       return
@@ -763,7 +764,7 @@ ${candidateList}`
     let exerciseData = null
     if (exerciseId) {
       const { data } = await supabase.from('exercises')
-        .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, thumbnail_url')
+        .select('id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url')
         .eq('id', exerciseId).single()
       exerciseData = data
     }
@@ -1674,13 +1675,17 @@ ${candidateList}`
                           {previewOpen[ex.id] && (() => {
                             const isFemale = clientGender==='female'
                             const demoUrl = (isFemale&&ex.exercise?.video_url_female)?ex.exercise.video_url_female:ex.exercise?.video_url
+                            const imageUrl = ex.exercise?.image_url || null
                             return (
                               <div style={{marginBottom:12}}>
-                                {demoUrl && (
+                                {demoUrl ? (
                                   <video src={demoUrl} controls playsInline preload="metadata"
                                     onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
                                     style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain',marginBottom:8}}/>
-                                )}
+                                ) : imageUrl ? (
+                                  <img src={imageUrl} alt={ex.exercise?.name||'Exercise demo'}
+                                    style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain',marginBottom:8}}/>
+                                ) : null}
                                 {ex.exercise?.description && (
                                   <div style={{padding:'10px 12px',background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,marginBottom:8}}>
                                     <div style={{fontSize:10,fontWeight:800,color:t.textDim,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>About this movement</div>

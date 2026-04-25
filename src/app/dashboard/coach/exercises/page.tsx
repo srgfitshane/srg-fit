@@ -35,7 +35,9 @@ const blank = {
   equipment_list:[] as string[], difficulty:'Intermediate', movement_pattern:'',
   modifiers:[] as string[], is_timed:false, default_duration_seconds:30,
   tags:[] as string[], description:'', cues:'', video_url:'',
+  image_url:'',
   _videoFile: null as File|null,
+  _imageFile: null as File|null,
 }
 
 export default function ExerciseLibrary() {
@@ -65,10 +67,10 @@ export default function ExerciseLibrary() {
     // Fetch in two pages to get past PostgREST's 1000-row server cap
     const [{ data: page1 }, { data: page2 }] = await Promise.all([
       supabase.from('exercises').select(
-        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
+        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,image_url,thumbnail_url,coach_id'
       ).order('name').range(0, 999),
       supabase.from('exercises').select(
-        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,thumbnail_url,coach_id'
+        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,image_url,thumbnail_url,coach_id'
       ).order('name').range(1000, 1999),
     ])
     setExercises([...(page1 || []), ...(page2 || [])])
@@ -80,6 +82,21 @@ export default function ExerciseLibrary() {
     const ext = file.name.split('.').pop()
     const suffix = field === 'video_url_female' ? 'demo_f' : 'demo'
     const path = `${exerciseId}/${suffix}.${ext}`
+    const { error } = await supabase.storage.from('exercise-videos')
+      .upload(path, file, { upsert: true, contentType: file.type })
+    if (error) { setUploading(null); console.error(error); return null }
+    const { data: { publicUrl } } = supabase.storage.from('exercise-videos').getPublicUrl(path)
+    setUploading(null)
+    return publicUrl
+  }
+
+  // Mirror of uploadVideo for static demo media (image or GIF). Stored in the
+  // same exercise-videos bucket under <id>/image.<ext>. Used when no video
+  // exists and we want a still demo or animated GIF instead.
+  const uploadImage = async (exerciseId: string, file: File): Promise<string|null> => {
+    setUploading(exerciseId)
+    const ext = file.name.split('.').pop()
+    const path = `${exerciseId}/image.${ext}`
     const { error } = await supabase.storage.from('exercise-videos')
       .upload(path, file, { upsert: true, contentType: file.type })
     if (error) { setUploading(null); console.error(error); return null }
@@ -101,11 +118,16 @@ export default function ExerciseLibrary() {
       tags: newEx.tags, description: newEx.description || null,
       cues: newEx.cues || null, coach_id: user!.id,
       video_url: newEx.video_url || null,
+      image_url: newEx.image_url || null,
     }
     const { data: saved } = await supabase.from('exercises').insert(payload).select().single()
     if (saved && newEx._videoFile) {
       const url = await uploadVideo(saved.id, newEx._videoFile)
       if (url) { await supabase.from('exercises').update({ video_url: url }).eq('id', saved.id); saved.video_url = url }
+    }
+    if (saved && newEx._imageFile) {
+      const url = await uploadImage(saved.id, newEx._imageFile)
+      if (url) { await supabase.from('exercises').update({ image_url: url }).eq('id', saved.id); saved.image_url = url }
     }
     if (saved) setExercises(p => [saved, ...p].sort((a,b)=>a.name.localeCompare(b.name)))
     setNewEx({...blank}); setShowNew(false); setSaving(false)
@@ -114,18 +136,26 @@ export default function ExerciseLibrary() {
   const saveEdit = async (id: string, changes: any) => {
     setSaving(true)
     const videoFile = changes._videoFile
+    const imageFile = changes._imageFile
     delete changes._videoFile
+    delete changes._imageFile
     const { error } = await supabase.from('exercises').update(changes).eq('id', id)
     if (!error && videoFile) {
       const url = await uploadVideo(id, videoFile)
       if (url) { await supabase.from('exercises').update({ video_url: url }).eq('id', id); changes.video_url = url }
     }
+    if (!error && imageFile) {
+      const url = await uploadImage(id, imageFile)
+      if (url) { await supabase.from('exercises').update({ image_url: url }).eq('id', id); changes.image_url = url }
+    }
     setExercises(p => p.map(e => e.id === id ? { ...e, ...changes } : e))
     setEditingId(null); setSaving(false)
   }
 
-  const quickUpload = async (id: string, file: File, field: 'video_url'|'video_url_female' = 'video_url') => {
-    const url = await uploadVideo(id, file, field)
+  const quickUpload = async (id: string, file: File, field: 'video_url'|'video_url_female'|'image_url' = 'video_url') => {
+    const url = field === 'image_url'
+      ? await uploadImage(id, file)
+      : await uploadVideo(id, file, field as 'video_url'|'video_url_female')
     if (url) {
       await supabase.from('exercises').update({ [field]: url }).eq('id', id)
       setExercises(p => p.map(e => e.id === id ? { ...e, [field]: url } : e))
