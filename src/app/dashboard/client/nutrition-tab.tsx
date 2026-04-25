@@ -172,16 +172,17 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
   const [barcodeErr,      setBarcodeErr]      = useState('')
   const [cameraOpen,      setCameraOpen]      = useState(false)
+  const [cameraKey,       setCameraKey]       = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const cameraStreamRef = useRef<MediaStream | null>(null)
   const scanningRef = useRef(false)
-  // zxing reader lives in a ref so stopCamera can actually dispose it.
-  // Without this, each startCamera() created a new local reader whose
-  // internal decode loop kept running after the local went out of scope —
-  // next scan would fire the OLD reader's callback with a cached result,
-  // making it look like the previous barcode was scanned again. Typed as
-  // any because @zxing/browser is imported dynamically.
-  const zxingReaderRef = useRef<{ reset?: () => void } | null>(null)
+  // ZXing is the iOS Safari fallback. Keep the returned controls and a
+  // session id so old callbacks cannot report a cached result into the
+  // next scan after "Add More".
+  const zxingControlsRef = useRef<{ stop: () => void } | null>(null)
+  const scanSessionRef = useRef(0)
+  const scanStartedAtRef = useRef(0)
+  const lastAcceptedBarcodeRef = useRef<{ code: string; at: number } | null>(null)
   // Photo log state (replaces old AI recognition)
   const imageInputRef     = useRef<HTMLInputElement>(null)
   const imageGalleryRef   = useRef<HTMLInputElement>(null)
@@ -540,8 +541,41 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   if (!clientRecord) return null
 
   // 📷 Camera barcode scanner ───────────────────────────────────────────────
+  function wait(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  async function waitForFreshVideoFrame(video: HTMLVideoElement) {
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth === 0) {
+      await new Promise<void>((resolve) => {
+        const done = () => { video.removeEventListener('loadeddata', done); resolve() }
+        video.addEventListener('loadeddata', done, { once: true })
+      })
+    }
+    const frameCallback = (video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number }).requestVideoFrameCallback
+    if (frameCallback) await new Promise<void>(resolve => frameCallback.call(video, () => resolve()))
+    else await wait(350)
+  }
+
+  function shouldAcceptBarcode(code: string, sessionId: number) {
+    if (!scanningRef.current || scanSessionRef.current !== sessionId) return false
+    // Persistent dup window: same code seen within 5 seconds of last accept is
+    // rejected, even if it spans multiple scan sessions. iOS Safari is the
+    // reason this exists — reopening the camera replays a cached video frame,
+    // so zxing fires its callback with the previous barcode before any fresh
+    // pixels arrive. Cross-session window catches that.
+    const lastAccepted = lastAcceptedBarcodeRef.current
+    if (lastAccepted?.code === code && Date.now() - lastAccepted.at < 5000) return false
+    lastAcceptedBarcodeRef.current = { code, at: Date.now() }
+    return true
+  }
+
   async function startCamera() {
     setBarcodeErr('')
+    stopCamera()
+    const sessionId = scanSessionRef.current + 1
+    scanSessionRef.current = sessionId
+    setCameraKey(key => key + 1)
     setCameraOpen(true)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -549,37 +583,38 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       })
       cameraStreamRef.current = stream
       if (videoRef.current) {
+        videoRef.current.pause()
+        videoRef.current.srcObject = null
         videoRef.current.srcObject = stream
-        videoRef.current.play()
+        await videoRef.current.play()
+        await waitForFreshVideoFrame(videoRef.current)
       }
       scanningRef.current = true
+      scanStartedAtRef.current = Date.now()
 
       // @ts-expect-error BarcodeDetector not in TS lib
       if (typeof BarcodeDetector !== 'undefined') {
         // Native — Android Chrome / desktop
-        scanFrame()
+        scanFrame(sessionId)
       } else {
-        // Fallback — dynamically load @zxing/browser for iOS Safari + Firefox
+        // Fallback — dynamically load @zxing/browser for iOS Safari + Firefox.
+        // The callback's third arg gives us controls without an await race —
+        // crucial because the callback can fire synchronously before the
+        // decodeFromVideoElement promise resolves, and we need to be able to
+        // stop the reader from inside the callback itself.
         try {
           const { BrowserMultiFormatReader } = await import('@zxing/browser')
           const reader = new BrowserMultiFormatReader()
-          zxingReaderRef.current = reader as unknown as { reset?: () => void }
           if (videoRef.current) {
-            reader.decodeFromVideoElement(videoRef.current, (result, _err) => {
-              // Guard against stale callbacks firing after stopCamera.
-              // decodeFromVideoElement keeps its own internal loop alive
-              // until reader.reset() is called, and we can't always
-              // guarantee reset has finished when the next scan starts.
-              // scanningRef flips false in stopCamera, so checking it
-              // here prevents the old reader from smuggling a cached
-              // result into the new session.
-              if (result && scanningRef.current) {
+            reader.decodeFromVideoElement(videoRef.current, (result, _err, controls) => {
+              if (controls) zxingControlsRef.current = controls
+              if (result && shouldAcceptBarcode(result.getText(), sessionId)) {
                 const code = result.getText()
                 stopCamera()
                 void lookupBarcode(code)
               }
               // err is normal when no barcode in frame — ignore
-            })
+            }).catch(() => { /* startup race — stopCamera already ran */ })
           }
         } catch {
           setBarcodeErr('Camera scan unavailable on this browser. Enter the barcode number manually below.')
@@ -594,20 +629,24 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
 
   function stopCamera() {
     scanningRef.current = false
-    // Dispose the zxing reader if one is active. Without this, its
-    // internal decode loop keeps running and can fire a cached detection
-    // into the next camera session, re-popping the previous scan.
-    if (zxingReaderRef.current) {
-      try { zxingReaderRef.current.reset?.() } catch { /* ignore */ }
-      zxingReaderRef.current = null
+    scanSessionRef.current += 1
+    if (zxingControlsRef.current) {
+      try { zxingControlsRef.current.stop() } catch { /* ignore */ }
+      zxingControlsRef.current = null
     }
     cameraStreamRef.current?.getTracks().forEach(t => t.stop())
     cameraStreamRef.current = null
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.srcObject = null
+      videoRef.current.removeAttribute('src')
+      try { videoRef.current.load() } catch { /* ignore */ }
+    }
     setCameraOpen(false)
   }
 
-  async function scanFrame() {
-    if (!scanningRef.current || !videoRef.current) return
+  async function scanFrame(sessionId: number) {
+    if (!scanningRef.current || scanSessionRef.current !== sessionId || !videoRef.current) return
     try {
       // @ts-expect-error BarcodeDetector is not in TS lib yet
       if (typeof BarcodeDetector !== 'undefined') {
@@ -616,6 +655,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         const barcodes = await detector.detect(videoRef.current)
         if (barcodes.length > 0) {
           const code = barcodes[0].rawValue
+          if (!shouldAcceptBarcode(code, sessionId)) {
+            if (scanningRef.current && scanSessionRef.current === sessionId) setTimeout(() => requestAnimationFrame(() => scanFrame(sessionId)), 400)
+            return
+          }
           stopCamera()
           await lookupBarcode(code)
           return
@@ -623,7 +666,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       }
     } catch { /* continue scanning */ }
     // 400ms throttle — fast enough to feel instant, not hammering at 60fps
-    if (scanningRef.current) setTimeout(() => requestAnimationFrame(scanFrame), 400)
+    if (scanningRef.current && scanSessionRef.current === sessionId) setTimeout(() => requestAnimationFrame(() => scanFrame(sessionId)), 400)
   }
 
   function resetAdd() {
@@ -787,7 +830,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             {/* Camera viewfinder */}
             {cameraOpen && (
               <div style={{ position:'relative', marginBottom:12, borderRadius:12, overflow:'hidden', background:'#000', aspectRatio:'16/9' }}>
-                <video ref={videoRef} autoPlay playsInline muted
+                <video key={cameraKey} ref={videoRef} autoPlay playsInline muted
                   style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
                 {/* Scan line overlay */}
                 <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
