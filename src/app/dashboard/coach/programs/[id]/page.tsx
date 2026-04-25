@@ -68,6 +68,7 @@ export default function ProgramBuilder() {
   const [newExEquipment, setNewExEquipment] = useState('')
   const [newExMuscle,    setNewExMuscle]    = useState('')
   const [newExMovement,  setNewExMovement]  = useState('')
+  const [newExImageFile, setNewExImageFile] = useState<File|null>(null)
   const [newExSaving,    setNewExSaving]    = useState(false)
   const [exSearch,    setExSearch]    = useState('')
   const [exGroup,     setExGroup]     = useState('all')
@@ -940,7 +941,7 @@ export default function ProgramBuilder() {
               {/* Tab switcher */}
               <div style={{ display:'flex', background:t.surfaceHigh, borderRadius:10, padding:3, gap:2, marginBottom:16 }}>
                 {([['exercise','🏋️ Exercise Library'],['template','💪 From Workout Library'],['create','✏️ Create New']] as const).map(([id,label])=>(
-                  <button key={id} onClick={()=>{ setAddExTab(id); if(id==='create') setNewExName(exSearch) }}
+                  <button key={id} onClick={()=>{ setAddExTab(id); if(id==='create') { setNewExName(exSearch); setNewExImageFile(null) } }}
                     style={{ flex:1, padding:'7px', borderRadius:8, border:'none', background:addExTab===id?t.teal:'transparent', color:addExTab===id?'#000':t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {label}
                   </button>
@@ -1026,6 +1027,29 @@ export default function ProgramBuilder() {
                       {movementPatterns.map(m=>(<option key={m} value={m} style={{textTransform:'capitalize'}}>{m}</option>))}
                     </select>
                   </div>
+                  {/* Optional demo image / GIF — used when no video exists */}
+                  <div>
+                    <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', display:'block', marginBottom:5 }}>
+                      Demo Image / GIF (optional)
+                    </label>
+                    <label style={{ display:'block', cursor:'pointer' }}>
+                      <input type="file" accept="image/*,image/gif" style={{ display:'none' }}
+                        onChange={e => setNewExImageFile(e.target.files?.[0] || null)} />
+                      <div style={{
+                        background:t.surfaceUp, border:'1px dashed '+t.border, borderRadius:10,
+                        padding:'10px 13px', fontSize:13, color: newExImageFile ? t.text : t.textMuted,
+                        textAlign:'center' as const,
+                      }}>
+                        {newExImageFile ? `✓ ${newExImageFile.name}` : '🖼️ Choose image or GIF'}
+                      </div>
+                    </label>
+                    {newExImageFile && (
+                      <button onClick={()=>setNewExImageFile(null)}
+                        style={{ marginTop:5, background:'none', border:'none', color:t.textMuted, fontSize:11, cursor:'pointer', textDecoration:'underline' }}>
+                        remove
+                      </button>
+                    )}
+                  </div>
                   <button
                     disabled={!newExName.trim() || newExSaving}
                     onClick={async () => {
@@ -1039,6 +1063,17 @@ export default function ProgramBuilder() {
                         ...(newExMovement  && { movement_pattern: newExMovement }),
                       }).select('id, name').single()
                       if (error) { alert('Could not create: ' + error.message); setNewExSaving(false); return }
+                      // Optional image/GIF upload — stored in same bucket as videos under <id>/image.<ext>
+                      if (created && newExImageFile) {
+                        const ext = newExImageFile.name.split('.').pop()
+                        const path = `${created.id}/image.${ext}`
+                        const { error: upErr } = await supabase.storage.from('exercise-videos')
+                          .upload(path, newExImageFile, { upsert: true, contentType: newExImageFile.type })
+                        if (!upErr) {
+                          const { data: { publicUrl } } = supabase.storage.from('exercise-videos').getPublicUrl(path)
+                          await supabase.from('exercises').update({ image_url: publicUrl }).eq('id', created.id)
+                        }
+                      }
                       // Reload exercises so the new one appears in search.
                       const [{ data: p1 }, { data: p2 }] = await Promise.all([
                         supabase.from('exercises').select('*').order('name').range(0, 999),
@@ -1046,6 +1081,7 @@ export default function ProgramBuilder() {
                       ])
                       setExercises([...(p1 || []), ...(p2 || [])])
                       setNewExName(''); setNewExEquipment(''); setNewExMuscle(''); setNewExMovement('')
+                      setNewExImageFile(null)
                       setNewExSaving(false)
                       // Switch to library with new name pre-filled so coach can add immediately.
                       setExSearch(created?.name || '')
