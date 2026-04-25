@@ -114,6 +114,7 @@ they are the reason the app stays coherent at its current scale.
 | 10 | **Emoji Files → Python, Not PowerShell** | PowerShell corrupts UTF-8 when writing/editing files with emoji. Use Python with `io.open(path, 'r', encoding='utf-8', newline='')`. |
 | 11 | **Media URLs → resolveSignedMediaUrl** | `resolveSignedMediaUrl` from `src/lib/media.ts` handles raw paths, Supabase public URLs, and external http URLs. Never pass raw storage paths to `src=` directly. |
 | 12 | **Anthropic API → Server-Side Only** | Never call `api.anthropic.com` from the client. Always proxy through `/api/*` routes. Client-side keys would be public. |
+| 13 | **Theme CSS Injected at Root Layout** | `buildThemeCss()` is called from `src/app/layout.tsx`, not from `dashboard/client/layout.tsx`. The `<style>` element on `<html>` defines `--teal`, `--orange`, etc. globally. Without this, files referencing `var(--teal)` would render with empty strings. The dark/light toggle still scopes via `[data-theme="light"]` on `<html>`, applied only under `/dashboard/client/*`. |
 
 ## Theme system
 
@@ -122,22 +123,41 @@ Light/dark/system theme preference per client, added April 2026.
 - DB: `clients.theme_preference` — `'dark' | 'light' | 'system'`, default `'dark'`
 - Source of truth: `src/lib/theme.ts` exports `themeDark`, `themeLight`,
   `buildThemeCss()`, and `ThemePreference` type.
-- Applied globally via `src/app/dashboard/client/layout.tsx` — injects
-  CSS custom properties once at mount, flips `data-theme` on `<html>`
-  based on DB preference, listens for `theme-changed` window events.
+- Applied globally via `src/app/layout.tsx` (the ROOT layout) —
+  injects a `<style>` element on `<html>` with all CSS custom
+  properties once at build time. `dashboard/client/layout.tsx` only
+  flips `data-theme` on `<html>` based on DB preference and listens
+  for `theme-changed` window events.
+- **Why root, not client layout**: shared components like
+  `RichMessageThread` are used on coach routes too. If theme CSS
+  was only injected under `/dashboard/client/*`, `var(--teal)` would
+  resolve to an empty string on coach pages and styles would silently
+  break.
+- **Per-file migration status**: not every file has been migrated
+  to var tokens. Many client-facing files use the var pattern
+  (`teal: "var(--teal)"`). Some coach files still use inline hex
+  (`teal: "#00c9b1"`) and that's fine — they intentionally stay
+  dark-only. **Always check the local `const t = {...}` block
+  before assuming which pattern applies.**
 - Every client-facing page/component has a local `const t = {...}`
   (or `const c = {...}` in `RichMessageThread`) whose values are
   `"var(--teal)"` style CSS var references, not hex literals.
-- **Don't add hex literals** inside these theme blocks. If a new color
-  is needed, add it to both `themeDark` and `themeLight` in
-  `src/lib/theme.ts`, then reference it as `var(--new-key)`.
+- **Don't add hex literals** inside these theme blocks (in files
+  that have already been migrated). If a new color is needed, add
+  it to both `themeDark` and `themeLight` in `src/lib/theme.ts`,
+  then reference it as `var(--new-key)`.
 - Coach pages intentionally stay on dark-only. The
-  `ThemeProvider`-equivalent layout is scoped to `/dashboard/client/*`.
-- **Alpha transparency**: the old pattern `t.orange + 'cc'` (concat
-  a hex alpha) does NOT work with CSS vars. Use the `alpha(color, pct)`
-  helper from `@/lib/theme` instead: `alpha(t.orange, 80)` gives you
-  80% opacity orange. It wraps `color-mix(in srgb, X pct%, transparent)`.
-  Works equally well for hex, var, and named colors.
+  `data-theme="light"` flip is scoped to `/dashboard/client/*`.
+- **Alpha transparency — the `t.X + 'cc'` bug**: the old pattern
+  `t.orange + 'cc'` (concat a hex alpha suffix) works fine when
+  `t.orange` is `"#f5a623"` (produces `"#f5a623cc"`, valid 8-digit
+  hex). It silently breaks when `t.orange` is `"var(--orange)"`
+  (produces `"var(--orange)cc"`, invalid CSS — the entire
+  declaration is dropped). Symptom: a button or panel with no
+  visible background. Use the `alpha(color, pct)` helper from
+  `@/lib/theme` instead: `alpha(t.orange, 80)` gives you 80%
+  opacity. It wraps `color-mix(in srgb, X pct%, transparent)` and
+  works equally well for hex, var, and named colors.
 
 ## Silent failures are the enemy
 
@@ -163,6 +183,20 @@ Always check **both**:
 
 A table can have RLS enabled with zero policies — that silently blocks
 all operations. Very hard to diagnose if you only check one.
+
+### Visual silent failures
+
+Invalid CSS gets dropped silently by the browser. The element still
+renders, just without the affected style. Common case: a button with
+`background: linear-gradient(135deg, var(--teal), var(--teal)cc)` has
+an invalid second stop, the whole gradient drops, and the button
+renders with no fill. If text on it is dark and the surrounding
+surface is dark, the button appears invisible.
+
+When a user reports "the button isn't there" on what should be a
+rendered element, suspect invalid CSS before assuming the conditional
+is wrong. Check the computed style in DevTools or grep for the
+`t.X + 'cc'` pattern in the file.
 
 ## Supabase-specific gotchas (learned the hard way)
 
@@ -242,6 +276,90 @@ The fast path:
 **Don't** start with a grand refactor. **Don't** add files/folders
 without being asked. **Don't** introduce new dependencies unless
 there's a clear reason — the stack is deliberately tight.
+
+### File-editing discipline
+
+`edit_block` / surgical str-replace tools fail on long files with
+nested JSX because of whitespace sensitivity, mixed line endings,
+and emoji bytes that get corrupted by the shell. **Default to
+Python scripts written via PowerShell heredoc:**
+
+```powershell
+$content = @'
+import io, sys
+PATH = r"C:\Users\Shane\OneDrive\Desktop\srg-fit\src\..."
+with io.open(PATH, 'r', encoding='utf-8', newline='') as f:
+    txt = f.read()
+# ... edits ...
+with io.open(PATH, 'w', encoding='utf-8', newline='') as f:
+    f.write(txt)
+'@; Set-Content -LiteralPath C:\path\script.py -Value $content -Encoding UTF8 -NoNewline
+```
+
+Then run via cmd (not PowerShell, since `python` may not be on the
+PowerShell PATH): `python C:\path\script.py`.
+
+**Line ending awareness is mandatory.** Files in this repo flip
+between LF and CRLF unpredictably (OneDrive sync touches them).
+Always use `newline=""` on read/write to preserve, and detect:
+
+```python
+def detect_nl(s):
+    return "\r\n" if "\r\n" in s else "\n"
+
+def replace_once(txt, old, new, label, nl):
+    old_nl = old.replace("\n", nl)
+    new_nl = new.replace("\n", nl)
+    if old_nl not in txt:
+        raise RuntimeError(f"{label}: anchor missing")
+    if txt.count(old_nl) != 1:
+        raise RuntimeError(f"{label}: matched {txt.count(old_nl)}, expected 1")
+    return txt.replace(old_nl, new_nl, 1)
+```
+
+Write anchors with bare `\n` and let `replace_once` substitute the
+file's actual line ending.
+
+**All-or-nothing pattern**: any failed anchor must `raise
+RuntimeError` BEFORE the final `f.write()`. A partial edit that
+leaves the file in a broken state is worse than no edit at all.
+
+**Anchor strategy**: pick distinctive, ~3-line landmark substrings
+that won't drift. Watch out for unicode characters like em-dash
+(U+2014) and right arrow (U+2192) — they look identical in most
+editors but anchor matching is byte-exact. When an anchor fails,
+dump the actual codepoints from the file to see what's there:
+`print([hex(ord(c)) for c in txt[i:i+30]])`.
+
+Drop the script before committing. Precedent: `ac2f0f8 chore:
+remove throwaway debug scripts`.
+
+### Phase A / Phase B split
+
+When a feature touches both data layer (column + reads/writes) and
+UI (file picker, render block), ship the data layer first. Coaches
+can populate the new column via SQL or `quickUpload` while the UI
+lands in a separate commit. This produces smaller PRs, easier
+rollback, and lets you verify the render path with hand-populated
+data before adding capture flow. The exercises image_url feature
+(commits `50c7dc7` + `bec44d3`) followed this pattern.
+
+### Image fallback pattern
+
+For any media element with a fallback, use a ternary chain rather
+than nested conditionals:
+
+```tsx
+{videoUrl ? (
+  <video src={videoUrl} ... />
+) : imageUrl ? (
+  <img src={imageUrl} ... />
+) : null}
+```
+
+Same width/height/objectFit on both branches so the layout doesn't
+shift when the fallback kicks in. Reuse the same `alt`/`title` from
+the underlying record (e.g. `ex.exercise?.name || 'Exercise demo'`).
 
 ## When searching for something
 
