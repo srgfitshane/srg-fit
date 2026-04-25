@@ -1,1 +1,0 @@
-280:     await supabase.from('habits').update({ active: false }).eq('client_id', clientId)
