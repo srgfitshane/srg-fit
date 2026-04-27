@@ -133,7 +133,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   const nextBtn = (onClick: () => void, color = t.teal, textColor = '#000') => (
     <button onClick={onClick}
       style={{ marginTop:16, width:'100%', padding:'12px', borderRadius:12, border:'none',
-        background:`linear-gradient(135deg,${color},${color}cc)`, color:textColor,
+        background:`linear-gradient(135deg,${color},${alpha(color, 80)})`, color:textColor,
         fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
       Next →
     </button>
