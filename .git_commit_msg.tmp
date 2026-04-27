@@ -1,0 +1,38 @@
+﻿fix(notifications): add apikey header to all send-notification calls
+
+Notifications stopped firing for the coach roughly 12 days ago. The
+table was getting check-in-due rows from pg_cron and new-message
+rows when the COACH messaged a CLIENT, but client->coach events
+(message sent, workout completed, review ready) produced nothing.
+
+Theory of the crime
+- Direct probe of the Edge Function with no headers: 401 Unauthorized
+  from the gateway. So verify_jwt is enforced at the platform level.
+- The seven raw fetch() callers send Authorization: Bearer
+  ${session.access_token} but NOT apikey. Supabase Edge Functions
+  with verify_jwt require both at the gateway.
+- supabase.functions.invoke() helpers send both automatically, which
+  is why a few call paths kept working (community fan-out, etc).
+- Result: every raw fetch quietly failed with 401, and the
+  .catch(() => {}) on each call ate the error.
+
+Fix
+- Add 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! to every
+  raw fetch to /functions/v1/send-notification. Seven files touched.
+- Add supabase/config.toml pinning verify_jwt for each function so
+  the next CLI deploy doesn't drift from intent.
+
+Verified
+- Direct DB INSERT to notifications still works (test row from the
+  bell came through).
+- TypeScript compile clean across all changes.
+
+Files
+- src/app/dashboard/client/workout/[sessionId]/page.tsx
+- src/app/dashboard/coach/messages/page.tsx
+- src/app/dashboard/coach/nutrition/page.tsx
+- src/app/dashboard/coach/outreach/page.tsx
+- src/app/dashboard/coach/reviews/page.tsx
+- src/app/dashboard/coach/workouts/page.tsx
+- src/components/messaging/RichMessageThread.tsx
+- supabase/config.toml (new)

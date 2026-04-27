@@ -1,0 +1,26 @@
+﻿# Supabase Edge Function configuration.
+#
+# verify_jwt controls whether the platform gateway checks the
+# Authorization header before running the function code. We disable
+# it for functions that need to be callable from cron jobs / webhooks
+# / unauthenticated client paths.
+
+[functions.send-notification]
+verify_jwt = false
+
+[functions.send-invite-email]
+verify_jwt = false
+
+[functions.nutrition-search]
+verify_jwt = false
+
+[functions.send-weekly-digest]
+verify_jwt = false
+
+# Coach-only insight generation should require auth.
+[functions.generate-ai-insight]
+verify_jwt = true
+
+# Stripe webhook is verified by signature inside the function.
+[functions.stripe-webhook]
+verify_jwt = false
