@@ -63,7 +63,7 @@ export default function CoachReportsPage() {
         { data: latestMetric },
         { data: firstMetric },
       ] = await Promise.all([
-        supabase.from('workout_sessions').select('*', { count:'exact', head:true }).eq('client_id', c.id).eq('status','completed'),
+        supabase.from('workout_sessions').select('*', { count:'exact', head:true }).eq('client_id', c.id).eq('status','completed').not('program_id','is',null),
         supabase.from('checkins').select('*', { count:'exact', head:true }).eq('client_id', c.id),
         supabase.from('metrics').select('*', { count:'exact', head:true }).eq('client_id', c.id),
         supabase.from('checkins').select('energy_score,stress_score,sleep_score,mood_score,pain_score,habit_completion_pct,notes,created_at')
@@ -111,7 +111,7 @@ export default function CoachReportsPage() {
       { data: metrics },
     ] = await Promise.all([
       supabase.from('workout_sessions').select('scheduled_date, status, session_rpe, mood, duration_seconds, title')
-        .eq('client_id', clientId).order('scheduled_date', { ascending:false }).limit(10),
+        .eq('client_id', clientId).not('program_id','is',null).order('scheduled_date', { ascending:false }).limit(10),
       supabase.from('checkins').select('created_at, energy_score, sleep_score, stress_score, mood_score, pain_score, habit_completion_pct, notes')
         .eq('client_id', clientId).order('created_at', { ascending:false }).limit(8),
       supabase.from('metrics').select('logged_date, weight, body_fat, waist')
@@ -326,6 +326,12 @@ export default function CoachReportsPage() {
               )
             })}
           </div>
+        </div>
+      </div>
+    </>
+  )
+}
+ </div>
         </div>
       </div>
     </>

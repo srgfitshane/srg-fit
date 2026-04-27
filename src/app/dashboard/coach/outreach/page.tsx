@@ -83,14 +83,16 @@ export default function OutreachPage() {
         })
       }
 
-      // Check: no completed workout in 7 days
+      // Check: no completed workout in 7 days (program sessions only — Rule 6)
       const { data: recentWorkout } = await supabase
         .from('workout_sessions').select('id').eq('client_id', client.id)
+        .not('program_id', 'is', null)
         .eq('status', 'completed').gte('completed_at', sevenDaysAgo).limit(1)
       if (!recentWorkout?.length) {
         // Only flag if they have assigned workouts (otherwise might not have a program)
         const { data: hasWorkouts } = await supabase
-          .from('workout_sessions').select('id').eq('client_id', client.id).limit(1)
+          .from('workout_sessions').select('id').eq('client_id', client.id)
+          .not('program_id', 'is', null).limit(1)
         if (hasWorkouts?.length) {
           found.push({
             type: 'missed_workout', client,
@@ -271,6 +273,16 @@ export default function OutreachPage() {
                       </div>
                     )}
                   </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+            </div>
                 )
               })}
             </div>
