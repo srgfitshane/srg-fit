@@ -2810,22 +2810,4 @@ function ExercisesTab({ supabase, t }: { supabase: ReturnType<typeof createClien
   )
 }
 
-// ── NutritionTab lives in ./nutrition-tab.tsx ─────────────────────────────
-ex.description}</p>}
-                {ex.instructions && <p style={{ fontSize:12, color:t.textMuted, lineHeight:1.6, marginTop:6 }}>{ex.instructions}</p>}
-                {ex.video_url && (
-                  <a href={ex.video_url} target="_blank" rel="noreferrer"
-                    style={{ display:'inline-block', marginTop:10, fontSize:12, color:t.teal, fontWeight:700 }}>
-                    ▶ Watch Demo
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ── NutritionTab lives in ./nutrition-tab.tsx ─────────────────────────
