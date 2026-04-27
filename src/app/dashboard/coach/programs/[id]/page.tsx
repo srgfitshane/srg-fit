@@ -110,6 +110,7 @@ export default function ProgramBuilder() {
     for (const b of srcBlocks) {
       const { data: nb } = await supabase.from('workout_blocks').insert({
         program_id: programId, name: b.name, day_label: b.day_label,
+        day_of_week: b.day_of_week,
         block_label: b.block_label, week_number: nextWeek, order_index: b.order_index,
         group_types: b.group_types || {},
       }).select().single()
@@ -154,6 +155,7 @@ export default function ProgramBuilder() {
       for (const b of week1Blocks) {
         const { data: nb } = await supabase.from('workout_blocks').insert({
           program_id: programId, name: b.name, day_label: b.day_label,
+          day_of_week: b.day_of_week,
           block_label: b.block_label, week_number: nextWeek, order_index: b.order_index,
           group_types: b.group_types || {},
         }).select().single()
@@ -187,6 +189,7 @@ export default function ProgramBuilder() {
       program_id: programId,
       name: `${block.day_label || block.name} (copy)`,
       day_label: `${block.day_label || label} (copy)`,
+      day_of_week: block.day_of_week,
       block_label: block.block_label,
       week_number: block.week_number,
       order_index: weekBlocks.length,
@@ -476,7 +479,13 @@ export default function ProgramBuilder() {
       const DAY_OFFSETS: Record<string,number> = { Mon:0, Tue:1, Wed:2, Thu:3, Fri:4, Sat:5, Sun:6 }
 
       for (const block of sortedBlocks) {
-        if (!block.day_of_week || !(block.day_of_week in DAY_OFFSETS)) continue
+        if (!block.day_of_week || !(block.day_of_week in DAY_OFFSETS)) {
+          // Fall back to the same order_index in week 1 — handles legacy programs
+          // whose duplicated weeks were created before day_of_week was carried over.
+          const week1Block = sortedBlocks.find((b: any) => b.week_number === 1 && b.order_index === block.order_index)
+          if (!week1Block?.day_of_week || !(week1Block.day_of_week in DAY_OFFSETS)) continue
+          block.day_of_week = week1Block.day_of_week
+        }
         const weekOffset = (block.week_number - 1) * 7
         const dayOffset = DAY_OFFSETS[block.day_of_week]
         const sessionDate = new Date(weekStart)
@@ -510,7 +519,7 @@ export default function ProgramBuilder() {
         const exes = (block?.block_exercises || [])
           .sort((a: any, b: any) => a.order_index - b.order_index)
         if (exes.length === 0) continue
-        await supabase.from('session_exercises').insert(
+        const { error: seError } = await supabase.from('session_exercises').insert(
           exes.map((ex: any) => ({
             session_id: session.id,
             exercise_id: ex.exercise_id || null,
@@ -530,6 +539,7 @@ export default function ProgramBuilder() {
             slot_filter_value: ex.slot_filter_value || null,
           }))
         )
+        if (seError) { setSendError('Could not populate exercises for ' + (block?.day_label || block?.name || 'a session') + ': ' + seError.message); setSendingSessions(false); return }
       }
       setSendDone(true)
       setTimeout(() => { setShowSend(false); setSendDone(false) }, 2200)
@@ -1533,6 +1543,21 @@ function CalendarView({ blocks, weeks, programId, supabase, onBlocksChange, onEd
               <div key={block.id}
                 onClick={() => setAssigning(assigning===block.id ? null : block.id)}
                 style={{ background:assigning===block.id?t.tealDim:t.surface, border:'1px solid '+(assigning===block.id?t.teal:t.border), borderRadius:12, padding:'12px 16px', cursor:'pointer', minWidth:160, transition:'all 0.15s' }}>
+                <div style={{ fontSize:13, fontWeight:800, color:assigning===block.id?t.teal:t.text, marginBottom:3 }}>{block.day_label || block.name}</div>
+                <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>{exCount(block)} exercise{exCount(block)!==1?'s':''}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:assigning===block.id?t.teal:t.textDim }}>
+                  {assigning===block.id ? '↑ Click a day above' : '📅 Schedule'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+    </div>
+  )
+}
+r:'1px solid '+(assigning===block.id?t.teal:t.border), borderRadius:12, padding:'12px 16px', cursor:'pointer', minWidth:160, transition:'all 0.15s' }}>
                 <div style={{ fontSize:13, fontWeight:800, color:assigning===block.id?t.teal:t.text, marginBottom:3 }}>{block.day_label || block.name}</div>
                 <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>{exCount(block)} exercise{exCount(block)!==1?'s':''}</div>
                 <div style={{ fontSize:11, fontWeight:700, color:assigning===block.id?t.teal:t.textDim }}>

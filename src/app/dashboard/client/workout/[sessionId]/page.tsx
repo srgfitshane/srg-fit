@@ -1298,7 +1298,7 @@ ${candidateList}`
       <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
       <div style={{fontSize:18,fontWeight:800,marginBottom:8,color:t.orange}}>No exercises in this workout</div>
       <div style={{fontSize:13,color:t.textMuted,marginBottom:32,maxWidth:280,lineHeight:1.6}}>This session has no exercises assigned yet. Your coach needs to add exercises to this program first.</div>
-      <button onClick={()=>setShowCancelSheet(true)} style={{background:t.tealDim,border:'1px solid '+alpha(t.teal, 25),borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+      <button onClick={()=>router.push(returnUrl)} style={{background:t.tealDim,border:'1px solid '+alpha(t.teal, 25),borderRadius:12,padding:'12px 24px',fontSize:14,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
         ← Back to Dashboard
       </button>
     </div>

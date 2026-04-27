@@ -2964,9 +2964,9 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     const mode = scheduleMode[progId] || 'add'
 
     try {
-    // Fetch blocks for this program
+    // Fetch blocks for this program — join exercises so exercise_name populates
     const { data: blocks } = await supabase.from('workout_blocks')
-      .select('*, block_exercises(*)')
+      .select('*, block_exercises(*, exercise:exercises(name, muscles))')
       .eq('program_id', progId)
       .order('week_number').order('order_index')
       .throwOnError()

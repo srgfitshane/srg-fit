@@ -130,11 +130,16 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   const STEPS = ['sleep','energy','sliders','journal'] as const
   const stepIdx = STEPS.indexOf(step)
 
+  // Solid background instead of color-mix gradient — color-mix isn't supported on
+  // iOS < 16.2 / Chrome < 111, and when it fails the gradient silently drops,
+  // leaving a transparent button (black text on dark surface = invisible). Solid
+  // color is bulletproof.
   const nextBtn = (onClick: () => void, color = t.teal, textColor = '#000') => (
     <button onClick={onClick}
       style={{ marginTop:16, width:'100%', padding:'12px', borderRadius:12, border:'none',
-        background:`linear-gradient(135deg,${color},${alpha(color, 80)})`, color:textColor,
-        fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+        backgroundColor: color, background: color, color:textColor,
+        fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
+        boxShadow:'inset 0 -2px 0 rgba(0,0,0,0.15)' }}>
       Next →
     </button>
   )
@@ -217,7 +222,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
               </div>
             ))}
             <button onClick={()=>setStep('journal')}
-              style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80) + ')', color:'#fff', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
+              style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', backgroundColor:t.purple, background:t.purple, color:'#fff', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:4, boxShadow:'inset 0 -2px 0 rgba(0,0,0,0.15)' }}>
               Next →
             </button>
           </div>
@@ -250,7 +255,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
                   Skip
                 </button>
                 <button onClick={()=>save(journal, isPrivate)} disabled={saving}
-                  style={{ ...btnBase, background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1 }}>
+                  style={{ ...btnBase, backgroundColor:t.teal, background:t.teal, borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1, boxShadow:'inset 0 -2px 0 rgba(0,0,0,0.15)' }}>
                   {saving?'Saving...':'Done ✓'}
                 </button>
               </div>
@@ -263,6 +268,17 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
           <div style={{ textAlign:'center' as const, marginTop:16 }}>
             <button onClick={()=>{
               if(step==='energy') setStep('sleep')
+              else if(step==='sliders') setStep('energy')
+            }} style={{ ...btnBase, color:t.textMuted, fontSize:12, opacity:step==='sleep'?0:1, pointerEvents:step==='sleep'?'none':'auto' }}>
+              ← Back
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+gy') setStep('sleep')
               else if(step==='sliders') setStep('energy')
             }} style={{ ...btnBase, color:t.textMuted, fontSize:12, opacity:step==='sleep'?0:1, pointerEvents:step==='sleep'?'none':'auto' }}>
               ← Back

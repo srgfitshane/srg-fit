@@ -376,7 +376,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
   const [workoutsThisWeek, setWorkoutsThisWeek] = useState<number>(0)
-  const [nextSession,  setNextSession]  = useState<NextSessionRecord | null>(null)
+  const [nextSessions, setNextSessions] = useState<NextSessionRecord[]>([])
   const [completedToday, setCompletedToday] = useState<{id:string,title:string,coach_reviewed_at:string|null} | null>(null)
   const [pendingReviews, setPendingReviews] = useState<PendingReviewRecord[]>([])
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
@@ -515,8 +515,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .or(`scheduled_date.eq.${todayStr},status.eq.in_progress`)
             .order('status', { ascending: false })
             .order('scheduled_date', { ascending: true })
-            .limit(1)
-            .single(),
+            .limit(5),
           supabase.from('workout_sessions')
             .select('id, title, coach_review_notes, coach_review_video_url, coach_reviewed_at')
             .eq('client_id', cid).eq('status', 'completed')
@@ -548,8 +547,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setMilestones((milestoneData || []) as MilestoneRecord[])
         setRecentPRs((prData || []) as PersonalRecordSummary[])
 
-        const isToday = nextSess?.scheduled_date === todayStr || nextSess?.status === 'in_progress'
-        setNextSession(nextSess ? ({ ...nextSess, isToday } as NextSessionRecord) : null)
+        const sessions = ((nextSess || []) as Array<Pick<WorkoutSessionRecord, 'id' | 'title' | 'scheduled_date' | 'status'>>).map((s) => ({
+          ...s,
+          isToday: s.scheduled_date === todayStr || s.status === 'in_progress',
+        } as NextSessionRecord))
+        setNextSessions(sessions)
 
         setPendingReviews((reviewData || []) as PendingReviewRecord[])
         console.log('[dashboard] pendingCI raw:', JSON.stringify(pendingCI))
@@ -1244,31 +1246,40 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           )}
 
           {/* ── 4. TODAY'S WORKOUT ── */}
-          <div style={{ background:t.surface, border:'1px solid '+(nextSession ? t.border : t.border), borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
-            <div style={{ height:3, background: nextSession ? 'linear-gradient(90deg,'+t.teal+','+t.orange+')' : 'linear-gradient(90deg,'+t.purple+','+t.teal+')' }}/>
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }} className="fade">
+            <div style={{ height:3, background: nextSessions.length > 0 ? 'linear-gradient(90deg,'+t.teal+','+t.orange+')' : 'linear-gradient(90deg,'+t.purple+','+t.teal+')' }}/>
             <div style={{ padding:'14px 16px' }}>
-              {nextSession ? (
+              {nextSessions.length > 0 ? (
                 <>
-                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-                    <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:14, fontWeight:800 }}>{nextSession.title}</div>
-                      <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
-                        {nextSession.status === 'in_progress'
-                          ? 'In progress — resume where you left off'
-                          : nextSession.isToday
-                          ? "Today's workout"
-                          : `Up next · ${new Date(nextSession.scheduled_date + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}`
-                        }
-                      </div>
+                  {nextSessions.length > 1 && (
+                    <div style={{ fontSize:11, fontWeight:800, color:t.orange, marginBottom:10, textTransform:'uppercase' as const, letterSpacing:0.5 }}>
+                      {nextSessions.length} workouts today
                     </div>
-                  </div>
-                  {(nextSession.status === 'in_progress' || nextSession.isToday) && (
-                    <button onClick={()=>router.push(workoutUrl(nextSession.id))}
-                      style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:`linear-gradient(135deg, ${t.orange}, ${alpha(t.orange, 80)})`, color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                      {nextSession.status === 'in_progress' ? 'Resume Workout 🔄' : 'Start Workout 💪'}
-                    </button>
                   )}
+                  {nextSessions.map((s, idx) => (
+                    <div key={s.id} style={{ marginTop: idx === 0 ? 0 : 12, paddingTop: idx === 0 ? 0 : 12, borderTop: idx === 0 ? 'none' : '1px solid '+t.border }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                        <div style={{ width:38, height:38, borderRadius:11, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>💪</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:14, fontWeight:800 }}>{s.title}</div>
+                          <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>
+                            {s.status === 'in_progress'
+                              ? 'In progress — resume where you left off'
+                              : s.isToday
+                              ? "Today's workout"
+                              : `Up next · ${new Date(s.scheduled_date + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })}`
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      {(s.status === 'in_progress' || s.isToday) && (
+                        <button onClick={()=>router.push(workoutUrl(s.id))}
+                          style={{ width:'100%', padding:'11px', borderRadius:11, border:'none', background:`linear-gradient(135deg, ${t.orange}, ${alpha(t.orange, 80)})`, color:'#000', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          {s.status === 'in_progress' ? 'Resume Workout 🔄' : 'Start Workout 💪'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </>
               ) : completedToday ? (
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -1469,7 +1480,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           </div>
 
           {/* Empty state */}
-          {habits.length === 0 && !nextSession && (
+          {habits.length === 0 && nextSessions.length === 0 && (
             <div style={{ background:'linear-gradient(135deg,'+alpha(t.teal, 7) + ','+alpha(t.orange, 3) + ')', border:'1px solid '+alpha(t.teal, 15), borderRadius:16, padding:'24px 18px', textAlign:'center', marginBottom:14 }} className="fade">
               <div style={{ fontSize:32, marginBottom:10 }}>🚀</div>
               <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>You&apos;re all set!</div>
@@ -1652,8 +1663,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </button>
               <button onClick={() => {
                 setPlusOpen(false)
-                if (nextSession) {
-                  router.push(workoutUrl(nextSession.id))
+                if (nextSessions.length > 0) {
+                  router.push(workoutUrl(nextSessions[0].id))
                   return
                 }
                 openTab('training')
@@ -1662,7 +1673,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
                 </svg>
-                {nextSession ? 'Start Workout' : 'Open Training'}
+                {nextSessions.length > 0 ? 'Start Workout' : 'Open Training'}
               </button>
             </div>
           )}
@@ -2800,3 +2811,21 @@ function ExercisesTab({ supabase, t }: { supabase: ReturnType<typeof createClien
 }
 
 // ── NutritionTab lives in ./nutrition-tab.tsx ─────────────────────────────
+ex.description}</p>}
+                {ex.instructions && <p style={{ fontSize:12, color:t.textMuted, lineHeight:1.6, marginTop:6 }}>{ex.instructions}</p>}
+                {ex.video_url && (
+                  <a href={ex.video_url} target="_blank" rel="noreferrer"
+                    style={{ display:'inline-block', marginTop:10, fontSize:12, color:t.teal, fontWeight:700 }}>
+                    ▶ Watch Demo
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── NutritionTab lives in ./nutrition-tab.tsx ─────────────────────────
