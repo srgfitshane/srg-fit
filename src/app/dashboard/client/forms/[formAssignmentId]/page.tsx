@@ -41,16 +41,6 @@ type FormAssignment = {
 
 type AnswerValue = string | number | string[] | null
 
-type CheckinRow = {
-  client_id: string
-  coach_id?: string | null
-  submitted_at: string
-  week_start: string
-  week_end: string
-  response_data: Record<string, AnswerValue>
-  [key: string]: string | number | boolean | string[] | null | Record<string, AnswerValue> | undefined
-}
-
 export default function ClientFormPage() {
   const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
@@ -64,6 +54,8 @@ export default function ClientFormPage() {
   const [questions,  setQuestions]  = useState<Question[]>([])
   const [answers,    setAnswers]    = useState<Record<string, AnswerValue>>({})
   const [errors,     setErrors]     = useState<Record<string, string>>({})
+  // Picked files per file-type question (one or more per question)
+  const [files,      setFiles]      = useState<Record<string, File[]>>({})
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -118,60 +110,124 @@ export default function ClientFormPage() {
     return Object.keys(errs).length === 0
   }
 
+  // Body-metric columns on the metrics table that maps_to may target
+  const metricColumns = new Set([
+    'weight','body_fat','chest','waist','hips','left_arm','right_arm',
+    'left_thigh','right_thigh','neck','calves','shoulders',
+  ])
+
   const submit = async () => {
     if (!validate()) return
     setSubmitting(true)
 
-    // Mark assignment complete
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSubmitting(false); return }
+
+    // Find the client record for the coach_id and the metrics client_id
+    // NOTE: progress_photos.client_id stores profile_id (auth.uid),
+    // metrics.client_id stores clients.id. Both are needed.
+    const { data: clientRec } = await supabase
+      .from('clients')
+      .select('id, coach_id')
+      .eq('profile_id', user.id)
+      .single<{ id: string; coach_id: string | null }>()
+
+    // Upload any picked files first so the response JSON can store URLs.
+    // Path scheme: <profile_id>/<YYYY-MM-DD>-<angle>-<rand>.<ext>
+    // Storage RLS requires the leading folder to be auth.uid().
+    const uploadedAnswers: Record<string, AnswerValue> = { ...answers }
+    const photoInserts: Array<{ angle: string; storage_path: string }> = []
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+
+    for (const q of questions) {
+      if (q.question_type !== 'file') continue
+      const picked = files[q.id] || []
+      if (picked.length === 0) continue
+      const urls: string[] = []
+      for (let i = 0; i < picked.length; i++) {
+        const f = picked[i]
+        const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
+        const rand = Math.random().toString(36).slice(2, 8)
+        const angle = (q.maps_to || '').replace(/^progress_photo_/, '') || 'photo'
+        const path = `${user.id}/${todayStr}-${angle}-${rand}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('progress-photos')
+          .upload(path, f, { upsert: false, contentType: f.type })
+        if (upErr) { console.error('progress-photos upload', upErr); continue }
+        urls.push(path)
+        if (q.maps_to && q.maps_to.startsWith('progress_photo_')) {
+          photoInserts.push({ angle, storage_path: path })
+        }
+      }
+      uploadedAnswers[q.id] = urls
+    }
+
+    // Mark the assignment complete with file URLs baked into the response.
     const { data: asgn } = await supabase.from('client_form_assignments').update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      response: answers,
+      response: uploadedAnswers,
     }).eq('id', formAssignmentId).select('client_id, form:onboarding_forms(form_type, is_checkin_type, id)').single<{ client_id: string; form: AssignmentForm | null }>()
 
-    // Mirror mapped fields into checkins table if this is a check_in type form
     const isCheckin = asgn?.form?.form_type === 'check_in' || asgn?.form?.is_checkin_type
-    if (isCheckin) {
-      const now = new Date()
-      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay())
-      const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)
-
-      // Build checkin row from mapped fields
-      const checkinRow: CheckinRow = {
-        client_id: asgn.client_id,
-        submitted_at: now.toISOString(),
-        week_start: weekStart.toISOString().split('T')[0],
-        week_end: weekEnd.toISOString().split('T')[0],
-        response_data: answers,
+    if (isCheckin && clientRec) {
+      // Fan out body-metric mapped fields into the metrics table.
+      // Upsert keyed on (client_id, logged_date) so re-submissions on
+      // the same day merge instead of duplicating rows.
+      const metricRow: Record<string, string | number | null> = {
+        client_id: clientRec.id,
+        coach_id:  clientRec.coach_id,
+        logged_date: todayStr,
       }
-
-      // Map answers to checkins columns using maps_to on each question
+      let hasMetric = false
       for (const q of questions) {
-        if (q.maps_to && answers[q.id] !== undefined && answers[q.id] !== '') {
-          const val = answers[q.id]
-          // Numeric fields
-          const numericFields = ['weight','sleep_hours','sleep_quality','mood_score','energy_score',
-            'stress','hunger_score','pain_score','workout_adherence','nutrition_adherence','habit_adherence']
-          checkinRow[q.maps_to] = numericFields.includes(q.maps_to) ? Number(val) : val
-        }
+        if (!q.maps_to || !metricColumns.has(q.maps_to)) continue
+        const v = answers[q.id]
+        if (v === undefined || v === null || v === '') continue
+        const n = Number(v)
+        if (!isFinite(n)) continue
+        metricRow[q.maps_to] = n
+        hasMetric = true
+      }
+      if (hasMetric) {
+        await supabase.from('metrics').upsert(metricRow, { onConflict: 'client_id,logged_date' })
       }
 
-      // Get coach_id from client record
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: clientRec } = await supabase.from('clients').select('coach_id').eq('profile_id', user.id).single()
-        if (clientRec) {
-          checkinRow.coach_id = clientRec.coach_id
-          // Update last check-in timestamp on client record
-          await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', asgn.client_id)
-          // Trigger AI insights
-          try {
-            const { triggerAiInsight } = await import('@/lib/ai-insights')
-            triggerAiInsight(asgn.client_id, clientRec.coach_id, 'checkin_brief')
-            triggerAiInsight(asgn.client_id, clientRec.coach_id, 'red_flag')
-          } catch { /* non-blocking */ }
+      // Insert progress_photos rows for each uploaded photo.
+      // Note: progress_photos.client_id holds the profile_id (auth.uid).
+      if (photoInserts.length > 0) {
+        // Pull current weight from the answers if present so we can
+        // stamp it on the photo row (helpful for side-by-side views).
+        let weightAtTime: number | null = null
+        for (const q of questions) {
+          if (q.maps_to === 'weight' && answers[q.id] !== undefined && answers[q.id] !== '') {
+            const n = Number(answers[q.id])
+            if (isFinite(n)) weightAtTime = n
+            break
+          }
         }
+        await supabase.from('progress_photos').insert(
+          photoInserts.map(p => ({
+            client_id: user.id,
+            coach_id:  clientRec.coach_id,
+            storage_path: p.storage_path,
+            photo_date: todayStr,
+            angle: p.angle,
+            weight_at_time: weightAtTime,
+          }))
+        )
       }
+
+      // Update last check-in timestamp + trigger AI insights.
+      await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', clientRec.id)
+      try {
+        const { triggerAiInsight } = await import('@/lib/ai-insights')
+        if (clientRec.coach_id) {
+          triggerAiInsight(clientRec.id, clientRec.coach_id, 'checkin_brief')
+          triggerAiInsight(clientRec.id, clientRec.coach_id, 'red_flag')
+        }
+      } catch { /* non-blocking */ }
     }
 
     setSubmitted(true)
@@ -321,12 +377,43 @@ export default function ClientFormPage() {
                   </div>
                 )}
 
-                {/* File upload — placeholder */}
-                {q.question_type === 'file' && (
-                  <div style={{ border:'2px dashed '+t.border, borderRadius:10, padding:'20px', textAlign:'center', color:t.textMuted, fontSize:13 }}>
-                    📎 File upload coming soon — drop your coach a message with the file for now.
-                  </div>
-                )}
+                {/* File upload — image/photo picker (multi) */}
+                {q.question_type === 'file' && (() => {
+                  const picked = files[q.id] || []
+                  const removeAt = (i: number) => setFiles(p => ({ ...p, [q.id]: (p[q.id] || []).filter((_, j) => j !== i) }))
+                  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const list = Array.from(e.target.files || [])
+                    if (list.length === 0) return
+                    setFiles(p => ({ ...p, [q.id]: [...(p[q.id] || []), ...list] }))
+                    setAnswer(q.id, [...(picked.map(f => f.name)), ...list.map(f => f.name)])
+                    e.target.value = ''
+                  }
+                  return (
+                    <div>
+                      {picked.length > 0 && (
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginBottom:10 }}>
+                          {picked.map((f, i) => (
+                            <div key={i} style={{ position:'relative', width:96, height:96, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border, background:t.surfaceHigh }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img alt={f.name} src={URL.createObjectURL(f)}
+                                style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                              <button type="button" onClick={() => removeAt(i)}
+                                style={{ position:'absolute', top:4, right:4, width:22, height:22, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.65)', color:'#fff', fontSize:12, cursor:'pointer', lineHeight:1, padding:0 }}>
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <label style={{ display:'block', cursor:'pointer' }}>
+                        <input type="file" accept="image/*" multiple onChange={onPick} style={{ display:'none' }} />
+                        <div style={{ border:'2px dashed '+t.border, borderRadius:10, padding:'18px', textAlign:'center', color:t.textMuted, fontSize:13, background:t.surfaceUp }}>
+                          📸 {picked.length === 0 ? 'Tap to add photo' : 'Add another'}
+                        </div>
+                      </label>
+                    </div>
+                  )
+                })()}
 
                 {errors[q.id] && (
                   <div style={{ marginTop:8, fontSize:12, color:t.red }}>{errors[q.id]}</div>
