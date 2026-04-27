@@ -1557,18 +1557,3 @@ function CalendarView({ blocks, weeks, programId, supabase, onBlocksChange, onEd
     </div>
   )
 }
-r:'1px solid '+(assigning===block.id?t.teal:t.border), borderRadius:12, padding:'12px 16px', cursor:'pointer', minWidth:160, transition:'all 0.15s' }}>
-                <div style={{ fontSize:13, fontWeight:800, color:assigning===block.id?t.teal:t.text, marginBottom:3 }}>{block.day_label || block.name}</div>
-                <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>{exCount(block)} exercise{exCount(block)!==1?'s':''}</div>
-                <div style={{ fontSize:11, fontWeight:700, color:assigning===block.id?t.teal:t.textDim }}>
-                  {assigning===block.id ? '↑ Click a day above' : '📅 Schedule'}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-    </div>
-  )
-}

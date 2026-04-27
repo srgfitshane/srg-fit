@@ -331,9 +331,3 @@ export default function CoachReportsPage() {
     </>
   )
 }
- </div>
-        </div>
-      </div>
-    </>
-  )
-}

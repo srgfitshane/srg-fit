@@ -278,14 +278,3 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
     </div>
   )
 }
-gy') setStep('sleep')
-              else if(step==='sliders') setStep('energy')
-            }} style={{ ...btnBase, color:t.textMuted, fontSize:12, opacity:step==='sleep'?0:1, pointerEvents:step==='sleep'?'none':'auto' }}>
-              ← Back
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
