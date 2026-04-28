@@ -1,0 +1,29 @@
+#!/bin/sh
+# srg-fit pre-commit hook
+# 
+# Runs scripts/verify.cmd which checks:
+#   1. No mojibake or emoji loss in staged files
+#   2. `next build` succeeds (Turbopack parse + TypeScript)
+#
+# Bypass (only when you really mean it): git commit --no-verify
+#
+# Hook is installed by scripts\install-hooks.cmd.
+
+set -e
+
+# Resolve repo root
+REPO=$(git rev-parse --show-toplevel)
+cd "$REPO"
+
+# On Windows, run the .cmd version. On Unix, would run a .sh equivalent.
+if [ -f "scripts/verify.cmd" ] && command -v cmd.exe >/dev/null 2>&1; then
+    cmd.exe //c "scripts\\verify.cmd"
+elif [ -f "scripts/verify.cmd" ]; then
+    # Fallback for non-Windows: at least run the encoding check
+    python3 scripts/check-encoding.py || python scripts/check-encoding.py
+    npx next build > /tmp/verify-build.log 2>&1 || {
+        echo "VERIFY FAILED: next build"
+        tail -60 /tmp/verify-build.log
+        exit 1
+    }
+fi

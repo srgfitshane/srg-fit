@@ -269,7 +269,10 @@ The fast path:
 1. Read the relevant file before editing (Shane's codebase has
    tight patterns; don't guess)
 2. Make the smallest edit that addresses the real cause
-3. `npx tsc --noEmit` (takes ~30s-3min depending on scope)
+3. **`scripts\verify.cmd`** (encoding check + `next build`, ~30-90s).
+   `tsc --noEmit` alone is NOT sufficient -- Turbopack catches import-syntax
+   errors that tsc misses. The pre-commit hook runs verify.cmd automatically;
+   running it explicitly gives faster feedback during a session
 4. Commit with a message that explains WHY, not just what
 5. Merge dev → main, push main
 
@@ -278,6 +281,11 @@ without being asked. **Don't** introduce new dependencies unless
 there's a clear reason — the stack is deliberately tight.
 
 ### File-editing discipline
+
+**This rule is non-negotiable. It got broken on April 28 2026
+when I (Claude) used PowerShell `Get-Content -Raw + WriteAllText` for
+"small" edits and destroyed every emoji byte in three files. Recovery
+took multiple commits. Don't do it.**
 
 `edit_block` / surgical str-replace tools fail on long files with
 nested JSX because of whitespace sensitivity, mixed line endings,
@@ -481,3 +489,59 @@ on them without asking, but keep them in mind:
 
 **If this file gets out of sync with reality, update it.** It lives
 in the repo and ships with every commit. It is the contract.
+
+
+## Guardrails (added April 28 2026)
+
+After a session that destroyed emoji in 3 files and shipped a
+syntactically-broken import, the following guardrails were added:
+
+### `scripts\verify.cmd`
+
+The single command to run before claiming a fix is "ready to ship".
+Runs encoding check (fast) + `next build` (slow but bulletproof).
+
+```cmd
+scripts\verify.cmd            # full check (~60s)
+scripts\verify.cmd --no-build # encoding only (~1s)
+```
+
+### Pre-commit hook
+
+`.git-hooks/pre-commit` runs `verify.cmd` on every commit. After a
+fresh clone, run `scripts\install-hooks.cmd` once to wire it up.
+Bypass with `git commit --no-verify` when genuinely needed.
+
+### `scripts\check-encoding.py`
+
+Scans staged files for two specific failure modes:
+- **Mojibake** -- `C3 XX C3 YY` byte sequences signaling UTF-8 was
+  decoded as Latin-1 and re-encoded.
+- **Emoji loss** -- file has fewer F0 9F emoji bytes than its HEAD
+  version. Catches tools that "succeed" but silently strip emoji.
+
+Refuses the commit with a clear message including recovery commands.
+
+### `.gitattributes` + `.editorconfig`
+
+Lock UTF-8 + LF line endings on all source filetypes.
+
+### Lessons from the April 28 incident
+
+1. **`tsc --noEmit` is not enough.** It doesn't run Turbopack's
+   parser, so syntax errors inside import declarations slip through.
+   Use `next build` for ship-readiness.
+
+2. **Never use PowerShell `Get-Content -Raw` for files with
+   non-ASCII content.** It decodes via Windows-1252 codepage. The
+   only safe way to read+write `.ts`/`.tsx`/`.md` in this repo is
+   Python with `encoding='utf-8'`.
+
+3. **Sweep scripts should target import injection carefully.** Use
+   a full statement match (DOTALL across `{ ... }`), not a single-line
+   `^import .+$` regex.
+
+4. **Sweep scripts should anchor bare-identifier alternatives.**
+   `|color` in a regex alternation matches partial expressions like
+   `(obj as Type).color+'XX'`, producing garbage. Always lookbehind:
+   `(?<![.\w])color`.

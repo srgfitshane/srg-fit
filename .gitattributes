@@ -1,0 +1,37 @@
+# Tell git these are text files. Without this, git auto-detection can
+# misclassify files containing emoji as binary.
+*.ts        text eol=lf working-tree-encoding=utf-8
+*.tsx       text eol=lf working-tree-encoding=utf-8
+*.js        text eol=lf working-tree-encoding=utf-8
+*.jsx       text eol=lf working-tree-encoding=utf-8
+*.json      text eol=lf working-tree-encoding=utf-8
+*.md        text eol=lf working-tree-encoding=utf-8
+*.mdx       text eol=lf working-tree-encoding=utf-8
+*.css       text eol=lf working-tree-encoding=utf-8
+*.html      text eol=lf working-tree-encoding=utf-8
+*.sql       text eol=lf working-tree-encoding=utf-8
+*.py        text eol=lf working-tree-encoding=utf-8
+*.toml      text eol=lf working-tree-encoding=utf-8
+*.yml       text eol=lf working-tree-encoding=utf-8
+*.yaml      text eol=lf working-tree-encoding=utf-8
+
+# Windows scripts: use CRLF (cmd.exe expects it)
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+*.ps1       text eol=crlf
+
+# Git hooks need LF even on Windows
+.git-hooks/* text eol=lf
+
+# Binary files
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
