@@ -592,8 +592,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         // Fire-and-forget: persist current_value updates to DB
         goalsWithProgress.forEach(goal => {
           if (goal.current_value !== (goalsData as ClientGoalRecord[])?.find(g => g.id === goal.id)?.current_value) {
-            supabase.from('client_goals').update({ current_value: goal.current_value })
-              .eq('id', goal.id).then(() => {})
+            supabase.from('client_goals').update({
+              current_value: goal.current_value,
+              updated_at: new Date().toISOString(),
+            })
+              .eq('id', goal.id)
+              .then(() => {})
           }
         })
 

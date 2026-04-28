@@ -1174,14 +1174,17 @@ ${candidateList}`
           sessionPRs.push({ exercise_name: exerciseName, pr_type: 'weight', weight: bestWeight, reps: bestReps })
           newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
 
-          // Check if this PR completes a weight_lifted goal
+          // Sync any weight_lifted goals tied to THIS exercise. Bumps
+          // current_value on every PR — not just when the target is hit —
+          // so the progress bar climbs as the lift goes up. Marks the goal
+          // completed if the new PR meets or exceeds the target.
           const { data: matchingGoals } = await supabase
             .from('client_goals')
             .select('id, title, target_value')
             .eq('client_id', clientId)
             .eq('status', 'active')
             .eq('type', 'weight_lifted')
-            .not('exercise_id', 'is', null)
+            .eq('exercise_id', se.exercise_id)
           if (matchingGoals?.length) {
             for (const goal of matchingGoals) {
               if (bestWeight >= Number(goal.target_value)) {
@@ -1189,8 +1192,14 @@ ${candidateList}`
                   status: 'completed',
                   completed_at: new Date().toISOString(),
                   current_value: bestWeight,
+                  updated_at: new Date().toISOString(),
                 }).eq('id', goal.id)
                 newMilestones.push(`🎯 Goal crushed: ${goal.title}!`)
+              } else {
+                await supabase.from('client_goals').update({
+                  current_value: bestWeight,
+                  updated_at: new Date().toISOString(),
+                }).eq('id', goal.id)
               }
             }
           }
