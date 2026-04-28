@@ -13,6 +13,7 @@ import {
   type ClientActivityRecord,
 } from '@/lib/client-activities'
 import {
+import { alpha } from '@/lib/theme'
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
 } from 'recharts'
@@ -27,16 +28,16 @@ const t = {
 }
 
 const TABS = [
-  { id:'overview',  label:'Overview',  icon:'ðŸ‘¤', inPersonOnly: false },
-  { id:'program',   label:'Program',   icon:'ðŸ“‹', inPersonOnly: false },
-  { id:'calendar',  label:'Calendar',  icon:'ðŸ“…', inPersonOnly: false },
-  { id:'nutrition', label:'Nutrition', icon:'ðŸ¥¦', inPersonOnly: false },
-  { id:'checkins',  label:'Check-ins', icon:'âœ“',  inPersonOnly: true  },
-  { id:'goals',     label:'Goals',     icon:'ðŸŽ¯', inPersonOnly: false },
-  { id:'metrics',   label:'Metrics',   icon:'ðŸ“ˆ', inPersonOnly: false },
-  { id:'pulse',     label:'Pulse & Journal', icon:'â¤', inPersonOnly: true },
-  { id:'messages',  label:'Messages',  icon:'ðŸ’¬', inPersonOnly: true  },
-  { id:'intake',    label:'Intake',    icon:'ðŸ“Š', inPersonOnly: true  },
+  { id:'overview',  label:'Overview',  icon:'👤', inPersonOnly: false },
+  { id:'program',   label:'Program',   icon:'📋', inPersonOnly: false },
+  { id:'calendar',  label:'Calendar',  icon:'📅', inPersonOnly: false },
+  { id:'nutrition', label:'Nutrition', icon:'🥦', inPersonOnly: false },
+  { id:'checkins',  label:'Check-ins', icon:'✓',  inPersonOnly: true  },
+  { id:'goals',     label:'Goals',     icon:'🎯', inPersonOnly: false },
+  { id:'metrics',   label:'Metrics',   icon:'📈', inPersonOnly: false },
+  { id:'pulse',     label:'Pulse & Journal', icon:'❤', inPersonOnly: true },
+  { id:'messages',  label:'Messages',  icon:'💬', inPersonOnly: true  },
+  { id:'intake',    label:'Intake',    icon:'📊', inPersonOnly: true  },
 ]
 
 
@@ -48,7 +49,7 @@ export default function ClientDetail() {
   const [workouts, setWorkouts] = useState<any[]>([])
   const [expandedWorkout,    setExpandedWorkout]    = useState<string|null>(null)
   const [showCompleted,      setShowCompleted]       = useState(true)
-  const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId â†’ {exercises, sets}
+  const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
   const [nutritionEdit, setNutritionEdit] = useState(false)
   const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
@@ -380,19 +381,19 @@ export default function ClientDetail() {
         <div className="client-topbar" style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
           <button onClick={()=>router.push('/dashboard/coach')}
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:6 }}>
-            â† Back
+            ← Back
           </button>
           <div style={{ width:1, height:28, background:t.border }} />
           <div style={{ fontSize:14, fontWeight:700 }}>Client Profile</div>
           <div style={{ flex:1 }} />
           {client.flagged
-            ? <button onClick={handleUnflag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>ðŸš© Unflag</button>
-            : <button onClick={()=>setShowFlag(true)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>ðŸš© Flag Client</button>
+            ? <button onClick={handleUnflag} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Unflag</button>
+            : <button onClick={()=>setShowFlag(true)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>🚩 Flag Client</button>
           }
           {client.client_type !== 'offline' && (
             <button onClick={resendInvite} disabled={resending || resendDone}
               style={{ background:resendDone?t.greenDim:t.orangeDim, border:'1px solid '+(resendDone?t.green:t.orange)+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:resendDone?t.green:t.orange, cursor:resending||resendDone?'default':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              {resendDone ? 'âœ“ Sent!' : resending ? 'Sending...' : 'ðŸ“¨ Resend Invite'}
+              {resendDone ? '✓ Sent!' : resending ? 'Sending...' : '📨 Resend Invite'}
             </button>
           )}
           {client.training_type === 'in_person' && (
@@ -403,25 +404,25 @@ export default function ClientDetail() {
               setTrainingType('hybrid')
               await resendInvite()
             }}
-              style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              ðŸ“± Invite to App (â†’ Hybrid)
+              style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              📱 Invite to App (→ Hybrid)
             </button>
           )}
           <button onClick={()=>setShowAssignForm(true)}
-            style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            ðŸ“ Send Form
+            style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            📝 Send Form
           </button>
           <button onClick={()=>router.push('/dashboard/coach/clients/'+clientId+'/habits')}
-            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            âœ… Manage Habits
+            style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            ✅ Manage Habits
           </button>
           <button onClick={()=>setShowArchive(true)}
-            style={{ background:t.yellowDim, border:'1px solid '+t.yellow+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.yellow, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            ðŸ“¦ Archive
+            style={{ background:t.yellowDim, border:'1px solid '+alpha(t.yellow, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.yellow, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            📦 Archive
           </button>
           <button onClick={()=>setShowDelete(true)}
-            style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-            ðŸ—‘ Delete
+            style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            🗑 Delete
           </button>
         </div>
 
@@ -435,15 +436,15 @@ export default function ClientDetail() {
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
                 <div style={{ fontSize:22, fontWeight:900 }}>{client.profile?.full_name || client.display_name || 'Unnamed Client'}</div>
-                {client.client_type === 'offline' && <div style={{ fontSize:12, color:'#8b5cf6', fontWeight:700, marginTop:2 }}>In-Person{client.contact_email ? ' Â· '+client.contact_email : ''}{client.contact_phone ? ' Â· '+client.contact_phone : ''}</div>}
-                {client.flagged && <div style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'2px 10px', fontSize:11, fontWeight:700, color:t.red }}>ðŸš© Flagged</div>}
+                {client.client_type === 'offline' && <div style={{ fontSize:12, color:'#8b5cf6', fontWeight:700, marginTop:2 }}>In-Person{client.contact_email ? ' · '+client.contact_email : ''}{client.contact_phone ? ' · '+client.contact_phone : ''}</div>}
+                {client.flagged && <div style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:7, padding:'2px 10px', fontSize:11, fontWeight:700, color:t.red }}>🚩 Flagged</div>}
               </div>
-              <div style={{ fontSize:13, color:t.textMuted }}>{client.profile?.email} Â· Client since {new Date(client.start_date).toLocaleDateString([], { month:'long', day:'numeric', year:'numeric' })}</div>
+              <div style={{ fontSize:13, color:t.textMuted }}>{client.profile?.email} · Client since {new Date(client.start_date).toLocaleDateString([], { month:'long', day:'numeric', year:'numeric' })}</div>
               {client.flag_note && <div style={{ fontSize:12, color:t.red, marginTop:4, fontStyle:'italic' }}>Note: {client.flag_note}</div>}
               {/* Last active signal */}
               {(() => {
                 const last = client.last_checkin_at
-                if (!last) return <div style={{ fontSize:12, color:t.red, marginTop:4, fontWeight:600 }}>âš ï¸ No check-in on record</div>
+                if (!last) return <div style={{ fontSize:12, color:t.red, marginTop:4, fontWeight:600 }}>⚠️ No check-in on record</div>
                 const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000)
                 const color = days >= 7 ? t.red : days >= 4 ? t.orange : t.green
                 const label = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`
@@ -455,7 +456,7 @@ export default function ClientDetail() {
               {[
                 { label:'Check-ins',    val:checkinAssignments.filter((a:any)=>a.status==='completed').length, color:t.teal   },
                 { label:'Workouts',     val:workouts.length,  color:t.orange },
-                { label:'Current Weight', val: latestMetric?.weight ? latestMetric.weight+'lbs' : 'â€”', color:t.purple },
+                { label:'Current Weight', val: latestMetric?.weight ? latestMetric.weight+'lbs' : '—', color:t.purple },
               ].map(s => (
                 <div key={s.label} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px', textAlign:'center', minWidth:90 }}>
                   <div style={{ fontSize:18, fontWeight:900, color:s.color, marginBottom:2 }}>{s.val}</div>
@@ -486,16 +487,16 @@ export default function ClientDetail() {
           {activeTab === 'overview' && (
             <div className="overview-grid" style={{ display:"grid" }}>
 
-              {/* â”€â”€ Pinned coach notes â”€â”€ */}
-              <div style={{ background:t.surface, border:`1px solid ${coachNotes.trim() ? t.orange+'60' : t.border}`, borderRadius:16, padding:20 }}>
+              {/* ── Pinned coach notes ── */}
+              <div style={{ background:t.surface, border:`1px solid ${coachNotes.trim() ? alpha(t.orange, 38) : t.border}`, borderRadius:16, padding:20 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-                  <div style={{ fontSize:13, fontWeight:800 }}>ðŸ“Œ Coach Notes</div>
-                  {notesSaved && <div style={{ fontSize:11, color:t.green, fontWeight:700 }}>Saved âœ“</div>}
+                  <div style={{ fontSize:13, fontWeight:800 }}>📌 Coach Notes</div>
+                  {notesSaved && <div style={{ fontSize:11, color:t.green, fontWeight:700 }}>Saved ✓</div>}
                 </div>
                 <textarea
                   value={coachNotes}
                   onChange={e=>{ setCoachNotes(e.target.value); setNotesSaved(false) }}
-                  placeholder="Private notes about this client â€” goals, preferences, injuries, cues that work..."
+                  placeholder="Private notes about this client — goals, preferences, injuries, cues that work..."
                   rows={4}
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box', marginBottom:10, colorScheme:'dark' }}
                 />
@@ -509,19 +510,19 @@ export default function ClientDetail() {
                 </button>
               </div>
 
-              {/* â”€â”€ Morning pulse (most recent) â”€â”€ */}
+              {/* ── Morning pulse (most recent) ── */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                  <div style={{ fontSize:13, fontWeight:800 }}>â¤ï¸ Morning Pulse</div>
+                  <div style={{ fontSize:13, fontWeight:800 }}>❤️ Morning Pulse</div>
                   {dailyPulse[0] && <div style={{ fontSize:11, color:t.textMuted }}>{new Date(dailyPulse[0].checkin_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</div>}
                 </div>
                 {dailyPulse[0] ? (
                   <div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:10 }}>
                       {[
-                        { label:'Sleep',  val: dailyPulse[0].sleep_quality ? dailyPulse[0].sleep_quality+'/5' : 'â€”',  color:t.purple },
-                        { label:'Energy', val: dailyPulse[0].energy_score  ? dailyPulse[0].energy_score+'/5'  : 'â€”',  color:t.teal   },
-                        { label:'Stress', val: dailyPulse[0].stress_score  ? dailyPulse[0].stress_score+'/10' : 'â€”',  color:t.orange },
+                        { label:'Sleep',  val: dailyPulse[0].sleep_quality ? dailyPulse[0].sleep_quality+'/5' : '—',  color:t.purple },
+                        { label:'Energy', val: dailyPulse[0].energy_score  ? dailyPulse[0].energy_score+'/5'  : '—',  color:t.teal   },
+                        { label:'Stress', val: dailyPulse[0].stress_score  ? dailyPulse[0].stress_score+'/10' : '—',  color:t.orange },
                       ].map(s => (
                         <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', textAlign:'center' as const }}>
                           <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
@@ -530,8 +531,8 @@ export default function ClientDetail() {
                       ))}
                     </div>
                     {dailyPulse[0].body && !dailyPulse[0].is_private && (
-                      <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal }}>
-                        ðŸ’¬ {dailyPulse[0].body}
+                      <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal }}>
+                        💬 {dailyPulse[0].body}
                       </div>
                     )}
                     {dailyPulse[0].is_private && <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' }}>Note is private</div>}
@@ -547,14 +548,14 @@ export default function ClientDetail() {
                     <div style={{ fontSize:11, color:t.textMuted, marginBottom:12 }}>
                       {latestCheckin.completed_at
                         ? new Date(latestCheckin.completed_at).toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })
-                        : 'â€”'}
+                        : '—'}
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
                       {[
-                        { label:'Weight',  val: latestCheckinResponse.weight_lbs ? latestCheckinResponse.weight_lbs+'lbs' : 'â€”', color:t.teal   },
-                        { label:'Sleep',   val: latestCheckinResponse.sleep_hours ? latestCheckinResponse.sleep_hours+'hrs' : 'â€”', color:t.purple },
-                        { label:'Stress',  val: latestCheckinResponse.stress_score ? latestCheckinResponse.stress_score+'/10' : latestCheckinResponse.stress ? latestCheckinResponse.stress+'/10' : 'â€”', color:t.red },
-                        { label:'Energy',  val: latestCheckinResponse.energy_score ? latestCheckinResponse.energy_score+'/10' : 'â€”', color:t.orange },
+                        { label:'Weight',  val: latestCheckinResponse.weight_lbs ? latestCheckinResponse.weight_lbs+'lbs' : '—', color:t.teal   },
+                        { label:'Sleep',   val: latestCheckinResponse.sleep_hours ? latestCheckinResponse.sleep_hours+'hrs' : '—', color:t.purple },
+                        { label:'Stress',  val: latestCheckinResponse.stress_score ? latestCheckinResponse.stress_score+'/10' : latestCheckinResponse.stress ? latestCheckinResponse.stress+'/10' : '—', color:t.red },
+                        { label:'Energy',  val: latestCheckinResponse.energy_score ? latestCheckinResponse.energy_score+'/10' : '—', color:t.orange },
                       ].map(s => (
                         <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
                           <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
@@ -562,8 +563,8 @@ export default function ClientDetail() {
                         </div>
                       ))}
                     </div>
-                    {latestCheckinResponse.wins && <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {String(latestCheckinResponse.wins)}</div>}
-                    {latestCheckinResponse.struggles && <div style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red }}><strong>Struggles:</strong> {String(latestCheckinResponse.struggles)}</div>}
+                    {latestCheckinResponse.wins && <div style={{ background:t.greenDim, border:'1px solid '+alpha(t.green, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {String(latestCheckinResponse.wins)}</div>}
+                    {latestCheckinResponse.struggles && <div style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red }}><strong>Struggles:</strong> {String(latestCheckinResponse.struggles)}</div>}
                   </div>
                 ) : (
                   <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No check-ins yet</div>
@@ -576,12 +577,12 @@ export default function ClientDetail() {
                 {latestMetric ? (
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
                     {[
-                      { label:'Weight',  val: latestMetric.weight ? latestMetric.weight+'lbs' : 'â€”'  },
-                      { label:'Chest',   val: latestMetric.chest  ? latestMetric.chest+'"'  : 'â€”'    },
-                      { label:'Waist',   val: latestMetric.waist  ? latestMetric.waist+'"'  : 'â€”'    },
-                      { label:'Hips',    val: latestMetric.hips   ? latestMetric.hips+'"'   : 'â€”'    },
-                      { label:'L Arm',   val: latestMetric.left_arm ? latestMetric.left_arm+'"' : 'â€”' },
-                      { label:'R Arm',   val: latestMetric.right_arm ? latestMetric.right_arm+'"' : 'â€”' },
+                      { label:'Weight',  val: latestMetric.weight ? latestMetric.weight+'lbs' : '—'  },
+                      { label:'Chest',   val: latestMetric.chest  ? latestMetric.chest+'"'  : '—'    },
+                      { label:'Waist',   val: latestMetric.waist  ? latestMetric.waist+'"'  : '—'    },
+                      { label:'Hips',    val: latestMetric.hips   ? latestMetric.hips+'"'   : '—'    },
+                      { label:'L Arm',   val: latestMetric.left_arm ? latestMetric.left_arm+'"' : '—' },
+                      { label:'R Arm',   val: latestMetric.right_arm ? latestMetric.right_arm+'"' : '—' },
                     ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
                         <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
@@ -601,11 +602,11 @@ export default function ClientDetail() {
                   ? workouts.filter((w:any) => w.status !== 'completed').sort((a:any,b:any) => (a.scheduled_date||'').localeCompare(b.scheduled_date||'')).slice(0,5).map((w:any, i:number, arr:any[]) => (
                   <div key={w.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom: i < arr.length-1 ? '1px solid '+t.border : 'none' }}>
                     <div style={{ width:32, height:32, borderRadius:9, background: w.status==='in_progress' ? t.orangeDim : t.tealDim, border:'1px solid '+(w.status==='in_progress'?t.orange:t.teal)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
-                      {w.status==='in_progress' ? 'ðŸ”„' : 'ðŸ“…'}
+                      {w.status==='in_progress' ? '🔄' : '📅'}
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, fontWeight:600 }}>{w.title || w.name || 'Workout Session'}</div>
-                      <div style={{ fontSize:11, color:t.textMuted }}>{w.scheduled_date ? new Date(w.scheduled_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : 'â€”'}</div>
+                      <div style={{ fontSize:11, color:t.textMuted }}>{w.scheduled_date ? new Date(w.scheduled_date+'T12:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'}</div>
                     </div>
                     <div style={{ fontSize:11, fontWeight:700, color: w.status==='in_progress' ? t.orange : t.textMuted, textTransform:'capitalize' as const }}>{w.status}</div>
                   </div>
@@ -614,13 +615,13 @@ export default function ClientDetail() {
                 )}
               </div>
 
-              {/* Recent activity â€” completed workouts + logged activities */}
+              {/* Recent activity — completed workouts + logged activities */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ fontSize:13, fontWeight:800, marginBottom:14 }}>Recent Activity</div>
                 {(() => {
                   const completedW = workouts.filter((w:any) => w.status === 'completed').slice(0, 5).map((w:any) => ({
                     id: w.id, type:'workout', label: w.title || w.name || 'Workout', date: w.scheduled_date || w.created_at,
-                    sub: w.duration_seconds ? Math.floor(w.duration_seconds/60)+'m' : null, icon:'ðŸ’ª', color:t.green,
+                    sub: w.duration_seconds ? Math.floor(w.duration_seconds/60)+'m' : null, icon:'💪', color:t.green,
                   }))
                   const activityItems = activities.slice(0, 5).map((a:any) => {
                     const config = getClientActivityConfig(a.activity_type)
@@ -634,10 +635,10 @@ export default function ClientDetail() {
                     <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                       {merged.map((item:any) => (
                         <div key={item.id+item.type} style={{ display:'flex', alignItems:'center', gap:10 }}>
-                          <div style={{ width:32, height:32, borderRadius:9, background:item.color+'18', border:'1px solid '+item.color+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>{item.icon}</div>
+                          <div style={{ width:32, height:32, borderRadius:9, background:alpha(item.color, 9), border:'1px solid '+alpha(item.color, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>{item.icon}</div>
                           <div style={{ flex:1 }}>
                             <div style={{ fontSize:13, fontWeight:600 }}>{item.label}</div>
-                            <div style={{ fontSize:11, color:t.textMuted }}>{item.sub} Â· {item.date ? new Date(item.date+'T12:00:00').toLocaleDateString([],{month:'short',day:'numeric'}) : 'â€”'}</div>
+                            <div style={{ fontSize:11, color:t.textMuted }}>{item.sub} · {item.date ? new Date(item.date+'T12:00:00').toLocaleDateString([],{month:'short',day:'numeric'}) : '—'}</div>
                           </div>
                         </div>
                       ))}
@@ -656,9 +657,9 @@ export default function ClientDetail() {
                   <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                     <select value={trainingType} onChange={e => { setTrainingType(e.target.value); setTrainingTypeSaved(false) }}
                       style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as any, outline:'none' }}>
-                      <option value="remote">ðŸŒ Remote</option>
-                      <option value="hybrid">âš¡ Hybrid</option>
-                      <option value="in_person">ðŸ‹ï¸ In-Person</option>
+                      <option value="remote">🌐 Remote</option>
+                      <option value="hybrid">⚡ Hybrid</option>
+                      <option value="in_person">🏋️ In-Person</option>
                     </select>
                     <button onClick={async () => {
                       const { error } = await supabase.from('clients').update({ training_type: trainingType }).eq('id', clientId)
@@ -667,7 +668,7 @@ export default function ClientDetail() {
                       setTimeout(() => setTrainingTypeSaved(false), 2000)
                     }}
                       style={{ background: trainingTypeSaved ? t.green : t.tealDim, border:'1px solid '+(trainingTypeSaved ? t.green : t.teal)+'40', borderRadius:9, padding:'9px 16px', fontSize:12, fontWeight:700, color: trainingTypeSaved ? '#000' : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, transition:'background .3s' }}>
-                      {trainingTypeSaved ? 'âœ“ Saved!' : 'Save'}
+                      {trainingTypeSaved ? '✓ Saved!' : 'Save'}
                     </button>
                   </div>
                 </div>
@@ -679,8 +680,8 @@ export default function ClientDetail() {
                     <select value={clientGender} onChange={e => { setClientGender(e.target.value); setGenderSaved(false) }}
                       style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:clientGender ? t.text : t.textMuted, fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as any, outline:'none' }}>
                       <option value="">Not set (defaults to male)</option>
-                      <option value="male">â™‚ Male</option>
-                      <option value="female">â™€ Female</option>
+                      <option value="male">♂ Male</option>
+                      <option value="female">♀ Female</option>
                       <option value="non-binary">Non-binary</option>
                       <option value="prefer_not_to_say">Prefer not to say</option>
                     </select>
@@ -691,7 +692,7 @@ export default function ClientDetail() {
                       setTimeout(() => setGenderSaved(false), 2000)
                     }}
                       style={{ background: genderSaved ? t.green : t.tealDim, border:'1px solid '+(genderSaved ? t.green : t.teal)+'40', borderRadius:9, padding:'9px 16px', fontSize:12, fontWeight:700, color: genderSaved ? '#000' : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, transition:'background .3s' }}>
-                      {genderSaved ? 'âœ“ Saved!' : 'Save'}
+                      {genderSaved ? '✓ Saved!' : 'Save'}
                     </button>
                   </div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:5 }}>Controls which demo video this client sees during workouts</div>
@@ -707,7 +708,7 @@ export default function ClientDetail() {
                     setNotesSaved(true); setTimeout(()=>setNotesSaved(false),2000)
                   }}
                   style={{ marginTop:10, background:notesSaved?t.green:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
-                  {notesSaved ? 'âœ“ Saved!' : 'Save Note'}
+                  {notesSaved ? '✓ Saved!' : 'Save Note'}
                 </button>
               </div>
               {/* Client Permissions */}
@@ -744,20 +745,20 @@ export default function ClientDetail() {
           )}
 
 
-          {/* â”€â”€ WORKOUTS TAB â”€â”€ */}
+          {/* ── WORKOUTS TAB ── */}
           {/* CHECK-INS TAB */}
           {activeTab === 'checkins' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
 
-              {/* â”€â”€ Schedule Card â”€â”€ */}
+              {/* ── Schedule Card ── */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
                   <div>
-                    <div style={{ fontSize:15, fontWeight:800 }}>ðŸ“… Weekly Schedule</div>
+                    <div style={{ fontSize:15, fontWeight:800 }}>📅 Weekly Schedule</div>
                     <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>
                       {checkinSchedule?.active
                         ? `Sends every ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][scheduleForm.send_day]} at ${scheduleForm.send_time}`
-                        : 'No active schedule â€” check-ins are manual only'}
+                        : 'No active schedule — check-ins are manual only'}
                     </div>
                   </div>
                   <button
@@ -798,7 +799,7 @@ export default function ClientDetail() {
                       setTimeout(() => setScheduleSaved(false), 2000)
                     }}
                     style={{ background:scheduleSaved?t.greenDim:t.tealDim, border:'1px solid '+(scheduleSaved?t.green:t.teal)+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:scheduleSaved?t.green:t.teal, cursor:scheduleSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {scheduleSaved ? 'âœ“ Saved!' : scheduleSaving ? 'Saving...' : 'Save Schedule'}
+                    {scheduleSaved ? '✓ Saved!' : scheduleSaving ? 'Saving...' : 'Save Schedule'}
                   </button>
                 </div>
 
@@ -825,8 +826,8 @@ export default function ClientDetail() {
                   <div>
                     <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Status</div>
                     <button onClick={() => setScheduleForm(p => ({ ...p, active: !p.active }))}
-                      style={{ width:'100%', padding:'10px 12px', borderRadius:9, border:'1px solid '+(scheduleForm.active?t.teal+'40':t.border), background:scheduleForm.active?t.tealDim:t.surfaceHigh, fontSize:13, fontWeight:700, color:scheduleForm.active?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                      {scheduleForm.active ? 'âœ“ Active' : 'â¸ Paused'}
+                      style={{ width:'100%', padding:'10px 12px', borderRadius:9, border:'1px solid '+(scheduleForm.active?alpha(t.teal, 25):t.border), background:scheduleForm.active?t.tealDim:t.surfaceHigh, fontSize:13, fontWeight:700, color:scheduleForm.active?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      {scheduleForm.active ? '✓ Active' : '⏸ Paused'}
                     </button>
                   </div>
                 </div>
@@ -850,8 +851,8 @@ export default function ClientDetail() {
                         if (target) router.push(`/dashboard/coach/onboarding?edit=${target}`)
                         else router.push('/dashboard/coach/onboarding')
                       }}
-                      style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'10px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
-                      âœï¸ Edit Form
+                      style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:9, padding:'10px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                      ✏️ Edit Form
                     </button>
                   </div>
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:5 }}>
@@ -893,7 +894,7 @@ export default function ClientDetail() {
                               body: {
                                 user_id: clientProfile,
                                 notification_type: 'checkin_due',
-                                title: 'Check-in time! ðŸ“‹',
+                                title: 'Check-in time! 📋',
                                 body: 'Coach Shane sent your weekly check-in. Tap to fill it out.',
                                 link_url: '/dashboard/client/checkin',
                               }
@@ -903,21 +904,21 @@ export default function ClientDetail() {
                       }
                       setSendingNow(false)
                     }}
-                    style={{ background:checkinSchedule?t.orangeDim:'transparent', border:'1px solid '+(checkinSchedule?t.orange+'40':t.border), borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:checkinSchedule?t.orange:t.textMuted, cursor:sendingNow||!checkinSchedule?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!checkinSchedule?0.5:1 }}>
-                    {sendingNow ? 'Sending...' : 'ðŸ“¤ Send Check-in Now'}
+                    style={{ background:checkinSchedule?t.orangeDim:'transparent', border:'1px solid '+(checkinSchedule?alpha(t.orange, 25):t.border), borderRadius:9, padding:'8px 18px', fontSize:12, fontWeight:700, color:checkinSchedule?t.orange:t.textMuted, cursor:sendingNow||!checkinSchedule?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!checkinSchedule?0.5:1 }}>
+                    {sendingNow ? 'Sending...' : '📤 Send Check-in Now'}
                   </button>
                   {!checkinSchedule && <span style={{ fontSize:11, color:t.textMuted, marginLeft:10 }}>Save a schedule first to enable manual sends</span>}
                 </div>
               </div>
 
-              {/* â”€â”€ History â”€â”€ */}
+              {/* ── History ── */}
               <div style={{ fontSize:13, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>
                 History ({checkinAssignments.length})
               </div>
 
               {checkinAssignments.length === 0 ? (
                 <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>ðŸ“‹</div>
+                  <div style={{ fontSize:32, marginBottom:12 }}>📋</div>
                   <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No check-ins sent yet</div>
                   <div style={{ fontSize:13, color:t.textMuted }}>Save a schedule above or use "Send Now" to send the first one</div>
                 </div>
@@ -927,12 +928,12 @@ export default function ClientDetail() {
                 const statusColor = a.status === 'completed' ? t.green : a.status === 'pending' ? t.orange : t.textMuted
                 const snoozed = a.snoozed_until && new Date(a.snoozed_until) > new Date()
                 return (
-                  <div key={a.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?t.teal+'40':t.border), borderRadius:16, overflow:'hidden' }}>
+                  <div key={a.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?alpha(t.teal, 25):t.border), borderRadius:16, overflow:'hidden' }}>
                     {/* Header */}
                     <div onClick={() => setExpandedCheckin(isExpanded ? null : a.id)}
                       style={{ display:'flex', alignItems:'center', gap:14, padding:'16px 20px', cursor:'pointer' }}>
-                      <div style={{ width:38, height:38, borderRadius:11, background:a.status==='completed'?t.greenDim:t.orangeDim, border:'1px solid '+(a.status==='completed'?t.green+'40':t.orange+'40'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
-                        {a.status === 'completed' ? 'âœ…' : snoozed ? 'â°' : 'ðŸ“‹'}
+                      <div style={{ width:38, height:38, borderRadius:11, background:a.status==='completed'?t.greenDim:t.orangeDim, border:'1px solid '+(a.status==='completed'?alpha(t.green, 25):alpha(t.orange, 25)), display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                        {a.status === 'completed' ? '✅' : snoozed ? '⏰' : '📋'}
                       </div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>
@@ -947,7 +948,7 @@ export default function ClientDetail() {
                       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                         <span style={{ fontSize:11, fontWeight:700, color:statusColor, textTransform:'capitalize' }}>{a.status}</span>
                         {a.coach_response && <span style={{ fontSize:10, color:t.teal, background:t.tealDim, borderRadius:20, padding:'2px 8px' }}>Replied</span>}
-                        <span style={{ color:t.textMuted, fontSize:12, transform:isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>â–¼</span>
+                        <span style={{ color:t.textMuted, fontSize:12, transform:isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
                       </div>
                     </div>
 
@@ -970,7 +971,7 @@ export default function ClientDetail() {
 
                         {/* Coach response */}
                         {a.coach_response ? (
-                          <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
+                          <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
                             <strong>Your response:</strong> {a.coach_response}
                             <button onClick={() => { setRespondingTo(a.id); setResponseText(a.coach_response) }}
                               style={{ marginLeft:10, background:'none', border:'none', color:t.teal, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif", textDecoration:'underline' }}>
@@ -999,20 +1000,20 @@ export default function ClientDetail() {
                                   setRespondingTo(null); setResponseText(''); setSavingResponse(false)
                                 }}
                                 style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:savingResponse||!responseText.trim()?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                                {savingResponse ? 'Saving...' : 'âœ“ Send Response'}
+                                {savingResponse ? 'Saving...' : '✓ Send Response'}
                               </button>
                             </div>
                           </div>
                         ) : (
                           <button onClick={() => { setRespondingTo(a.id); setResponseText('') }}
-                            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                            ðŸ’¬ Respond to Check-in
+                            style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                            💬 Respond to Check-in
                           </button>
                         )}
                       </div>
                     )}
 
-                    {/* Pending â€” show pending state */}
+                    {/* Pending — show pending state */}
                     {isExpanded && a.status === 'pending' && (
                       <div style={{ borderTop:'1px solid '+t.border, padding:'16px 20px', color:t.textMuted, fontSize:13 }}>
                         {snoozed
@@ -1067,7 +1068,7 @@ export default function ClientDetail() {
                 t={t}
                 refreshKey={scheduleRefreshKey}
               />
-              {/* Completed sessions â€” collapsible */}
+              {/* Completed sessions — collapsible */}
               <div style={{ marginTop:24 }}>
                 <button
                   onClick={()=>setShowCompleted(prev=>!prev)}
@@ -1076,7 +1077,7 @@ export default function ClientDetail() {
                   <span style={{ fontSize:11, color:t.textMuted, background:t.surfaceHigh, borderRadius:20, padding:'2px 8px' }}>
                     {workouts.filter((w:any)=>w.status==='completed').length}
                   </span>
-                  <span style={{ color:t.textMuted, fontSize:12, transform:showCompleted?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>â–¼</span>
+                  <span style={{ color:t.textMuted, fontSize:12, transform:showCompleted?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
                 </button>
                 {showCompleted && (
                   <div>
@@ -1090,20 +1091,20 @@ export default function ClientDetail() {
                       const detail = workoutDetails[w.id]
                       const fmtDuration = (s:number) => s ? Math.floor(s/60)+'m '+s%60+'s' : null
                       return (
-                        <div key={w.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?t.teal+'50':t.border), borderRadius:16, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
+                        <div key={w.id} style={{ background:t.surface, border:'1px solid '+(isExpanded?alpha(t.teal, 31):t.border), borderRadius:16, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
                           <div onClick={()=>{ isExpanded ? setExpandedWorkout(null) : loadWorkoutDetail(w.id) }}
                             style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', cursor:'pointer' }}>
-                            <div style={{ width:40, height:40, borderRadius:12, background:t.greenDim, border:'1px solid '+t.green+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>âœ…</div>
+                            <div style={{ width:40, height:40, borderRadius:12, background:t.greenDim, border:'1px solid '+alpha(t.green, 25), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>✅</div>
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{w.title || 'Workout Session'}</div>
                               <div style={{ fontSize:11, color:t.textMuted, display:'flex', gap:10, flexWrap:'wrap' as const }}>
                                 <span>{new Date(w.scheduled_date||w.created_at).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</span>
-                                {w.duration_seconds && <span>â± {fmtDuration(w.duration_seconds)}</span>}
+                                {w.duration_seconds && <span>⏱ {fmtDuration(w.duration_seconds)}</span>}
                                 {w.session_rpe && <span>RPE {w.session_rpe}/10</span>}
                                 {w.mood && <span>{w.mood}</span>}
                               </div>
                             </div>
-                            <span style={{ color:t.textMuted, fontSize:14, transform:isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>â–¼</span>
+                            <span style={{ color:t.textMuted, fontSize:14, transform:isExpanded?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s' }}>▼</span>
                           </div>
                           {isExpanded && (
                             <div style={{ borderTop:'1px solid '+t.border, padding:'16px 18px' }}>
@@ -1117,11 +1118,11 @@ export default function ClientDetail() {
                                   <div key={ex.id} style={{ marginBottom:16 }}>
                                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                                       <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>{ex.exercise_name}</div>
-                                      <div style={{ fontSize:11, color:t.textMuted }}>Target: {ex.sets_prescribed}Ã—{ex.reps_prescribed}{ex.weight_prescribed?' @ '+ex.weight_prescribed:''}</div>
+                                      <div style={{ fontSize:11, color:t.textMuted }}>Target: {ex.sets_prescribed}×{ex.reps_prescribed}{ex.weight_prescribed?' @ '+ex.weight_prescribed:''}</div>
                                       {ex.client_video_url && (
                                         <a href={ex.client_video_url} target="_blank" rel="noreferrer"
-                                          style={{ marginLeft:'auto', fontSize:11, fontWeight:700, color:t.purple, background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:20, padding:'3px 10px', textDecoration:'none' }}>
-                                          ðŸ“¹ Form Check
+                                          style={{ marginLeft:'auto', fontSize:11, fontWeight:700, color:t.purple, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:20, padding:'3px 10px', textDecoration:'none' }}>
+                                          📹 Form Check
                                         </a>
                                       )}
                                     </div>
@@ -1133,11 +1134,11 @@ export default function ClientDetail() {
                                           ))}
                                         </div>
                                         {exSets.map((s:any,i:number)=>(
-                                          <div key={s.id} style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', padding:'8px 12px', borderBottom:i<exSets.length-1?'1px solid '+t.border+'66':'none', background:s.is_warmup?t.orangeDim:'transparent' }}>
+                                          <div key={s.id} style={{ display:'grid', gridTemplateColumns:'40px 1fr 1fr 1fr 1fr', padding:'8px 12px', borderBottom:i<exSets.length-1?'1px solid '+alpha(t.border, 40):'none', background:s.is_warmup?t.orangeDim:'transparent' }}>
                                             <div style={{ fontSize:12, fontWeight:700, color:s.is_warmup?t.orange:t.textDim }}>{s.is_warmup?'W':s.set_number}</div>
-                                            <div style={{ fontSize:13, fontWeight:700 }}>{s.reps_completed||'â€”'}</div>
-                                            <div style={{ fontSize:13, fontWeight:700 }}>{s.weight_value!=null?s.weight_value+(s.weight_unit||'lbs'):s.weight_unit==='bw'?'BW':'â€”'}</div>
-                                            <div style={{ fontSize:13 }}>{s.rpe||'â€”'}</div>
+                                            <div style={{ fontSize:13, fontWeight:700 }}>{s.reps_completed||'—'}</div>
+                                            <div style={{ fontSize:13, fontWeight:700 }}>{s.weight_value!=null?s.weight_value+(s.weight_unit||'lbs'):s.weight_unit==='bw'?'BW':'—'}</div>
+                                            <div style={{ fontSize:13 }}>{s.rpe||'—'}</div>
                                             <div style={{ fontSize:11, color:t.textMuted }}>{s.notes||''}</div>
                                           </div>
                                         ))}
@@ -1165,9 +1166,9 @@ export default function ClientDetail() {
                 {/* Header */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
                   <div>
-                    <div style={{ fontSize:15, fontWeight:800 }}>ðŸ¥— Nutrition Targets</div>
+                    <div style={{ fontSize:15, fontWeight:800 }}>🥗 Nutrition Targets</div>
                     <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>
-                      {nutritionPlan ? 'Active plan Â· tap Edit to adjust' : 'No plan set yet'}
+                      {nutritionPlan ? 'Active plan · tap Edit to adjust' : 'No plan set yet'}
                     </div>
                   </div>
                   <button onClick={() => {
@@ -1183,21 +1184,21 @@ export default function ClientDetail() {
                     }
                     setNutritionEdit(e => !e)
                   }}
-                    style={{ background:nutritionEdit?t.surfaceHigh:t.tealDim, border:'1px solid '+(nutritionEdit?t.border:t.teal+'40'), borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:nutritionEdit?t.textMuted:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    style={{ background:nutritionEdit?t.surfaceHigh:t.tealDim, border:'1px solid '+(nutritionEdit?t.border:alpha(t.teal, 25)), borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:nutritionEdit?t.textMuted:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {nutritionEdit ? 'Cancel' : nutritionPlan ? 'Edit' : '+ Set Plan'}
                   </button>
                 </div>
 
-                {/* View mode â€” macro tiles */}
+                {/* View mode — macro tiles */}
                 {!nutritionEdit && nutritionPlan && (
                   <>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
                       {[
-                        { label:'Calories', val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : 'â€”', color:t.orange },
-                        { label:'Protein',  val: nutritionPlan.protein_g  ? nutritionPlan.protein_g+'g'  : 'â€”', color:t.teal   },
-                        { label:'Carbs',    val: nutritionPlan.carbs_g    ? nutritionPlan.carbs_g+'g'    : 'â€”', color:t.yellow },
-                        { label:'Fat',      val: nutritionPlan.fat_g      ? nutritionPlan.fat_g+'g'      : 'â€”', color:t.purple },
-                        { label:'Water',    val: nutritionPlan.water_oz   ? nutritionPlan.water_oz+'oz'  : 'â€”', color:'#38bdf8' },
+                        { label:'Calories', val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : '—', color:t.orange },
+                        { label:'Protein',  val: nutritionPlan.protein_g  ? nutritionPlan.protein_g+'g'  : '—', color:t.teal   },
+                        { label:'Carbs',    val: nutritionPlan.carbs_g    ? nutritionPlan.carbs_g+'g'    : '—', color:t.yellow },
+                        { label:'Fat',      val: nutritionPlan.fat_g      ? nutritionPlan.fat_g+'g'      : '—', color:t.purple },
+                        { label:'Water',    val: nutritionPlan.water_oz   ? nutritionPlan.water_oz+'oz'  : '—', color:'#38bdf8' },
                       ].map(s => (
                         <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' }}>
                           <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
@@ -1206,38 +1207,38 @@ export default function ClientDetail() {
                       ))}
                     </div>
                     {nutritionPlan.notes && (
-                      <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6, marginTop:16 }}>
+                      <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6, marginTop:16 }}>
                         <strong>Notes:</strong> {nutritionPlan.notes}
                       </div>
                     )}
-                    {/* Meal plan view â€” read-only summary */}
+                    {/* Meal plan view — read-only summary */}
                     {Array.isArray(nutritionPlan.meal_plan) && nutritionPlan.meal_plan.length > 0 && (
                       <div style={{ marginTop:16 }}>
-                        <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>ðŸ½ï¸ Sample Meal Plan</div>
+                        <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>🍽️ Sample Meal Plan</div>
                         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                           {nutritionPlan.meal_plan.map((meal: any, mi: number) => (
                             <div key={mi} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'12px 14px' }}>
                               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                                 <div style={{ fontSize:13, fontWeight:800 }}>{meal.name}</div>
-                                {meal.time && <div style={{ fontSize:11, color:t.textMuted }}>Â· {meal.time}</div>}
+                                {meal.time && <div style={{ fontSize:11, color:t.textMuted }}>· {meal.time}</div>}
                                 <div style={{ marginLeft:'auto', fontSize:11, fontWeight:700, color:t.orange }}>
                                   {meal.calories ? `${meal.calories}kcal` : ''}
-                                  {meal.protein_g ? ` Â· ${meal.protein_g}P` : ''}
-                                  {meal.carbs_g ? ` Â· ${meal.carbs_g}C` : ''}
-                                  {meal.fat_g ? ` Â· ${meal.fat_g}F` : ''}
+                                  {meal.protein_g ? ` · ${meal.protein_g}P` : ''}
+                                  {meal.carbs_g ? ` · ${meal.carbs_g}C` : ''}
+                                  {meal.fat_g ? ` · ${meal.fat_g}F` : ''}
                                 </div>
                               </div>
                               {Array.isArray(meal.items) && meal.items.map((item: any, ii: number) => (
                                 <div key={ii} style={{ fontSize:12, color:t.textDim, marginLeft:4 }}>
-                                  Â· {item.food}{item.qty ? ` â€” ${item.qty}` : ''}
+                                  · {item.food}{item.qty ? ` — ${item.qty}` : ''}
                                 </div>
                               ))}
                             </div>
                           ))}
                         </div>
                         {nutritionPlan.meal_plan_notes && (
-                          <div style={{ background:t.purpleDim, border:'1px solid '+t.purple+'30', borderRadius:10, padding:'10px 14px', fontSize:12, color:t.purple, lineHeight:1.5, marginTop:10 }}>
-                            ðŸ’¬ {nutritionPlan.meal_plan_notes}
+                          <div style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), borderRadius:10, padding:'10px 14px', fontSize:12, color:t.purple, lineHeight:1.5, marginTop:10 }}>
+                            💬 {nutritionPlan.meal_plan_notes}
                           </div>
                         )}
                       </div>
@@ -1248,15 +1249,15 @@ export default function ClientDetail() {
                 {/* Empty state */}
                 {!nutritionEdit && !nutritionPlan && (
                   <div style={{ textAlign:'center', padding:'32px 0', color:t.textMuted }}>
-                    <div style={{ fontSize:36, marginBottom:10 }}>ðŸ¥—</div>
+                    <div style={{ fontSize:36, marginBottom:10 }}>🥗</div>
                     <div style={{ fontSize:13 }}>No nutrition plan set. Hit "+ Set Plan" to add targets.</div>
                   </div>
                 )}
 
-                {/* Edit mode â€” inline form */}
+                {/* Edit mode — inline form */}
                 {nutritionEdit && (
                   <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                    {/* AI Suggest Macros â€” reads intake, fills form */}
+                    {/* AI Suggest Macros — reads intake, fills form */}
                     <button
                       disabled={aiMacrosLoading || !intake}
                       onClick={async () => {
@@ -1282,15 +1283,15 @@ export default function ClientDetail() {
                             setAiMacrosRationale(data.error || 'AI request failed')
                           }
                         } catch (e) {
-                          setAiMacrosRationale('Network error â€” try again')
+                          setAiMacrosRationale('Network error — try again')
                         }
                         setAiMacrosLoading(false)
                       }}
-                      style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.purple, cursor:aiMacrosLoading||!intake?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!intake?0.5:1 }}>
-                      {aiMacrosLoading ? 'Thinkingâ€¦' : !intake ? 'ðŸ¤– Suggest Macros (intake required)' : 'ðŸ¤– Suggest Macros from Intake'}
+                      style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:10, padding:'10px', fontSize:13, fontWeight:700, color:t.purple, cursor:aiMacrosLoading||!intake?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!intake?0.5:1 }}>
+                      {aiMacrosLoading ? 'Thinking…' : !intake ? '🤖 Suggest Macros (intake required)' : '🤖 Suggest Macros from Intake'}
                     </button>
                     {aiMacrosRationale && (
-                      <div style={{ background:t.purpleDim, border:'1px solid '+t.purple+'30', borderRadius:10, padding:'12px 14px', fontSize:12, color:t.purple, lineHeight:1.6 }}>
+                      <div style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), borderRadius:10, padding:'12px 14px', fontSize:12, color:t.purple, lineHeight:1.6 }}>
                         <strong>AI rationale:</strong> {aiMacrosRationale}
                       </div>
                     )}
@@ -1355,15 +1356,15 @@ export default function ClientDetail() {
                         setNutritionEdit(false)
                       }}
                       style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'12px', fontSize:13, fontWeight:800, color:'#000', cursor:nutritionSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:nutritionSaving?0.6:1 }}>
-                      {nutritionSaving ? 'Saving...' : 'âœ“ Save Nutrition Plan'}
+                      {nutritionSaving ? 'Saving...' : '✓ Save Nutrition Plan'}
                     </button>
 
-                    {/* â”€â”€ Meal Plan Builder â”€â”€ */}
+                    {/* ── Meal Plan Builder ── */}
                     <div style={{ marginTop:8, paddingTop:18, borderTop:'1px solid '+t.border }}>
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
                         <div>
-                          <div style={{ fontSize:13, fontWeight:800 }}>ðŸ½ï¸ Sample Meal Plan</div>
-                          <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>A reference day â€” client sees this as guidance, not tracking</div>
+                          <div style={{ fontSize:13, fontWeight:800 }}>🍽️ Sample Meal Plan</div>
+                          <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>A reference day — client sees this as guidance, not tracking</div>
                         </div>
                         <button
                           disabled={aiPlanLoading || !nutritionForm.calories}
@@ -1390,14 +1391,14 @@ export default function ClientDetail() {
                             } catch {}
                             setAiPlanLoading(false)
                           }}
-                          style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:aiPlanLoading||!nutritionForm.calories?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!nutritionForm.calories?0.5:1 }}>
-                          {aiPlanLoading ? 'Generatingâ€¦' : mealPlan.length > 0 ? 'ðŸ¤– Regenerate' : 'ðŸ¤– Generate Sample Plan'}
+                          style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:aiPlanLoading||!nutritionForm.calories?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!nutritionForm.calories?0.5:1 }}>
+                          {aiPlanLoading ? 'Generating…' : mealPlan.length > 0 ? '🤖 Regenerate' : '🤖 Generate Sample Plan'}
                         </button>
                       </div>
 
                       {mealPlan.length === 0 ? (
                         <div style={{ background:t.surfaceHigh, border:'1px dashed '+t.border, borderRadius:12, padding:'24px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
-                          {!nutritionForm.calories ? 'Set calories first, then generate a plan' : 'No meal plan yet â€” tap Generate above'}
+                          {!nutritionForm.calories ? 'Set calories first, then generate a plan' : 'No meal plan yet — tap Generate above'}
                         </div>
                       ) : (
                         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -1415,7 +1416,7 @@ export default function ClientDetail() {
                                   placeholder="7:00 AM"
                                   style={{ width:90, background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', fontSize:12, color:t.textDim, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
                                 <button onClick={() => setMealPlan(prev => prev.filter((_,i) => i !== mi))}
-                                  style={{ background:'none', border:'none', color:t.red, cursor:'pointer', fontSize:16, padding:'4px 8px' }}>Ã—</button>
+                                  style={{ background:'none', border:'none', color:t.red, cursor:'pointer', fontSize:16, padding:'4px 8px' }}>×</button>
                               </div>
                               {/* Items */}
                               <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
@@ -1432,7 +1433,7 @@ export default function ClientDetail() {
                                       placeholder="Qty"
                                       style={{ flex:1, background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 9px', fontSize:12, color:t.textDim, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
                                     <button onClick={() => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, items: m.items.filter((_:any,j:number) => j !== ii) } : m))}
-                                      style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:14, padding:'0 6px' }}>Ã—</button>
+                                      style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:14, padding:'0 6px' }}>×</button>
                                   </div>
                                 ))}
                                 <button onClick={() => setMealPlan(prev => prev.map((m,i) => i===mi ? { ...m, items: [...(m.items||[]), { food:'', qty:'' }] } : m))}
@@ -1467,13 +1468,13 @@ export default function ClientDetail() {
                         </div>
                       )}
 
-                      {/* Meal plan notes â€” client-visible coaching note */}
+                      {/* Meal plan notes — client-visible coaching note */}
                       <div style={{ marginTop:12 }}>
                         <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:5, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Meal Plan Note (visible to client)</div>
                         <textarea
                           value={mealPlanNotes}
                           onChange={e => setMealPlanNotes(e.target.value)}
-                          placeholder="Tips on timing, swaps, hydrationâ€¦"
+                          placeholder="Tips on timing, swaps, hydration…"
                           rows={2}
                           style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 12px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none' as const, colorScheme:'dark' as const, boxSizing:'border-box' as const }}/>
                       </div>
@@ -1509,7 +1510,7 @@ export default function ClientDetail() {
                           const diff = calTarget ? Math.round(day.calories - calTarget) : null
                           const onTrack = diff !== null && Math.abs(diff) <= 150
                           return (
-                            <tr key={day.date} style={{ borderBottom:'1px solid '+t.border+'60' }}>
+                            <tr key={day.date} style={{ borderBottom:'1px solid '+alpha(t.border, 38) }}>
                               <td style={{ padding:'8px 8px', color:t.textMuted }}>{new Date(day.date+'T12:00:00').toLocaleDateString([],{month:'short',day:'numeric'})}</td>
                               <td style={{ padding:'8px 8px', textAlign:'right' as const, fontWeight:700, color:t.text }}>{Math.round(day.calories)}</td>
                               <td style={{ padding:'8px 8px', textAlign:'right' as const, color:t.teal }}>{Math.round(day.protein)}g</td>
@@ -1517,7 +1518,7 @@ export default function ClientDetail() {
                               <td style={{ padding:'8px 8px', textAlign:'right' as const, color:t.yellow }}>{Math.round(day.fat)}g</td>
                               {nutritionPlan && (
                                 <td style={{ padding:'8px 8px', textAlign:'right' as const, fontWeight:700, color: onTrack ? t.green : diff! > 0 ? t.red : t.textMuted }}>
-                                  {diff !== null ? (diff > 0 ? '+' : '') + diff : 'â€”'}
+                                  {diff !== null ? (diff > 0 ? '+' : '') + diff : '—'}
                                 </td>
                               )}
                             </tr>
@@ -1543,7 +1544,7 @@ export default function ClientDetail() {
             {callRequests.length > 0 && (
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:13, fontWeight:800, color:'#f5a623', marginBottom:12 }}>
-                  ðŸ“ž Pending Call Requests
+                  📞 Pending Call Requests
                 </div>
                 {callRequests.map(req => (
                   <div key={req.id} style={{ background:'#0f0f1a', border:'1px solid #f5a62330', borderRadius:14, padding:16, marginBottom:10 }}>
@@ -1584,7 +1585,7 @@ export default function ClientDetail() {
                             setApprovingCall(null); setZoomLink('')
                           }}
                             style={{ flex:2, padding:'9px', borderRadius:9, border:'none', background: zoomLink.trim()?'linear-gradient(135deg,#00c9b1,#00c9b1cc)':'#1d1d2e', color: zoomLink.trim()?'#000':'#5a5a78', fontSize:12, fontWeight:800, cursor: zoomLink.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
-                            âœ“ Confirm &amp; Send Link
+                            ✓ Confirm &amp; Send Link
                           </button>
                         </div>
                       </div>
@@ -1600,7 +1601,7 @@ export default function ClientDetail() {
                         </button>
                         <button onClick={()=>setApprovingCall(req.id)}
                           style={{ flex:2, padding:'9px', borderRadius:9, border:'none', background:'linear-gradient(135deg,#00c9b1,#00c9b1cc)', color:'#000', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                          âœ“ Approve + Add Link
+                          ✓ Approve + Add Link
                         </button>
                       </div>
                     )}
@@ -1641,27 +1642,27 @@ export default function ClientDetail() {
                   <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Type</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
                     {([
-                      { value:'weight_lifted', label:'Strength ðŸ‹ï¸' },
-                      { value:'bodyweight',    label:'Body Weight âš–ï¸' },
-                      { value:'consistency',   label:'Consistency ðŸ”¥' },
+                      { value:'weight_lifted', label:'Strength 🏋️' },
+                      { value:'bodyweight',    label:'Body Weight ⚖️' },
+                      { value:'consistency',   label:'Consistency 🔥' },
                     ] as const).map(({ value, label }) => (
                       <button key={value} onClick={()=>setGoalForm(p=>({...p, type:value, unit: value==='bodyweight' ? 'lbs' : value==='consistency' ? 'workouts' : 'lbs', exercise_id:''}))}
-                        style={{ padding:'6px 14px', borderRadius:20, border:'1px solid '+(goalForm.type===value?t.teal:t.border), background:goalForm.type===value?t.teal+'20':'transparent', color:goalForm.type===value?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        style={{ padding:'6px 14px', borderRadius:20, border:'1px solid '+(goalForm.type===value?t.teal:t.border), background:goalForm.type===value?alpha(t.teal, 13):'transparent', color:goalForm.type===value?t.teal:t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         {label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Exercise picker â€” only for strength goals */}
+                {/* Exercise picker — only for strength goals */}
                 {goalForm.type === 'weight_lifted' && (
                   <div>
                     <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Exercise</div>
                     {goalForm.exercise_id ? (
-                      <div style={{ display:'flex', alignItems:'center', gap:8, background:t.teal+'15', border:'1px solid '+t.teal+'40', borderRadius:10, padding:'10px 13px' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, background:alpha(t.teal, 8), border:'1px solid '+alpha(t.teal, 25), borderRadius:10, padding:'10px 13px' }}>
                         <span style={{ flex:1, fontSize:13, fontWeight:700, color:t.teal }}>{exerciseResults.find(e=>e.id===goalForm.exercise_id)?.name || 'Selected'}</span>
                         <button onClick={()=>{ setGoalForm(p=>({...p,exercise_id:''})); setExerciseSearch(''); setExerciseResults([]) }}
-                          style={{ fontSize:11, color:t.textMuted, background:'none', border:'none', cursor:'pointer' }}>âœ• Change</button>
+                          style={{ fontSize:11, color:t.textMuted, background:'none', border:'none', cursor:'pointer' }}>✕ Change</button>
                       </div>
                     ) : (
                       <div style={{ position:'relative' as const }}>
@@ -1764,7 +1765,7 @@ export default function ClientDetail() {
         {showAssignForm && (
           <div onClick={()=>setShowAssignForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>
-              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>ðŸ“ Send a Form</div>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>📝 Send a Form</div>
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>
                 Assign a form to {client?.profile?.full_name || client?.display_name}
               </div>
@@ -1777,7 +1778,7 @@ export default function ClientDetail() {
                 </select>
                 {forms.length === 0 && (
                   <div style={{ fontSize:12, color:t.orange, marginTop:6 }}>
-                    No forms yet. <span onClick={()=>router.push('/dashboard/coach/onboarding')} style={{ cursor:'pointer', textDecoration:'underline' }}>Create one first â†’</span>
+                    No forms yet. <span onClick={()=>router.push('/dashboard/coach/onboarding')} style={{ cursor:'pointer', textDecoration:'underline' }}>Create one first →</span>
                   </div>
                 )}
               </div>
@@ -1793,7 +1794,7 @@ export default function ClientDetail() {
                 </button>
                 <button onClick={assignForm} disabled={!assignFormId || assigning || assignedDone}
                   style={{ flex:2, background:assignedDone?t.green:'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:assignedDone?'#000':'#fff', cursor:!assignFormId||assigning||assignedDone?'not-allowed':'pointer', opacity:!assignFormId||assigning?0.5:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
-                  {assignedDone ? 'âœ“ Form Sent!' : assigning ? 'Sending...' : 'ðŸ“ Send Form'}
+                  {assignedDone ? '✓ Form Sent!' : assigning ? 'Sending...' : '📝 Send Form'}
                 </button>
               </div>
             </div>
@@ -1849,8 +1850,8 @@ export default function ClientDetail() {
 
                   {/* Goals */}
                   <IntakeSection title="Goals" color="#f5a623">
-                    <IntakeRow label="Primary Goal"     value={Array.isArray(intake.primary_goal) ? (intake.primary_goal as string[]).join(' â€¢ ') : intake.primary_goal} />
-                    <IntakeRow label="Secondary Goal"   value={Array.isArray(intake.secondary_goal) ? (intake.secondary_goal as string[]).join(' â€¢ ') : intake.secondary_goal} />
+                    <IntakeRow label="Primary Goal"     value={Array.isArray(intake.primary_goal) ? (intake.primary_goal as string[]).join(' • ') : intake.primary_goal} />
+                    <IntakeRow label="Secondary Goal"   value={Array.isArray(intake.secondary_goal) ? (intake.secondary_goal as string[]).join(' • ') : intake.secondary_goal} />
                     <IntakeRow label="Target Date"      value={intake.goal_target_date} />
                     <IntakeRow label="Motivation"       value={intake.motivation_why} long />
                     <IntakeRow label="Biggest Obstacle" value={intake.biggest_obstacle} long />
@@ -1891,12 +1892,12 @@ export default function ClientDetail() {
           </div>
           <div style={{ display:'flex', gap:10 }}>
             <button onClick={()=>router.push('/dashboard/preview/'+clientId)}
-              style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              ðŸ‘ï¸ Preview as Client
+              style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              👁️ Preview as Client
             </button>
             <button onClick={saveAndBack}
               style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:9, padding:'8px 20px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              â† Save & Back
+              ← Save & Back
             </button>
           </div>
         </div>
@@ -1920,7 +1921,7 @@ export default function ClientDetail() {
               {/* Goals list */}
               {goals.length === 0 ? (
                 <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'40px 20px', textAlign:'center' as const, color:t.textMuted }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>ðŸŽ¯</div>
+                  <div style={{ fontSize:32, marginBottom:12 }}>🎯</div>
                   <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No goals set yet</div>
                   <div style={{ fontSize:12, lineHeight:1.6 }}>Add a goal to give your client something concrete to work toward.</div>
                 </div>
@@ -1933,7 +1934,7 @@ export default function ClientDetail() {
                     const isCompleted = goal.status === 'completed'
                     const isPast = goal.deadline && new Date(goal.deadline) < new Date() && !isCompleted
                     return (
-                      <div key={goal.id} style={{ background:t.surface, border:'1px solid '+(isCompleted ? t.teal+'50' : isPast ? t.red+'30' : t.border), borderRadius:16, padding:18, opacity: isCompleted ? 0.8 : 1 }}>
+                      <div key={goal.id} style={{ background:t.surface, border:'1px solid '+(isCompleted ? alpha(t.teal, 31) : isPast ? alpha(t.red, 19) : t.border), borderRadius:16, padding:18, opacity: isCompleted ? 0.8 : 1 }}>
                         <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom: pct !== null ? 14 : 0 }}>
                           <div style={{ flex:1 }}>
                             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
@@ -1941,7 +1942,7 @@ export default function ClientDetail() {
                                 {isCompleted ? '\u2713 ' : ''}{goal.title}
                               </div>
                               {isPast && !isCompleted && (
-                                <span style={{ fontSize:10, fontWeight:700, color:t.red, background:t.red+'15', borderRadius:20, padding:'2px 8px' }}>Overdue</span>
+                                <span style={{ fontSize:10, fontWeight:700, color:t.red, background:alpha(t.red, 8), borderRadius:20, padding:'2px 8px' }}>Overdue</span>
                               )}
                             </div>
                             {goal.description && (
@@ -1951,12 +1952,12 @@ export default function ClientDetail() {
                               {goal.target_value && (
                                 <span style={{ fontSize:11, color:t.textDim }}>
                                   Target: <strong style={{color:t.text}}>{goal.target_value}{goal.unit ? ' '+goal.unit : ''}</strong>
-                                  {goal.current_value != null ? <> Â· Now: <strong style={{color:t.teal}}>{goal.current_value}{goal.unit ? ' '+goal.unit : ''}</strong></> : null}
+                                  {goal.current_value != null ? <> · Now: <strong style={{color:t.teal}}>{goal.current_value}{goal.unit ? ' '+goal.unit : ''}</strong></> : null}
                                 </span>
                               )}
                               {goal.deadline && (
                                 <span style={{ fontSize:11, color: isPast ? t.red : t.textDim }}>
-                                  ðŸ“… {new Date(goal.deadline+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                                  📅 {new Date(goal.deadline+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
                                 </span>
                               )}
                             </div>
@@ -1970,7 +1971,7 @@ export default function ClientDetail() {
                                   onChange={e => setEditingGoalVal(e.target.value)}
                                   autoFocus
                                   placeholder="Value"
-                                  style={{ width:80, background:'#1d1d2e', border:'1px solid '+t.teal+'60', borderRadius:8, padding:'5px 9px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none' }}
+                                  style={{ width:80, background:'#1d1d2e', border:'1px solid '+alpha(t.teal, 38), borderRadius:8, padding:'5px 9px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none' }}
                                 />
                                 <button onClick={async () => {
                                   const num = parseFloat(editingGoalVal)
@@ -1980,11 +1981,11 @@ export default function ClientDetail() {
                                   setGoals(p => p.map(g => g.id === goal.id ? {...g, current_value: num} : g))
                                   setEditingGoalId(null); setEditingGoalVal('')
                                 }} style={{ padding:'5px 10px', borderRadius:8, border:'none', background:t.teal, color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                                  âœ“
+                                  ✓
                                 </button>
                                 <button onClick={() => { setEditingGoalId(null); setEditingGoalVal('') }}
                                   style={{ padding:'5px 9px', borderRadius:8, border:'1px solid '+t.border, background:'transparent', color:t.textMuted, fontSize:11, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                                  âœ•
+                                  ✕
                                 </button>
                               </>
                             ) : !isCompleted && (
@@ -1999,12 +2000,12 @@ export default function ClientDetail() {
                                 const now = new Date().toISOString()
                                 const { error } = await supabase.from('client_goals').update({ status:'completed', completed_at: now, current_value: goal.target_value, updated_at: now }).eq('id', goal.id)
                                 if (error) { alert('Could not mark goal complete: ' + error.message); return }
-                                // Fire milestone (fire-and-forget â€” celebration is nice-to-have)
-                                supabase.from('milestones').insert({ client_id: clientId, milestone_type:'goal', message: 'ðŸ† Goal achieved: ' + goal.title + '!', seen: false }).then(()=>{}, ()=>{})
+                                // Fire milestone (fire-and-forget — celebration is nice-to-have)
+                                supabase.from('milestones').insert({ client_id: clientId, milestone_type:'goal', message: '🏆 Goal achieved: ' + goal.title + '!', seen: false }).then(()=>{}, ()=>{})
                                 setGoals(p => p.map(g => g.id === goal.id ? {...g, status:'completed', completed_at: now} : g))
                               }}
                                 style={{ padding:'6px 10px', borderRadius:8, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                                âœ“ Done
+                                ✓ Done
                               </button>
                             )}
                             <button onClick={async()=>{
@@ -2013,8 +2014,8 @@ export default function ClientDetail() {
                               if (error) { alert('Could not delete goal: ' + error.message); return }
                               setGoals(p => p.filter(g => g.id !== goal.id))
                             }}
-                              style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+t.red+'30', background:t.red+'10', color:t.red, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                              âœ•
+                              style={{ padding:'6px 10px', borderRadius:8, border:'1px solid '+alpha(t.red, 19), background:alpha(t.red, 6), color:t.red, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              ✕
                             </button>
                           </div>
                         </div>
@@ -2039,21 +2040,21 @@ export default function ClientDetail() {
             </div>
           )}
 
-        {/* â”€â”€ DAILY PULSE TAB â”€â”€ */}
+        {/* ── DAILY PULSE TAB ── */}
         {activeTab === 'pulse' && (
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Daily Morning Pulse</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Sleep quality, energy, mood and journal entries logged daily. Last 30 days.</div>
             {dailyPulse.length === 0 ? (
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const, color:t.textMuted, fontSize:13 }}>
-                No morning pulse data yet â€” client logs this from their Home tab each day.
+                No morning pulse data yet — client logs this from their Home tab each day.
               </div>
             ) : (<>
               {/* Summary stat tiles */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:12, marginBottom:20 }}>
                 {([
-                  { key:'sleep_quality', label:'Sleep',  color:t.purple,  unit:'â˜…', max:5 },
-                  { key:'energy_score',  label:'Energy', color:t.yellow,  unit:'âš¡', max:5 },
+                  { key:'sleep_quality', label:'Sleep',  color:t.purple,  unit:'★', max:5 },
+                  { key:'energy_score',  label:'Energy', color:t.yellow,  unit:'⚡', max:5 },
                 ] as { key:string, label:string, color:string, unit:string, max:number }[]).map(({ key, label, color, unit, max }) => {
                   const vals = dailyPulse.map((d:any) => d[key]).filter((v:any) => v != null)
                   if (!vals.length) return null
@@ -2113,8 +2114,8 @@ export default function ClientDetail() {
                     <YAxis domain={[0,5]} ticks={[1,2,3,4,5]} tick={{ fill:t.textMuted, fontSize:10 }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text, fontSize:12 }} />
                     <Legend wrapperStyle={{ paddingTop:10, color:t.textMuted, fontSize:12 }} />
-                    <Line type="monotone" dataKey="sleep_quality" name="Sleep â˜…" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="energy_score"  name="Energy âš¡" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="sleep_quality" name="Sleep ★" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="energy_score"  name="Energy ⚡" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -2130,13 +2131,13 @@ export default function ClientDetail() {
                       ))}
                     </tr></thead>
                     <tbody>{dailyPulse.map((d:any)=>(
-                      <tr key={d.id} style={{ borderBottom:'1px solid '+t.border+'44' }}>
+                      <tr key={d.id} style={{ borderBottom:'1px solid '+alpha(t.border, 27) }}>
                         <td style={{ padding:'8px 10px', color:t.teal, fontWeight:600 }}>{new Date(d.checkin_date+'T00:00:00').toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</td>
-                        <td style={{ padding:'8px 10px', color:t.purple }}>{d.sleep_quality ? 'â˜…'.repeat(d.sleep_quality)+'â˜†'.repeat(5-d.sleep_quality) : 'â€”'}</td>
-                        <td style={{ padding:'8px 10px', color:t.yellow }}>{d.energy_score ? 'âš¡'.repeat(d.energy_score) : 'â€”'}</td>
-                        <td style={{ padding:'8px 10px', fontSize:18 }}>{d.mood_emoji ?? 'â€”'}</td>
+                        <td style={{ padding:'8px 10px', color:t.purple }}>{d.sleep_quality ? '★'.repeat(d.sleep_quality)+'☆'.repeat(5-d.sleep_quality) : '—'}</td>
+                        <td style={{ padding:'8px 10px', color:t.yellow }}>{d.energy_score ? '⚡'.repeat(d.energy_score) : '—'}</td>
+                        <td style={{ padding:'8px 10px', fontSize:18 }}>{d.mood_emoji ?? '—'}</td>
                         <td style={{ padding:'8px 10px', color:t.textDim, maxWidth:300, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
-                          {d.is_private ? <span style={{ color:t.textMuted, fontStyle:'italic' }}>ðŸ”’ Private</span> : d.body ? d.body : 'â€”'}
+                          {d.is_private ? <span style={{ color:t.textMuted, fontStyle:'italic' }}>🔒 Private</span> : d.body ? d.body : '—'}
                         </td>
                       </tr>
                     ))}</tbody>
@@ -2147,26 +2148,26 @@ export default function ClientDetail() {
           </div>
         )}
 
-        {/* â”€â”€ JOURNAL TAB â”€â”€ */}
+        {/* ── JOURNAL TAB ── */}
         {activeTab === 'pulse' && (
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Client Journal</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Only entries the client marked "Visible to Coach" appear here. Private entries are never shown.</div>
             {journalEntries.length === 0 ? (
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'48px 20px', textAlign:'center' as const }}>
-                <div style={{ fontSize:32, marginBottom:10 }}>ðŸ”’</div>
+                <div style={{ fontSize:32, marginBottom:10 }}>🔒</div>
                 <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No shared entries yet</div>
                 <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.6 }}>When the client shares a journal entry it will appear here.</div>
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {journalEntries.map((entry:any) => (
-                  <div key={entry.id} style={{ background:t.surface, border:'1px solid '+t.teal+'30', borderRadius:16, padding:'18px 20px' }}>
+                  <div key={entry.id} style={{ background:t.surface, border:'1px solid '+alpha(t.teal, 19), borderRadius:16, padding:'18px 20px' }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                       <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>
                         {new Date(entry.entry_date+'T00:00:00').toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
                       </div>
-                      <div style={{ fontSize:11, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:20, padding:'3px 10px' }}>
+                      <div style={{ fontSize:11, color:t.teal, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:20, padding:'3px 10px' }}>
                         Shared with you
                       </div>
                     </div>
@@ -2183,13 +2184,13 @@ export default function ClientDetail() {
         {showFlag && (
           <div onClick={()=>setShowFlag(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:440, padding:28 }}>
-              <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>ðŸš© Flag Client</div>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>🚩 Flag Client</div>
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:16 }}>Add a note about why you're flagging this client. Only you can see this.</div>
               <textarea value={flagNote} onChange={e=>setFlagNote(e.target.value)} placeholder="e.g. Missed last 3 check-ins, need to follow up..." rows={3}
                 style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.5, marginBottom:16 }} />
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
                 <button onClick={()=>setShowFlag(false)} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
-                <button onClick={handleFlag} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Flag Client</button>
+                <button onClick={handleFlag} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Flag Client</button>
               </div>
             </div>
           </div>
@@ -2199,7 +2200,7 @@ export default function ClientDetail() {
         {showArchive && (
           <div onClick={()=>setShowArchive(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
-              <div style={{ fontSize:32, marginBottom:12 }}>ðŸ“¦</div>
+              <div style={{ fontSize:32, marginBottom:12 }}>📦</div>
               <div style={{ fontSize:16, fontWeight:800, marginBottom:8 }}>Archive {client?.profile?.full_name}?</div>
               <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6, marginBottom:24 }}>
                 Archiving removes them from your active client list but keeps all their data intact. You can reactivate them anytime from Supabase.
@@ -2211,7 +2212,7 @@ export default function ClientDetail() {
                 </button>
                 <button onClick={handleArchive} disabled={actioning}
                   style={{ flex:1, padding:'11px', borderRadius:11, border:'none', background:'linear-gradient(135deg,'+t.yellow+','+t.yellow+'cc)', fontSize:13, fontWeight:800, color:'#000', cursor:actioning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:actioning?0.6:1 }}>
-                  {actioning ? 'Archiving...' : 'ðŸ“¦ Archive Client'}
+                  {actioning ? 'Archiving...' : '📦 Archive Client'}
                 </button>
               </div>
             </div>
@@ -2221,14 +2222,14 @@ export default function ClientDetail() {
         {/* Delete modal */}
         {showDelete && (
           <div onClick={()=>setShowDelete(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(10px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.red+'40', borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
-              <div style={{ fontSize:32, marginBottom:12 }}>âš ï¸</div>
+            <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+alpha(t.red, 25), borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
               <div style={{ fontSize:16, fontWeight:800, marginBottom:8, color:t.red }}>Delete {client?.profile?.full_name}?</div>
               <div style={{ fontSize:13, color:t.textMuted, lineHeight:1.6, marginBottom:8 }}>
                 This removes the client relationship and deactivates their habits. Their auth account stays intact so they can be re-invited later.
               </div>
-              <div style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'10px 14px', fontSize:12, color:t.red, marginBottom:24, fontWeight:600 }}>
-                âš ï¸ This cannot be undone. All check-ins, workout logs, and metrics will remain in the database but will be unlinked.
+              <div style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:10, padding:'10px 14px', fontSize:12, color:t.red, marginBottom:24, fontWeight:600 }}>
+                ⚠️ This cannot be undone. All check-ins, workout logs, and metrics will remain in the database but will be unlinked.
               </div>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={()=>setShowDelete(false)}
@@ -2237,7 +2238,7 @@ export default function ClientDetail() {
                 </button>
                 <button onClick={handleDelete} disabled={actioning}
                   style={{ flex:1, padding:'11px', borderRadius:11, border:'none', background:t.red, fontSize:13, fontWeight:800, color:'#fff', cursor:actioning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:actioning?0.6:1 }}>
-                  {actioning ? 'Deleting...' : 'ðŸ—‘ Delete Client'}
+                  {actioning ? 'Deleting...' : '🗑 Delete Client'}
                 </button>
               </div>
             </div>
@@ -2250,14 +2251,14 @@ export default function ClientDetail() {
 }
 
 
-// â”€â”€ CoachMetricsTab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CoachMetricsTab ───────────────────────────────────────────────────────
 function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSaved }: { metrics: any[], t: any, clientId: string, clientProfileId: string | null, coachId: string | null, onSaved: () => void }) {
   const supabase = createClient()
   const [activeChart, setActiveChart]   = useState<'weight'|'measurements'|'sleep'|'steps'|'water'>('weight')
   const [logOpen,  setLogOpen]  = useState<'none'|'weight'|'measurements'>('none')
   const [logForm,  setLogForm]  = useState<Record<string,string>>({})
   const [saving,   setSaving]   = useState(false)
-  const [habitData, setHabitData] = useState<Record<string, Record<string,number>>>({}) // date â†’ {sleep,steps,water}
+  const [habitData, setHabitData] = useState<Record<string, Record<string,number>>>({}) // date → {sleep,steps,water}
 
   useEffect(() => {
     void (async () => {
@@ -2381,11 +2382,11 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
       <div style={{ display:'flex', gap:10 }}>
         <button onClick={()=>{ setLogOpen('weight'); setLogForm({}) }}
           style={{ background:t.teal, color:'#000', border:'none', borderRadius:10, padding:'9px 18px', fontWeight:700, cursor:'pointer', fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
-          âš–ï¸ Log Weight
+          ⚖️ Log Weight
         </button>
         <button onClick={()=>{ setLogOpen('measurements'); setLogForm({}) }}
           style={{ background:t.surfaceHigh, color:t.text, border:`1px solid ${t.border}`, borderRadius:10, padding:'9px 18px', fontWeight:700, cursor:'pointer', fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
-          ðŸ“ Log Measurements
+          📏 Log Measurements
         </button>
       </div>
 
@@ -2394,8 +2395,8 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
         <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:20, padding:26, width:'100%', maxWidth:380 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>âš–ï¸ Log Weight</div>
-              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>âœ•</button>
+              <div style={{ fontWeight:800, fontSize:17 }}>⚖️ Log Weight</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
               {[
@@ -2425,8 +2426,8 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
         <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:20, padding:26, width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>ðŸ“ Log Measurements</div>
-              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>âœ•</button>
+              <div style={{ fontWeight:800, fontSize:17 }}>📏 Log Measurements</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
               {[
@@ -2460,15 +2461,15 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
 
       {metrics.length === 0 ? (
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-          <div style={{ fontSize:32, marginBottom:12 }}>ðŸ“ˆ</div>
+          <div style={{ fontSize:32, marginBottom:12 }}>📈</div>
           <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No metrics yet</div>
           <div style={{ fontSize:13, color:t.textMuted }}>Log the first entry above to start tracking</div>
         </div>
       ) : (<>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:10 }}>
         {[
-          { label:'Current Weight', val: latest?.weight ? latest.weight+' lbs' : 'â€”', color: t.teal },
-          { label:'Weight Change', val: wChange !== null ? (wChange > 0 ? '+' : '')+wChange+' lbs' : 'â€”', color: wChange !== null ? (wChange < 0 ? t.green : t.red) : t.textMuted },
+          { label:'Current Weight', val: latest?.weight ? latest.weight+' lbs' : '—', color: t.teal },
+          { label:'Weight Change', val: wChange !== null ? (wChange > 0 ? '+' : '')+wChange+' lbs' : '—', color: wChange !== null ? (wChange < 0 ? t.green : t.red) : t.textMuted },
           { label:'Entries', val: metrics.length, color: t.purple },
         ].map(s => (
           <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'12px 16px' }}>
@@ -2485,7 +2486,7 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
             <button key={tab.id} onClick={()=>setActiveChart(tab.id)}
               style={{ padding:'6px 14px', borderRadius:20, border:'1px solid', cursor:'pointer', fontSize:12, fontWeight:600, fontFamily:"'DM Sans',sans-serif", transition:'all .15s',
                 borderColor: activeChart===tab.id ? tab.color : t.border,
-                background:  activeChart===tab.id ? tab.color+'22' : 'transparent',
+                background:  activeChart===tab.id ? alpha(tab.color, 13) : 'transparent',
                 color:       activeChart===tab.id ? tab.color : t.textMuted }}>
               {tab.label}
             </button>
@@ -2529,7 +2530,7 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
             <>
               {/* Running average */}
               {habitAvg && (
-                <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16, padding:'10px 14px', background:(activeHabitTab as any).color+'11', border:`1px solid ${(activeHabitTab as any).color}30`, borderRadius:12 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16, padding:'10px 14px', background:(activeHabitTab as any).alpha(color, 7), border:`1px solid ${(activeHabitTab as any).color}30`, borderRadius:12 }}>
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em' }}>Average</div>
                     <div style={{ fontSize:22, fontWeight:900, color:(activeHabitTab as any).color }}>{habitAvg} <span style={{ fontSize:13, fontWeight:600 }}>{(activeHabitTab as any).unit}</span></div>
@@ -2565,19 +2566,19 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
             </thead>
             <tbody>
               {[...metrics].sort((a,b)=>b.logged_date.localeCompare(a.logged_date)).map((m, i) => (
-                <tr key={m.id} style={{ borderTop:'1px solid '+t.border, background: i%2===0 ? 'transparent' : t.surfaceUp+'44' }}>
+                <tr key={m.id} style={{ borderTop:'1px solid '+t.border, background: i%2===0 ? 'transparent' : alpha(t.surfaceUp, 27) }}>
                   <td style={{ padding:'10px 14px', fontWeight:600, color:t.textDim, whiteSpace:'nowrap' }}>{fmt(m.logged_date)}</td>
                   {[
-                    m.weight     ? m.weight+'lbs'     : 'â€”',
-                    m.waist      ? m.waist+'"'        : 'â€”',
-                    m.hips       ? m.hips+'"'         : 'â€”',
-                    m.chest      ? m.chest+'"'        : 'â€”',
-                    m.left_arm   ? m.left_arm+'"'     : 'â€”',
-                    m.right_arm  ? m.right_arm+'"'    : 'â€”',
-                    m.neck       ? m.neck+'"'         : 'â€”',
-                    m.calves     ? m.calves+'"'       : 'â€”',
+                    m.weight     ? m.weight+'lbs'     : '—',
+                    m.waist      ? m.waist+'"'        : '—',
+                    m.hips       ? m.hips+'"'         : '—',
+                    m.chest      ? m.chest+'"'        : '—',
+                    m.left_arm   ? m.left_arm+'"'     : '—',
+                    m.right_arm  ? m.right_arm+'"'    : '—',
+                    m.neck       ? m.neck+'"'         : '—',
+                    m.calves     ? m.calves+'"'       : '—',
                   ].map((val, j) => (
-                    <td key={j} style={{ padding:'10px 14px', fontWeight: val==='â€”' ? 400 : 700, color: val==='â€”' ? t.textMuted : t.orange }}>{val}</td>
+                    <td key={j} style={{ padding:'10px 14px', fontWeight: val==='—' ? 400 : 700, color: val==='—' ? t.textMuted : t.orange }}>{val}</td>
                   ))}
                 </tr>
               ))}
@@ -2588,10 +2589,10 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
 
       </>)}
 
-      {/* Progress photos â€” grouped by angle with date stamps + per-angle compare */}
+      {/* Progress photos — grouped by angle with date stamps + per-angle compare */}
       {clientProfileId && (
         <div style={{ marginTop:8 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>ðŸ“¸ Progress Photos</div>
+          <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>📸 Progress Photos</div>
           <ProgressPhotosViewer
             supabase={supabase}
             clientProfileId={clientProfileId}
@@ -2604,7 +2605,7 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
 }
 
 
-// â”€â”€ FormsTab: coach view of assigned forms + check-in schedules â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── FormsTab: coach view of assigned forms + check-in schedules ──────────
 function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: any) {
   const [assignments, setAssignments] = useState<any[]>([])
   const [schedules,   setSchedules]   = useState<any[]>([])
@@ -2663,16 +2664,16 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
-      {/* â”€â”€ Check-in Schedules section â”€â”€ */}
+      {/* ── Check-in Schedules section ── */}
       <div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
           <div>
-            <div style={{ fontSize:14, fontWeight:800 }}>âœ… Check-in Schedule</div>
+            <div style={{ fontSize:14, fontWeight:800 }}>✅ Check-in Schedule</div>
             <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>Recurring check-in forms sent on a schedule</div>
           </div>
           {checkinForms.length > 0 && (
             <button onClick={()=>setShowSchedule(true)}
-              style={{ background:'linear-gradient(135deg,${t.purple},${t.purple}cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              style={{ background:'linear-gradient(135deg,${t.purple},${alpha(t.purple, 80)})', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               + Schedule Check-in
             </button>
           )}
@@ -2680,21 +2681,21 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
 
         {checkinForms.length === 0 && (
           <div style={{ background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', fontSize:12, color:t.textMuted }}>
-            No check-in forms yet. Go to <span onClick={()=>router.push('/dashboard/coach/onboarding')} style={{ color:t.teal, cursor:'pointer', textDecoration:'underline' }}>Form Builder</span> â†’ create a form â†’ toggle "Check-in Form" on.
+            No check-in forms yet. Go to <span onClick={()=>router.push('/dashboard/coach/onboarding')} style={{ color:t.teal, cursor:'pointer', textDecoration:'underline' }}>Form Builder</span> → create a form → toggle "Check-in Form" on.
           </div>
         )}
 
         {schedules.length > 0 && (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {schedules.map((s: any) => (
-              <div key={s.id} style={{ background:s.active ? t.purpleDim : t.surfaceUp, border:'1px solid '+(s.active ? t.purple+'40' : t.border), borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ fontSize:20 }}>ðŸ“…</div>
+              <div key={s.id} style={{ background:s.active ? t.purpleDim : t.surfaceUp, border:'1px solid '+(s.active ? alpha(t.purple, 25) : t.border), borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ fontSize:20 }}>📅</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:13, fontWeight:700 }}>{s.form?.title}</div>
-                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2, textTransform:'capitalize' }}>{s.frequency} Â· {s.active ? 'Active' : 'Paused'}</div>
+                  <div style={{ fontSize:11, color:t.textMuted, marginTop:2, textTransform:'capitalize' }}>{s.frequency} · {s.active ? 'Active' : 'Paused'}</div>
                   {s.note && <div style={{ fontSize:11, color:t.textDim, marginTop:2, fontStyle:'italic' }}>"{s.note}"</div>}
                 </div>
-                <button onClick={()=>deleteSchedule(s.id)} style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>âœ•</button>
+                <button onClick={()=>deleteSchedule(s.id)} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
               </div>
             ))}
           </div>
@@ -2704,7 +2705,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
         {showSchedule && (
           <div onClick={()=>setShowSchedule(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
             <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, width:'100%', maxWidth:420, padding:28 }}>
-              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>ðŸ“… Schedule Check-in</div>
+              <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>📅 Schedule Check-in</div>
               <div style={{ fontSize:13, color:t.textMuted, marginBottom:20 }}>Client will be prompted on this schedule. A new form assignment is created each cycle.</div>
               <div style={{ marginBottom:14 }}>
                 <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Check-in Form *</label>
@@ -2727,8 +2728,8 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
               </div>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={()=>setShowSchedule(false)} style={{ flex:1, background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'11px', fontSize:13, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
-                <button onClick={saveSchedule} disabled={!schedFormId||scheduling} style={{ flex:2, background:'linear-gradient(135deg,${t.purple},${t.purple}cc)', border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#fff', cursor:!schedFormId||scheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!schedFormId||scheduling?.5:1 }}>
-                  {scheduling ? 'Saving...' : 'ðŸ“… Save Schedule'}
+                <button onClick={saveSchedule} disabled={!schedFormId||scheduling} style={{ flex:2, background:'linear-gradient(135deg,${t.purple},${alpha(t.purple, 80)})', border:'none', borderRadius:11, padding:'11px', fontSize:13, fontWeight:800, color:'#fff', cursor:!schedFormId||scheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!schedFormId||scheduling?.5:1 }}>
+                  {scheduling ? 'Saving...' : '📅 Save Schedule'}
                 </button>
               </div>
             </div>
@@ -2736,32 +2737,32 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
         )}
       </div>
 
-      {/* â”€â”€ One-off form assignments â”€â”€ */}
+      {/* ── One-off form assignments ── */}
       <div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-          <div style={{ fontSize:14, fontWeight:800 }}>ðŸ“ Sent Forms ({assignments.length})</div>
-          <button onClick={onAssign} style={{ background:'linear-gradient(135deg,${t.purple},${t.purple}cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Send Form</button>
+          <div style={{ fontSize:14, fontWeight:800 }}>📝 Sent Forms ({assignments.length})</div>
+          <button onClick={onAssign} style={{ background:'linear-gradient(135deg,${t.purple},${alpha(t.purple, 80)})', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Send Form</button>
         </div>
 
         {assignments.length === 0 ? (
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'40px', textAlign:'center' }}>
-            <div style={{ fontSize:32, marginBottom:10 }}>ðŸ“</div>
+            <div style={{ fontSize:32, marginBottom:10 }}>📝</div>
             <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No forms sent yet</div>
-            <div style={{ fontSize:12, color:t.textMuted }}>Send a one-off form â€” intake, waiver, survey, whatever you need.</div>
+            <div style={{ fontSize:12, color:t.textMuted }}>Send a one-off form — intake, waiver, survey, whatever you need.</div>
           </div>
         ) : assignments.map((a: any) => (
           <div key={a.id} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:38, height:38, borderRadius:10, background:a.status==='completed'?t.greenDim:t.purpleDim, border:'1px solid '+(a.status==='completed'?t.green:t.purple)+'40', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
-              {a.status==='completed' ? 'âœ…' : (a.form?.form_type === 'check_in' || a.form?.is_checkin_type) ? 'ðŸ“‹' : 'ðŸ“'}
+              {a.status==='completed' ? '✅' : (a.form?.form_type === 'check_in' || a.form?.is_checkin_type) ? '📋' : '📝'}
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:700 }}>{a.form?.title}</div>
               <div style={{ fontSize:11, color:t.textMuted }}>
-                Sent {new Date(a.assigned_at).toLocaleDateString()} Â· {a.status==='completed' ? <span style={{ color:t.green }}>Completed {new Date(a.completed_at).toLocaleDateString()}</span> : <span style={{ color:t.orange }}>Pending</span>}
+                Sent {new Date(a.assigned_at).toLocaleDateString()} · {a.status==='completed' ? <span style={{ color:t.green }}>Completed {new Date(a.completed_at).toLocaleDateString()}</span> : <span style={{ color:t.orange }}>Pending</span>}
               </div>
               {a.note && <div style={{ fontSize:11, color:t.textDim, fontStyle:'italic' }}>"{a.note}"</div>}
             </div>
-            <button onClick={()=>deleteAssignment(a.id)} style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>âœ•</button>
+            <button onClick={()=>deleteAssignment(a.id)} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
           </div>
         ))}
       </div>
@@ -2770,7 +2771,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
 }
 
 
-// â”€â”€ MiniThread: embedded in client profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── MiniThread: embedded in client profile ────────────────────────────────
 function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; client: any }) {
   const supabase  = createClient()
   const [coachId, setCoachId] = useState<string | null>(coachIdProp)
@@ -2840,7 +2841,7 @@ function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; 
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
-    // Enter does NOT send â€” use the send button only
+    // Enter does NOT send — use the send button only
   }
 
   const c = colors
@@ -2848,10 +2849,10 @@ function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; 
     <div style={{ background:c.surface, border:'1px solid '+c.border, borderRadius:16, overflow:'hidden', display:'flex', flexDirection:'column', height:500 }}>
       {/* Header */}
       <div style={{ padding:'14px 18px', borderBottom:'1px solid '+c.border, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div style={{ fontSize:13, fontWeight:800 }}>ðŸ’¬ Messages</div>
+        <div style={{ fontSize:13, fontWeight:800 }}>💬 Messages</div>
         <a href={`/dashboard/coach/messages?client=${client.id}`}
           style={{ fontSize:11, fontWeight:700, color:c.teal, textDecoration:'none' }}>
-          Open full view â†’
+          Open full view →
         </a>
       </div>
 
@@ -2872,7 +2873,7 @@ function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; 
                 {msg.body}
                 <div style={{ fontSize:10, marginTop:3, opacity:0.6, textAlign: isMe ? 'right' : 'left' }}>
                   {new Date(msg.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
-                  {isMe && <span style={{ marginLeft:4 }}>{msg.read ? ' âœ“âœ“' : ' âœ“'}</span>}
+                  {isMe && <span style={{ marginLeft:4 }}>{msg.read ? ' ✓✓' : ' ✓'}</span>}
                 </div>
               </div>
             </div>
@@ -2901,7 +2902,7 @@ function MiniThread({ coachId: coachIdProp, client }: { coachId: string | null; 
   )
 }
 
-// â”€â”€ ProgramTab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── ProgramTab ────────────────────────────────────────────────────────────
 function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t, onProgramChange, onScheduled }: any) {
   const [clientPrograms, setClientPrograms] = useState<any[]>([])
   const [templates, setTemplates] = useState<any[]>([])
@@ -2969,7 +2970,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
     const mode = scheduleMode[progId] || 'add'
 
     try {
-    // Fetch blocks for this program â€” join exercises so exercise_name populates
+    // Fetch blocks for this program — join exercises so exercise_name populates
     const { data: blocks } = await supabase.from('workout_blocks')
       .select('*, block_exercises(*, exercise:exercises(name, muscles))')
       .eq('program_id', progId)
@@ -3087,7 +3088,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
       setDeleteConfirm(null)
     } catch (err: any) {
       console.error('deleteProgram failed:', err)
-      alert('Could not delete program: ' + (err?.message || 'Unknown error') + '. Some pieces may have been removed â€” please refresh and try again.')
+      alert('Could not delete program: ' + (err?.message || 'Unknown error') + '. Some pieces may have been removed — please refresh and try again.')
     } finally {
       setDeleting(false)
     }
@@ -3172,7 +3173,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={()=>{ setShowAssign(true); setShowCreate(false) }}
-            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             + Assign Template
           </button>
           <button onClick={()=>{ setShowCreate(true); setShowAssign(false) }}
@@ -3184,14 +3185,14 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
 
       {/* Assign template panel */}
       {showAssign && (
-        <div style={{ background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:14, padding:18 }}>
+        <div style={{ background:t.surface, border:'1px solid '+alpha(t.teal, 25), borderRadius:14, padding:18 }}>
           <div style={{ fontSize:13, fontWeight:700, marginBottom:6 }}>Assign a template to this client</div>
           <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Creates a copy of the template for this client. Changes won't affect the original.</div>
           <select value={assignId} onChange={e=>setAssignId(e.target.value)}
             style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, marginBottom:10 }}>
-            <option value="">â€” Choose a template â€”</option>
-            {templates.map(p => <option key={p.id} value={p.id}>ðŸ“ {p.name}{p.goal ? ' Â· '+p.goal : ''}</option>)}
-            {templates.length === 0 && <option disabled>No templates yet â€” create one in Programs</option>}
+            <option value="">— Choose a template —</option>
+            {templates.map(p => <option key={p.id} value={p.id}>📐 {p.name}{p.goal ? ' · '+p.goal : ''}</option>)}
+            {templates.length === 0 && <option disabled>No templates yet — create one in Programs</option>}
           </select>
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={()=>setShowAssign(false)}
@@ -3199,8 +3200,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
               Cancel
             </button>
             <button onClick={assignProgram} disabled={!assignId || assigning}
-              style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!assignId||assigning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!assignId||assigning?0.5:1 }}>
-              {assigning ? 'Assigning...' : 'âœ“ Assign Template'}
+              style={{ flex:2, background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!assignId||assigning?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!assignId||assigning?0.5:1 }}>
+              {assigning ? 'Assigning...' : '✓ Assign Template'}
             </button>
           </div>
         </div>
@@ -3208,19 +3209,19 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
 
       {/* Create new program panel */}
       {showCreate && (
-        <div style={{ background:t.surface, border:'1px solid '+t.orange+'40', borderRadius:14, padding:18 }}>
+        <div style={{ background:t.surface, border:'1px solid '+alpha(t.orange, 25), borderRadius:14, padding:18 }}>
           <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Create new program for this client</div>
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Program Name *</div>
-            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Phase 1 â€” Strength Foundation"
+            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Phase 1 — Strength Foundation"
               style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, boxSizing:'border-box' as const }} />
           </div>
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Start from template (optional)</div>
             <select value={assignId} onChange={e=>setAssignId(e.target.value)}
               style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}>
-              <option value="">â€” Start blank â€”</option>
-              {templates.map(p => <option key={p.id} value={p.id}>ðŸ“ {p.name}</option>)}
+              <option value="">— Start blank —</option>
+              {templates.map(p => <option key={p.id} value={p.id}>📐 {p.name}</option>)}
             </select>
           </div>
           <div style={{ display:'flex', gap:8 }}>
@@ -3229,8 +3230,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
               Cancel
             </button>
             <button onClick={createFromTemplate} disabled={!newName.trim() || creating}
-              style={{ flex:2, background:`linear-gradient(135deg,${t.orange},${t.orange}cc)`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!newName.trim()||creating?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newName.trim()||creating?0.5:1 }}>
-              {creating ? 'Creating...' : 'âœ“ Create Program'}
+              style={{ flex:2, background:`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`, border:'none', borderRadius:9, padding:'9px', fontSize:12, fontWeight:800, color:'#000', cursor:!newName.trim()||creating?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!newName.trim()||creating?0.5:1 }}>
+              {creating ? 'Creating...' : '✓ Create Program'}
             </button>
           </div>
         </div>
@@ -3239,7 +3240,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
       {/* Program cards */}
       {clientPrograms.length === 0 ? (
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px 20px', textAlign:'center' as const }}>
-          <div style={{ fontSize:36, marginBottom:12 }}>ðŸ“‹</div>
+          <div style={{ fontSize:36, marginBottom:12 }}>📋</div>
           <div style={{ fontSize:14, fontWeight:700, marginBottom:6 }}>No programs yet</div>
           <div style={{ fontSize:13, color:t.textMuted }}>Create a new program or assign a template above.</div>
         </div>
@@ -3253,7 +3254,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         const currentMode = scheduleMode[p.id] || 'add'
 
         return (
-          <div key={p.id} style={{ background:t.surface, border:'1px solid '+(isActive ? t.teal+'60' : t.border), borderRadius:16, overflow:'hidden' }}>
+          <div key={p.id} style={{ background:t.surface, border:'1px solid '+(isActive ? alpha(t.teal, 38) : t.border), borderRadius:16, overflow:'hidden' }}>
             {isActive && <div style={{ height:3, background:`linear-gradient(90deg,${t.teal},${t.orange})` }} />}
             <div style={{ padding:18 }}>
 
@@ -3263,15 +3264,15 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                   {isEditing ? (
                     <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)}
                       onKeyDown={e=>{ if(e.key==='Enter') saveRename(p.id); if(e.key==='Escape') setEditingId(null) }}
-                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.orange+'60', borderRadius:8, padding:'7px 10px', fontSize:14, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }} />
+                      style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+alpha(t.orange, 38), borderRadius:8, padding:'7px 10px', fontSize:14, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }} />
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       <div style={{ fontSize:14, fontWeight:800 }}>{p.name}</div>
-                      {isActive && <span style={{ fontSize:10, fontWeight:800, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:20, padding:'2px 8px' }}>ACTIVE</span>}
+                      {isActive && <span style={{ fontSize:10, fontWeight:800, color:t.teal, background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:20, padding:'2px 8px' }}>ACTIVE</span>}
                     </div>
                   )}
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:3 }}>
-                    {[p.goal, p.duration_weeks ? p.duration_weeks+'w' : null, p.difficulty].filter(Boolean).join(' Â· ') || 'No details set'}
+                    {[p.goal, p.duration_weeks ? p.duration_weeks+'w' : null, p.difficulty].filter(Boolean).join(' · ') || 'No details set'}
                   </div>
                 </div>
 
@@ -3280,8 +3281,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                   {isEditing ? (
                     <>
                       <button onClick={()=>saveRename(p.id)} disabled={editSaving}
-                        style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'5px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        {editSaving ? '...' : 'âœ“ Save'}
+                        style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:7, padding:'5px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {editSaving ? '...' : '✓ Save'}
                       </button>
                       <button onClick={()=>setEditingId(null)}
                         style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -3302,28 +3303,28 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                             alert('Could not activate program: ' + (err?.message || 'Unknown error'))
                           }
                         }}
-                          style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                           Set Active
                         </button>
                       )}
                       <button onClick={()=>router.push('/dashboard/coach/programs/'+p.id)}
-                        style={{ background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        âœï¸ Edit Program
+                        style={{ background:t.orangeDim, border:'1px solid '+alpha(t.orange, 25), borderRadius:7, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        ✏️ Edit Program
                       </button>
                       <button onClick={()=>{ setEditingId(p.id); setEditName(p.name) }}
                         style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'5px 10px', fontSize:11, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         Rename
                       </button>
                       <button onClick={()=>setDeleteConfirm(p.id)}
-                        style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:7, padding:'5px 10px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                        ðŸ—‘
+                        style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:7, padding:'5px 10px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        🗑
                       </button>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* â”€â”€ Schedule Section â”€â”€ */}
+              {/* ── Schedule Section ── */}
               <div style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px' }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>Schedule Sessions</div>
 
@@ -3344,8 +3345,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                     <div style={{ display:'flex', gap:6 }}>
                       {(['add','replace'] as const).map(mode => (
                         <button key={mode} onClick={()=>setScheduleMode(prev=>({...prev,[p.id]:mode}))}
-                          style={{ flex:1, padding:'8px 4px', borderRadius:8, border:'1px solid '+(currentMode===mode?t.teal+'60':t.border), background:currentMode===mode?t.tealDim:'transparent', fontSize:11, fontWeight:700, color:currentMode===mode?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                          {mode === 'add' ? 'âž• Add' : 'ðŸ”„ Replace'}
+                          style={{ flex:1, padding:'8px 4px', borderRadius:8, border:'1px solid '+(currentMode===mode?alpha(t.teal, 38):t.border), background:currentMode===mode?t.tealDim:'transparent', fontSize:11, fontWeight:700, color:currentMode===mode?t.teal:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          {mode === 'add' ? '➕ Add' : '🔄 Replace'}
                         </button>
                       ))}
                     </div>
@@ -3357,20 +3358,20 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
 
                 {/* Schedule button */}
                 {isDone ? (
-                  <div style={{ background:t.greenDim, border:'1px solid '+t.green+'40', borderRadius:9, padding:'10px 14px', fontSize:13, fontWeight:700, color:t.green, textAlign:'center' as const }}>
-                    âœ“ Sessions scheduled!
+                  <div style={{ background:t.greenDim, border:'1px solid '+alpha(t.green, 25), borderRadius:9, padding:'10px 14px', fontSize:13, fontWeight:700, color:t.green, textAlign:'center' as const }}>
+                    ✓ Sessions scheduled!
                   </div>
                 ) : (
                   <button onClick={()=>scheduleProgram(p.id)} disabled={!currentStartDate || isScheduling}
-                    style={{ width:'100%', background:currentStartDate?`linear-gradient(135deg,${t.orange},${t.orange}cc)`:'transparent', border:'1px solid '+(currentStartDate?'transparent':t.border), borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:currentStartDate?'#000':t.textMuted, cursor:!currentStartDate||isScheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!currentStartDate?0.5:1 }}>
-                    {isScheduling ? 'â³ Scheduling...' : currentStartDate ? 'ðŸ“¤ Schedule Sessions' : 'Set a start date first'}
+                    style={{ width:'100%', background:currentStartDate?`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`:'transparent', border:'1px solid '+(currentStartDate?'transparent':t.border), borderRadius:9, padding:'10px', fontSize:13, fontWeight:800, color:currentStartDate?'#000':t.textMuted, cursor:!currentStartDate||isScheduling?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!currentStartDate?0.5:1 }}>
+                    {isScheduling ? '⏳ Scheduling...' : currentStartDate ? '📤 Schedule Sessions' : 'Set a start date first'}
                   </button>
                 )}
               </div>
 
               {/* Delete confirm */}
               {isDeleteConfirm && (
-                <div style={{ marginTop:12, background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:10, padding:'12px 14px' }}>
+                <div style={{ marginTop:12, background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:10, padding:'12px 14px' }}>
                   <div style={{ fontSize:13, fontWeight:700, color:t.red, marginBottom:10 }}>
                     Delete "{p.name}"? This removes all workout sessions too. Cannot be undone.
                   </div>
@@ -3381,7 +3382,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                     </button>
                     <button onClick={()=>deleteProgram(p.id)} disabled={deleting}
                       style={{ flex:2, background:t.red, border:'none', borderRadius:8, padding:'8px', fontSize:12, fontWeight:800, color:'#fff', cursor:deleting?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:deleting?0.7:1 }}>
-                      {deleting ? 'Deleting...' : 'ðŸ—‘ Yes, Delete'}
+                      {deleting ? 'Deleting...' : '🗑 Yes, Delete'}
                     </button>
                   </div>
                 </div>
@@ -3397,7 +3398,7 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         {workouts.length > 0 ? workouts.slice(0,10).map((w:any, i:number) => (
           <div key={w.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom: i < Math.min(workouts.length,10)-1 ? '1px solid '+t.border : 'none' }}>
             <div style={{ width:34, height:34, borderRadius:9, background: w.status==='completed' ? t.greenDim : t.orangeDim, border:'1px solid '+(w.status==='completed'?t.green:t.orange)+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>
-              {w.status==='completed' ? 'âœ…' : 'ðŸ’ª'}
+              {w.status==='completed' ? '✅' : '💪'}
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:600 }}>{w.title || w.name || 'Workout'}</div>
@@ -3413,11 +3414,11 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   )
 }
 
-// â”€â”€ Intake display helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Intake display helpers ──────────────────────────────────────────────────
 function IntakeSection({ title, color, children }: { title:string, color:string, children:React.ReactNode }) {
   return (
-    <div style={{ background:'#0f0f1a', border:`1px solid ${color}25`, borderRadius:14, overflow:'hidden' }}>
-      <div style={{ background:`${color}15`, padding:'10px 16px', fontSize:11, fontWeight:800, color, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>{title}</div>
+    <div style={{ background:'#0f0f1a', border:`1px solid ${alpha(color, 15)}`, borderRadius:14, overflow:'hidden' }}>
+      <div style={{ background:`${alpha(color, 8)}`, padding:'10px 16px', fontSize:11, fontWeight:800, color, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>{title}</div>
       <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:8 }}>{children}</div>
     </div>
   )
