@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import ScheduleTab from '@/components/coach/ScheduleTab'
+import ProgressPhotosViewer from '@/components/client/ProgressPhotosViewer'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import {
@@ -1031,6 +1032,7 @@ export default function ClientDetail() {
               metrics={metrics}
               t={t}
               clientId={clientId}
+              clientProfileId={client?.profile_id ?? null}
               coachId={coachId}
               onSaved={async () => {
                 const { data } = await supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(20)
@@ -2249,7 +2251,7 @@ export default function ClientDetail() {
 
 
 // ── CoachMetricsTab ───────────────────────────────────────────────────────
-function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: any[], t: any, clientId: string, coachId: string | null, onSaved: () => void }) {
+function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSaved }: { metrics: any[], t: any, clientId: string, clientProfileId: string | null, coachId: string | null, onSaved: () => void }) {
   const supabase = createClient()
   const [activeChart, setActiveChart]   = useState<'weight'|'measurements'|'sleep'|'steps'|'water'>('weight')
   const [logOpen,  setLogOpen]  = useState<'none'|'weight'|'measurements'>('none')
@@ -2319,15 +2321,6 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
     borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13,
     boxSizing:'border-box', colorScheme:'dark',
   }
-
-
-  if (metrics.length === 0) return (
-    <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'48px', textAlign:'center' }}>
-      <div style={{ fontSize:32, marginBottom:12 }}>📈</div>
-      <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>No metrics yet</div>
-      <div style={{ fontSize:13, color:t.textMuted }}>Metrics will appear here once the client logs them</div>
-    </div>
-  )
 
   const sorted = [...metrics].sort((a,b) => a.logged_date.localeCompare(b.logged_date))
   const fmt = (d: string) => new Date(d+'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' })
@@ -2594,6 +2587,18 @@ function CoachMetricsTab({ metrics, t, clientId, coachId, onSaved }: { metrics: 
       </div>
 
       </>)}
+
+      {/* Progress photos — grouped by angle with date stamps + per-angle compare */}
+      {clientProfileId && (
+        <div style={{ marginTop:8 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>📸 Progress Photos</div>
+          <ProgressPhotosViewer
+            supabase={supabase}
+            clientProfileId={clientProfileId}
+            t={t}
+          />
+        </div>
+      )}
     </div>
   )
 }
