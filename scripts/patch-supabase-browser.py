@@ -1,4 +1,8 @@
-import { createBrowserClient } from '@supabase/ssr'
+import io
+
+PATH = r"C:\Users\Shane\OneDrive\Desktop\srg-fit\src\lib\supabase-browser.ts"
+
+NEW = """import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
@@ -33,3 +37,8 @@ export function createClient() {
   )
   return client
 }
+"""
+
+with io.open(PATH, "w", encoding="utf-8", newline="\n") as f:
+    f.write(NEW)
+print(f"wrote {PATH}")
