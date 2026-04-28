@@ -30,7 +30,7 @@ export async function triggerAiInsight(
         'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ client_id: clientId, coach_id: coachId, type }),
-    }).catch(() => {}) // swallow — non-blocking
+    }).catch(err => console.warn('[ai-insights] failed', err))
   } catch {
     // non-blocking, never throw
   }

@@ -510,7 +510,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
             body: snippet || 'New announcement',
             link_url: '/dashboard/client/community',
           }
-        }).catch(() => {})
+        }).catch(err => console.warn('[notify:community] failed', err))
       }
     }
     setDraft(''); clearAllMedia(); setGifUrl(null); setAsAnnouncement(false); setPosting(false); await loadPosts()

@@ -369,7 +369,7 @@ export default function ReviewsPage() {
           title: '💬 Coach reviewed your workout',
           body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
           link_url: '/dashboard/client',
-        })).catch(() => {})
+        })).catch(err => console.warn('[notify:reviews-1] failed', err))
 
         // Push notification
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
@@ -385,7 +385,7 @@ export default function ReviewsPage() {
             body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
             link_url: '/dashboard/client',
           })
-        }).catch(() => {})
+        }).catch(err => console.warn('[notify:reviews-2] failed', err))
       }
     }
 

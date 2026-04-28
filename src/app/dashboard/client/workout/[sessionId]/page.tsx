@@ -332,7 +332,7 @@ ${candidateList}`
     // Raw storage path — generate signed URL from workout-reviews bucket
     supabase.storage.from('workout-reviews').createSignedUrl(raw, 60 * 60)
       .then(({ data }) => { if (data?.signedUrl) setReviewVideoUrl(data.signedUrl) })
-      .catch(() => {})
+      .catch(err => console.warn('[workout:bg-load] failed', err))
   }, [session?.coach_review_video_url])
   useEffect(() => {
     // Don't run timer if session is completed or not started
@@ -1045,7 +1045,7 @@ ${candidateList}`
             link_url: `/dashboard/coach/reviews`,
             data: { session_id: sessionId }
           })
-        }).catch(() => {}) // intentionally swallowed — never block on this
+        }).catch(err => console.warn('[workout:bg-load] failed', err)) // intentionally swallowed — never block on this
       }
     }
 

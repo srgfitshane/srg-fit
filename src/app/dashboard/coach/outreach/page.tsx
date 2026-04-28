@@ -161,7 +161,7 @@ export default function OutreachPage() {
           body: msgBody.trim().slice(0, 80) + (msgBody.length > 80 ? '...' : ''),
           link_url: '/dashboard/client'
         })
-      }).catch(() => {})
+      }).catch(err => console.warn('[notify:coach-outreach] failed', err))
     }
     const key = `${composing.type}-${composing.client.id}`
     setSentIds(prev => new Set([...prev, key]))

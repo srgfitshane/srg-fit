@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         plan: 'Direct Invite',
         source: 'direct',
       }),
-    }).catch(() => {})
+    }).catch(err => console.warn('[notify:invite-direct] failed', err))
 
     return NextResponse.json({ success: true })
 

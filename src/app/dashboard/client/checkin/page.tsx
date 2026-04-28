@@ -283,7 +283,7 @@ export default function CheckinForm() {
           body: 'A client just submitted their weekly check-in.',
           link_url: '/dashboard/coach/checkins',
         }
-      }).catch(() => {})
+      }).catch(err => console.warn('[notify:checkin] failed', err))
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'checkin_brief')
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'red_flag')
     }

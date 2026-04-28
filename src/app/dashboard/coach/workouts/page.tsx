@@ -471,7 +471,7 @@ export default function CoachWorkoutsPage() {
               body: actionForm.date ? `Scheduled for ${actionForm.date}` : 'Ready when you are!',
               link_url: '/dashboard/client',
             })
-          }).catch(()=>{})
+          }).catch(err => console.warn('[notify:coach-workouts] failed', err))
         }
       }
     }

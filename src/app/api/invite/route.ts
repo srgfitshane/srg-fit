@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
         plan: 'Coach Invite',
         source: 'coach_dashboard',
       }),
-    }).catch(() => {})
+    }).catch(err => console.warn('[notify:invite-email] failed', err))
 
     return NextResponse.json({
       success: true,

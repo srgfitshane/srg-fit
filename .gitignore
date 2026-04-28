@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+  
+# Supabase CLI temp artifacts  
+supabase/.temp/  
+
+# Local commit message scratch file
+.git_commit_msg.tmp

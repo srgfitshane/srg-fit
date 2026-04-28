@@ -327,7 +327,7 @@ function MessagesInner() {
             body: broadcastText.trim().slice(0, 100),
             link_url: '/dashboard/client/messages',
           })
-        }).catch(() => {})
+        }).catch(err => console.warn('[notify:coach-messages] failed', err))
       }
     }
     setBroadcasting(false)

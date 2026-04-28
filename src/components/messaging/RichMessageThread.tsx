@@ -89,7 +89,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         body: body.slice(0, 100),
         link_url: '/dashboard/client?tab=messages&view=coach',
       })
-    }).catch(() => {})
+    }).catch(err => console.warn('[notify:message-recipient] failed', err))
   }
 
   const [gifQuery,     setGifQuery]     = useState('')

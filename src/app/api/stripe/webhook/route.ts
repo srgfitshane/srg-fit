@@ -201,7 +201,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       plan: subData?.items?.data?.[0]?.price?.nickname || 'Coaching',
       source: 'stripe',
     }),
-  }).catch(() => {})
+  }).catch(err => console.warn('[notify:stripe-webhook] failed', err))
 }
 
 async function handleTrialWillEnd(sub: Stripe.Subscription) {
