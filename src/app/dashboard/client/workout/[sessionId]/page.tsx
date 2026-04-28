@@ -1509,11 +1509,11 @@ ${candidateList}`
               <div key={group.role} style={{marginBottom:20}}>
                 {/* Section header */}
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-                  <div style={{height:1,background:group.color+'30',flex:1}}/>
+                  <div style={{height:1,background:alpha(group.color, 19),flex:1}}/>
                   <span style={{fontSize:11,fontWeight:800,color:group.color,letterSpacing:'0.08em',textTransform:'uppercase' as const,whiteSpace:'nowrap' as const}}>
                     {group.label}
                   </span>
-                  <div style={{height:1,background:group.color+'30',flex:1}}/>
+                  <div style={{height:1,background:alpha(group.color, 19),flex:1}}/>
                 </div>
 
                 {/* Exercise cards — with superset group headers */}
@@ -1526,11 +1526,11 @@ ${candidateList}`
                   if (sg) lastGroup = sg
                   const groupHeader = showGroupHeader ? (
                     <div key={'gh-'+sg} style={{display:'flex',alignItems:'center',gap:8,margin:'12px 0 6px'}}>
-                      <div style={{background:group.color+'18',border:'1px solid '+group.color+'40',borderRadius:6,padding:'2px 10px',fontSize:10,fontWeight:900,color:group.color,letterSpacing:'0.08em'}}>
+                      <div style={{background:alpha(group.color, 9),border:'1px solid '+alpha(group.color, 25),borderRadius:6,padding:'2px 10px',fontSize:10,fontWeight:900,color:group.color,letterSpacing:'0.08em'}}>
                         {sg}
                       </div>
                       <div style={{fontSize:10,fontWeight:700,color:t.textMuted}}>{GROUP_TYPE_LABELS[ex.group_type||'straight']||'Straight Sets'}</div>
-                      <div style={{height:1,background:group.color+'20',flex:1}}/>
+                      <div style={{height:1,background:alpha(group.color, 13),flex:1}}/>
                     </div>
                   ) : null
                   const setsArr = setData[ex.id] || []
@@ -1567,7 +1567,7 @@ ${candidateList}`
                   return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?group.color+'50':isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
+                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}

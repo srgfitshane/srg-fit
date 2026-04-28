@@ -44,7 +44,7 @@ function Slider({ label, value, onChange, color, min=1, max=10, lowLabel='Low', 
       </div>
       <div style={{ position:'relative', height:32, display:'flex', alignItems:'center' }}>
         <div style={{ position:'absolute', width:'100%', height:6, background:t.surfaceHigh, borderRadius:3, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:pct+'%', background:`linear-gradient(90deg,${color}88,${color})`, borderRadius:3, transition:'width 0.1s' }} />
+          <div style={{ height:'100%', width:pct+'%', background:`linear-gradient(90deg,${alpha(color, 53)},${color})`, borderRadius:3, transition:'width 0.1s' }} />
         </div>
         <input type="range" min={min} max={max} value={value} onChange={e=>onChange(+e.target.value)}
           style={{ position:'relative', width:'100%', appearance:'none', background:'transparent', cursor:'pointer', zIndex:1 }} />

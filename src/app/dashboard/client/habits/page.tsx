@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -167,7 +168,7 @@ export default function ClientHabits() {
 
                 {/* Progress bar */}
                 <div style={{ height:4, background:t.surfaceHigh, borderRadius:2, marginBottom:12, overflow:'hidden' }}>
-                  <div style={{ height:'100%', width:wc.pct+'%', background:`linear-gradient(90deg,${color}88,${color})`, borderRadius:2, transition:'width 0.3s' }} />
+                  <div style={{ height:'100%', width:wc.pct+'%', background:`linear-gradient(90deg,${alpha(color, 53)},${color})`, borderRadius:2, transition:'width 0.3s' }} />
                 </div>
 
                 {/* Day buttons */}
@@ -180,7 +181,7 @@ export default function ClientHabits() {
                       <button key={date} onClick={()=>!isFuture && toggleLog(habit.id, date)}
                         style={{
                           background: done ? color : isToday ? t.surfaceHigh : 'transparent',
-                          border: '1px solid '+(done ? color+'60' : isToday ? color+'40' : t.border),
+                          border: '1px solid '+(done ? alpha(color, 38) : isToday ? alpha(color, 25) : t.border),
                           borderRadius:10, padding:'8px 4px', textAlign:'center',
                           cursor: isFuture ? 'default' : 'pointer',
                           opacity: isFuture ? 0.35 : 1, transition:'all 0.15s',

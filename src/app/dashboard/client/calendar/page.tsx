@@ -327,9 +327,9 @@ export default function ClientCalendarPage() {
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {selectedItems.map(e => (
-                  <div key={e.id} style={{ background:t.surfaceHigh, border:'1px solid '+e.color+'30', borderRadius:12, padding:'12px 14px' }}>
+                  <div key={e.id} style={{ background:t.surfaceHigh, border:'1px solid '+alpha(e.color, 19), borderRadius:12, padding:'12px 14px' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: e.description || e.session_rpe ? 8 : 0 }}>
-                      <div style={{ width:36, height:36, borderRadius:10, background:e.color+'18', border:'1px solid '+e.color+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>
+                      <div style={{ width:36, height:36, borderRadius:10, background:alpha(e.color, 9), border:'1px solid '+alpha(e.color, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>
                         {e.icon}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -511,7 +511,7 @@ export default function ClientCalendarPage() {
                       </div>
                       <div style={{ fontSize:11, color:t.textMuted }}>{dayLabel}</div>
                     </div>
-                    <div style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:20, background:e.color+'18', color:e.color }}>{e.label}</div>
+                    <div style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:20, background:alpha(e.color, 9), color:e.color }}>{e.label}</div>
                   </div>
                 )
               })}

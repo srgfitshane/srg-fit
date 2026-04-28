@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * CommunityFeed — single source of truth for the SRG Fit community.
+ * CommunityFeed â€” single source of truth for the SRG Fit community.
  * Used by both the client page and coach page.
  * Rule: all UI/logic changes happen HERE only.
  */
@@ -21,14 +21,14 @@ const t = {
   green:"var(--green)", pink:"var(--pink)", yellow:"var(--yellow)", red:"var(--red)",
   text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
 }
-const QUICK_REACTIONS = ['💪','🔥','❤️','🎉','👏','😤','🏆','⚡']
+const QUICK_REACTIONS = ['ðŸ’ª','ðŸ”¥','â¤ï¸','ðŸŽ‰','ðŸ‘','ðŸ˜¤','ðŸ†','âš¡']
 const CLIENT_COLORS   = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 
 function Avatar({ name, role, size=32, color }:{ name:string, role:string, size?:number, color?:string }) {
   const initials = name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
   const bg = role==='coach'
     ? 'linear-gradient(135deg,#00c9b1,#f5a623)'
-    : `linear-gradient(135deg,${color||t.purple},${color||t.purple}88)`
+    : `linear-gradient(135deg,${color||t.purple},${alpha(color||t.purple, 53)})`
   return (
     <div style={{ width:size, height:size, borderRadius:size/3, background:bg,
       display:'flex', alignItems:'center', justifyContent:'center',
@@ -39,18 +39,18 @@ function Avatar({ name, role, size=32, color }:{ name:string, role:string, size?
 }
 
 /**
- * ImageGrid — renders 1 to 4 images in a social-media-style layout.
- *   1 image  → full width, max 320px tall
- *   2 images → side by side, each 50% width
- *   3 images → one tall left (50%), two stacked right (each 25% height)
- *   4 images → 2×2 grid
+ * ImageGrid â€” renders 1 to 4 images in a social-media-style layout.
+ *   1 image  â†’ full width, max 320px tall
+ *   2 images â†’ side by side, each 50% width
+ *   3 images â†’ one tall left (50%), two stacked right (each 25% height)
+ *   4 images â†’ 2Ã—2 grid
  *
  * Images with `giphy.com` in the URL are treated as GIFs and rendered
  * via a plain <img> (Next's Image component refuses external hosts
  * without explicit remotePatterns config). All other URLs go through
  * next/image unoptimized for consistency.
  *
- * editable: when true, each tile gets a small × button that calls
+ * editable: when true, each tile gets a small Ã— button that calls
  * onRemove(index). Used only by the composer preview.
  */
 function ImageGrid({
@@ -89,13 +89,13 @@ function ImageGrid({
         <button
           onClick={(e)=>{ e.stopPropagation(); onRemove(idx) }}
           aria-label="Remove image"
-          style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.75)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1, zIndex:2 }}>×</button>
+          style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.75)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1, zIndex:2 }}>Ã—</button>
       )}
     </div>
   )
 
   // Single-image layout matches the old design: full width, capped
-  // height, no grid wrapper — keeps existing posts visually identical.
+  // height, no grid wrapper â€” keeps existing posts visually identical.
   if (count === 1) {
     return (
       <div style={{ borderRadius:10, overflow:'hidden', maxHeight:320 }}>
@@ -115,7 +115,7 @@ function ImageGrid({
   if (count === 3) {
     return (
       <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gap:2, aspectRatio:'1 / 1' }}>
-        {/* Left column — tall primary. Spans both rows. */}
+        {/* Left column â€” tall primary. Spans both rows. */}
         <Tile url={images[0].url} idx={0} style={{ gridRow:'1 / 3' }} />
         <Tile url={images[1].url} idx={1} />
         <Tile url={images[2].url} idx={2} />
@@ -197,7 +197,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [loading,      setLoading]      = useState(true)
   const [draft,        setDraft]        = useState('')
   const [posting,      setPosting]      = useState(false)
-  // Coach-only: flag the compose as an announcement. Checked → insert
+  // Coach-only: flag the compose as an announcement. Checked â†’ insert
   // with is_announcement=true and fan out a push to every active
   // client under this coach. State is kept unconditional (even on
   // client role) so React hooks order stays stable; the toggle UI
@@ -208,7 +208,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [replyOpen,    setReplyOpen]    = useState<string|null>(null)
   const [replyPosting, setReplyPosting] = useState<string|null>(null)
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
-  // Compose media — images and video are mutually exclusive. A post can
+  // Compose media â€” images and video are mutually exclusive. A post can
   // have up to 4 images OR one video OR one GIF. Each imageFiles[i] has
   // a matching imagePreviews[i] (object URL for <Image src>); revoke the
   // URL when removed to avoid memory leaks.
@@ -248,7 +248,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         const { data } = await supabase.storage.from('community-media').createSignedUrl(url, 60 * 60)
         return data?.signedUrl || null
       }
-      // Sign all four image slots in parallel. Each is independent —
+      // Sign all four image slots in parallel. Each is independent â€”
       // one missing image shouldn't block the others. Same TTL as
       // before (60min), matching the original single-image flow.
       const [img1, img2, img3, img4, vid] = await Promise.all([
@@ -349,7 +349,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
 
   // File input supports multiple when adding images. For video we keep
   // single-selection. Image attachments append up to MAX_IMAGES; beyond
-  // that we silently drop the overflow — simpler than shouting.
+  // that we silently drop the overflow â€” simpler than shouting.
   const attachMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) { e.target.value = ''; return }
@@ -359,7 +359,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     if (!isVideo && !isImage) { e.target.value = ''; return }
 
     if (isVideo) {
-      // Video replaces any existing attachments — can't mix with images.
+      // Video replaces any existing attachments â€” can't mix with images.
       clearAllMedia()
       setVideoFile(first)
       setVideoPreview(URL.createObjectURL(first))
@@ -430,7 +430,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     // Upload every staged image in parallel. Each returns its storage
     // path or null on failure; we drop nulls rather than silently
     // advance-failing a post (an orphaned image is worse than one
-    // image quietly missing from a 4-pic post — but at least the post
+    // image quietly missing from a 4-pic post â€” but at least the post
     // is clearly broken, prompting user to retry). If ALL uploads fail
     // we abort the post.
     let imagePaths: string[] = []
@@ -452,7 +452,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       }
     }
 
-    // Video upload — separate path since video is mutually exclusive
+    // Video upload â€” separate path since video is mutually exclusive
     // with images and has its own column.
     let videoPath: string | null = null
     if (videoFile) {
@@ -490,7 +490,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       return
     }
 
-    // Announcement → fan out push. Fire-and-forget per rule 8.
+    // Announcement â†’ fan out push. Fire-and-forget per rule 8.
     if (isAnnouncement && inserted) {
       const { data: activeClients } = await supabase.from('clients')
         .select('profile_id')
@@ -500,13 +500,13 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         .map(c => c.profile_id)
         .filter((pid): pid is string => !!pid && pid !== me.id)
       const coachName = me.full_name?.split(' ')[0] || 'Coach Shane'
-      const snippet = postBody.length > 80 ? postBody.slice(0, 80) + '…' : postBody
+      const snippet = postBody.length > 80 ? postBody.slice(0, 80) + 'â€¦' : postBody
       for (const uid of recipientIds) {
         supabase.functions.invoke('send-notification', {
           body: {
             user_id: uid,
             notification_type: 'announcement',
-            title: `📣 ${coachName} posted an announcement`,
+            title: `ðŸ“£ ${coachName} posted an announcement`,
             body: snippet || 'New announcement',
             link_url: '/dashboard/client/community',
           }
@@ -594,7 +594,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 18px', display:'flex', alignItems:'center', height:56, gap:12 }}>
-          <button onClick={()=>router.push(backPath)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
+          <button onClick={()=>router.push(backPath)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>â† Back</button>
           <div style={{ width:1, height:26, background:t.border }}/>
           <div style={{ fontSize:15, fontWeight:800, background:'linear-gradient(135deg,'+t.teal+','+t.orange+')', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>SRG Fit Community</div>
           <div style={{ flex:1 }}/>
@@ -609,12 +609,12 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
               <Avatar name={me?.full_name||'You'} role={role} color={me?.id ? clientColors[me.id] : undefined} size={32}/>
               <div style={{ flex:1 }}>
                 <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
-                  placeholder="Share a win, ask a question, hype someone up... 🔥"
+                  placeholder="Share a win, ask a question, hype someone up... ðŸ”¥"
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", lineHeight:1.5 }}
                 />
                 {/* Multi-image composer preview. Renders the same grid
                     layout the post card uses so the coach sees exactly
-                    what clients will see. Each tile has its own × to
+                    what clients will see. Each tile has its own Ã— to
                     remove; the grid auto-collapses as tiles leave. */}
                 {imagePreviews.length > 0 && (
                   <div style={{ marginTop:8 }}>
@@ -625,7 +625,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     />
                     {imagePreviews.length < MAX_IMAGES && (
                       <div style={{ fontSize:10, color:t.textMuted, marginTop:6, textAlign:'center' }}>
-                        {imagePreviews.length} of {MAX_IMAGES} images · tap 🖼️ to add more
+                        {imagePreviews.length} of {MAX_IMAGES} images Â· tap ðŸ–¼ï¸ to add more
                       </div>
                     )}
                   </div>
@@ -633,13 +633,13 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                 {videoPreview && (
                   <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
                     <video src={videoPreview} controls style={{ width:'100%', maxHeight:240, display:'block' }}/>
-                    <button onClick={clearVideo} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
+                    <button onClick={clearVideo} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>Ã—</button>
                   </div>
                 )}
                 {gifUrl && imagePreviews.length === 0 && !videoPreview && (
                   <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
                     <img src={gifUrl} alt="GIF" style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }}/>
-                    <button onClick={()=>setGifUrl(null)} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
+                    <button onClick={()=>setGifUrl(null)} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>Ã—</button>
                   </div>
                 )}
                 {showGifPicker && (
@@ -678,16 +678,16 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       }}
                       disabled={imageFiles.length >= MAX_IMAGES}
                       title={imageFiles.length >= MAX_IMAGES ? `Max ${MAX_IMAGES} images per post` : 'Add photo(s)'}
-                      style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:imageFiles.length >= MAX_IMAGES ? 'not-allowed' : 'pointer', color:t.textMuted, lineHeight:1, opacity: imageFiles.length >= MAX_IMAGES ? 0.4 : 1 }}>🖼️</button>
+                      style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:imageFiles.length >= MAX_IMAGES ? 'not-allowed' : 'pointer', color:t.textMuted, lineHeight:1, opacity: imageFiles.length >= MAX_IMAGES ? 0.4 : 1 }}>ðŸ–¼ï¸</button>
                     <button onClick={()=>{
                         const el = fileInputRef.current
                         if (!el) return
                         el.setAttribute('accept', 'video/*')
                         el.removeAttribute('multiple')
                         el.click()
-                      }} title="Add video" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>🎥</button>
+                      }} title="Add video" style={{ background:'none', border:'1px solid '+t.border, borderRadius:8, padding:'5px 10px', fontSize:16, cursor:'pointer', color:t.textMuted, lineHeight:1 }}>ðŸŽ¥</button>
                     <button onClick={()=>{ setShowGifPicker(p=>!p); if(!gifs.length) searchGifs('') }} title="Add GIF" style={{ background:showGifPicker?t.tealDim:'none', border:'1px solid '+(showGifPicker?t.teal:t.border), borderRadius:8, padding:'5px 10px', fontSize:12, fontWeight:800, cursor:'pointer', color:showGifPicker?t.teal:t.textMuted, lineHeight:1 }}>GIF</button>
-                    {/* Coach-only announcement toggle — when on, post gets
+                    {/* Coach-only announcement toggle â€” when on, post gets
                         prominent styling + push notifications to every
                         active client. */}
                     {role === 'coach' && (
@@ -707,13 +707,13 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                           letterSpacing: 0.3,
                           fontFamily: "'DM Sans',sans-serif",
                         }}>
-                        📣 {asAnnouncement ? 'Announcement ON' : 'Announce'}
+                        ðŸ“£ {asAnnouncement ? 'Announcement ON' : 'Announce'}
                       </button>
                     )}
                   </div>
                   <button onClick={post} disabled={posting||uploading||(!draft.trim()&&imageFiles.length===0&&!videoFile&&!gifUrl)}
                     style={{ background:(draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':'transparent', border:'1px solid '+((draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&imageFiles.length===0&&!videoFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {uploading?'Uploading...':posting?'...':'Post 🔥'}
+                    {uploading?'Uploading...':posting?'...':'Post ðŸ”¥'}
                   </button>
                 </div>
               </div>
@@ -723,7 +723,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           {/* Feed */}
           {posts.length === 0 && (
             <div style={{ textAlign:'center', padding:48, color:t.textMuted, fontSize:13 }}>
-              <div style={{ fontSize:36, marginBottom:10 }}>🌱</div>Be the first to post something!
+              <div style={{ fontSize:36, marginBottom:10 }}>ðŸŒ±</div>Be the first to post something!
             </div>
           )}
 
@@ -758,10 +758,10 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
               <div key={p.id} style={cardStyle}>
                 {isAnnounce && (
                   <div style={{ background:`linear-gradient(135deg, ${alpha(t.orange, 80)}, ${alpha(t.teal, 60)})`, padding:'5px 12px', fontSize:10, fontWeight:800, color:'#000', letterSpacing:0.5, display:'flex', alignItems:'center', gap:6 }}>
-                    📣 COACH ANNOUNCEMENT
+                    ðŸ“£ COACH ANNOUNCEMENT
                   </div>
                 )}
-                {!isAnnounce && p.pinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>📌 Pinned</div>}
+                {!isAnnounce && p.pinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>ðŸ“Œ Pinned</div>}
                 <div style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
                     <Avatar name={author?.full_name||'?'} role={p.author_role} color={color} size={30}/>
@@ -777,22 +777,22 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                       <div style={{ position:'relative' }}>
                         <button onClick={e=>{ e.stopPropagation(); setCoachMenu(coachMenu===p.id?null:p.id) }}
                           style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 6px', lineHeight:1, borderRadius:6 }}>
-                          ···
+                          Â·Â·Â·
                         </button>
                         {coachMenu === p.id && (
                           <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'4px', zIndex:50, minWidth:150, boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}
                             onClick={e=>e.stopPropagation()}>
                             <button onClick={()=>{ pinPost(p.id, p.pinned??false); setCoachMenu(null) }}
                               style={{ display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px', fontSize:12, fontWeight:700, color:t.text, cursor:'pointer', borderRadius:7 }}>
-                              {p.pinned ? '📌 Unpin' : '📌 Pin to top'}
+                              {p.pinned ? 'ðŸ“Œ Unpin' : 'ðŸ“Œ Pin to top'}
                             </button>
                             <button onClick={()=>{ archivePost(p.id, p.archived??false); setCoachMenu(null) }}
                               style={{ display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px', fontSize:12, fontWeight:700, color:t.yellow, cursor:'pointer', borderRadius:7 }}>
-                              {p.archived ? '📂 Unarchive' : '📦 Archive'}
+                              {p.archived ? 'ðŸ“‚ Unarchive' : 'ðŸ“¦ Archive'}
                             </button>
                             <button onClick={()=>{ deletePost(p.id); setCoachMenu(null) }}
                               style={{ display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', borderRadius:7 }}>
-                              🗑️ Delete post
+                              ðŸ—‘ï¸ Delete post
                             </button>
                           </div>
                         )}
@@ -829,7 +829,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     ))}
                     <div style={{ position:'relative' }}>
                       <button onClick={e=>{ e.stopPropagation(); setReactOpen(reactOpen===p.id?null:p.id) }}
-                        style={{ background:'none', border:'1px solid '+t.border, borderRadius:20, padding:'3px 8px', cursor:'pointer', fontSize:11, color:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>+ 😄</button>
+                        style={{ background:'none', border:'1px solid '+t.border, borderRadius:20, padding:'3px 8px', cursor:'pointer', fontSize:11, color:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>+ ðŸ˜„</button>
                       {reactOpen === p.id && (
                         <div style={{ position:'absolute', bottom:'calc(100% + 6px)', left:0, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:24, padding:'5px 8px', display:'flex', gap:3, zIndex:10, boxShadow:'0 4px 20px rgba(0,0,0,.5)', whiteSpace:'nowrap' }}>
                           {QUICK_REACTIONS.map(emoji => (
@@ -840,7 +840,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                     </div>
                     <button onClick={()=>{ setReplyOpen(showReplyBox?null:p.id); setTimeout(()=>replyInputRef.current?.focus(),50) }}
                       style={{ background:'none', border:'1px solid '+(showReplyBox?alpha(t.teal, 25):t.border), borderRadius:20, padding:'3px 9px', cursor:'pointer', fontSize:11, fontWeight:600, color:showReplyBox?t.teal:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>
-                      💬 {postReplies.length > 0 ? `${postReplies.length} ${postReplies.length===1?'reply':'replies'}` : 'Reply'}
+                      ðŸ’¬ {postReplies.length > 0 ? `${postReplies.length} ${postReplies.length===1?'reply':'replies'}` : 'Reply'}
                     </button>
                   </div>
                 </div>

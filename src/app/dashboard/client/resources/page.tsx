@@ -146,9 +146,9 @@ export default function ClientResourcesPage() {
                     const color = cat.color || t.teal
                     return (
                       <div key={cat.id} onClick={()=>{setActiveParent(cat.id);setActiveGroup(null);setSearch('')}}
-                        style={{background:t.surface,border:`1px solid ${color}30`,borderRadius:16,padding:'18px 16px',cursor:'pointer',position:'relative',overflow:'hidden'}}>
+                        style={{background:t.surface,border:`1px solid ${alpha(color, 19)}`,borderRadius:16,padding:'18px 16px',cursor:'pointer',position:'relative',overflow:'hidden'}}>
                         {/* color accent bar */}
-                        <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${color},${color}88)`}}/>
+                        <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${color},${alpha(color, 53)})`}}/>
                         <div style={{fontSize:32,marginBottom:10,lineHeight:1}}>{cat.icon||'📁'}</div>
                         <div style={{fontSize:14,fontWeight:800,marginBottom:3,color:t.text}}>{cat.name}</div>
                         <div style={{fontSize:12,color:t.textMuted}}>{count} item{count!==1?'s':''}</div>
@@ -176,8 +176,8 @@ export default function ClientResourcesPage() {
                     <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:16}}>
                       {subgroups(activeParent).map(sub=>(
                         <div key={sub.id} onClick={()=>setActiveGroup(sub.id)}
-                          style={{background:t.surface,border:`1px solid ${sub.color||t.border}30`,borderRadius:14,padding:'14px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:10}}>
-                          <div style={{width:36,height:36,borderRadius:10,background:(sub.color||t.teal)+'18',border:`1px solid ${sub.color||t.teal}30`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>
+                          style={{background:t.surface,border:`1px solid ${alpha(sub.color||t.border, 19)}`,borderRadius:14,padding:'14px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:10}}>
+                          <div style={{width:36,height:36,borderRadius:10,background:alpha((sub.color||t.teal), 9),border:`1px solid ${alpha(sub.color||t.teal, 19)}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>
                             {sub.icon||'📂'}
                           </div>
                           <div style={{minWidth:0}}>
@@ -226,11 +226,11 @@ export default function ClientResourcesPage() {
                           const tm = TYPE_META[item.content_type]||TYPE_META.article
                           return (
                             <div key={item.id} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:14,padding:'14px 16px',display:'flex',gap:12,alignItems:'flex-start'}}>
-                              <div style={{width:42,height:42,borderRadius:11,background:tm.color+'18',border:'1px solid '+tm.color+'30',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{tm.icon}</div>
+                              <div style={{width:42,height:42,borderRadius:11,background:alpha(tm.color, 9),border:'1px solid '+alpha(tm.color, 19),display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{tm.icon}</div>
                               <div style={{flex:1,minWidth:0}}>
                                 <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4,flexWrap:'wrap' as const}}>
                                   <div style={{fontSize:14,fontWeight:700}}>{item.title}</div>
-                                  <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:tm.color+'18',color:tm.color}}>{tm.label}</span>
+                                  <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:alpha(tm.color, 9),color:tm.color}}>{tm.label}</span>
                                   {(item.duration||item.estimated_duration) && <span style={{fontSize:10,color:t.textMuted,background:t.surfaceHigh,padding:'2px 7px',borderRadius:20}}>⏱ {item.estimated_duration||item.duration}</span>}
                                 </div>
                                 {item.description && <div style={{fontSize:12,color:t.textDim,lineHeight:1.5,marginBottom:6}}>{item.description}</div>}
@@ -269,11 +269,11 @@ export default function ClientResourcesPage() {
                       const tm = TYPE_META[item.content_type]||TYPE_META.article
                       return (
                         <div key={item.id} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:14,padding:'14px 16px',display:'flex',gap:12,alignItems:'flex-start'}}>
-                          <div style={{width:42,height:42,borderRadius:11,background:tm.color+'18',border:'1px solid '+tm.color+'30',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{tm.icon}</div>
+                          <div style={{width:42,height:42,borderRadius:11,background:alpha(tm.color, 9),border:'1px solid '+alpha(tm.color, 19),display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{tm.icon}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4,flexWrap:'wrap' as const}}>
                               <div style={{fontSize:14,fontWeight:700}}>{item.title}</div>
-                              <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:tm.color+'18',color:tm.color}}>{tm.label}</span>
+                              <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:alpha(tm.color, 9),color:tm.color}}>{tm.label}</span>
                               {(item.duration||item.estimated_duration) && <span style={{fontSize:10,color:t.textMuted,background:t.surfaceHigh,padding:'2px 7px',borderRadius:20}}>⏱ {item.estimated_duration||item.duration}</span>}
                             </div>
                             {item.description && <div style={{fontSize:12,color:t.textDim,lineHeight:1.5,marginBottom:6}}>{item.description}</div>}

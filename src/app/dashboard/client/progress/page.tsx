@@ -94,7 +94,7 @@ export default function ClientProgressPage() {
   const [photoFile, setPhotoFile] = useState<File|null>(null)
   const [saving, setSaving] = useState(false)
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>([])
-  const [habitLogs,    setHabitLogs]    = useState<Record<string, Record<string,number>>>({}) // date → {sleep,steps,water}
+  const [habitLogs,    setHabitLogs]    = useState<Record<string, Record<string,number>>>({}) // date ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ {sleep,steps,water}
   const [pulseTimeframe, setPulseTimeframe] = useState(30)
   const [journalEntries, setJournalEntries] = useState<{id:string,entry_date:string,content:string,is_private:boolean}[]>([])
   const [expandedEntry, setExpandedEntry] = useState<string|null>(null)
@@ -151,7 +151,7 @@ export default function ClientProgressPage() {
         .order('created_at', { ascending: false }),
     ])
 
-    // Aggregate habit logs by date — average multiple entries per day, classify by keyword
+    // Aggregate habit logs by date ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â average multiple entries per day, classify by keyword
     const byDate: Record<string, Record<string, number[]>> = {}
     for (const row of (hData || []) as any[]) {
       const label = (row.habit?.label || '').toLowerCase()
@@ -190,7 +190,7 @@ export default function ClientProgressPage() {
 
   const activeGroup = METRIC_GROUPS[activeGroupIdx]
 
-  // Build unified chart data — habit groups use habitLogs, metric groups use metrics
+  // Build unified chart data ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â habit groups use habitLogs, metric groups use metrics
   const chartData = useMemo(() => {
     if (activeGroup.habit) {
       return Object.entries(habitLogs)
@@ -227,14 +227,14 @@ export default function ClientProgressPage() {
     setSuggestGoalSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      // Send as a message to coach — simplest path, no separate table needed
+      // Send as a message to coach ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â simplest path, no separate table needed
       const { data: coachData } = await supabase.from('clients')
         .select('coach_id').eq('id', clientRecord.id).single()
       if (coachData?.coach_id) {
         await supabase.from('messages').insert({
           sender_id: user.id,
           recipient_id: coachData.coach_id,
-          content: `💡 Goal suggestion: ${suggestGoalText.trim()}`,
+          content: `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ Goal suggestion: ${suggestGoalText.trim()}`,
         })
       }
     }
@@ -283,13 +283,13 @@ export default function ClientProgressPage() {
       <div style={{ background:t.bg, minHeight:'100vh', color:t.text, fontFamily:'system-ui,sans-serif', padding:'24px 24px 0' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24, flexWrap:'wrap', gap:10 }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:800, margin:0 }}>📈 My Progress</h1>
+          <h1 style={{ fontSize:22, fontWeight:800, margin:0 }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Â¹ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â  My Progress</h1>
           <p style={{ color:t.textMuted, margin:'4px 0 0', fontSize:13 }}>Track your transformation over time</p>
         </div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {clientRecord?.show_progress_photos !== false && <button onClick={()=>setPhotoOpen(true)} style={{ background:alpha(t.purple, 13), color:t.purple, border:'1px solid '+alpha(t.purple, 27),
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
-            📸 Add Photo
+            ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ Add Photo
           </button>}
           <button onClick={()=>setLogOpen('weight')} style={{ background:t.teal, color:'#000', border:'none',
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
@@ -302,7 +302,7 @@ export default function ClientProgressPage() {
         </div>
       </div>
 
-      {/* ── GOALS ── */}
+      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ GOALS ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ */}
       {activeGoals.length > 0 && (
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:10 }}>My Goals</div>
@@ -313,15 +313,15 @@ export default function ClientProgressPage() {
                 : null
               const isComplete = goal.status === 'completed' || (pct !== null && pct >= 100)
               const color = isComplete ? t.teal : goal.type === 'consistency' ? t.orange : goal.type === 'bodyweight' ? t.purple : t.yellow
-              const icon = isComplete ? '🏆' : goal.type === 'consistency' ? '🔥' : goal.type === 'bodyweight' ? '⚖️' : '🏋️'
+              const icon = isComplete ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ' : goal.type === 'consistency' ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥' : goal.type === 'bodyweight' ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â' : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¹ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â'
               const today = new Date(); today.setHours(0,0,0,0)
               const daysLeft = goal.deadline
                 ? Math.ceil((new Date(goal.deadline).getTime() - today.getTime()) / 86400000)
                 : null
               return (
-                <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? alpha(t.teal, 25) : color+'30'}`, borderRadius:13, padding:'12px 14px' }}>
+                <div key={goal.id} style={{ background:t.surface, border:`1px solid ${isComplete ? alpha(t.teal, 25) : alpha(color, 19)}`, borderRadius:13, padding:'12px 14px' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom: pct !== null ? 8 : 0 }}>
-                    <div style={{ width:32, height:32, borderRadius:9, background:color+'18', border:`1px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
+                    <div style={{ width:32, height:32, borderRadius:9, background:alpha(color, 9), border:`1px solid ${alpha(color, 25)}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>
                       {icon}
                     </div>
                     <div style={{ flex:1 }}>
@@ -332,12 +332,12 @@ export default function ClientProgressPage() {
                           : goal.description || ''}
                         {daysLeft !== null && !isComplete && (
                           <span style={{ marginLeft:6, color: daysLeft <= 7 ? t.red : t.textMuted }}>
-                            · {daysLeft > 0 ? `${daysLeft}d left` : 'Due today'}
+                            ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {daysLeft > 0 ? `${daysLeft}d left` : 'Due today'}
                           </span>
                         )}
                       </div>
                     </div>
-                    {isComplete && <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Done ✓</span>}
+                    {isComplete && <span style={{ fontSize:11, fontWeight:800, color:t.teal }}>Done ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“</span>}
                   </div>
                   {pct !== null && (
                     <div>
@@ -346,7 +346,7 @@ export default function ClientProgressPage() {
                         <span style={{ fontWeight:700, color: pct >= 100 ? t.teal : color }}>{pct}%</span>
                       </div>
                       <div style={{ height:6, borderRadius:4, background:t.surfaceHigh, overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:`${pct}%`, borderRadius:4, background: pct >= 100 ? t.teal : `linear-gradient(90deg,${color},${color}aa)`, transition:'width 0.6s ease' }}/>
+                        <div style={{ height:'100%', width:`${pct}%`, borderRadius:4, background: pct >= 100 ? t.teal : `linear-gradient(90deg,${color},${alpha(color, 67)})`, transition:'width 0.6s ease' }}/>
                       </div>
                     </div>
                   )}
@@ -364,7 +364,7 @@ export default function ClientProgressPage() {
                 {suggestGoalSaving ? '...' : 'Send'}
               </button>
               <button onClick={()=>setSuggestGoalOpen(false)}
-                style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:10, padding:'9px 12px', fontSize:12, color:t.textMuted, cursor:'pointer', fontFamily:'system-ui,sans-serif' }}>✕</button>
+                style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:10, padding:'9px 12px', fontSize:12, color:t.textMuted, cursor:'pointer', fontFamily:'system-ui,sans-serif' }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢</button>
             </div>
           ) : (
             <button onClick={()=>setSuggestGoalOpen(true)}
@@ -379,8 +379,8 @@ export default function ClientProgressPage() {
       {metrics.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:10, marginBottom:20 }}>
           {[
-            { label:'Current Weight', val: last?.weight ? `${last.weight} lbs` : '—', color:t.teal },
-            { label:'Change', val: weightChange ? `${+weightChange>0?'+':''}${weightChange} lbs` : '—',
+            { label:'Current Weight', val: last?.weight ? `${last.weight} lbs` : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â', color:t.teal },
+            { label:'Change', val: weightChange ? `${+weightChange>0?'+':''}${weightChange} lbs` : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â',
               color: weightChange ? (+weightChange<0?t.green:t.red) : t.textMuted },
             { label:'Entries', val: metrics.length, color:t.purple },
           ].filter((s:any) => !s.hidden).map(s => (
@@ -394,7 +394,7 @@ export default function ClientProgressPage() {
 
       {/* Chart */}
       <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
-        {/* Metric tabs — horizontally scrollable on mobile */}
+        {/* Metric tabs ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â horizontally scrollable on mobile */}
         <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', marginBottom:10, marginLeft:-20, marginRight:-20, paddingLeft:20, paddingRight:20 }}>
           <div style={{ display:'flex', gap:6, width:'max-content' }}>
             {(clientRecord == null || clientRecord.show_body_metrics
@@ -404,7 +404,7 @@ export default function ClientProgressPage() {
               <button key={g.key} onClick={()=>setActiveGroup(i)}
                 style={{ padding:'6px 12px', borderRadius:20, border:'1px solid', whiteSpace:'nowrap',
                   borderColor: activeGroupIdx===i?g.color:t.border,
-                  background: activeGroupIdx===i?g.color+'22':'transparent',
+                  background: activeGroupIdx===i?alpha(g.color, 13):'transparent',
                   color: activeGroupIdx===i?g.color:t.textMuted,
                   cursor:'pointer', fontSize:12, fontWeight:600, flexShrink:0 }}>
                 {g.label}
@@ -428,7 +428,7 @@ export default function ClientProgressPage() {
 
         {/* Running average stat */}
         {runningAvg && (
-          <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:14, padding:'10px 14px', background:activeGroup.color+'11', border:`1px solid ${activeGroup.color}30`, borderRadius:12 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:14, padding:'10px 14px', background:alpha(activeGroup.color, 7), border:`1px solid ${alpha(activeGroup.color, 19)}`, borderRadius:12 }}>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em' }}>{timeframe.label} Average</div>
               <div style={{ fontSize:22, fontWeight:900, color:activeGroup.color }}>{runningAvg} <span style={{ fontSize:13, fontWeight:600 }}>{activeGroup.unit}</span></div>
@@ -442,8 +442,8 @@ export default function ClientProgressPage() {
         {chartData.length === 0 ? (
           <div style={{ textAlign:'center', color:t.textMuted, padding:60, fontSize:14 }}>
             {activeGroup.habit
-              ? `No ${activeGroup.label.toLowerCase()} logged yet — track it in your daily habits! 💪`
-              : 'No data yet — log your first entry to start tracking! 💪'}
+              ? `No ${activeGroup.label.toLowerCase()} logged yet ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â track it in your daily habits! ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âª`
+              : 'No data yet ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â log your first entry to start tracking! ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âª'}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
@@ -497,8 +497,8 @@ export default function ClientProgressPage() {
                 <YAxis domain={[0,5]} ticks={[1,2,3,4,5]} tick={{ fill:t.textMuted, fontSize:9 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text, fontSize:12 }} />
                 <Legend wrapperStyle={{ paddingTop:8, color:t.textMuted, fontSize:11 }} />
-                <Line type="monotone" dataKey="sleep" name="🌙 Sleep" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
-                <Line type="monotone" dataKey="energy" name="⚡ Energy" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
+                <Line type="monotone" dataKey="sleep" name="ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Sleep" stroke={t.purple} strokeWidth={2} dot={false} connectNulls />
+                <Line type="monotone" dataKey="energy" name="ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ Energy" stroke={t.yellow} strokeWidth={2} dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -557,8 +557,8 @@ export default function ClientProgressPage() {
         <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:360 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>⚖️ Log Weight</div>
-              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+              <div style={{ fontWeight:800, fontSize:17 }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Log Weight</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢</button>
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
               {[
@@ -590,8 +590,8 @@ export default function ClientProgressPage() {
         <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>📏 Log Measurements</div>
-              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+              <div style={{ fontWeight:800, fontSize:17 }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Log Measurements</div>
+              <button onClick={()=>setLogOpen('none')} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12 }}>
               {[
@@ -627,15 +627,15 @@ export default function ClientProgressPage() {
         <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:420 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>📸 Add Progress Photo</div>
-              <button onClick={()=>setPhotoOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+              <div style={{ fontWeight:800, fontSize:17 }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ Add Progress Photo</div>
+              <button onClick={()=>setPhotoOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢</button>
             </div>
             {/* File drop zone */}
             <div onClick={()=>fileRef.current?.click()}
               style={{ border:'2px dashed '+t.border, borderRadius:12, padding:32, textAlign:'center',
                 cursor:'pointer', marginBottom:16, color:t.textMuted, fontSize:13,
                 background: photoFile ? alpha(t.green, 7) : 'transparent' }}>
-              {photoFile ? `✅ ${photoFile.name}` : '📁 Click to select photo'}
+              {photoFile ? `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ ${photoFile.name}` : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Click to select photo'}
               <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
                 onChange={e => setPhotoFile(e.target.files?.[0]||null)} />
             </div>
@@ -676,7 +676,7 @@ export default function ClientProgressPage() {
         {/* Journal History */}
         {journalEntries.length > 0 && (
           <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>✍️ Journal</div>
+            <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Journal</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {journalEntries.map(entry => (
                 <div key={entry.id}
@@ -688,9 +688,9 @@ export default function ClientProgressPage() {
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:10, color:entry.is_private ? t.textMuted : t.teal, fontWeight:600 }}>
-                        {entry.is_private ? '🔒 Private' : '👁 Shared'}
+                        {entry.is_private ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Private' : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Shared'}
                       </span>
-                      <span style={{ fontSize:10, color:t.textMuted }}>{expandedEntry===entry.id ? '▲' : '▼'}</span>
+                      <span style={{ fontSize:10, color:t.textMuted }}>{expandedEntry===entry.id ? 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²' : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼'}</span>
                     </div>
                   </div>
                   {expandedEntry !== entry.id && (

@@ -190,7 +190,7 @@ export default function ClientMetrics() {
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <input type="number" step="0.1" value={values[m.key]||''} onChange={e=>setValues(v=>({...v,[m.key]:e.target.value}))}
                       placeholder={prev != null ? String(prev) : '—'}
-                      style={{ flex:1, background:t.surfaceUp, border:'1px solid '+(values[m.key]?m.color+'60':t.border), borderRadius:8, padding:'9px 12px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
+                      style={{ flex:1, background:t.surfaceUp, border:'1px solid '+(values[m.key]?alpha(m.color, 38):t.border), borderRadius:8, padding:'9px 12px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
                     <span style={{ fontSize:11, color:t.textMuted, minWidth:24 }}>{m.unit}</span>
                   </div>
                 </div>
