@@ -26,9 +26,17 @@ const CLIENT_COLORS   = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 
 function Avatar({ name, role, size=32, color }:{ name:string, role:string, size?:number, color?:string }) {
   const initials = name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
+  // Client gradient: full color → 53% alpha at the bottom-right.
+  // This used to be ${color||t.purple} + '88' (hex alpha suffix), but
+  // since color is now a CSS var like 'var(--teal)', concatenating
+  // '88' produces 'var(--teal)88' which is invalid CSS — the whole
+  // gradient gets dropped and the avatar renders without a background.
+  // alpha() routes through color-mix() which works for both hex and
+  // var(--*) inputs.
+  const fallback = t.purple
   const bg = role==='coach'
     ? 'linear-gradient(135deg,#00c9b1,#f5a623)'
-    : `linear-gradient(135deg,${color||t.purple},${color||t.purple}88)`
+    : `linear-gradient(135deg,${color||fallback},${alpha(color||fallback, 53)})`
   return (
     <div style={{ width:size, height:size, borderRadius:size/3, background:bg,
       display:'flex', alignItems:'center', justifyContent:'center',
