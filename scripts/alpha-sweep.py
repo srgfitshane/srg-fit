@@ -37,7 +37,7 @@ def hex_to_pct(hp):
 
 # Color expression: t.X | X.color | sub.color || t.teal | (sub.color||t.teal) etc.
 # Keep it conservative: identifier chain ending in .color OR t.IDENT
-COLOR_EXPR = r"(?:t\.\w+|\w+(?:\?\.)?\.color(?:\s*\|\|\s*t\.\w+)?|\(\w+(?:\?\.)?\.color\s*\|\|\s*t\.\w+\)|color)"
+COLOR_EXPR = r"(?:t\.\w+|\w+(?:\?\.)?\.color(?:\s*\|\|\s*t\.\w+)?|\(\w+(?:\?\.)?\.color\s*\|\|\s*t\.\w+\)|(?<![.\w])color)"
 
 # Pattern A: concatenation form -- EXPR+'XX' or EXPR + 'XX' or EXPR + "XX"
 # The alpha hex must be lowercase hex pair 00-ff, 2 chars, NOT followed by another hex digit
@@ -79,7 +79,7 @@ def add_alpha_import(content):
             return content[:m.start()] + m.group(1) + new_names + m.group(3) + content[m.end():]
         return content
     # No theme import yet -- add one after the last existing import
-    imports = list(re.finditer(r"^import .+$", content, re.MULTILINE))
+    imports = list(re.finditer(r"^import\s+(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['""][^'""]+['""];?\s*$", content, re.MULTILINE | re.DOTALL))
     if not imports:
         return "import { alpha } from '@/lib/theme'\n" + content
     last = imports[-1]

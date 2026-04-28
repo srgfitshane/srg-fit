@@ -13,10 +13,10 @@ import {
   type ClientActivityRecord,
 } from '@/lib/client-activities'
 import {
-import { alpha } from '@/lib/theme'
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
 } from 'recharts'
+import { alpha } from '@/lib/theme'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -2530,7 +2530,7 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
             <>
               {/* Running average */}
               {habitAvg && (
-                <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16, padding:'10px 14px', background:(activeHabitTab as any).alpha(color, 7), border:`1px solid ${(activeHabitTab as any).color}30`, borderRadius:12 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16, padding:'10px 14px', background:alpha((activeHabitTab as any).color, 7), border:`1px solid ${alpha((activeHabitTab as any).color, 19)}`, borderRadius:12 }}>
                   <div>
                     <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.07em' }}>Average</div>
                     <div style={{ fontSize:22, fontWeight:900, color:(activeHabitTab as any).color }}>{habitAvg} <span style={{ fontSize:13, fontWeight:600 }}>{(activeHabitTab as any).unit}</span></div>
