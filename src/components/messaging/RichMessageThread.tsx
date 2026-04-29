@@ -39,6 +39,7 @@ interface Message {
   duration_sec: number | null
   gif_url: string | null
   read: boolean
+  read_at?: string | null
   created_at: string
   reactions?: Reaction[]
 }
@@ -187,9 +188,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     // Force scroll on initial load
     setTimeout(() => scrollToBottom(true), 0)
 
-    // Mark incoming as read
+    // Mark incoming as read. Stamp read_at so the sender can see when (Wave 5
+    // read receipts -- the sender's outgoing-bubble checkmark resolves from this).
     await supabase.from('messages')
-      .update({ read: true })
+      .update({ read: true, read_at: new Date().toISOString() })
       .eq('sender_id', otherId).eq('recipient_id', myId).eq('read', false)
   }, [myId, otherId, supabase])
 
@@ -274,8 +276,17 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             }
           }
           setThread(prev => [...prev, { ...msg, media_url: mediaUrl, reactions: [] }])
-          supabase.from('messages').update({ read: true }).eq('id', msg.id)
+          supabase.from('messages').update({ read: true, read_at: new Date().toISOString() }).eq('id', msg.id)
         }
+      })
+      // Read-receipt liveness: when the other side marks my outgoing message
+      // as read, push the read/read_at update into the local thread so the
+      // ✓ -> ✓✓ flips without a refresh. Filter on sender_id so this only
+      // fires for messages I sent (the recipient_id was them).
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages',
+        filter: `sender_id=eq.${myId}` }, (p) => {
+        const updated = p.new as Message
+        setThread(prev => prev.map(m => m.id === updated.id ? { ...m, read: updated.read, read_at: updated.read_at } : m))
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'message_reactions' }, () => {
         loadThread()
@@ -720,7 +731,13 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                     <BubbleContent msg={msg} />
                     <div style={{ fontSize:10, marginTop: isMedia?4:3, opacity:0.55, textAlign: isMe?'right':'left', padding: isMedia?'0 6px 4px':0 }}>
                       {fmtMsgTime(msg.created_at)}
-                      {isMe && <span style={{ marginLeft:4 }}>{msg.read ? ' ✓✓' : ' ✓'}</span>}
+                      {isMe && (
+                        <span
+                          style={{ marginLeft:4, cursor: msg.read_at ? 'help' : 'default' }}
+                          title={msg.read_at ? `Read ${fmtMsgTime(msg.read_at)}` : msg.read ? 'Read' : 'Sent'}>
+                          {msg.read ? ' ✓✓' : ' ✓'}
+                        </span>
+                      )}
                     </div>
                   </div>
 

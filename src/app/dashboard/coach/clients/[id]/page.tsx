@@ -51,6 +51,7 @@ export default function ClientDetail() {
   const [showCompleted,      setShowCompleted]       = useState(true)
   const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
+  const [nutritionLogs28d, setNutritionLogs28d] = useState<Array<{ log_date: string; total_calories: number | null; total_protein: number | null }>>([])
   const [nutritionEdit, setNutritionEdit] = useState(false)
   const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
   const [nutritionSaving, setNutritionSaving] = useState(false)
@@ -195,6 +196,7 @@ export default function ClientDetail() {
         { data: assignData },
         { data: activityData },
         { data: macroData },
+        { data: nutritionLogsData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
         supabase.from('client_form_assignments').select('id, completed_at, response, coach_response').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
@@ -209,6 +211,7 @@ export default function ClientDetail() {
         supabase.from('client_form_assignments').select('*, form:onboarding_forms(title)').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).order('assigned_at', { ascending: false }).limit(20),
         supabase.from('client_activities').select('*').eq('client_id', clientId).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(8),
         supabase.from('food_entries').select('logged_at,calories,protein_g,carbs_g,fat_g').eq('client_id', clientId).gte('logged_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).order('logged_at', { ascending: true }),
+        supabase.from('nutrition_daily_logs').select('log_date, total_calories, total_protein').eq('client_id', clientId).gte('log_date', new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('log_date', { ascending: false }),
       ])
 
       setForms(formData || [])
@@ -216,6 +219,7 @@ export default function ClientDetail() {
       setMetrics(metricsData || [])
       setWorkouts(workoutData || [])
       setNutritionPlan(nutritionData || null)
+      setNutritionLogs28d((nutritionLogsData || []) as Array<{ log_date: string; total_calories: number | null; total_protein: number | null }>)
       if (nutritionData) {
         setNutritionForm({
           calories: String(nutritionData.calories_target || ''),
@@ -1187,6 +1191,79 @@ export default function ClientDetail() {
           {/* NUTRITION TAB */}
           {activeTab === 'nutrition' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+              {/* 28-day adherence heatmap. Each cell = one day. Empty = no log;
+                  filled intensity scales with calories logged vs the active
+                  plan target (or against logged average if no target set). */}
+              {(() => {
+                const target = (nutritionPlan?.calories_target as number | null) || null
+                const logsByDate = new Map<string, number>()
+                for (const log of nutritionLogs28d) {
+                  if (log.log_date && log.total_calories != null && log.total_calories > 0) {
+                    logsByDate.set(log.log_date, log.total_calories)
+                  }
+                }
+                // Build 28 days ending today, oldest first so the grid reads
+                // top-left = 4 weeks ago, bottom-right = today.
+                const cells: Array<{ date: string; cals: number | null; iso: string }> = []
+                const today = new Date()
+                for (let i = 27; i >= 0; i--) {
+                  const d = new Date(today)
+                  d.setDate(today.getDate() - i)
+                  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                  cells.push({ date: d.toLocaleDateString([], { month: 'short', day: 'numeric' }), cals: logsByDate.get(iso) ?? null, iso })
+                }
+                const loggedDays = cells.filter(c => c.cals !== null).length
+                const compliancePct = Math.round((loggedDays / 28) * 100)
+                const colorFor = (cals: number | null) => {
+                  if (cals === null) return 'transparent'
+                  if (target) {
+                    const ratio = cals / target
+                    if (ratio >= 0.85 && ratio <= 1.15) return t.green // on target
+                    if (ratio >= 0.6 && ratio < 0.85)  return t.teal  // under
+                    if (ratio > 1.15 && ratio <= 1.4)  return t.orange // over
+                    return t.red // way under or way over
+                  }
+                  // No target -- just show logged-vs-not.
+                  return t.teal
+                }
+                const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+                return (
+                  <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'20px 24px' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap' as const, gap:8 }}>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:800 }}>📅 28-day adherence</div>
+                        <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                          {loggedDays}/28 days logged · {compliancePct}% compliance
+                          {target ? ' · color = on/under/over target' : ' · no target set'}
+                        </div>
+                      </div>
+                      {target && (
+                        <div style={{ display:'flex', gap:10, fontSize:10, color:t.textMuted, alignItems:'center', flexWrap:'wrap' as const }}>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:t.green, display:'inline-block' }}/> on target</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:t.teal, display:'inline-block' }}/> under</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:t.orange, display:'inline-block' }}/> over</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:t.red, display:'inline-block' }}/> way off</span>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:6 }}>
+                      {cells.map((c) => {
+                        const isToday = c.iso === todayIso
+                        const bg = colorFor(c.cals)
+                        return (
+                          <div key={c.iso}
+                            title={`${c.date} · ${c.cals !== null ? Math.round(c.cals) + ' kcal' : 'no log'}${target && c.cals ? ' / ' + target + ' target' : ''}`}
+                            style={{ height:36, borderRadius:6, background: bg === 'transparent' ? t.surfaceHigh : bg, border:'1px solid '+(isToday ? t.teal : (bg === 'transparent' ? t.border : 'transparent')), display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, color: bg === 'transparent' ? t.textMuted : '#000', fontWeight:700 }}>
+                            {new Date(c.iso).getDate()}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
 
                 {/* Header */}
