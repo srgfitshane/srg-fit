@@ -115,6 +115,7 @@ they are the reason the app stays coherent at its current scale.
 | 11 | **Media URLs → resolveSignedMediaUrl** | `resolveSignedMediaUrl` from `src/lib/media.ts` handles raw paths, Supabase public URLs, and external http URLs. Never pass raw storage paths to `src=` directly. |
 | 12 | **Anthropic API → Server-Side Only** | Never call `api.anthropic.com` from the client. Always proxy through `/api/*` routes. Client-side keys would be public. |
 | 13 | **Theme CSS Injected at Root Layout** | `buildThemeCss()` is called from `src/app/layout.tsx`, not from `dashboard/client/layout.tsx`. The `<style>` element on `<html>` defines `--teal`, `--orange`, etc. globally. Without this, files referencing `var(--teal)` would render with empty strings. The dark/light toggle still scopes via `[data-theme="light"]` on `<html>`, applied only under `/dashboard/client/*`. |
+| 14 | **Mutations Must Check `error` + Long-Form Inputs Get Drafts** | Any user-visible mutation (form submit, settings save, profile update, message send) MUST destructure `error` from the supabase call and bail with a visible failure banner if non-null. `setSubmitted(true)` / success UI must NEVER run unconditionally at the end of a submit handler. **For any form whose response is text-heavy enough that re-typing would frustrate the user (check-ins, intake, journal, anything with a `textarea`), wire localStorage draft autosave** keyed by a stable id (`form-draft:${assignmentId}`), restore on mount, clear on success. The original case: Anubha (77yo) wrote a long check-in, hit Submit, the request silently failed, the success screen fired anyway, her writing was gone. **DO NOT REMOVE this pattern from forms even if it looks defensive â€” it's the floor under elderly/slow/distracted users and the only thing keeping their work safe across session expiry, network blips, and browser crashes.** |
 
 ## Theme system
 
@@ -197,6 +198,66 @@ When a user reports "the button isn't there" on what should be a
 rendered element, suspect invalid CSS before assuming the conditional
 is wrong. Check the computed style in DevTools or grep for the
 `t.X + 'cc'` pattern in the file.
+
+### Form-submit silent failures
+
+**The April 28 Anubha case**: a 77-year-old client filled out the
+weekly check-in, hit Submit, saw the success screen, came back
+later to find nothing was saved. Root cause: `submit()` did not
+destructure `error` from any supabase call. The `.update()` on
+`client_form_assignments` silently failed (likely session expiry
+after a long fill), but `setSubmitted(true)` ran unconditionally
+at the end. From her perspective the form vanished into the void.
+
+**The fix pattern, locked in by Rule 14**:
+
+1. Every mutation in a submit handler destructures `error` and
+   bails on failure:
+
+   ```tsx
+   const { data, error } = await supabase.from('...').update({...})
+     .eq('id', id).select().single()
+   if (error || !data) {
+     setSubmitting(false)
+     setSubmitError('Could not save... ' + (error?.message || ''))
+     return
+   }
+   ```
+
+2. Auth-null branches surface a real message ("session expired,
+   please refresh") instead of returning silently.
+
+3. **localStorage draft autosave** for any text-heavy form. Pattern:
+
+   ```tsx
+   // On mount: restore draft if no server response yet
+   const draft = window.localStorage.getItem(`form-draft:${id}`)
+   if (draft) { setAnswers(JSON.parse(draft)); setRestoredDraft(true) }
+
+   // Debounced autosave on every keystroke (800ms)
+   useEffect(() => {
+     if (Object.keys(answers).length === 0 || submitted) return
+     const h = setTimeout(() => {
+       try { localStorage.setItem(`form-draft:${id}`, JSON.stringify(answers)) }
+       catch { /* quota exceeded */ }
+     }, 800)
+     return () => clearTimeout(h)
+   }, [answers, id, submitted])
+
+   // On successful submit: clear the draft
+   try { localStorage.removeItem(`form-draft:${id}`) } catch {}
+   ```
+
+Reference implementation: `src/app/dashboard/client/forms/[formAssignmentId]/page.tsx`.
+That file is the canonical example of the pattern -- copy from it
+when adding a new long-form input surface (intake wizard, journal,
+call requests with notes, etc.).
+
+**Don't strip this out to "simplify" a file.** It looks like
+defensive boilerplate; it isn't. It is the only thing keeping
+text-heavy responses safe across session expiry, network blips,
+browser crashes, and tab close events. The cost is ~30 lines per
+form. The benefit is users never lose their writing.
 
 ## Supabase-specific gotchas (learned the hard way)
 
