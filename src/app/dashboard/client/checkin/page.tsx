@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { triggerAiInsight } from '@/lib/ai-insights'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
+import { fetchServerDraft, saveServerDraft, clearServerDraft } from '@/lib/form-drafts'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -208,18 +209,31 @@ export default function CheckinForm() {
               }
               // Rule 14: restore localStorage draft over defaults if present.
               // Photos (File objects) can't be serialized so they aren't restored;
-              // text + scale answers are. Same canonical pattern as forms/[formAssignmentId].
+              // text + scale answers are. Wave 5: if localStorage is empty
+              // (cross-device case), fall back to the server-side draft.
               let initialAnswers: Record<string, unknown> = defaults
+              let restoredFromLocal = false
               try {
                 const draft = window.localStorage.getItem(`checkin-draft:${pending.id}`)
                 if (draft) {
                   const parsed = JSON.parse(draft)
-                  if (parsed && typeof parsed === 'object') {
+                  if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
                     initialAnswers = { ...defaults, ...parsed }
-                    if (Object.keys(parsed).length > 0) setRestoredDraft(true)
+                    setRestoredDraft(true)
+                    restoredFromLocal = true
                   }
                 }
               } catch { /* localStorage disabled / private mode -- silent fallback */ }
+              if (!restoredFromLocal) {
+                const serverDraft = await fetchServerDraft(user.id, `checkin:${pending.id}`)
+                if (serverDraft && serverDraft.payload && typeof serverDraft.payload === 'object') {
+                  const payload = serverDraft.payload as Record<string, unknown>
+                  if (Object.keys(payload).length > 0) {
+                    initialAnswers = { ...defaults, ...payload }
+                    setRestoredDraft(true)
+                  }
+                }
+              }
               setAnswers(initialAnswers)
             }
           } else {
@@ -243,24 +257,36 @@ export default function CheckinForm() {
     if (submitError) setSubmitError(null)
   }
 
-  // Debounced localStorage autosave of answers. Excludes File objects (not serializable).
-  // Cleared on successful submit. Rule 14 -- protects long check-in writing across
-  // session expiry / network blip / browser crash.
+  // Debounced autosave. Excludes File objects (not serializable).
+  // Local at 800ms (per-device safety). Server at 5s (Wave 5 cross-device backup).
+  // Both cleared on successful submit.
   useEffect(() => {
     if (!assignment?.id || done) return
     if (Object.keys(answers).length === 0) return
-    const handle = window.setTimeout(() => {
+    const buildSerializable = () => {
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(answers)) {
+        if (v instanceof File) continue
+        out[k] = v
+      }
+      return out
+    }
+    const localHandle = window.setTimeout(() => {
       try {
-        const serializable: Record<string, unknown> = {}
-        for (const [k, v] of Object.entries(answers)) {
-          if (v instanceof File) continue
-          serializable[k] = v
-        }
-        window.localStorage.setItem(`checkin-draft:${assignment.id}`, JSON.stringify(serializable))
+        window.localStorage.setItem(`checkin-draft:${assignment.id}`, JSON.stringify(buildSerializable()))
       } catch { /* quota / disabled -- silent */ }
     }, 800)
-    return () => window.clearTimeout(handle)
-  }, [answers, assignment?.id, done])
+    const profileId = clientRecord?.profile_id
+    const serverHandle = profileId
+      ? window.setTimeout(() => {
+          void saveServerDraft(profileId, `checkin:${assignment.id}`, buildSerializable())
+        }, 5000)
+      : null
+    return () => {
+      window.clearTimeout(localHandle)
+      if (serverHandle) window.clearTimeout(serverHandle)
+    }
+  }, [answers, assignment?.id, done, clientRecord?.profile_id])
 
   const handleSnooze = async () => {
     if (!assignment) return
@@ -340,8 +366,9 @@ export default function CheckinForm() {
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'red_flag')
     }
 
-    // Success — clear the localStorage draft so it doesn't pre-fill next week.
+    // Success — clear local + server drafts so neither pre-fills next week.
     try { window.localStorage.removeItem(`checkin-draft:${assignment.id}`) } catch { /* */ }
+    if (clientRecord.profile_id) void clearServerDraft(clientRecord.profile_id, `checkin:${assignment.id}`)
 
     setSubmitting(false)
     if (uploadFailures > 0) {

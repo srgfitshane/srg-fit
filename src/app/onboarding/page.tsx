@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { fetchServerDraft, saveServerDraft, clearServerDraft } from '@/lib/form-drafts'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -44,13 +45,16 @@ export default function OnboardingPage() {
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(true)
   const [restoredDraft, setRestoredDraft] = useState(false)
+  const [profileId, setProfileId] = useState<string | null>(null)
 
   const draftKey = clientId ? `onboarding-draft:${clientId}` : null
+  const serverDraftKey = clientId ? `onboarding:${clientId}` : null
 
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
+      setProfileId(user.id)
       const { data: cl } = await supabase
         .from('clients')
         .select('id')
@@ -65,43 +69,69 @@ export default function OnboardingPage() {
         .single<IntakeCompletionRecord>()
       if (existing?.intake_completed_at) { router.push('/dashboard/client'); return }
       const { data: partial } = await supabase.from('client_intake_profiles').select('*').eq('client_id', cl.id).single()
-      // Merge server data with any localStorage draft. Draft wins for keys present
-      // in it -- if the user filled steps offline / the upsert silently failed last
-      // time, the draft holds work the server doesn't have. Rule 14 belt-and-suspenders.
+      // Merge server intake row with any localStorage draft. Draft wins for keys
+      // present -- if the upsert silently failed last time, the draft holds work
+      // the server doesn't have. Rule 14 belt-and-suspenders. Wave 5: if local
+      // is empty (cross-device case), fall back to the server-side draft store.
       let merged: IntakeFormData = (partial as IntakeFormData) || {}
+      const cleanDraft = (raw: Record<string, unknown>) => {
+        const out: IntakeFormData = {}
+        for (const k of Object.keys(raw)) {
+          if (k === 'updated_at' || k === 'intake_completed_at' || k === 'client_id') continue
+          out[k] = raw[k] as IntakeFormData[string]
+        }
+        return out
+      }
+      let restoredFromLocal = false
       try {
         const draftStr = window.localStorage.getItem(`onboarding-draft:${cl.id}`)
         if (draftStr) {
           const draft = JSON.parse(draftStr)
           if (draft && typeof draft === 'object') {
-            const draftKeys = Object.keys(draft)
-            // Filter out structural keys that shouldn't override server (e.g. timestamps)
-            const draftClean: IntakeFormData = {}
-            for (const k of draftKeys) {
-              if (k === 'updated_at' || k === 'intake_completed_at' || k === 'client_id') continue
-              draftClean[k] = draft[k]
+            const cleaned = cleanDraft(draft)
+            if (Object.keys(cleaned).length > 0) {
+              merged = { ...merged, ...cleaned }
+              setRestoredDraft(true)
+              restoredFromLocal = true
             }
-            merged = { ...merged, ...draftClean }
-            if (Object.keys(draftClean).length > 0) setRestoredDraft(true)
           }
         }
       } catch { /* localStorage disabled / private mode -- silent fallback */ }
+      if (!restoredFromLocal) {
+        const serverDraft = await fetchServerDraft(user.id, `onboarding:${cl.id}`)
+        if (serverDraft && serverDraft.payload && typeof serverDraft.payload === 'object') {
+          const cleaned = cleanDraft(serverDraft.payload as Record<string, unknown>)
+          if (Object.keys(cleaned).length > 0) {
+            merged = { ...merged, ...cleaned }
+            setRestoredDraft(true)
+          }
+        }
+      }
       setData(merged)
       setLoading(false)
     }
     void load()
   }, [router, supabase])
 
-  // Debounced autosave of in-progress answers to localStorage. Cleared on completion.
+  // Debounced autosave. localStorage at 800ms (per-device safety),
+  // server form_drafts at 5s (Wave 5 cross-device backup). Cleared on completion.
   useEffect(() => {
     if (!draftKey) return
     if (Object.keys(data).length === 0) return
-    const handle = window.setTimeout(() => {
+    const localHandle = window.setTimeout(() => {
       try { window.localStorage.setItem(draftKey, JSON.stringify(data)) }
       catch { /* quota / disabled -- silent */ }
     }, 800)
-    return () => window.clearTimeout(handle)
-  }, [data, draftKey])
+    const serverHandle = profileId && serverDraftKey
+      ? window.setTimeout(() => {
+          void saveServerDraft(profileId, serverDraftKey, data)
+        }, 5000)
+      : null
+    return () => {
+      window.clearTimeout(localHandle)
+      if (serverHandle) window.clearTimeout(serverHandle)
+    }
+  }, [data, draftKey, profileId, serverDraftKey])
 
   const set = (field: string, val: IntakeValue) => {
     setData((p) => ({ ...p, [field]: val }))
@@ -143,8 +173,9 @@ export default function OnboardingPage() {
     setError('')
     const ok = await save(true)
     if (!ok) return
-    // Success — clear the localStorage draft so it doesn't pre-fill on next visit.
+    // Success — clear local + server drafts so neither pre-fills on next visit.
     try { if (draftKey) window.localStorage.removeItem(draftKey) } catch { /* */ }
+    if (profileId && serverDraftKey) void clearServerDraft(profileId, serverDraftKey)
     router.push('/dashboard/client')
   }
 

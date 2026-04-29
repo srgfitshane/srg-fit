@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
+import { fetchServerDraft, saveServerDraft, clearServerDraft } from '@/lib/form-drafts'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
@@ -56,6 +57,7 @@ export default function ClientFormPage() {
   const [errors,     setErrors]     = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [restoredDraft, setRestoredDraft] = useState(false)
+  const [profileId, setProfileId] = useState<string | null>(null)
   // Picked files per file-type question (one or more per question)
   const [files,      setFiles]      = useState<Record<string, File[]>>({})
 
@@ -64,6 +66,7 @@ export default function ClientFormPage() {
       void (async () => {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { router.push('/login'); return }
+        setProfileId(user.id)
 
         const { data: asgn } = await supabase
           .from('client_form_assignments')
@@ -84,23 +87,35 @@ export default function ClientFormPage() {
           .order('sort_order')
 
         setQuestions(qs || [])
-        // Pre-fill priority: server response (already submitted) > localStorage draft > empty.
-        // The draft fallback is the safety net for users who fill out a long form, hit
-        // session expiry / network issue / browser crash, and come back later.
+        // Pre-fill priority: server response (already submitted) > localStorage
+        // draft (this device) > server draft (cross-device, e.g. started on
+        // phone, opened on laptop) > empty. localStorage wins over server
+        // draft because writes are synchronous; server is the cross-device
+        // backup (Wave 5 form_drafts table).
+        const draftKey = `form-draft:${formAssignmentId}`
+        const formKey = `forms:${formAssignmentId}`
         if (asgn.response && Object.keys(asgn.response).length > 0) {
           setAnswers(asgn.response)
         } else {
+          let restoredFromLocal = false
           try {
-            const draftKey = `form-draft:${formAssignmentId}`
             const draft = window.localStorage.getItem(draftKey)
             if (draft) {
               const parsed = JSON.parse(draft)
               if (parsed && typeof parsed === 'object') {
                 setAnswers(parsed)
                 setRestoredDraft(true)
+                restoredFromLocal = true
               }
             }
           } catch { /* localStorage disabled / private mode -- silent fallback */ }
+          if (!restoredFromLocal) {
+            const serverDraft = await fetchServerDraft(user.id, formKey)
+            if (serverDraft && serverDraft.payload && typeof serverDraft.payload === 'object') {
+              setAnswers(serverDraft.payload as Record<string, AnswerValue>)
+              setRestoredDraft(true)
+            }
+          }
         }
         setLoading(false)
       })()
@@ -109,20 +124,27 @@ export default function ClientFormPage() {
     return () => clearTimeout(timer)
   }, [formAssignmentId, router, supabase])
 
-  // Debounced localStorage autosave. Writes the current `answers` object
-  // every 800ms after the last keystroke. Prevents data loss if the user's
-  // session expires, the browser crashes, or they close the tab mid-form.
-  // Cleared on successful submit (see submit()).
+  // Debounced autosave. localStorage at 800ms (instant per-device safety),
+  // server-side at 5s (cross-device backup, lighter network use). Both are
+  // cleared on successful submit.
   useEffect(() => {
     if (!formAssignmentId || submitted) return
     if (Object.keys(answers).length === 0) return
-    const handle = window.setTimeout(() => {
+    const localHandle = window.setTimeout(() => {
       try {
         window.localStorage.setItem(`form-draft:${formAssignmentId}`, JSON.stringify(answers))
       } catch { /* quota exceeded / disabled -- silent fallback */ }
     }, 800)
-    return () => window.clearTimeout(handle)
-  }, [answers, formAssignmentId, submitted])
+    const serverHandle = profileId
+      ? window.setTimeout(() => {
+          void saveServerDraft(profileId, `forms:${formAssignmentId}`, answers)
+        }, 5000)
+      : null
+    return () => {
+      window.clearTimeout(localHandle)
+      if (serverHandle) window.clearTimeout(serverHandle)
+    }
+  }, [answers, formAssignmentId, submitted, profileId])
 
   const setAnswer = (qId: string, val: AnswerValue) => {
     setAnswers(p => ({ ...p, [qId]: val }))
@@ -292,8 +314,9 @@ export default function ClientFormPage() {
       } catch { /* non-blocking */ }
     }
 
-    // Success -- clear the localStorage draft so it doesn't pre-fill on next visit.
+    // Success -- clear local + server drafts so neither pre-fills on next visit.
     try { window.localStorage.removeItem(`form-draft:${formAssignmentId}`) } catch { /* */ }
+    if (profileId) void clearServerDraft(profileId, `forms:${formAssignmentId}`)
 
     if (uploadFailures > 0) {
       // Soft-warn: response saved but some photos didn't upload.

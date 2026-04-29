@@ -8,6 +8,7 @@
 import { createClient } from '@/lib/supabase-browser'
 import { useEffect, useState } from 'react'
 import { alpha } from '@/lib/theme'
+import { fetchServerDraft, saveServerDraft, clearServerDraft } from '@/lib/form-drafts'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -50,33 +51,61 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   const [collapsed, setCollapsed] = useState(alreadyDone)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [restoredDraft, setRestoredDraft] = useState(false)
+  const [profileId, setProfileId] = useState<string | null>(null)
+  const serverDraftKey = `pulse:${clientId}:${today}`
 
-  // Restore journal text from localStorage on mount if no server response yet.
-  // Rule 14: text-heavy fields get localStorage backup so a 77yo client who
-  // wrote a long note before a session expiry / crash doesn't lose the writing.
+  // Resolve profile_id once on mount so server-side draft sync is keyed by
+  // auth.uid() (matches the form_drafts RLS policy).
   useEffect(() => {
-    if (alreadyDone) return
-    if (existing?.body) return
+    void supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.id) setProfileId(data.user.id)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Restore journal text on mount. Rule 14 + Wave 5 priority:
+  // localStorage > server form_drafts > existing.body. localStorage wins on
+  // the same device because it's synchronous; server fills the cross-device
+  // case (started journal on phone, opened laptop).
+  useEffect(() => {
+    if (alreadyDone || existing?.body) return
+    let restoredFromLocal = false
     try {
       const draft = window.localStorage.getItem(draftKey)
       if (draft) {
         setJournal(draft)
         setRestoredDraft(true)
+        restoredFromLocal = true
       }
     } catch { /* localStorage disabled / private mode -- silent fallback */ }
+    if (!restoredFromLocal && profileId) {
+      void fetchServerDraft(profileId, serverDraftKey).then((srv) => {
+        if (srv?.payload && typeof srv.payload === 'string' && srv.payload.length > 0) {
+          setJournal(srv.payload)
+          setRestoredDraft(true)
+        }
+      })
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [profileId])
 
-  // Debounced autosave of journal text to localStorage. Cleared on successful save.
+  // Debounced autosave: localStorage at 800ms, server form_drafts at 5s.
+  // Both cleared on successful pulse save.
   useEffect(() => {
     if (alreadyDone) return
     if (!journal) return
-    const handle = window.setTimeout(() => {
+    const localHandle = window.setTimeout(() => {
       try { window.localStorage.setItem(draftKey, journal) }
       catch { /* quota / disabled -- silent */ }
     }, 800)
-    return () => window.clearTimeout(handle)
-  }, [journal, draftKey, alreadyDone])
+    const serverHandle = profileId
+      ? window.setTimeout(() => { void saveServerDraft(profileId, serverDraftKey, journal) }, 5000)
+      : null
+    return () => {
+      window.clearTimeout(localHandle)
+      if (serverHandle) window.clearTimeout(serverHandle)
+    }
+  }, [journal, draftKey, alreadyDone, profileId, serverDraftKey])
 
   const save = async (finalJournal = journal, finalPrivate = isPrivate) => {
     if (!clientId) return
@@ -97,8 +126,9 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
       setSaveError('Could not save your check-in. Your note is still saved on this device — please try again. (' + error.message + ')')
       return
     }
-    // Success — clear the localStorage draft so it doesn't pre-fill tomorrow.
+    // Success — clear local + server drafts so neither pre-fills tomorrow.
     try { window.localStorage.removeItem(draftKey) } catch { /* */ }
+    if (profileId) void clearServerDraft(profileId, serverDraftKey)
     setStep('done')
     setCollapsed(true)
     setRestoredDraft(false)
