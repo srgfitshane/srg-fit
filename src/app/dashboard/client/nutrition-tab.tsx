@@ -161,6 +161,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [searchResults,   setSearchResults]   = useState<SearchResult[]>([])
   const [searching,       setSearching]       = useState(false)
   const [searchError,     setSearchError]     = useState('')
+  const [commitError,     setCommitError]     = useState('')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
   const [pendingFood,     setPendingFood]     = useState<Partial<FoodEntry> | null>(null)
@@ -265,12 +266,17 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     if (!pendingFood) return
     if (!clientRecord) return
     setSaving(true)
+    setCommitError('')
     let succeeded = false
     try {
       const s = pendingServings
       const isPhoto = pendingFood.source === 'photo'
       const currentLog = await ensureLog()
-      if (!currentLog?.id) { console.error('commitEntry: ensureLog returned null'); setSaving(false); return }
+      if (!currentLog?.id) {
+        console.error('commitEntry: ensureLog returned null')
+        setCommitError('Could not start a daily log. Please refresh and try again.')
+        setSaving(false); return
+      }
       const { data: saved, error } = await supabase.from('food_entries').insert({
         daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
         food_name:    pendingFood.food_name || '',
@@ -283,7 +289,11 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         carbs_g:   !isPhoto && pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
         fat_g:     !isPhoto && pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
       }).select().single()
-      if (error) { console.error('food_entries insert error:', error.message); setSaving(false); return }
+      if (error) {
+        console.error('food_entries insert error:', error.message)
+        setCommitError('Could not save this food. ' + error.message)
+        setSaving(false); return
+      }
       if (saved) {
         succeeded = true
         const mealLabel = MEAL_LABELS.find(m => m.id === meal_time)?.label || meal_time
@@ -1033,6 +1043,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             )}
 
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
+            {commitError && (
+              <div style={{ background:alpha(t.orange, 12), border:`1px solid ${alpha(t.orange, 38)}`, borderRadius:10, padding:'10px 12px', fontSize:12, color:t.orange, marginBottom:10, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:8 }}>
+                <span style={{ fontSize:14, lineHeight:1, marginTop:1 }}>⚠</span>
+                <span>{commitError}</span>
+              </div>
+            )}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
                 <button key={m.id} onClick={()=>commitEntry(m.id)} disabled={saving}

@@ -160,6 +160,8 @@ export default function CheckinForm() {
   const [submitting,   setSubmitting]   = useState(false)
   const [snoozing,     setSnoozing]     = useState(false)
   const [done,         setDone]         = useState(false)
+  const [submitError,  setSubmitError]  = useState<string | null>(null)
+  const [restoredDraft, setRestoredDraft] = useState(false)
   const router   = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -204,7 +206,21 @@ export default function CheckinForm() {
                   defaults[key] = Math.round((q.scale_min + q.scale_max) / 2)
                 }
               }
-              setAnswers(defaults)
+              // Rule 14: restore localStorage draft over defaults if present.
+              // Photos (File objects) can't be serialized so they aren't restored;
+              // text + scale answers are. Same canonical pattern as forms/[formAssignmentId].
+              let initialAnswers: Record<string, unknown> = defaults
+              try {
+                const draft = window.localStorage.getItem(`checkin-draft:${pending.id}`)
+                if (draft) {
+                  const parsed = JSON.parse(draft)
+                  if (parsed && typeof parsed === 'object') {
+                    initialAnswers = { ...defaults, ...parsed }
+                    if (Object.keys(parsed).length > 0) setRestoredDraft(true)
+                  }
+                }
+              } catch { /* localStorage disabled / private mode -- silent fallback */ }
+              setAnswers(initialAnswers)
             }
           } else {
             const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6)
@@ -224,7 +240,27 @@ export default function CheckinForm() {
 
   const setAnswer = (key: string, value: unknown) => {
     setAnswers(prev => ({ ...prev, [key]: value }))
+    if (submitError) setSubmitError(null)
   }
+
+  // Debounced localStorage autosave of answers. Excludes File objects (not serializable).
+  // Cleared on successful submit. Rule 14 -- protects long check-in writing across
+  // session expiry / network blip / browser crash.
+  useEffect(() => {
+    if (!assignment?.id || done) return
+    if (Object.keys(answers).length === 0) return
+    const handle = window.setTimeout(() => {
+      try {
+        const serializable: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(answers)) {
+          if (v instanceof File) continue
+          serializable[k] = v
+        }
+        window.localStorage.setItem(`checkin-draft:${assignment.id}`, JSON.stringify(serializable))
+      } catch { /* quota / disabled -- silent */ }
+    }, 800)
+    return () => window.clearTimeout(handle)
+  }, [answers, assignment?.id, done])
 
   const handleSnooze = async () => {
     if (!assignment) return
@@ -239,9 +275,11 @@ export default function CheckinForm() {
   const handleSubmit = async () => {
     if (!clientRecord || !assignment) return
     setSubmitting(true)
+    setSubmitError(null)
 
     // Build response: maps_to fields use their mapped key, others use question id
     const responseData: Record<string, unknown> = {}
+    let uploadFailures = 0
     for (const q of questions) {
       const key = q.maps_to || q.id
       const val = answers[key]
@@ -250,29 +288,43 @@ export default function CheckinForm() {
         try {
           const ext = val.name.split('.').pop() || 'jpg'
           const path = `checkin-photos/${clientRecord.id}/${assignment.id}/${q.id}.${ext}`
-          const { data: uploadData } = await supabase.storage
+          const { data: uploadData, error: upErr } = await supabase.storage
             .from('workout-reviews').upload(path, val, { upsert: true })
-          if (uploadData) {
+          if (upErr || !uploadData) {
+            uploadFailures++
+            responseData[key] = null
+          } else {
             // Store the raw storage path. Bucket is private; any URL
             // generated here either expires (signed, 1hr TTL) or 403s
             // (public). Whoever reads this response should sign on read.
             responseData[key] = path
           }
-        } catch { responseData[key] = null }
+        } catch { uploadFailures++; responseData[key] = null }
       } else {
         responseData[key] = val ?? null
       }
     }
 
-    await supabase.from('client_form_assignments').update({
+    // THE call whose silent failure caused the original Anubha incident on
+    // a sister checkin route. Now we destructure error and bail with a
+    // visible banner -- the localStorage draft preserves the answers.
+    const { error: updateErr } = await supabase.from('client_form_assignments').update({
       status:       'completed',
       response:     responseData,
       completed_at: new Date().toISOString(),
     }).eq('id', assignment.id)
 
-    await supabase.from('clients')
+    if (updateErr) {
+      setSubmitting(false)
+      setSubmitError('Could not submit your check-in. Your answers are saved on this device — please try again or refresh the page. (' + updateErr.message + ')')
+      return
+    }
+
+    // Non-critical follow-ups -- log but don't block the success state.
+    const { error: clientUpdErr } = await supabase.from('clients')
       .update({ last_checkin_at: new Date().toISOString() })
       .eq('id', clientRecord.id)
+    if (clientUpdErr) console.error('[checkin] last_checkin_at update failed:', clientUpdErr)
 
     if (clientRecord.coach_id) {
       await supabase.functions.invoke('send-notification', {
@@ -288,7 +340,15 @@ export default function CheckinForm() {
       triggerAiInsight(clientRecord.id, clientRecord.coach_id, 'red_flag')
     }
 
+    // Success — clear the localStorage draft so it doesn't pre-fill next week.
+    try { window.localStorage.removeItem(`checkin-draft:${assignment.id}`) } catch { /* */ }
+
     setSubmitting(false)
+    if (uploadFailures > 0) {
+      setSubmitError(`Your check-in was submitted, but ${uploadFailures} photo${uploadFailures === 1 ? '' : 's'} failed to upload. You can re-add them from the Progress page later.`)
+      setTimeout(() => setDone(true), 100)
+      return
+    }
     setDone(true)
   }
 
@@ -392,6 +452,12 @@ export default function CheckinForm() {
             Answer honestly — this helps your coach program smarter for you.
           </div>
 
+          {restoredDraft && (
+            <div style={{ background:t.orangeDim, border:`1px solid ${alpha(t.orange, 27)}`, borderRadius:10, padding:'10px 14px', fontSize:13, color:t.orange, lineHeight:1.5, marginBottom:18 }}>
+              💾 We restored your in-progress answers from your last visit.
+            </div>
+          )}
+
           {questions.map((q, idx) => {
             const key = q.maps_to || q.id
             return (
@@ -410,6 +476,12 @@ export default function CheckinForm() {
 
           {/* Submit */}
           <div style={{ marginTop:8 }}>
+            {submitError && (
+              <div style={{ background:t.redDim, border:`1px solid ${alpha(t.red, 38)}`, borderRadius:12, padding:'12px 16px', color:t.red, fontSize:13, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:10, marginBottom:14 }}>
+                <span style={{ fontSize:16, lineHeight:1, marginTop:1 }}>⚠</span>
+                <span>{submitError}</span>
+              </div>
+            )}
             {!canSubmit && (
               <div style={{ fontSize:12, color:t.orange, marginBottom:12, textAlign:'center' }}>
                 {requiredUnanswered.length} required {requiredUnanswered.length === 1 ? 'question' : 'questions'} still need an answer

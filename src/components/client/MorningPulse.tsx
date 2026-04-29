@@ -6,7 +6,7 @@
  * Step 4: Optional morning note (separate from daily journal)
  */
 import { createClient } from '@/lib/supabase-browser'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { alpha } from '@/lib/theme'
 
 const t = {
@@ -38,6 +38,7 @@ const btnBase: React.CSSProperties = {
 
 export default function MorningPulse({ clientId, today, supabase, existing, onSaved }: Props) {
   const alreadyDone = !!(existing?.sleep_quality || existing?.energy_score || existing?.stress_score)
+  const draftKey = `pulse-draft:${clientId}:${today}`
 
   const [step,      setStep]      = useState<'sleep'|'energy'|'sliders'|'journal'|'done'>(alreadyDone ? 'done' : 'sleep')
   const [sleep,     setSleep]     = useState(existing?.sleep_quality || 0)
@@ -47,11 +48,41 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   const [isPrivate, setIsPrivate] = useState(existing?.is_private ?? true)
   const [saving,    setSaving]    = useState(false)
   const [collapsed, setCollapsed] = useState(alreadyDone)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [restoredDraft, setRestoredDraft] = useState(false)
+
+  // Restore journal text from localStorage on mount if no server response yet.
+  // Rule 14: text-heavy fields get localStorage backup so a 77yo client who
+  // wrote a long note before a session expiry / crash doesn't lose the writing.
+  useEffect(() => {
+    if (alreadyDone) return
+    if (existing?.body) return
+    try {
+      const draft = window.localStorage.getItem(draftKey)
+      if (draft) {
+        setJournal(draft)
+        setRestoredDraft(true)
+      }
+    } catch { /* localStorage disabled / private mode -- silent fallback */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced autosave of journal text to localStorage. Cleared on successful save.
+  useEffect(() => {
+    if (alreadyDone) return
+    if (!journal) return
+    const handle = window.setTimeout(() => {
+      try { window.localStorage.setItem(draftKey, journal) }
+      catch { /* quota / disabled -- silent */ }
+    }, 800)
+    return () => window.clearTimeout(handle)
+  }, [journal, draftKey, alreadyDone])
 
   const save = async (finalJournal = journal, finalPrivate = isPrivate) => {
     if (!clientId) return
     setSaving(true)
-    await supabase.from('daily_checkins').upsert({
+    setSaveError(null)
+    const { error } = await supabase.from('daily_checkins').upsert({
       client_id:     clientId,
       checkin_date:  today,
       sleep_quality: sleep  || null,
@@ -62,8 +93,15 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
       is_private:    finalPrivate,
     }, { onConflict: 'client_id,checkin_date' })
     setSaving(false)
+    if (error) {
+      setSaveError('Could not save your check-in. Your note is still saved on this device — please try again. (' + error.message + ')')
+      return
+    }
+    // Success — clear the localStorage draft so it doesn't pre-fill tomorrow.
+    try { window.localStorage.removeItem(draftKey) } catch { /* */ }
     setStep('done')
     setCollapsed(true)
+    setRestoredDraft(false)
     onSaved?.()
   }
 
@@ -233,6 +271,11 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:4 }}>Morning note</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Optional — separate from your daily journal</div>
+            {restoredDraft && (
+              <div style={{ background:alpha(t.orange, 12), border:'1px solid '+alpha(t.orange, 27), borderRadius:10, padding:'8px 12px', fontSize:12, color:t.orange, marginBottom:10, lineHeight:1.5 }}>
+                💾 Restored your in-progress note from earlier.
+              </div>
+            )}
             <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' as const }}>
               {sleep>0  && <span style={{ fontSize:12, background:t.surfaceHigh, borderRadius:20, padding:'4px 10px', color:t.textDim }}>{'⭐'.repeat(sleep)} sleep</span>}
               {energy>0 && <span style={{ fontSize:12, background:t.surfaceHigh, borderRadius:20, padding:'4px 10px', color:t.textDim }}>{'⚡'.repeat(energy)} energy</span>}
@@ -243,6 +286,12 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
               placeholder="How are you feeling this morning? Shane sees this only if you share it."
               style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' as const, marginBottom:10 }}
             />
+            {saveError && (
+              <div style={{ background:alpha(t.red, 12), border:'1px solid '+alpha(t.red, 38), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red, marginBottom:10, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:8 }}>
+                <span style={{ fontSize:14, lineHeight:1, marginTop:1 }}>⚠</span>
+                <span>{saveError}</span>
+              </div>
+            )}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <button onClick={()=>setIsPrivate(p=>!p)}
                 style={{ ...btnBase, display:'flex', alignItems:'center', gap:6, background:isPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(isPrivate?t.border:alpha(t.teal, 25)), borderRadius:20, padding:'5px 12px', transition:'all 0.2s' }}>

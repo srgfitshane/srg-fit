@@ -43,6 +43,9 @@ export default function OnboardingPage() {
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(true)
+  const [restoredDraft, setRestoredDraft] = useState(false)
+
+  const draftKey = clientId ? `onboarding-draft:${clientId}` : null
 
   useEffect(() => {
     const load = async () => {
@@ -62,37 +65,86 @@ export default function OnboardingPage() {
         .single<IntakeCompletionRecord>()
       if (existing?.intake_completed_at) { router.push('/dashboard/client'); return }
       const { data: partial } = await supabase.from('client_intake_profiles').select('*').eq('client_id', cl.id).single()
-      if (partial) setData(partial as IntakeFormData)
+      // Merge server data with any localStorage draft. Draft wins for keys present
+      // in it -- if the user filled steps offline / the upsert silently failed last
+      // time, the draft holds work the server doesn't have. Rule 14 belt-and-suspenders.
+      let merged: IntakeFormData = (partial as IntakeFormData) || {}
+      try {
+        const draftStr = window.localStorage.getItem(`onboarding-draft:${cl.id}`)
+        if (draftStr) {
+          const draft = JSON.parse(draftStr)
+          if (draft && typeof draft === 'object') {
+            const draftKeys = Object.keys(draft)
+            // Filter out structural keys that shouldn't override server (e.g. timestamps)
+            const draftClean: IntakeFormData = {}
+            for (const k of draftKeys) {
+              if (k === 'updated_at' || k === 'intake_completed_at' || k === 'client_id') continue
+              draftClean[k] = draft[k]
+            }
+            merged = { ...merged, ...draftClean }
+            if (Object.keys(draftClean).length > 0) setRestoredDraft(true)
+          }
+        }
+      } catch { /* localStorage disabled / private mode -- silent fallback */ }
+      setData(merged)
       setLoading(false)
     }
     void load()
   }, [router, supabase])
 
-  const set = (field: string, val: IntakeValue) => setData((p) => ({ ...p, [field]: val }))
+  // Debounced autosave of in-progress answers to localStorage. Cleared on completion.
+  useEffect(() => {
+    if (!draftKey) return
+    if (Object.keys(data).length === 0) return
+    const handle = window.setTimeout(() => {
+      try { window.localStorage.setItem(draftKey, JSON.stringify(data)) }
+      catch { /* quota / disabled -- silent */ }
+    }, 800)
+    return () => window.clearTimeout(handle)
+  }, [data, draftKey])
+
+  const set = (field: string, val: IntakeValue) => {
+    setData((p) => ({ ...p, [field]: val }))
+    if (error) setError('')
+  }
   const toggle = (field: string, val: string) => {
     const arr = Array.isArray(data[field]) ? (data[field] as string[]) : []
     set(field, arr.includes(val) ? arr.filter((x: string) => x !== val) : [...arr, val])
   }
 
-  const save = async (completed = false) => {
-    if (!clientId) return
+  // Returns true on success, false on failure. Caller must check before advancing.
+  const save = async (completed = false): Promise<boolean> => {
+    if (!clientId) return false
     setSaving(true)
+    setError('')
     const payload: Record<string, IntakeValue> & { client_id: string; updated_at: string; intake_completed_at?: string } = {
       ...data,
       client_id: clientId,
       updated_at: new Date().toISOString(),
     }
     if (completed) payload.intake_completed_at = new Date().toISOString()
-    await supabase.from('client_intake_profiles').upsert(payload, { onConflict: 'client_id' })
+    const { error: upErr } = await supabase.from('client_intake_profiles').upsert(payload, { onConflict: 'client_id' })
     setSaving(false)
+    if (upErr) {
+      setError('Could not save your progress. Your answers are saved on this device — please check your connection and try again. (' + upErr.message + ')')
+      return false
+    }
+    return true
   }
 
-  const next = async () => { await save(); if (step < STEPS.length - 1) setStep(s => s + 1) }
+  const next = async () => {
+    const ok = await save()
+    if (!ok) return
+    if (step < STEPS.length - 1) setStep(s => s + 1)
+  }
   const back = () => setStep(s => s - 1)
   const finish = async () => {
     if (!agreed) { setError('Please agree to the Terms & Conditions to continue.'); return }
     setError('')
-    await save(true)
+    const ok = await save(true)
+    if (!ok) return
+    // Success — clear the localStorage draft so it doesn't pre-fill on next visit.
+    try { if (draftKey) window.localStorage.removeItem(draftKey) } catch { /* */ }
     router.push('/dashboard/client')
   }
 
@@ -146,6 +198,13 @@ export default function OnboardingPage() {
 
         {/* Content */}
         <div style={{ maxWidth:520, margin:'0 auto', padding:'24px 20px 120px' }}>
+
+          {/* Restored draft banner — shows once on first load when localStorage had work the server didn't */}
+          {restoredDraft && (
+            <div style={{ marginBottom:14, background:'#f5a62315', border:'1px solid #f5a62340', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#f5a623', lineHeight:1.5 }}>
+              💾 We restored your in-progress answers from your last visit.
+            </div>
+          )}
 
           {/* Step header */}
           <div style={{ marginBottom:24 }}>
@@ -457,31 +516,38 @@ export default function OnboardingPage() {
                 </div>
               </button>
 
-              {error && <div style={{ background:'#ef444415', border:'1px solid #ef444440', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#ef4444' }}>{error}</div>}
             </div>
           )}
 
         </div>{/* end content */}
 
         {/* Bottom nav buttons — fixed */}
-        <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#080810', borderTop:'1px solid #252538', padding:'16px 20px', display:'flex', gap:10, maxWidth:520, margin:'0 auto' }}>
-          {step > 0 && (
-            <button onClick={back}
-              style={{ flex:1, padding:'13px', borderRadius:12, border:'1px solid #252538', background:'transparent', color:'#8888a8', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              Back
-            </button>
+        <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#080810', borderTop:'1px solid #252538', padding:'12px 20px 16px', maxWidth:520, margin:'0 auto' }}>
+          {error && (
+            <div style={{ background:'#ef444415', border:'1px solid #ef444440', borderRadius:10, padding:'10px 12px', fontSize:12, color:'#ef4444', marginBottom:10, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:8 }}>
+              <span style={{ fontSize:14, lineHeight:1, marginTop:1 }}>⚠</span>
+              <span>{error}</span>
+            </div>
           )}
-          {step < STEPS.length - 1 ? (
-            <button onClick={next} disabled={saving}
-              style={{ flex:2, padding:'13px', borderRadius:12, border:'none', background: saving?'#1d1d2e':'linear-gradient(135deg,#00c9b1,#f5a623)', color: saving?'#5a5a78':'#000', fontSize:14, fontWeight:900, cursor: saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              {saving ? 'Saving...' : `Next 🛡`}
-            </button>
-          ) : (
-            <button onClick={finish} disabled={saving||!agreed}
-              style={{ flex:2, padding:'13px', borderRadius:12, border:'none', background: (saving||!agreed)?'#1d1d2e':'linear-gradient(135deg,#00c9b1,#f5a623)', color: (saving||!agreed)?'#5a5a78':'#000', fontSize:14, fontWeight:900, cursor: (saving||!agreed)?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              {saving ? 'Saving...' : `Enter SRG Fit 💪`}
-            </button>
-          )}
+          <div style={{ display:'flex', gap:10 }}>
+            {step > 0 && (
+              <button onClick={back}
+                style={{ flex:1, padding:'13px', borderRadius:12, border:'1px solid #252538', background:'transparent', color:'#8888a8', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                Back
+              </button>
+            )}
+            {step < STEPS.length - 1 ? (
+              <button onClick={next} disabled={saving}
+                style={{ flex:2, padding:'13px', borderRadius:12, border:'none', background: saving?'#1d1d2e':'linear-gradient(135deg,#00c9b1,#f5a623)', color: saving?'#5a5a78':'#000', fontSize:14, fontWeight:900, cursor: saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                {saving ? 'Saving...' : `Next 🛡`}
+              </button>
+            ) : (
+              <button onClick={finish} disabled={saving||!agreed}
+                style={{ flex:2, padding:'13px', borderRadius:12, border:'none', background: (saving||!agreed)?'#1d1d2e':'linear-gradient(135deg,#00c9b1,#f5a623)', color: (saving||!agreed)?'#5a5a78':'#000', fontSize:14, fontWeight:900, cursor: (saving||!agreed)?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                {saving ? 'Saving...' : `Enter SRG Fit 💪`}
+              </button>
+            )}
+          </div>
         </div>
 
       </div>
