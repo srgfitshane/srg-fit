@@ -158,6 +158,43 @@ function daysSince(iso: string | null | undefined) {
   return Number((hours / 24).toFixed(1))
 }
 
+// Per-client baselines so fallback rules don't false-positive on clients
+// whose normal cadence differs from the hardcoded average. A 2x/wk client at
+// 6 days since workout is normal; for a 5x/wk client that's a real signal.
+// Returns null if the client has too little history to derive a stable
+// baseline -- caller should then fall back to absolute thresholds.
+function computeWorkoutCadence(workoutDates: Array<string | null | undefined>) {
+  const sorted = workoutDates
+    .filter((d): d is string => !!d)
+    .map((d) => new Date(d).getTime())
+    .sort((a, b) => b - a) // newest first
+  if (sorted.length < 4) return null // need at least 3 intervals for a stable baseline
+  const intervalsDays: number[] = []
+  for (let i = 0; i < sorted.length - 1; i++) {
+    intervalsDays.push((sorted[i] - sorted[i + 1]) / (1000 * 60 * 60 * 24))
+  }
+  // Median is robust to one-off skipped weeks (vacation, illness).
+  const sortedIntervals = [...intervalsDays].sort((a, b) => a - b)
+  const mid = Math.floor(sortedIntervals.length / 2)
+  const median = sortedIntervals.length % 2
+    ? sortedIntervals[mid]
+    : (sortedIntervals[mid - 1] + sortedIntervals[mid]) / 2
+  return Number(median.toFixed(2))
+}
+
+function computeNutritionBaseline(logDates: Array<string | null | undefined>, windowDays: number) {
+  const distinctDays = new Set(
+    logDates
+      .filter((d): d is string => !!d)
+      .map((d) => d.slice(0, 10)) // YYYY-MM-DD only
+  )
+  if (windowDays <= 0) return null
+  // Days/week the client normally logs. Floor of 14 days of data so we don't
+  // over-react to first-week clients.
+  if (distinctDays.size < 4) return null
+  return Number(((distinctDays.size / windowDays) * 7).toFixed(2))
+}
+
 // Pre-compute a trend vector server-side instead of dumping raw rows into the prompt.
 // Splits the row set in half (recent_avg = first half, prior_avg = second half) to
 // surface direction + magnitude. The model gets a single line like
@@ -255,6 +292,8 @@ function deriveFallbackInsight(clientName: string, defaults: { category: string;
   daysSinceWorkout: number | null
   daysSinceClientMessage: number | null
   painOrEquipmentFlags14d: number
+  typicalWorkoutGapDays: number | null
+  typicalNutritionLoggingPerWeek: number | null
 }) {
   const {
     skippedExercises14d,
@@ -266,9 +305,19 @@ function deriveFallbackInsight(clientName: string, defaults: { category: string;
     daysSinceWorkout,
     daysSinceClientMessage,
     painOrEquipmentFlags14d,
+    typicalWorkoutGapDays,
+    typicalNutritionLoggingPerWeek,
   } = context
 
-  if ((daysSinceWorkout !== null && daysSinceWorkout >= 6) || (daysSinceClientMessage !== null && daysSinceClientMessage >= 5)) {
+  // Per-client thresholds (see deriveInsightDefaults for rationale).
+  const workoutGapStale = typicalWorkoutGapDays !== null
+    ? Math.max(4, typicalWorkoutGapDays * 2.5)
+    : 6
+  const nutritionStale = typicalNutritionLoggingPerWeek !== null
+    ? Math.max(2, typicalNutritionLoggingPerWeek * 0.5)
+    : 2
+
+  if ((daysSinceWorkout !== null && daysSinceWorkout >= workoutGapStale) || (daysSinceClientMessage !== null && daysSinceClientMessage >= 5)) {
     return {
       title: `${clientName} needs proactive outreach`,
       summary: `${clientName} has gone quiet enough that engagement risk is climbing. The next best move is direct outreach before the client fully disconnects.`,
@@ -324,14 +373,19 @@ function deriveFallbackInsight(clientName: string, defaults: { category: string;
     }
   }
 
-  if (nutritionLoggingDays7d <= 2) {
+  if (nutritionLoggingDays7d <= nutritionStale) {
     return {
       title: `${clientName} needs nutrition follow-through`,
       summary: `${clientName} is not logging enough nutrition data to coach effectively right now. A small compliance reset is likely more useful than a big nutrition change.`,
       category: 'nutrition_inconsistency',
       severity: 'medium',
       confidence: 0.66,
-      evidence: [`Only ${nutritionLoggingDays7d} nutrition log day${nutritionLoggingDays7d === 1 ? '' : 's'} were recorded in the last 7 days.`],
+      evidence: [
+        `Only ${nutritionLoggingDays7d} nutrition log day${nutritionLoggingDays7d === 1 ? '' : 's'} were recorded in the last 7 days.`,
+        typicalNutritionLoggingPerWeek !== null
+          ? `Below the client's normal cadence of ~${typicalNutritionLoggingPerWeek} days/week.`
+          : null,
+      ].filter((s): s is string => !!s),
       bullets: ['Reinforce the smallest logging habit that will restore visibility this week.'],
       suggested_action: 'Ask for a simple nutrition compliance target for the next 3 days instead of changing the plan yet.',
       follow_up: 'Review nutrition logging again in 72 hours.',
@@ -362,14 +416,29 @@ function deriveInsightDefaults(type: string, context: {
   daysSinceWorkout: number | null
   daysSinceClientMessage: number | null
   nutritionLoggingDays7d: number
+  typicalWorkoutGapDays: number | null
+  typicalNutritionLoggingPerWeek: number | null
 }) {
-  const { adherenceRate14d, avgSleep, avgEnergy, skippedExercises14d, swappedExercises14d, daysSinceWorkout, daysSinceClientMessage, nutritionLoggingDays7d } = context
+  const { adherenceRate14d, avgSleep, avgEnergy, skippedExercises14d, swappedExercises14d, daysSinceWorkout, daysSinceClientMessage, nutritionLoggingDays7d, typicalWorkoutGapDays, typicalNutritionLoggingPerWeek } = context
+
+  // Per-client thresholds: a workout gap is "stale" when it exceeds 2.5x the
+  // client's typical interval. Floor of 4 days so we don't false-positive on
+  // a 6x/wk client who took one rest day. If we don't have a baseline yet,
+  // fall back to the original absolute 6-day threshold.
+  const workoutGapStale = typicalWorkoutGapDays !== null
+    ? Math.max(4, typicalWorkoutGapDays * 2.5)
+    : 6
+  // Per-client nutrition: stale when the trailing 7-day count drops below
+  // half the client's normal cadence (and below an absolute floor of 2).
+  const nutritionStale = typicalNutritionLoggingPerWeek !== null
+    ? Math.max(2, typicalNutritionLoggingPerWeek * 0.5)
+    : 2
 
   if (type === 'red_flag') {
     if ((avgSleep !== null && avgSleep <= 2.6) || (avgEnergy !== null && avgEnergy <= 2.4)) {
       return { category: 'recovery_risk', severity: 'high' }
     }
-    if ((daysSinceWorkout !== null && daysSinceWorkout >= 6) || (daysSinceClientMessage !== null && daysSinceClientMessage >= 5)) {
+    if ((daysSinceWorkout !== null && daysSinceWorkout >= workoutGapStale) || (daysSinceClientMessage !== null && daysSinceClientMessage >= 5)) {
       return { category: 'at_risk_churn', severity: 'high' }
     }
     return { category: 'recovery_risk', severity: 'medium' }
@@ -383,7 +452,7 @@ function deriveInsightDefaults(type: string, context: {
   }
 
   if (type === 'recommended_action') {
-    if (nutritionLoggingDays7d <= 2) {
+    if (nutritionLoggingDays7d <= nutritionStale) {
       return { category: 'nutrition_inconsistency', severity: 'medium' }
     }
     if (swappedExercises14d >= 2) {
@@ -468,6 +537,17 @@ serve(async (req) => {
       ? await supabase.from('messages').select('id, body, created_at').eq('sender_id', client.profile_id).order('created_at', { ascending: false }).limit(8)
       : { data: [] }
 
+    // Lightweight queries used only to derive per-client baselines. Wider windows
+    // than the main rich-context queries above; we just need timestamps.
+    const sixtyDaysAgoIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    const twentyEightDaysAgoIso = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const [{ data: workoutHistory60d }, { data: nutritionHistory28d }] = await Promise.all([
+      supabase.from('workout_sessions').select('completed_at').eq('client_id', client_id).eq('status', 'completed').gte('completed_at', sixtyDaysAgoIso).order('completed_at', { ascending: false }).limit(120),
+      supabase.from('nutrition_daily_logs').select('log_date').eq('client_id', client_id).gte('log_date', twentyEightDaysAgoIso).limit(60),
+    ])
+    const typicalWorkoutGapDays = computeWorkoutCadence((workoutHistory60d || []).map((r) => (r as { completed_at: string }).completed_at))
+    const typicalNutritionLoggingPerWeek = computeNutritionBaseline((nutritionHistory28d || []).map((r) => (r as { log_date: string }).log_date), 28)
+
     const clientName = client?.profile?.full_name?.split(' ')[0] || 'Client'
     const workoutCount = recentWorkouts?.length || 0
     const pulseEntries = (recentPulse || []) as RecentPulseEntry[]
@@ -526,6 +606,8 @@ serve(async (req) => {
       daysSinceWorkout: daysSince(lastWorkoutAt),
       daysSinceClientMessage: daysSince(lastClientMessageAt),
       nutritionLoggingDays7d,
+      typicalWorkoutGapDays,
+      typicalNutritionLoggingPerWeek,
     })
 
     const contextSummary = {
@@ -550,6 +632,11 @@ serve(async (req) => {
       pain_or_equipment_flags_last_14_days: painOrEquipmentFlags14d,
       nutrition_logging_days_last_7_days: nutritionLoggingDays7d,
       nutrition_compliance_pct_last_7_days: Math.round((nutritionLoggingDays7d / 7) * 100),
+      // Per-client baselines from a wider window. null = not enough history yet
+      // (treat as "use absolute thresholds"). When present, these are the right
+      // anchor for "is this gap unusual for THIS client?"
+      typical_workout_gap_days: typicalWorkoutGapDays,
+      typical_nutrition_logging_per_week: typicalNutritionLoggingPerWeek,
       hours_since_last_workout: hoursSince(lastWorkoutAt),
       hours_since_last_client_message: hoursSince(lastClientMessageAt),
       hours_since_last_checkin: hoursSince(lastCheckinAt),
@@ -622,6 +709,8 @@ Rules:
   as recovery signal; positive delta in stress as a worsening signal; positive delta in
   session_rpe with no progress as plateau or recovery risk
 - nutrition_compliance_pct_last_7_days below 50 is weak; 50-80 is partial; 80+ is strong
+- typical_workout_gap_days is the client's normal interval between workouts (median over 60 days, null if too little history). Compare hours_since_last_workout to this -- a gap of 2.5x the baseline is unusual for THIS client; an absolute "X days" threshold is misleading because 2x/wk and 5x/wk clients have very different normal cadences.
+- typical_nutrition_logging_per_week is the client's normal logging cadence (over 28 days). A trailing-7-day count below half of this baseline is a real drop; matching the baseline is fine even if the absolute number is low.
 
 Heuristics to respect:
 - low_adherence: missed workouts, stale check-ins, weak nutrition logging, or repeated silence
@@ -701,6 +790,8 @@ ${JSON.stringify(contextSummary, null, 2)}`
         daysSinceWorkout: daysSince(lastWorkoutAt),
         daysSinceClientMessage: daysSince(lastClientMessageAt),
         painOrEquipmentFlags14d,
+        typicalWorkoutGapDays,
+        typicalNutritionLoggingPerWeek,
       })
     }
 
