@@ -349,6 +349,65 @@ export default function ReviewsPage() {
     setUploadingVideo(false)
   }
 
+  // Bulk-clear sessions whose friction score is 0 (no skips, no swaps,
+  // no high-RPE sets, no form-check videos, no completion drop, no low-energy).
+  // These are the rote "looks fine, moving on" cases that otherwise eat
+  // coach time clicking each one. Sessions with any friction signal are NOT
+  // included -- those still need a real review.
+  async function markCleanReviewed() {
+    const cleanReviews = reviews.filter(r => getReviewIntelligence(r).frictionScore === 0)
+    if (cleanReviews.length === 0) {
+      alert('No clean sessions to clear. The remaining reviews have at least one friction signal (skip, swap, form check, high RPE, or completion drop).')
+      return
+    }
+    if (!window.confirm(`Mark ${cleanReviews.length} clean session${cleanReviews.length === 1 ? '' : 's'} as reviewed?\n\nThis sends each client a generic "reviewed" notification with no note or video. Sessions with friction signals are NOT included.`)) {
+      return
+    }
+    setSaving(true)
+    const ids = cleanReviews.map(r => r.id)
+    const reviewedAt = new Date().toISOString()
+    const { error } = await supabase.from('workout_sessions')
+      .update({ coach_reviewed_at: reviewedAt })
+      .in('id', ids)
+    if (error) {
+      setSaving(false)
+      alert('Bulk mark failed: ' + error.message)
+      return
+    }
+    // Fire-and-forget push per client (rule 8). Failures are cosmetic.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      for (const r of cleanReviews) {
+        const profileId = r.client?.profile_id
+        if (!profileId) continue
+        Promise.resolve(supabase.from('notifications').insert({
+          user_id: profileId,
+          notification_type: 'review_ready',
+          title: '✅ Coach reviewed your workout',
+          body: 'Looks clean -- keep going!',
+          link_url: '/dashboard/client',
+        })).catch(err => console.warn('[notify:bulk-review-1]', err))
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            user_id: profileId,
+            notification_type: 'review_ready',
+            title: '✅ Coach reviewed your workout',
+            body: 'Looks clean -- keep going!',
+            link_url: '/dashboard/client',
+          })
+        }).catch(err => console.warn('[notify:bulk-review-2]', err))
+      }
+    }
+    setReviews(prev => prev.filter(r => !ids.includes(r.id)))
+    setSaving(false)
+  }
+
   async function markReviewed(sessionId: string) {
     setSaving(true)
     await supabase.from('workout_sessions').update({
@@ -589,13 +648,24 @@ export default function ReviewsPage() {
     <>
       <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:680, margin:'0 auto', padding:'20px 16px 80px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:24 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:18 }}>
           <button onClick={()=>router.push('/dashboard/coach')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:22 }}>←</button>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:22, fontWeight:900, background:`linear-gradient(135deg,${t.teal},${t.orange})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Pending Reviews</div>
             <div style={{ fontSize:12, color:t.textMuted }}>{reviews.length} workout{reviews.length!==1?'s':''} awaiting review</div>
           </div>
         </div>
+        {(() => {
+          const cleanCount = reviews.filter(r => getReviewIntelligence(r).frictionScore === 0).length
+          if (cleanCount === 0) return null
+          return (
+            <button onClick={markCleanReviewed} disabled={saving}
+              style={{ width:'100%', background:t.greenDim, border:`1px solid ${t.green}40`, borderRadius:12, padding:'10px 14px', fontSize:13, fontWeight:800, color:t.green, cursor: saving ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:14, opacity: saving ? 0.6 : 1, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <span>⚡</span>
+              <span>{saving ? 'Marking...' : `Quick-clear ${cleanCount} clean session${cleanCount === 1 ? '' : 's'}`}</span>
+            </button>
+          )
+        })()}
         {reviews.length === 0 ? (
           <div style={{ textAlign:'center', padding:'80px 20px' }}>
             <div style={{ fontSize:48, marginBottom:16 }}>✅</div>

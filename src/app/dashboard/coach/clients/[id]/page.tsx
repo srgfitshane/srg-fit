@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import ScheduleTab from '@/components/coach/ScheduleTab'
 import ProgressPhotosViewer from '@/components/client/ProgressPhotosViewer'
 import { createClient } from '@/lib/supabase-browser'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import {
   formatClientActivityDate,
   getClientActivityConfig,
@@ -113,8 +113,34 @@ export default function ClientDetail() {
   const [resendDone,     setResendDone]     = useState(false)
   const router   = useRouter()
   const params   = useParams()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const clientId = params.id as string
+
+  // Tab persistence -- read ?tab=X on mount so reload, browser back/forward,
+  // and shareable URLs all land on the right tab. Skips hydration concerns
+  // by syncing in an effect rather than initializing state from window.
+  useEffect(() => {
+    const queryTab = searchParams?.get('tab')
+    if (queryTab && TABS.some(tt => tt.id === queryTab) && queryTab !== activeTab) {
+      setActiveTab(queryTab)
+    }
+  // run only on mount; subsequent URL changes from this page push their own state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Push activeTab back to the URL whenever it changes, so refresh / share
+  // / back-forward stays sticky. router.replace + scroll:false avoids any
+  // visible navigation effect.
+  useEffect(() => {
+    if (!clientId) return
+    const current = searchParams?.get('tab')
+    if (current === activeTab) return
+    const qs = new URLSearchParams(searchParams?.toString() || '')
+    qs.set('tab', activeTab)
+    router.replace(`/dashboard/coach/clients/${clientId}?${qs.toString()}`, { scroll: false })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, clientId])
 
   async function searchExercises(query: string) {
     if (!query.trim()) { setExerciseResults([]); return }

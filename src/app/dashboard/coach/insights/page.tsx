@@ -47,6 +47,7 @@ const FEEDBACK_OPTIONS = [
 
 type ClientListItem = {
   id: string
+  profile_id?: string | null
   profiles?: { full_name?: string | null } | Array<{ full_name?: string | null }> | null
 }
 
@@ -119,13 +120,15 @@ export default function CoachInsightsPage() {
   const [actingOn, setActingOn] = useState<string|null>(null)
   const [feedbacking, setFeedbacking] = useState<string|null>(null)
   const [copiedDraft, setCopiedDraft] = useState<string|null>(null)
+  const [sendingDraft, setSendingDraft] = useState<string|null>(null)
+  const [sentDraft, setSentDraft] = useState<string|null>(null)
 
   const load = useCallback(async () => {
     const {data:{user}} = await supabase.auth.getUser()
     if (!user){router.push('/login');return}
     setCoachId(user.id)
     const [{data:cls},{data:ins}] = await Promise.all([
-      supabase.from('clients').select('id, profiles!profile_id(full_name)').eq('coach_id',user.id).eq('status','active'),
+      supabase.from('clients').select('id, profile_id, profiles!profile_id(full_name)').eq('coach_id',user.id).eq('status','active'),
       supabase.from('ai_insights').select('*').eq('coach_id',user.id).eq('is_dismissed',false).order('generated_at',{ascending:false}).limit(50),
     ])
     const safeClients = (cls || []) as ClientListItem[]
@@ -190,6 +193,64 @@ export default function CoachInsightsPage() {
     } catch {
       // best effort only
     }
+  }
+
+  // One-click "+ Send to Client": drop the AI's draft message into the
+  // client's thread, fire push, mark the insight as acted_on. The whole point
+  // of the suggested-action feature -- coach skims the insight, hits send,
+  // moves on. No copy-paste shuffle.
+  const sendDraftToClient = async (insight: InsightRecord, draft: string) => {
+    if (!coachId) return
+    const client = clients.find((c) => c.id === insight.client_id)
+    const recipientId = client?.profile_id
+    if (!recipientId) {
+      alert('Could not find this client\'s profile -- the message was not sent.')
+      return
+    }
+    if (!window.confirm(`Send this message to ${clientName(insight.client_id)}?\n\n"${draft.slice(0, 200)}${draft.length > 200 ? '...' : ''}"`)) {
+      return
+    }
+    setSendingDraft(insight.id)
+    const { error: msgErr } = await supabase.from('messages').insert({
+      sender_id: coachId,
+      recipient_id: recipientId,
+      body: draft,
+    })
+    if (msgErr) {
+      setSendingDraft(null)
+      alert('Could not send the message: ' + msgErr.message)
+      return
+    }
+    // Push notification -- fire-and-forget per Rule 8.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        },
+        body: JSON.stringify({
+          user_id: recipientId,
+          notification_type: 'new_message',
+          title: '💬 New message from your coach',
+          body: draft.slice(0, 100),
+          link_url: '/dashboard/client?tab=messages',
+        }),
+      }).catch((err) => console.warn('[notify:share-insight]', err))
+    }
+    // Mark insight acted_on so the queue thins out.
+    await supabase.from('ai_insights').update({
+      action_status: 'acted_on',
+      acted_on_at: new Date().toISOString(),
+      is_reviewed: true,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', insight.id)
+    setInsights(prev => prev.map(i => i.id === insight.id ? { ...i, action_status: 'acted_on', is_reviewed: true } : i))
+    setSendingDraft(null)
+    setSentDraft(insight.id)
+    setTimeout(() => setSentDraft((cur) => cur === insight.id ? null : cur), 3000)
   }
 
   const updateActionStatus = async (id: string, action_status: string, extra: Record<string, unknown> = {}) => {
@@ -509,14 +570,23 @@ export default function CoachInsightsPage() {
 
                           {draftMessage && (
                             <div style={{background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'12px 14px',marginBottom:12}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:8}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:8,flexWrap:'wrap' as const}}>
                                 <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase'}}>Draft Message</div>
-                                <button
-                                  onClick={()=>copyDraft(insight.id, draftMessage)}
-                                  style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'4px 8px',fontSize:11,fontWeight:700,color:copiedDraft===insight.id?t.green:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}
-                                >
-                                  {copiedDraft===insight.id ? 'Copied' : 'Copy'}
-                                </button>
+                                <div style={{display:'flex',gap:6}}>
+                                  <button
+                                    onClick={()=>copyDraft(insight.id, draftMessage)}
+                                    style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'4px 8px',fontSize:11,fontWeight:700,color:copiedDraft===insight.id?t.green:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}
+                                  >
+                                    {copiedDraft===insight.id ? 'Copied' : 'Copy'}
+                                  </button>
+                                  <button
+                                    onClick={()=>sendDraftToClient(insight, draftMessage)}
+                                    disabled={sendingDraft===insight.id}
+                                    style={{background:sentDraft===insight.id ? t.greenDim : t.tealDim, border:'1px solid '+(sentDraft===insight.id ? t.green+'60' : t.teal+'40'),borderRadius:8,padding:'4px 10px',fontSize:11,fontWeight:800,color:sentDraft===insight.id ? t.green : t.teal,cursor:sendingDraft===insight.id?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}
+                                  >
+                                    {sendingDraft===insight.id ? 'Sending...' : sentDraft===insight.id ? '✓ Sent' : '+ Send to client'}
+                                  </button>
+                                </div>
                               </div>
                               <div style={{fontSize:13,color:t.text,lineHeight:1.6,whiteSpace:'pre-wrap' as const}}>{draftMessage}</div>
                             </div>

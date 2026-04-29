@@ -59,6 +59,7 @@ type CoachClient = {
   flagged?: boolean | null
   start_date?: string | null
   last_checkin_at?: string | null
+  last_workout_at?: string | null
   profile?: { full_name?: string | null; email?: string | null; avatar_url?: string | null } | null
 }
 
@@ -134,6 +135,14 @@ const formatCheckInGap = (iso: string | null | undefined) => {
   if (days <= 0) return 'Checked in today'
   if (days === 1) return 'Last check-in 1 day ago'
   return `Last check-in ${days} days ago`
+}
+
+const formatWorkoutGap = (iso: string | null | undefined) => {
+  const days = getDaysSince(iso)
+  if (days === null) return 'No workouts logged in 60+ days'
+  if (days <= 0) return 'Worked out today'
+  if (days === 1) return 'Last workout 1 day ago'
+  return `Last workout ${days} days ago`
 }
 
 // Workout review urgency — based on time remaining until review_due_at (24hr SLA)
@@ -327,20 +336,56 @@ export default function CoachDashboard() {
           .map((client) => [client.profile_id as string, client.profile?.full_name || 'Client'])
       )
 
-      // Attention clients — going quiet or watch (7+ days no check-in)
-      const attentionList = safeClientList
+      // Build last-workout-per-client map. A client who keeps checking in but
+      // stops logging workouts wouldn't show up via last_checkin_at alone, so
+      // we add this as a second engagement-decay signal. 60-day window keeps
+      // the payload bounded; clients with no entry in that window get a null
+      // last_workout_at -> treated as stale.
+      const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+      const { data: clientWorkoutRows } = await supabase
+        .from('workout_sessions')
+        .select('client_id, completed_at')
+        .eq('coach_id', user.id)
+        .eq('status', 'completed')
+        .gte('completed_at', sixtyDaysAgo.toISOString())
+        .order('completed_at', { ascending: false })
+        .limit(500)
+      const lastWorkoutByClient = new Map<string, string>()
+      for (const row of (clientWorkoutRows || []) as Array<{ client_id: string; completed_at: string }>) {
+        if (!lastWorkoutByClient.has(row.client_id)) {
+          lastWorkoutByClient.set(row.client_id, row.completed_at)
+        }
+      }
+
+      // Stamp last_workout_at onto every client so downstream renders can use it.
+      const clientsWithWorkoutGap = safeClientList.map((client) => ({
+        ...client,
+        last_workout_at: lastWorkoutByClient.get(client.id) || null,
+      }))
+
+      // Attention clients — going quiet on EITHER signal
+      // (7+ days no check-in, OR 10+ days no logged workout).
+      // Clients with both signals stale rank highest.
+      const CHECKIN_THRESHOLD = 7
+      const WORKOUT_THRESHOLD = 10
+      const attentionList = clientsWithWorkoutGap
         .filter((client) => !client.paused)
         .filter((client) => client.training_type !== 'in_person')
         .filter((client) => {
-          const gap = getDaysSince(client.last_checkin_at)
-          return gap === null || gap >= 7
+          const ciGap = getDaysSince(client.last_checkin_at)
+          const woGap = getDaysSince(client.last_workout_at)
+          const ciStale = ciGap === null || ciGap >= CHECKIN_THRESHOLD
+          const woStale = woGap === null || woGap >= WORKOUT_THRESHOLD
+          return ciStale || woStale
         })
         .sort((a, b) => {
-          const aGap = getDaysSince(a.last_checkin_at)
-          const bGap = getDaysSince(b.last_checkin_at)
-          if (aGap === null) return -1
-          if (bGap === null) return 1
-          return bGap - aGap
+          // Stale on both signals = most urgent; otherwise bigger of the two gaps.
+          const worst = (c: CoachClient) => {
+            const ci = getDaysSince(c.last_checkin_at) ?? 999
+            const wo = getDaysSince(c.last_workout_at) ?? 999
+            return Math.max(ci, wo)
+          }
+          return worst(b) - worst(a)
         })
       setAttentionClients(attentionList)
 
@@ -814,10 +859,23 @@ export default function CoachDashboard() {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {attentionClients.slice(0, 5).map(client => {
-                  const days = getDaysSince(client.last_checkin_at)
-                  const isNever = days === null
-                  const urgency = isNever || days >= 14 ? t.red : days >= 7 ? t.orange : t.yellow
+                  const ciDays = getDaysSince(client.last_checkin_at)
+                  const woDays = getDaysSince(client.last_workout_at)
+                  const ciNever = ciDays === null
+                  const woNever = woDays === null
+                  // Worst-of-both drives the urgency colour.
+                  const worstDays = Math.max(ciDays ?? 999, woDays ?? 999)
+                  const bothStale = (ciNever || ciDays >= 7) && (woNever || woDays >= 10)
+                  const urgency = bothStale || worstDays >= 14 ? t.red : worstDays >= 7 ? t.orange : t.yellow
                   const initials = (client.profile?.full_name || '?').split(' ').map((n:string)=>n[0]).join('').slice(0,2)
+                  // Lead the secondary line with the more-stale signal.
+                  const detail = (woNever || (woDays ?? 0) > (ciDays ?? 0))
+                    ? formatWorkoutGap(client.last_workout_at)
+                    : formatCheckInGap(client.last_checkin_at)
+                  const badge = bothStale ? '🔴 Quiet on both'
+                    : ciNever ? 'Never checked in'
+                    : worstDays >= 14 ? '🔴 Going quiet'
+                    : '🟡 Watch'
                   return (
                     <button key={client.id}
                       onClick={()=>router.push('/dashboard/coach/clients/'+client.id)}
@@ -827,11 +885,11 @@ export default function CoachDashboard() {
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:13, fontWeight:800, marginBottom:2 }}>{client.profile?.full_name || 'Client'}</div>
-                        <div style={{ fontSize:11, color:t.textMuted }}>{formatCheckInGap(client.last_checkin_at)}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>{detail}</div>
                       </div>
                       <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                         <span style={{ fontSize:10, fontWeight:800, color:urgency, background:urgency+'15', borderRadius:20, padding:'3px 9px', whiteSpace:'nowrap' as const }}>
-                          {isNever ? 'Never checked in' : days >= 14 ? '🔴 Going quiet' : '🟡 Watch'}
+                          {badge}
                         </span>
                         <span style={{ fontSize:14, color:t.textMuted }}>›</span>
                       </div>
