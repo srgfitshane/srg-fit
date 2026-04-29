@@ -44,6 +44,8 @@ type RecentPulseEntry = {
   sleep_quality?: number | null
   energy_score?: number | null
   mood_emoji?: string | null
+  mood_score?: number | null
+  stress_score?: number | null
   body?: string | null
 }
 
@@ -154,6 +156,31 @@ function daysSince(iso: string | null | undefined) {
   const hours = hoursSince(iso)
   if (hours === null) return null
   return Number((hours / 24).toFixed(1))
+}
+
+// Pre-compute a trend vector server-side instead of dumping raw rows into the prompt.
+// Splits the row set in half (recent_avg = first half, prior_avg = second half) to
+// surface direction + magnitude. The model gets a single line like
+// "sleep_trend: { recent_avg: 6.2, prior_avg: 7.8, delta_pct: -20.5 }" instead of
+// 14 timestamped numbers it has to reason about. Tighter prompt, more confident output.
+function computeTrend(rows: Array<{ date: string | null | undefined; value: number | null | undefined }>) {
+  const cleaned = rows
+    .filter((r) => r.date && r.value !== null && r.value !== undefined && Number(r.value) > 0)
+    .map((r) => ({ date: new Date(r.date as string).getTime(), value: Number(r.value) }))
+    .sort((a, b) => b.date - a.date) // newest first
+  if (cleaned.length < 4) return null
+  const half = Math.floor(cleaned.length / 2)
+  const recent = cleaned.slice(0, half).map((r) => r.value)
+  const prior = cleaned.slice(half).map((r) => r.value)
+  const recentAvg = recent.reduce((s, v) => s + v, 0) / recent.length
+  const priorAvg = prior.reduce((s, v) => s + v, 0) / prior.length
+  const deltaPct = priorAvg === 0 ? 0 : ((recentAvg - priorAvg) / priorAvg) * 100
+  return {
+    recent_avg: Number(recentAvg.toFixed(2)),
+    prior_avg: Number(priorAvg.toFixed(2)),
+    delta_pct: Number(deltaPct.toFixed(1)),
+    samples: cleaned.length,
+  }
 }
 
 function isAllowedCategory(value: string): value is InsightCategory {
@@ -430,7 +457,7 @@ serve(async (req) => {
       supabase.from('clients').select('*, profile:profiles!profile_id(full_name)').eq('id', client_id).single(),
       supabase.from('checkins').select('id, submitted_at, wins, struggles').eq('client_id', client_id).order('submitted_at', { ascending: false }).limit(4),
       supabase.from('workout_sessions').select('id, title, status, completed_at, session_rpe, mood, notes_client').eq('client_id', client_id).eq('status', 'completed').order('completed_at', { ascending: false }).limit(10),
-      supabase.from('daily_checkins').select('id, checkin_date, sleep_quality, energy_score, mood_emoji, body').eq('client_id', client_id).order('checkin_date', { ascending: false }).limit(14),
+      supabase.from('daily_checkins').select('id, checkin_date, sleep_quality, energy_score, mood_emoji, mood_score, stress_score, body').eq('client_id', client_id).order('checkin_date', { ascending: false }).limit(14),
       supabase.from('personal_records').select('id, weight_pr, logged_date, exercise:exercises(name)').eq('client_id', client_id).order('logged_date', { ascending: false }).limit(5),
       supabase.from('client_goals').select('id, title, goal_type, target_value').eq('client_id', client_id).eq('status', 'active'),
       supabase.from('session_exercises').select('id, session_id, exercise_name, original_exercise_name, swap_reason, skip_reason, skipped, skipped_at, swapped_at, client_video_url, session:workout_sessions!session_exercises_session_id_fkey(completed_at)').eq('session.client_id', client_id).order('swapped_at', { ascending: false }).limit(40),
@@ -454,7 +481,17 @@ serve(async (req) => {
 
     const avgSleep = average(pulseEntries.map((row) => Number(row.sleep_quality || 0)).filter(Boolean))
     const avgEnergy = average(pulseEntries.map((row) => Number(row.energy_score || 0)).filter(Boolean))
+    const avgMood = average(pulseEntries.map((row) => Number(row.mood_score || 0)).filter(Boolean))
+    const avgStress = average(pulseEntries.map((row) => Number(row.stress_score || 0)).filter(Boolean))
     const avgSessionRpe = average(workoutEntries.map((row) => Number(row.session_rpe || 0)).filter(Boolean))
+
+    // Trend vectors: recent half vs. prior half. Pre-computed so the model can
+    // reason about direction + magnitude without re-deriving from raw rows.
+    const sleepTrend = computeTrend(pulseEntries.map((row) => ({ date: row.checkin_date, value: row.sleep_quality })))
+    const energyTrend = computeTrend(pulseEntries.map((row) => ({ date: row.checkin_date, value: row.energy_score })))
+    const moodTrend = computeTrend(pulseEntries.map((row) => ({ date: row.checkin_date, value: row.mood_score })))
+    const stressTrend = computeTrend(pulseEntries.map((row) => ({ date: row.checkin_date, value: row.stress_score })))
+    const rpeTrend = computeTrend(workoutEntries.map((row) => ({ date: row.completed_at, value: row.session_rpe })))
     const skippedExercises14d = sessionExerciseEvents.filter((row) => row.skipped || row.skip_reason).length
     const swappedExercises14d = sessionExerciseEvents.filter((row) => row.original_exercise_name || row.swap_reason).length
     const formCheckSubmissions14d = sessionExerciseEvents.filter((row) => row.client_video_url).length
@@ -496,13 +533,23 @@ serve(async (req) => {
       workouts_completed_last_10: workoutCount,
       avg_sleep_quality_last_14_days: avgSleep,
       avg_energy_last_14_days: avgEnergy,
+      avg_mood_last_14_days: avgMood,
+      avg_stress_last_14_days: avgStress,
       avg_session_rpe_last_10: avgSessionRpe,
+      // Trends -- recent half vs prior half. delta_pct positive = improving (or worsening
+      // for stress), null = not enough data points (<4 samples).
+      sleep_trend: sleepTrend,
+      energy_trend: energyTrend,
+      mood_trend: moodTrend,
+      stress_trend: stressTrend,
+      session_rpe_trend: rpeTrend,
       adherence_rate_last_14_days: adherenceRate14d,
       skipped_exercises_last_14_days: skippedExercises14d,
       swapped_exercises_last_14_days: swappedExercises14d,
       form_checks_last_14_days: formCheckSubmissions14d,
       pain_or_equipment_flags_last_14_days: painOrEquipmentFlags14d,
       nutrition_logging_days_last_7_days: nutritionLoggingDays7d,
+      nutrition_compliance_pct_last_7_days: Math.round((nutritionLoggingDays7d / 7) * 100),
       hours_since_last_workout: hoursSince(lastWorkoutAt),
       hours_since_last_client_message: hoursSince(lastClientMessageAt),
       hours_since_last_checkin: hoursSince(lastCheckinAt),
@@ -544,8 +591,12 @@ serve(async (req) => {
       goal_ids: clientGoals.map((entry) => entry.id).filter(Boolean),
     }
 
-    const prompt = `
-You are the internal AI copilot for Coach Shane at SRG Fit. The AI is coach-facing only.
+    // System block: stable framing, rules, heuristics, response schema. Identical
+    // across every call so it's a perfect candidate for prompt caching -- a coach
+    // reviewing 5 clients back-to-back hits the cache on calls 2-5, dropping
+    // both latency and input-token cost on the static section. cache_control:
+    // ephemeral keeps the entry alive for ~5 min after each use.
+    const SYSTEM_PROMPT = `You are the internal AI copilot for Coach Shane at SRG Fit. The AI is coach-facing only.
 Your job is to help Coach Shane notice patterns faster and choose strong next-step options.
 You must never replace the coach's judgment, never diagnose, never shame the client, and never write as if the AI is the relationship owner.
 The client population may include people dealing with anxiety, depression, low motivation, and overwhelm. Favor calm, practical, low-friction options.
@@ -566,10 +617,12 @@ Rules:
 - Draft message should sound warm, simple, and supportive in Coach Shane's style without being pushy
 - If skipped or swapped exercises show a pattern, treat that as programming friction
 - If sleep, energy, workout gaps, or message silence are concerning, bias toward earlier follow-up
+- Trend vectors (sleep_trend, energy_trend, mood_trend, stress_trend, session_rpe_trend)
+  give recent_avg vs prior_avg and delta_pct -- treat negative deltas in sleep/energy/mood
+  as recovery signal; positive delta in stress as a worsening signal; positive delta in
+  session_rpe with no progress as plateau or recovery risk
+- nutrition_compliance_pct_last_7_days below 50 is weak; 50-80 is partial; 80+ is strong
 
-Requested emphasis: ${type}
-Suggested default category/severity:
-${JSON.stringify(defaults, null, 2)}
 Heuristics to respect:
 - low_adherence: missed workouts, stale check-ins, weak nutrition logging, or repeated silence
 - recovery_risk: low sleep/energy, rough mood trend, high session RPE, or repeated "struggles" check-ins
@@ -579,8 +632,6 @@ Heuristics to respect:
 - likely_exercise_mismatch: recurring swaps/skips, pain notes, discomfort, or equipment mismatch
 - at_risk_churn: multiple engagement signals are dropping together and the coach should intervene quickly
 - urgent should be rare and reserved for same-day attention; high means 24-hour follow-up; medium means 72-hour follow-up
-Client context:
-${JSON.stringify(contextSummary, null, 2)}
 
 Respond with strict JSON:
 {
@@ -601,7 +652,14 @@ Respond with strict JSON:
   ],
   "draft_message": "short editable draft Coach Shane could send to the client",
   "coaching_note": "short internal note or programming reminder for Coach Shane"
-}`.trim()
+}`
+
+    const userPrompt = `Requested emphasis: ${type}
+Suggested default category/severity:
+${JSON.stringify(defaults, null, 2)}
+
+Client context:
+${JSON.stringify(contextSummary, null, 2)}`
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -613,7 +671,10 @@ Respond with strict JSON:
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 700,
-        messages: [{ role: 'user', content: prompt }],
+        system: [
+          { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        ],
+        messages: [{ role: 'user', content: userPrompt }],
       }),
     })
 
