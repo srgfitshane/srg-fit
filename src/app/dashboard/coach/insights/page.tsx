@@ -344,7 +344,7 @@ export default function CoachInsightsPage() {
           <div style={{flex:1}}/>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'min(300px,100%)',maxWidth:1200,margin:'0 auto',padding:24,gap:20}}
+        <div style={{maxWidth:1200,margin:'0 auto',padding:24}}
           className="insights-grid">
 
           {/* Left: Generator panel */}
