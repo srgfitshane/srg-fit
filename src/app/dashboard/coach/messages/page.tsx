@@ -325,7 +325,7 @@ function MessagesInner() {
             notification_type: 'new_message',
             title: 'Message from Coach Shane',
             body: broadcastText.trim().slice(0, 100),
-            link_url: '/dashboard/client/messages',
+            link_url: '/dashboard/client?tab=messages',
           })
         }).catch(err => console.warn('[notify:coach-messages] failed', err))
       }

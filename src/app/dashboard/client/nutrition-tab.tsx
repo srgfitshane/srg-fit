@@ -925,9 +925,15 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               </div>
             )}
 
-            {/* Uploading spinner */}
+            {/* Uploading -- indeterminate progress so a slow connection doesn't look frozen */}
             {photoUploading && (
-              <div style={{ textAlign:'center', padding:'24px 0', color:t.textMuted, fontSize:13 }}>Uploading photo...</div>
+              <div style={{ textAlign:'center', padding:'18px 0' }}>
+                <div style={{ color:t.textMuted, fontSize:13, marginBottom:10 }}>Uploading photo...</div>
+                <div style={{ width:'100%', height:4, background:t.surfaceHigh, borderRadius:2, overflow:'hidden', position:'relative' as const }}>
+                  <div style={{ position:'absolute' as const, top:0, left:0, height:'100%', width:'40%', background:t.teal, borderRadius:2, animation:'srgUploadSlide 1.2s ease-in-out infinite' }} />
+                </div>
+                <style>{`@keyframes srgUploadSlide{0%{transform:translateX(-100%)}50%{transform:translateX(150%)}100%{transform:translateX(-100%)}}`}</style>
+              </div>
             )}
 
             {/* Photo preview + caption + confirm */}

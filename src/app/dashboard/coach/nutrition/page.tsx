@@ -154,7 +154,7 @@ export default function CoachNutritionPage() {
               notification_type: 'program_assigned',
               title: `New nutrition plan: ${form.name}`,
               body: `Your coach has assigned you a new nutrition plan`,
-              link_url: '/dashboard/client'
+              link_url: '/dashboard/client?tab=nutrition'
             })
           })
         }

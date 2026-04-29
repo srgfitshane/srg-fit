@@ -380,12 +380,15 @@ export default function ReviewsPage() {
       for (const r of cleanReviews) {
         const profileId = r.client?.profile_id
         if (!profileId) continue
+        // Deep-link to the actual workout the coach just reviewed instead
+        // of dropping the client at the dashboard. Same pattern in markReviewed.
+        const workoutLink = `/dashboard/client/workout/${r.id}`
         Promise.resolve(supabase.from('notifications').insert({
           user_id: profileId,
           notification_type: 'review_ready',
           title: '✅ Coach reviewed your workout',
           body: 'Looks clean -- keep going!',
-          link_url: '/dashboard/client',
+          link_url: workoutLink,
         })).catch(err => console.warn('[notify:bulk-review-1]', err))
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
@@ -399,7 +402,7 @@ export default function ReviewsPage() {
             notification_type: 'review_ready',
             title: '✅ Coach reviewed your workout',
             body: 'Looks clean -- keep going!',
-            link_url: '/dashboard/client',
+            link_url: workoutLink,
           })
         }).catch(err => console.warn('[notify:bulk-review-2]', err))
       }
@@ -416,18 +419,20 @@ export default function ReviewsPage() {
       coach_review_video_url: reviewVideoPath || null,
     }).eq('id', sessionId)
 
-    // Notify client — fire-and-forget
+    // Notify client — fire-and-forget. Deep-link to the workout itself so
+    // the client lands on the review video / coach note, not the dashboard.
     const profileId = selected?.client?.profile_id
     if (profileId) {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.access_token) {
+        const workoutLink = `/dashboard/client/workout/${sessionId}`
         // Insert in-app notification (shows in bell)
         Promise.resolve(supabase.from('notifications').insert({
           user_id: profileId,
           notification_type: 'review_ready',
           title: '💬 Coach reviewed your workout',
           body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
-          link_url: '/dashboard/client',
+          link_url: workoutLink,
         })).catch(err => console.warn('[notify:reviews-1] failed', err))
 
         // Push notification
@@ -442,7 +447,7 @@ export default function ReviewsPage() {
             notification_type: 'review_ready',
             title: '💬 Coach reviewed your workout',
             body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
-            link_url: '/dashboard/client',
+            link_url: workoutLink,
           })
         }).catch(err => console.warn('[notify:reviews-2] failed', err))
       }
@@ -646,7 +651,19 @@ export default function ReviewsPage() {
   // ── Inbox view ──────────────────────────────────────────────────────────
   return (
     <>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}
+        /* Mobile compression: coach reviewing the queue on a phone between
+           clients only needs name + countdown + a hint of friction. The full
+           coach-focus paragraph and tertiary metadata get dropped under 520px;
+           padding tightens so more cards fit on screen. */
+        @media (max-width: 520px) {
+          .review-card { padding: 12px !important; }
+          .review-card .review-coach-focus { display: none !important; }
+          .review-card .review-meta-line { gap: 8px !important; font-size: 10px !important; }
+          .review-card .review-avatar { width: 36px !important; height: 36px !important; font-size: 15px !important; }
+          .review-card .review-title { font-size: 12px !important; }
+        }
+      `}</style>
       <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:680, margin:'0 auto', padding:'20px 16px 80px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:18 }}>
           <button onClick={()=>router.push('/dashboard/coach')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:22 }}>←</button>
@@ -680,9 +697,10 @@ export default function ReviewsPage() {
               const intelligence = getReviewIntelligence(r)
               return (
                 <button key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('')}}
+                  className="review-card"
                   style={{ background:t.surface, border:`1px solid ${u==='overdue'||u==='red'?t.red+'50':t.border}`, borderRadius:16, padding:'16px', textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", width:'100%' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
-                    <div style={{ width:44, height:44, borderRadius:'50%', background:ub, border:`1px solid ${uc}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                    <div className="review-avatar" style={{ width:44, height:44, borderRadius:'50%', background:ub, border:`1px solid ${uc}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
                       {u==='overdue'||u==='red'?'🔴':u==='yellow'?'🟡':'🟢'}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
@@ -691,8 +709,8 @@ export default function ReviewsPage() {
                         <div style={{ fontSize:11, fontWeight:700, color:uc, background:ub, borderRadius:6, padding:'1px 7px' }}>{countdown(r.review_due_at)}</div>
                         {hasVideo && <div style={{ fontSize:11, fontWeight:700, color:t.teal, background:t.tealDim, borderRadius:6, padding:'1px 7px' }}>📹 Form Check</div>}
                       </div>
-                      <div style={{ fontSize:13, color:t.textDim, marginBottom:4 }}>{r.title}</div>
-                      <div style={{ display:'flex', gap:12, fontSize:11, color:t.textMuted }}>
+                      <div className="review-title" style={{ fontSize:13, color:t.textDim, marginBottom:4 }}>{r.title}</div>
+                      <div className="review-meta-line" style={{ display:'flex', gap:12, fontSize:11, color:t.textMuted }}>
                         <span>🕐 {new Date(r.completed_at).toLocaleDateString()} {new Date(r.completed_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
                         {r.duration_seconds&&<span>⏱ {fmtDuration(r.duration_seconds)}</span>}
                         {r.session_rpe&&<span>RPE {r.session_rpe}</span>}
@@ -703,7 +721,7 @@ export default function ReviewsPage() {
                           💬 {r.notes_client}
                         </div>
                       )}
-                      <div style={{ marginTop:8, fontSize:12, color:t.textDim, lineHeight:1.5 }}>
+                      <div className="review-coach-focus" style={{ marginTop:8, fontSize:12, color:t.textDim, lineHeight:1.5 }}>
                         {intelligence.coachFocus}
                       </div>
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>

@@ -203,6 +203,17 @@ export default function ClientMetrics() {
             {saving ? 'Saving...' : '💾 Save Measurements'}
           </button>
 
+          {/* First-time hint when no history yet */}
+          {history.length === 0 && (
+            <div style={{ marginTop:24, background:t.surface, border:`1px dashed ${t.border}`, borderRadius:14, padding:'18px 20px', textAlign:'center' as const }}>
+              <div style={{ fontSize:24, marginBottom:8 }}>📈</div>
+              <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>Log your first measurement above</div>
+              <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>
+                Trends and sparklines unlock once you have two entries. Coaches use these to track progress against your goals.
+              </div>
+            </div>
+          )}
+
           {/* History */}
           {history.length > 0 && (
             <div style={{ marginTop:28 }}>
