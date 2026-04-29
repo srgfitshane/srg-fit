@@ -106,8 +106,22 @@ export async function POST(req: NextRequest) {
 
   if (!intake) return NextResponse.json({ error: 'No intake profile found' }, { status: 404 })
 
-  // ----- Deterministic math (server-side) -----
-  const weightLbs = Number(intake.current_weight_lbs)
+  // ----- Resolve current weight -----
+  // Prefer the latest entry from metrics (the client logs weight here
+  // every check-in or whenever they update it on the Progress page).
+  // Fall back to the intake row's current_weight_lbs only if metrics
+  // has nothing yet -- this matters for brand new clients who haven't
+  // logged a weight yet but did fill in onboarding.
+  const { data: latestMetric } = await supabase
+    .from('metrics')
+    .select('weight, logged_date')
+    .eq('client_id', clientId)
+    .not('weight', 'is', null)
+    .order('logged_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const weightLbs = Number(latestMetric?.weight) || Number(intake.current_weight_lbs) || 0
   if (!weightLbs || weightLbs <= 0) {
     return NextResponse.json({ error: 'Client has no current weight on file' }, { status: 400 })
   }
