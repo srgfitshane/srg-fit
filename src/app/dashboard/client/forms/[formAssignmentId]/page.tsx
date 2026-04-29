@@ -54,6 +54,8 @@ export default function ClientFormPage() {
   const [questions,  setQuestions]  = useState<Question[]>([])
   const [answers,    setAnswers]    = useState<Record<string, AnswerValue>>({})
   const [errors,     setErrors]     = useState<Record<string, string>>({})
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [restoredDraft, setRestoredDraft] = useState(false)
   // Picked files per file-type question (one or more per question)
   const [files,      setFiles]      = useState<Record<string, File[]>>({})
 
@@ -82,8 +84,24 @@ export default function ClientFormPage() {
           .order('sort_order')
 
         setQuestions(qs || [])
-        // Pre-fill if already answered
-        if (asgn.response) setAnswers(asgn.response)
+        // Pre-fill priority: server response (already submitted) > localStorage draft > empty.
+        // The draft fallback is the safety net for users who fill out a long form, hit
+        // session expiry / network issue / browser crash, and come back later.
+        if (asgn.response && Object.keys(asgn.response).length > 0) {
+          setAnswers(asgn.response)
+        } else {
+          try {
+            const draftKey = `form-draft:${formAssignmentId}`
+            const draft = window.localStorage.getItem(draftKey)
+            if (draft) {
+              const parsed = JSON.parse(draft)
+              if (parsed && typeof parsed === 'object') {
+                setAnswers(parsed)
+                setRestoredDraft(true)
+              }
+            }
+          } catch { /* localStorage disabled / private mode -- silent fallback */ }
+        }
         setLoading(false)
       })()
     }, 0)
@@ -91,9 +109,25 @@ export default function ClientFormPage() {
     return () => clearTimeout(timer)
   }, [formAssignmentId, router, supabase])
 
+  // Debounced localStorage autosave. Writes the current `answers` object
+  // every 800ms after the last keystroke. Prevents data loss if the user's
+  // session expires, the browser crashes, or they close the tab mid-form.
+  // Cleared on successful submit (see submit()).
+  useEffect(() => {
+    if (!formAssignmentId || submitted) return
+    if (Object.keys(answers).length === 0) return
+    const handle = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(`form-draft:${formAssignmentId}`, JSON.stringify(answers))
+      } catch { /* quota exceeded / disabled -- silent fallback */ }
+    }, 800)
+    return () => window.clearTimeout(handle)
+  }, [answers, formAssignmentId, submitted])
+
   const setAnswer = (qId: string, val: AnswerValue) => {
     setAnswers(p => ({ ...p, [qId]: val }))
     if (errors[qId]) setErrors(p => { const n = { ...p }; delete n[qId]; return n })
+    if (submitError) setSubmitError(null)
   }
 
   const validate = () => {
@@ -119,18 +153,29 @@ export default function ClientFormPage() {
   const submit = async () => {
     if (!validate()) return
     setSubmitting(true)
+    setSubmitError(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSubmitting(false); return }
+    const { data: { user }, error: userErr } = await supabase.auth.getUser()
+    if (userErr || !user) {
+      setSubmitting(false)
+      setSubmitError('Your session expired. Please refresh the page and log in again -- your answers are saved on this device and will be restored.')
+      return
+    }
 
     // Find the client record for the coach_id and the metrics client_id
     // NOTE: progress_photos.client_id stores profile_id (auth.uid),
     // metrics.client_id stores clients.id. Both are needed.
-    const { data: clientRec } = await supabase
+    const { data: clientRec, error: clientErr } = await supabase
       .from('clients')
       .select('id, coach_id')
       .eq('profile_id', user.id)
       .single<{ id: string; coach_id: string | null }>()
+
+    if (clientErr || !clientRec) {
+      setSubmitting(false)
+      setSubmitError('Could not find your client profile. Your answers are saved on this device -- please contact your coach.')
+      return
+    }
 
     // Upload any picked files first so the response JSON can store URLs.
     // Path scheme: <profile_id>/<YYYY-MM-DD>-<angle>-<rand>.<ext>
@@ -139,6 +184,7 @@ export default function ClientFormPage() {
     const photoInserts: Array<{ angle: string; storage_path: string }> = []
     const today = new Date()
     const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+    let uploadFailures = 0
 
     for (const q of questions) {
       if (q.question_type !== 'file') continue
@@ -154,7 +200,11 @@ export default function ClientFormPage() {
         const { error: upErr } = await supabase.storage
           .from('progress-photos')
           .upload(path, f, { upsert: false, contentType: f.type })
-        if (upErr) { console.error('progress-photos upload', upErr); continue }
+        if (upErr) {
+          console.error('progress-photos upload', upErr)
+          uploadFailures++
+          continue
+        }
         urls.push(path)
         if (q.maps_to && q.maps_to.startsWith('progress_photo_')) {
           photoInserts.push({ angle, storage_path: path })
@@ -164,11 +214,19 @@ export default function ClientFormPage() {
     }
 
     // Mark the assignment complete with file URLs baked into the response.
-    const { data: asgn } = await supabase.from('client_form_assignments').update({
+    // THIS is the call whose silent failure caused Anubha to lose her writing.
+    // Now we check error explicitly and bail with a visible message.
+    const { data: asgn, error: updateErr } = await supabase.from('client_form_assignments').update({
       status: 'completed',
       completed_at: new Date().toISOString(),
       response: uploadedAnswers,
     }).eq('id', formAssignmentId).select('client_id, form:onboarding_forms(form_type, is_checkin_type, id)').single<{ client_id: string; form: AssignmentForm | null }>()
+
+    if (updateErr || !asgn) {
+      setSubmitting(false)
+      setSubmitError('Could not save your responses. Your answers are still saved on this device -- please try again or refresh the page. (Error: ' + (updateErr?.message || 'unknown') + ')')
+      return
+    }
 
     const isCheckin = asgn?.form?.form_type === 'check_in' || asgn?.form?.is_checkin_type
     if (isCheckin && clientRec) {
@@ -191,7 +249,9 @@ export default function ClientFormPage() {
         hasMetric = true
       }
       if (hasMetric) {
-        await supabase.from('metrics').upsert(metricRow, { onConflict: 'client_id,logged_date' })
+        // Non-blocking: if metrics fan-out fails the response is still saved.
+        const { error: mErr } = await supabase.from('metrics').upsert(metricRow, { onConflict: 'client_id,logged_date' })
+        if (mErr) console.error('[checkin] metrics fan-out failed:', mErr)
       }
 
       // Insert progress_photos rows for each uploaded photo.
@@ -207,7 +267,7 @@ export default function ClientFormPage() {
             break
           }
         }
-        await supabase.from('progress_photos').insert(
+        const { error: pErr } = await supabase.from('progress_photos').insert(
           photoInserts.map(p => ({
             client_id: user.id,
             coach_id:  clientRec.coach_id,
@@ -217,10 +277,12 @@ export default function ClientFormPage() {
             weight_at_time: weightAtTime,
           }))
         )
+        if (pErr) console.error('[checkin] progress_photos insert failed:', pErr)
       }
 
-      // Update last check-in timestamp + trigger AI insights.
-      await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', clientRec.id)
+      // Update last check-in timestamp + trigger AI insights. Non-blocking.
+      const { error: clientUpdErr } = await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', clientRec.id)
+      if (clientUpdErr) console.error('[checkin] last_checkin_at update failed:', clientUpdErr)
       try {
         const { triggerAiInsight } = await import('@/lib/ai-insights')
         if (clientRec.coach_id) {
@@ -228,6 +290,16 @@ export default function ClientFormPage() {
           triggerAiInsight(clientRec.id, clientRec.coach_id, 'red_flag')
         }
       } catch { /* non-blocking */ }
+    }
+
+    // Success -- clear the localStorage draft so it doesn't pre-fill on next visit.
+    try { window.localStorage.removeItem(`form-draft:${formAssignmentId}`) } catch { /* */ }
+
+    if (uploadFailures > 0) {
+      // Soft-warn: response saved but some photos didn't upload.
+      setSubmitError(`Your responses were saved, but ${uploadFailures} photo${uploadFailures === 1 ? '' : 's'} failed to upload. You can re-add them from the Progress page later.`)
+      setTimeout(() => { setSubmitted(true); setSubmitting(false) }, 100)
+      return
     }
 
     setSubmitted(true)
@@ -283,6 +355,11 @@ export default function ClientFormPage() {
             {assignment?.note && (
               <div style={{ marginTop:12, background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'10px 14px', fontSize:13, color:t.teal, lineHeight:1.5 }}>
                 📝 {assignment.note}
+              </div>
+            )}
+            {restoredDraft && (
+              <div style={{ marginTop:12, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 27), borderRadius:10, padding:'10px 14px', fontSize:13, color:t.orange, lineHeight:1.5 }}>
+                💾 We restored your in-progress answers from your last visit.
               </div>
             )}
           </div>
@@ -421,6 +498,14 @@ export default function ClientFormPage() {
               </div>
             ))}
           </div>
+
+          {/* Error banner -- appears above Submit when an attempt failed */}
+          {submitError && (
+            <div style={{ marginTop:24, background:t.redDim, border:'1px solid '+alpha(t.red, 38), borderRadius:12, padding:'12px 16px', color:t.red, fontSize:13, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:10 }}>
+              <span style={{ fontSize:16, lineHeight:1, marginTop:1 }}>⚠</span>
+              <span>{submitError}</span>
+            </div>
+          )}
 
           {/* Submit */}
           <div style={{ marginTop:28 }}>
