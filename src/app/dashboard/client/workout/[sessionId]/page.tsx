@@ -412,10 +412,11 @@ ${candidateList}`
   }, [restActive, restTimer])
 
   const loadSession = useCallback(async () => {
-    // Mark assigned → in_progress (first start)
-    await supabase.from('workout_sessions').update({ status:'in_progress', started_at: new Date().toISOString() })
-      .eq('id', sessionId).eq('status','assigned').not('program_id', 'is', null)
-
+    // No more auto-flip from assigned -> in_progress. The preview screen
+    // (rendered when status === 'assigned') gives the client a peek at
+    // what's coming and an explicit Start button. Status only flips when
+    // they tap Start, so opening a workout to look at it doesn't burn the
+    // start time.
     const { data: sess } = await supabase.from('workout_sessions').select('*').eq('id', sessionId).single()
     const safeSession = sess as WorkoutSession | null
     
@@ -1470,6 +1471,97 @@ ${candidateList}`
   )
 
   if (phase === 'complete') return <WorkoutComplete session={session} elapsed={elapsedSeconds} router={router} t={t} sessionId={sessionId} supabase={supabase} returnUrl={returnUrl} summary={sessionSummary}/>
+
+  // ── Preview (assigned, not yet started) ──────────────────────────────────
+  // Lets the client peek at what's coming before the timer starts.
+  if (session?.status === 'assigned' && !isReopened) {
+    const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets_prescribed || 0), 0)
+    // Rough estimate: each set ~45s of work + the prescribed rest, +30s per
+    // exercise for setup. Floors at 10 min so we never tell someone "1 min".
+    const estSeconds = exercises.reduce((sum, ex) => {
+      const sets = ex.sets_prescribed || 3
+      const rest = ex.rest_seconds || 60
+      return sum + sets * 45 + Math.max(sets - 1, 0) * rest + 30
+    }, 0)
+    const estMin = Math.max(10, Math.round(estSeconds / 60))
+
+    const handleStart = async () => {
+      const startedAt = new Date().toISOString()
+      const { error } = await supabase.from('workout_sessions')
+        .update({ status: 'in_progress', started_at: startedAt })
+        .eq('id', sessionId).eq('status', 'assigned')
+      if (error) {
+        toastError('Could not start workout: ' + error.message)
+        return
+      }
+      // Update local state so the timer effect picks up immediately;
+      // skips a full reload so the user goes straight into the logger.
+      setSession(prev => prev ? { ...prev, status: 'in_progress', started_at: startedAt } : prev)
+    }
+
+    return (
+      <>
+        <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
+        <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',padding:'24px 20px',paddingBottom:'calc(96px + env(safe-area-inset-bottom))'}}>
+          <button onClick={()=>router.push(returnUrl)}
+            style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:700,marginBottom:20,display:'flex',alignItems:'center',gap:6,padding:0}}>
+            ← Back
+          </button>
+          <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{session?.title}</div>
+          <div style={{fontSize:12,color:t.textMuted,marginBottom:16}}>
+            {session?.scheduled_date ? new Date(session.scheduled_date + 'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}) : 'Ready when you are'}
+          </div>
+
+          {/* Stat strip */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:18}}>
+            <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:12,padding:'10px 12px',textAlign:'center'}}>
+              <div style={{fontSize:11,color:t.textMuted,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>Exercises</div>
+              <div style={{fontSize:20,fontWeight:900,color:t.text,marginTop:2}}>{exercises.length}</div>
+            </div>
+            <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:12,padding:'10px 12px',textAlign:'center'}}>
+              <div style={{fontSize:11,color:t.textMuted,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>Sets</div>
+              <div style={{fontSize:20,fontWeight:900,color:t.text,marginTop:2}}>{totalSets || '—'}</div>
+            </div>
+            <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:12,padding:'10px 12px',textAlign:'center'}}>
+              <div style={{fontSize:11,color:t.textMuted,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>Est. Time</div>
+              <div style={{fontSize:20,fontWeight:900,color:t.text,marginTop:2}}>~{estMin}m</div>
+            </div>
+          </div>
+
+          {session?.notes_coach && (
+            <div style={{background:alpha(t.orange, 8),border:`1px solid ${alpha(t.orange, 25)}`,borderRadius:12,padding:'10px 14px',marginBottom:16,display:'flex',gap:8}}>
+              <span style={{fontSize:14}}>📌</span>
+              <p style={{fontSize:12,color:t.orange,lineHeight:1.5,margin:0,whiteSpace:'pre-wrap' as const}}>{session.notes_coach}</p>
+            </div>
+          )}
+
+          {/* Exercise list */}
+          <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:10}}>What you&apos;re doing</div>
+          {exercises.length === 0 ? (
+            <div style={{fontSize:13,color:t.textMuted,fontStyle:'italic',marginBottom:16}}>No exercises yet. Check back with your coach.</div>
+          ) : exercises.map((ex, i) => (
+            <div key={ex.id} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:12,padding:'10px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:12}}>
+              <div style={{fontSize:11,fontWeight:800,color:t.textMuted,minWidth:20,textAlign:'center'}}>{i + 1}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:t.text}}>{ex.exercise_name}</div>
+                <div style={{fontSize:11,color:t.textMuted,marginTop:2}}>
+                  {ex.sets_prescribed || '—'} × {ex.reps_prescribed || '—'}{ex.weight_prescribed ? ` @ ${ex.weight_prescribed}` : ''}{ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Sticky start bar */}
+          <div style={{position:'fixed',bottom:0,left:0,right:0,background:t.bg,borderTop:`1px solid ${t.border}`,padding:'12px 20px calc(12px + env(safe-area-inset-bottom))',maxWidth:480,margin:'0 auto'}}>
+            <button onClick={handleStart} disabled={exercises.length === 0}
+              style={{width:'100%',background:exercises.length === 0 ? t.surfaceHigh : `linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:exercises.length === 0 ? t.textMuted : '#000',cursor:exercises.length === 0 ? 'not-allowed' : 'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+              ▶ Start Workout
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
 
   // ── Re-opened completed workout ──────────────────────────────────────────
   if (isReopened) {
