@@ -1359,6 +1359,53 @@ ${candidateList}`
   if (isReopened) {
     const isReviewed = !!session?.coach_reviewed_at
 
+    // Read-only summary of what the client logged. Used in both the reviewed
+    // (locked) branch and the unreviewed (re-openable) branch so clients can
+    // browse history without having to tap into Re-open.
+    const loggedSummary = (
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:11,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:10}}>
+          Your Workout
+        </div>
+        {exercises.length === 0 ? (
+          <div style={{fontSize:13,color:t.textMuted,fontStyle:'italic'}}>No exercises logged.</div>
+        ) : exercises.map(ex => {
+          const sets = (setData[ex.id] || []).filter(s => s.logged)
+          const isSkipped = skipped[ex.id]
+          return (
+            <div key={ex.id} style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:12,padding:'12px 14px',marginBottom:10}}>
+              <div style={{fontSize:14,fontWeight:800,color:t.text,marginBottom:4}}>{ex.exercise_name}</div>
+              {(ex.sets_prescribed || ex.reps_prescribed || ex.weight_prescribed) && (
+                <div style={{fontSize:11,color:t.textMuted,marginBottom:8}}>
+                  Prescribed: {ex.sets_prescribed || '—'} × {ex.reps_prescribed || '—'}{ex.weight_prescribed ? ` @ ${ex.weight_prescribed}` : ''}
+                </div>
+              )}
+              {isSkipped ? (
+                <div style={{fontSize:12,color:t.orange,fontStyle:'italic'}}>Skipped</div>
+              ) : sets.length === 0 ? (
+                <div style={{fontSize:12,color:t.textMuted,fontStyle:'italic'}}>No sets logged.</div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                  {sets.map((s, idx) => (
+                    <div key={idx} style={{fontSize:13,color:t.text,fontVariantNumeric:'tabular-nums' as const}}>
+                      <span style={{color:t.textMuted,marginRight:8}}>Set {idx + 1}{s.is_warmup ? ' (warmup)' : ''}:</span>
+                      {s.weight_value ? `${s.weight_value}${s.weight_unit}` : '—'} × {s.reps_completed || '—'}{s.rpe ? ` · RPE ${s.rpe}` : ''}
+                      {s.notes && <div style={{fontSize:11,color:t.textMuted,paddingLeft:0,marginTop:2,fontStyle:'italic'}}>{s.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {ex.notes_client && !ex.notes_client.startsWith('[SKIPPED]') && (
+                <div style={{fontSize:12,color:t.textDim,marginTop:8,padding:'8px 10px',background:t.surfaceUp,borderRadius:8,fontStyle:'italic'}}>
+                  {ex.notes_client}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+
     // ── REVIEWED — locked, show coach feedback ─────────────────────────────
     if (isReviewed) return (
       <>
@@ -1382,6 +1429,9 @@ ${candidateList}`
               <div style={{fontSize:11,color:t.textMuted}}>This workout is now locked</div>
             </div>
           </div>
+
+          {/* Logged sets summary */}
+          {loggedSummary}
 
           {/* Coach review */}
           <div style={{border:`1px solid ${alpha(t.teal, 25)}`,borderRadius:14,overflow:'hidden',marginBottom:16}}>
@@ -1426,23 +1476,37 @@ ${candidateList}`
       </>
     )
 
-    // ── NOT YET REVIEWED — can re-enter ────────────────────────────────────
+    // ── NOT YET REVIEWED — can browse + re-enter ──────────────────────────
     return (
       <>
         <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}`}</style>
-        <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32,textAlign:'center'}}>
-          <div style={{fontSize:48,marginBottom:16}}>✏️</div>
-          <div style={{fontSize:20,fontWeight:900,marginBottom:8}}>{session?.title}</div>
-          <div style={{fontSize:13,color:t.textMuted,marginBottom:32,lineHeight:1.6,maxWidth:280}}>
-            This workout is already marked complete. Want to go back in and update something?
-          </div>
-          <button onClick={reopenWorkout}
-            style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>
-            ✏️ Re-open Workout
-          </button>
+        <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',padding:'24px 20px',paddingBottom:'calc(32px + env(safe-area-inset-bottom))'}}>
+          {/* Header */}
           <button onClick={()=>router.push(returnUrl)}
-            style={{width:'100%',background:'none',border:`1px solid ${t.border}`,borderRadius:13,padding:'12px',fontSize:13,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-            ← Back to Dashboard
+            style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:700,marginBottom:20,display:'flex',alignItems:'center',gap:6,padding:0}}>
+            ← Back
+          </button>
+          <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{session?.title}</div>
+          <div style={{fontSize:12,color:t.textMuted,marginBottom:20}}>
+            Completed · {session?.completed_at ? new Date(session.completed_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}
+          </div>
+
+          {/* Awaiting-review badge */}
+          <div style={{display:'flex',alignItems:'center',gap:8,background:alpha(t.orange, 10),border:`1px solid ${alpha(t.orange, 30)}`,borderRadius:10,padding:'10px 14px',marginBottom:20}}>
+            <span style={{fontSize:16}}>⏳</span>
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:t.orange}}>Awaiting coach review</div>
+              <div style={{fontSize:11,color:t.textMuted}}>You can still edit until review lands</div>
+            </div>
+          </div>
+
+          {/* Logged sets summary */}
+          {loggedSummary}
+
+          {/* Actions */}
+          <button onClick={reopenWorkout}
+            style={{width:'100%',background:`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`,border:'none',borderRadius:13,padding:'14px',fontSize:15,fontWeight:800,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",marginBottom:10}}>
+            ✏️ Re-open to Edit
           </button>
         </div>
       </>
