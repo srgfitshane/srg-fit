@@ -112,7 +112,7 @@ type SessionExerciseRow = {
 
 type QueueItem = {
   id: string
-  type: 'review' | 'insight' | 'message' | 'checkin' | 'friction'
+  type: 'review' | 'insight' | 'message' | 'checkin' | 'friction' | 'silent_client'
   priority: number
   title: string
   detail: string
@@ -176,6 +176,7 @@ const queueTypeLabel: Record<QueueItem['type'], string> = {
   message: 'Message',
   checkin: 'Check-in',
   friction: 'Friction',
+  silent_client: 'Quiet',
 }
 
 const queueTypeColor = (type: QueueItem['type']) => {
@@ -185,6 +186,7 @@ const queueTypeColor = (type: QueueItem['type']) => {
     case 'message': return { color: t.teal, bg: t.tealDim }
     case 'checkin': return { color: t.yellow, bg: `${t.yellow}15` }
     case 'friction': return { color: t.orange, bg: t.orangeDim }
+    case 'silent_client': return { color: t.orange, bg: t.orangeDim }
   }
 }
 
@@ -209,7 +211,9 @@ export default function CoachDashboard() {
   const [unreadMsgs,     setUnreadMsgs]     = useState(0)
   const [actionQueue,    setActionQueue]    = useState<QueueItem[]>([])
   const [dismissedQueueIds, setDismissedQueueIds] = useState<Set<string>>(new Set())
-  const [attentionClients, setAttentionClients] = useState<CoachClient[]>([])
+  // Silent / quiet clients are folded into the actionQueue (silent_client items),
+  // so we no longer keep a separate state for them. attentionList stays as a
+  // local in the load effect to seed those queue items.
   const [weeklyDigests, setWeeklyDigests]   = useState<any[]>([])
   const [digestExpanded, setDigestExpanded] = useState<string|null>(null)
   const router   = useRouter()
@@ -429,7 +433,7 @@ export default function CoachDashboard() {
           const gb = getDaysSince(b.last_active_at) ?? 999
           return gb - ga
         })
-      setAttentionClients(attentionList)
+      // attentionList is consumed below when seeding silent_client queue items
 
       const recentSessions = (recentSessionsRes.data || []) as RecentSession[]
       let frictionQueueItems: QueueItem[] = []
@@ -509,10 +513,25 @@ export default function CoachDashboard() {
           onClick: () => router.push('/dashboard/coach/messages'),
         })),
         ...frictionQueueItems,
+        ...attentionList.slice(0, 6).map((client) => {
+          const days = getDaysSince(client.last_active_at)
+          const urgency: 'red' | 'orange' | 'yellow' = days === null || days >= 14 ? 'red' : days >= 10 ? 'orange' : 'yellow'
+          const icon = urgency === 'red' ? '🔴' : urgency === 'orange' ? '🟠' : '🟡'
+          return {
+            id: `silent-${client.id}`,
+            type: 'silent_client' as const,
+            priority: urgency === 'red' ? 92 : urgency === 'orange' ? 75 : 55,
+            title: `${client.profile?.full_name || 'Client'} going quiet ${icon}`,
+            detail: days === null ? 'No activity in 60+ days' : days === 1 ? 'Last active yesterday' : `Last active ${days} days ago`,
+            action: 'Open client',
+            color: urgency === 'red' ? t.red : urgency === 'orange' ? t.orange : t.yellow,
+            onClick: () => router.push(`/dashboard/coach/clients/${client.id}`),
+          }
+        }),
       ]
         .filter((item) => !dismissed.has(item.id))
         .sort((a, b) => b.priority - a.priority)
-        .slice(0, 8)
+        .slice(0, 12)
 
       setActionQueue(queueItems)
 
@@ -670,52 +689,9 @@ export default function CoachDashboard() {
       return (a.profile?.full_name || '').localeCompare(b.profile?.full_name || '')
     })
 
-  const reviewFlowColor = reviewUrgency.red > 0 ? t.red
-                        : reviewUrgency.yellow > 0 ? t.yellow
-                        : reviewUrgency.green > 0 ? t.green
-                        : t.green
-  const reviewFlowBg    = reviewUrgency.red > 0 ? t.redDim
-                        : reviewUrgency.yellow > 0 ? t.yellow+'15'
-                        : reviewUrgency.green > 0 ? t.greenDim
-                        : t.greenDim
-  const reviewFlowDetail = pendingReviews > 0
-    ? `${reviewUrgency.red > 0 ? `🔴 ${reviewUrgency.red} urgent · ` : ''}${reviewUrgency.yellow > 0 ? `🟡 ${reviewUrgency.yellow} due soon · ` : ''}${reviewUrgency.green > 0 ? `🟢 ${reviewUrgency.green} on track` : ''}`.replace(/·\s*$/, '')
-    : 'No overdue workout feedback right now.'
-
-  const coachFlowCards = [
-    {
-      id: 'reviews',
-      eyebrow: 'Start here',
-      title: pendingReviews > 0 ? `${pendingReviews} review${pendingReviews === 1 ? '' : 's'} waiting` : 'Reviews are under control',
-      detail: reviewFlowDetail,
-      color: reviewFlowColor,
-      bg: reviewFlowBg,
-      action: pendingReviews > 0 ? 'Open reviews' : 'View reviews',
-      onClick: () => router.push('/dashboard/coach/reviews'),
-    },
-    {
-      id: 'messages',
-      eyebrow: 'Client touchpoints',
-      title: unreadMsgs > 0 ? `${unreadMsgs} unread client message${unreadMsgs === 1 ? '' : 's'}` : 'Inbox is clear',
-      detail: unreadMsgs > 0 ? 'Reply to the most urgent client threads before programming work.' : 'Use messages for proactive outreach and quick support.',
-      color: t.teal,
-      bg: t.tealDim,
-      action: 'Open messages',
-      onClick: () => router.push('/dashboard/coach/messages'),
-    },
-    {
-      id: 'insights',
-      eyebrow: 'Coach AI',
-      title: aiInsights.length > 0 ? `${aiInsights.length} unread AI insight${aiInsights.length === 1 ? '' : 's'}` : 'Insights are quiet',
-      detail: aiInsights.length > 0 ? 'Use AI flags to spot low adherence, recovery risk, and churn early.' : 'No unread coach insights right now.',
-      color: t.purple,
-      bg: t.purpleDim,
-      action: 'Open insights',
-      onClick: () => router.push('/dashboard/coach/insights'),
-    },
-  ]
-
-  const todayFocus = actionQueue[0]
+  // The Coach Flow cards + reviewFlow* derivations were dropped when the
+  // do-this-now surfaces consolidated into the unified inbox above. The
+  // reviewUrgency state still feeds a per-row indicator further down.
 
   return (
     <>
@@ -816,69 +792,11 @@ export default function CoachDashboard() {
             ))}
           </div>
 
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, padding:'20px 20px 18px', marginBottom:24 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', gap:14, flexWrap:'wrap', marginBottom:14 }}>
-              <div>
-                <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Coach Flow</div>
-                <div style={{ fontSize:18, fontWeight:900 }}>Run the day in the right order</div>
-              </div>
-              {todayFocus && (
-                <button onClick={todayFocus.onClick}
-                  style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  Focus now: {todayFocus.action}
-                </button>
-              )}
-            </div>
-            <div className="coach-flow">
-              {coachFlowCards.map((card) => (
-                <button key={card.id} onClick={card.onClick}
-                  style={{ background:card.bg, border:'1px solid '+card.color+'30', borderRadius:16, padding:'16px 16px 14px', textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  <div style={{ fontSize:11, fontWeight:800, color:card.color, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>{card.eyebrow}</div>
-                  <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>{card.title}</div>
-                  <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.55, marginBottom:12 }}>{card.detail}</div>
-                  <div style={{ fontSize:12, fontWeight:800, color:card.color }}>{card.action} →</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Pending reviews banner with urgency breakdown */}
-          {pendingReviews > 0 && (() => {
-            const topUrgency = reviewUrgency.red > 0 ? 'red' : reviewUrgency.yellow > 0 ? 'yellow' : 'green'
-            const bannerColor = topUrgency === 'red' ? t.red : topUrgency === 'yellow' ? t.yellow : t.green
-            const bannerBg    = topUrgency === 'red' ? 'linear-gradient(135deg,#1a0a0a,#1a0808)'
-                              : topUrgency === 'yellow' ? 'linear-gradient(135deg,#1a1604,#181404)'
-                              : 'linear-gradient(135deg,#0a1a10,#08180c)'
-            return (
-              <button onClick={()=>router.push('/dashboard/coach/reviews')}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:14, background:bannerBg, border:`1px solid ${bannerColor}50`, borderRadius:14, padding:'14px 18px', cursor:'pointer', marginBottom:24, fontFamily:"'DM Sans',sans-serif", textAlign:'left' as const }}>
-                <div style={{ fontSize:28, flexShrink:0 }}>⏰</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:bannerColor, marginBottom:4 }}>
-                    {pendingReviews} workout{pendingReviews !== 1 ? 's' : ''} pending review
-                  </div>
-                  <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const, fontSize:11, fontWeight:700 }}>
-                    {reviewUrgency.red > 0 && (
-                      <span style={{ color:t.red, background:t.redDim, borderRadius:20, padding:'2px 9px' }}>
-                        🔴 {reviewUrgency.red} overdue / urgent
-                      </span>
-                    )}
-                    {reviewUrgency.yellow > 0 && (
-                      <span style={{ color:t.yellow, background:t.yellow+'15', borderRadius:20, padding:'2px 9px' }}>
-                        🟡 {reviewUrgency.yellow} due soon
-                      </span>
-                    )}
-                    {reviewUrgency.green > 0 && (
-                      <span style={{ color:t.green, background:t.greenDim, borderRadius:20, padding:'2px 9px' }}>
-                        🟢 {reviewUrgency.green} on track
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div style={{ fontSize:20, color:bannerColor }}>›</div>
-              </button>
-            )
-          })()}
+          {/* Coach Flow + Pending Reviews banner + Needs Attention block all
+              folded into the unified inbox below ("Today's Coaching"). The
+              actionQueue array now includes silent-client items alongside
+              reviews / messages / insights / friction events, sorted by
+              urgency, with a single dismiss model. */}
 
           {/* Stats density bar — informational only, kept visually light so
               the action surfaces below get the eye's attention. */}
@@ -898,12 +816,17 @@ export default function CoachDashboard() {
             ))}
           </div>
 
-          {actionQueue.length > 0 && (
+          {/* Today's Coaching — single sorted-by-urgency inbox. Reviews,
+              messages, AI insights, friction events, and silent clients
+              all live here. Replaces Coach Flow + Pending Reviews banner
+              + Needs Attention block. Coach can dismiss insight / silent
+              items; reviews and messages stay until acted on. */}
+          {actionQueue.length > 0 ? (
             <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, padding:'18px 20px', marginBottom:24 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:14, flexWrap:'wrap' }}>
                 <div>
-                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Action Queue</div>
-                  <div style={{ fontSize:16, fontWeight:800 }}>What needs your attention right now</div>
+                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Today&apos;s Coaching</div>
+                  <div style={{ fontSize:16, fontWeight:800 }}>{actionQueue.length} item{actionQueue.length === 1 ? '' : 's'} for you, sorted by urgency</div>
                 </div>
                 <button onClick={clearAllQueue}
                   style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'7px 12px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -933,70 +856,16 @@ export default function CoachDashboard() {
                 ))}
               </div>
             </div>
-          )}
-
-          {/* Who Needs Attention */}
-          {attentionClients.length > 0 && (
-            <div style={{ background:t.surface, border:`1px solid ${t.orange}30`, borderRadius:18, padding:'18px 20px', marginBottom:24 }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:14, flexWrap:'wrap' as const }}>
-                <div>
-                  <div style={{ fontSize:12, fontWeight:800, color:t.orange, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:4 }}>Needs Attention</div>
-                  <div style={{ fontSize:16, fontWeight:800 }}>
-                    {attentionClients.length} client{attentionClients.length !== 1 ? 's' : ''} going quiet
-                  </div>
-                </div>
-                <button onClick={()=>router.push('/dashboard/coach/load')}
-                  style={{ background:t.orangeDim, border:`1px solid ${t.orange}40`, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
-                  Full Load View →
-                </button>
-              </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {attentionClients.slice(0, 5).map(client => {
-                  // last_active_at is the aggregated max of: last_checkin_at,
-                  // last completed workout, last Morning Pulse, last weekly
-                  // form check-in. Single signal drives both badge + urgency.
-                  const days = getDaysSince(client.last_active_at)
-                  const never = days === null
-                  const urgency = never || days >= 14 ? t.red : days >= 7 ? t.orange : t.yellow
-                  const initials = (client.profile?.full_name || '?').split(' ').map((n:string)=>n[0]).join('').slice(0,2)
-                  const detail = never
-                    ? 'No activity in 60+ days'
-                    : days === 0 ? 'Active today'
-                    : days === 1 ? 'Active yesterday'
-                    : `Last active ${days} days ago`
-                  const badge = never ? '🔴 Silent'
-                    : days >= 14 ? '🔴 Going quiet'
-                    : days >= 10 ? '🟠 Quiet'
-                    : '🟡 Watch'
-                  return (
-                    <button key={client.id}
-                      onClick={()=>router.push('/dashboard/coach/clients/'+client.id)}
-                      style={{ width:'100%', background:t.surfaceUp, border:`1px solid ${urgency}25`, borderRadius:12, padding:'11px 14px', display:'flex', alignItems:'center', gap:12, textAlign:'left' as const, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                      <div style={{ width:36, height:36, borderRadius:10, background:urgency+'20', border:`1px solid ${urgency}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:900, color:urgency, flexShrink:0 }}>
-                        {initials}
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:800, marginBottom:2 }}>{client.profile?.full_name || 'Client'}</div>
-                        <div style={{ fontSize:11, color:t.textMuted }}>{detail}</div>
-                      </div>
-                      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                        <span style={{ fontSize:10, fontWeight:800, color:urgency, background:urgency+'15', borderRadius:20, padding:'3px 9px', whiteSpace:'nowrap' as const }}>
-                          {badge}
-                        </span>
-                        <span style={{ fontSize:14, color:t.textMuted }}>›</span>
-                      </div>
-                    </button>
-                  )
-                })}
-                {attentionClients.length > 5 && (
-                  <button onClick={()=>router.push('/dashboard/coach/load')}
-                    style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    +{attentionClients.length - 5} more → View all in Client Load
-                  </button>
-                )}
-              </div>
+          ) : (
+            <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:18, padding:'24px 20px', marginBottom:24, textAlign:'center' as const }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>🎯</div>
+              <div style={{ fontSize:14, fontWeight:800, color:t.text, marginBottom:4 }}>Inbox is clear</div>
+              <div style={{ fontSize:12, color:t.textMuted }}>Nothing urgent right now. Use this time for proactive outreach.</div>
             </div>
           )}
+
+          {/* Needs Attention block removed -- silent clients now appear as
+              silent_client items in the unified inbox above ("Today's Coaching"). */}
 
           {/* ── WEEKLY DIGEST ── */}
           {weeklyDigests.length > 0 && (
