@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -37,11 +38,6 @@ export default function ClientResourcesPage() {
   const [assigning,    setAssigning]    = useState(false)
   const [assignDone,   setAssignDone]   = useState<Set<string>>(new Set())
   const [isCoach,      setIsCoach]      = useState(false)
-
-  const localDateStr = () => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  }
 
   const openAssign = (item: Item) => {
     setAssignItem(item)

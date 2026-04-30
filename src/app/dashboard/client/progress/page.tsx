@@ -8,9 +8,7 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts'
 import { alpha } from '@/lib/theme'
-
-const localDateStr = (d: Date = new Date()) =>
-  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceHigh:"var(--surface-high)", border:"var(--border)",

@@ -5,6 +5,7 @@ import ScheduleTab from '@/components/coach/ScheduleTab'
 import ProgressPhotosViewer from '@/components/client/ProgressPhotosViewer'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { localDateStr } from '@/lib/date'
 import {
   formatClientActivityDate,
   getClientActivityConfig,
@@ -217,7 +218,7 @@ export default function ClientDetail() {
         supabase.from('client_form_assignments').select('*, form:onboarding_forms(title)').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).order('assigned_at', { ascending: false }).limit(20),
         supabase.from('client_activities').select('*').eq('client_id', clientId).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(8),
         supabase.from('food_entries').select('logged_at,calories,protein_g,carbs_g,fat_g').eq('client_id', clientId).gte('logged_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).order('logged_at', { ascending: true }),
-        supabase.from('nutrition_daily_logs').select('log_date, total_calories, total_protein').eq('client_id', clientId).gte('log_date', new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('log_date', { ascending: false }),
+        supabase.from('nutrition_daily_logs').select('log_date, total_calories, total_protein').eq('client_id', clientId).gte('log_date', localDateStr(new Date(Date.now() - 28 * 24 * 60 * 60 * 1000))).order('log_date', { ascending: false }),
       ])
 
       setForms(formData || [])
@@ -3229,8 +3230,8 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
         block_id: block.id,
         coach_id: user?.id,
         title: block.day_label || block.name,
-        scheduled_date: sessionDate.toISOString().split('T')[0],
-        date: sessionDate.toISOString().split('T')[0],
+        scheduled_date: localDateStr(sessionDate),
+        date: localDateStr(sessionDate),
         status: 'assigned',
         week_number: block.week_number,
         day_label: block.day_of_week,

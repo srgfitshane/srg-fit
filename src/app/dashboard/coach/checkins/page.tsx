@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -86,7 +87,7 @@ export default function CoachCheckins() {
     // Fetch weekly morning pulse averages per client (last 7 days)
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
-    const weekStr = weekAgo.toISOString().split('T')[0]
+    const weekStr = localDateStr(weekAgo)
     const { data: pulseData } = await supabase
       .from('daily_checkins')
       .select('client_id, sleep_quality, energy_score, stress_score, mood_score')

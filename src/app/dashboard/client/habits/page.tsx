@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -31,7 +32,7 @@ function getWeekDates() {
   const sunday = new Date(today); sunday.setDate(today.getDate() - day)
   return Array.from({ length:7 }, (_, i) => {
     const d = new Date(sunday); d.setDate(sunday.getDate() + i)
-    return d.toISOString().split('T')[0]
+    return localDateStr(d)
   })
 }
 
@@ -98,7 +99,7 @@ export default function ClientHabits() {
     const today = new Date()
     for (let i = 0; i < 30; i++) {
       const d = new Date(today); d.setDate(today.getDate() - i)
-      const ds = d.toISOString().split('T')[0]
+      const ds = localDateStr(d)
       if (logs[`${habitId}::${ds}`]) streak++
       else break
     }

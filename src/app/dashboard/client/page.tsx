@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 import MorningPulse from '@/components/client/MorningPulse'
+import { localDateStr } from '@/lib/date'
 import {
   CLIENT_ACTIVITY_INTENSITIES,
   CLIENT_ACTIVITY_TYPES,
@@ -506,7 +507,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
           supabase.from('milestones').select('*').eq('client_id', cid).eq('seen', false).order('created_at', { ascending: false }),
-          supabase.from('personal_records').select('*, exercise:exercises(name)').eq('client_id', cid).gte('logged_date', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]).order('logged_date', { ascending: false }).limit(3),
+          supabase.from('personal_records').select('*, exercise:exercises(name)').eq('client_id', cid).gte('logged_date', localDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))).order('logged_date', { ascending: false }).limit(3),
           supabase.from('workout_sessions')
             .select('id, title, scheduled_date, status')
             .eq('client_id', cid)

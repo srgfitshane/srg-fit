@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
+import { localDateStr } from '@/lib/date'
 
 const COACH_ID = '133f93d0-2399-4542-bc57-db4de8b98d79'
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
         await admin.from('clients').insert({
           profile_id: existingProfile.id,
           coach_id: COACH_ID,
-          start_date: new Date().toISOString().split('T')[0],
+          start_date: localDateStr(),
           active: true,
         })
       }
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
       await admin.from('clients').insert({
         profile_id: invited.user.id,
         coach_id: COACH_ID,
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: localDateStr(),
         active: false,
       })
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createServerSupabaseClient } from '@/lib/supabase-server'
 import { buildInviteUrl, isCoachRole } from '@/lib/invite-utils'
+import { localDateStr } from '@/lib/date'
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         await admin.from('clients').insert({
           profile_id: existingProfile.id,
           coach_id: user.id,
-          start_date: new Date().toISOString().split('T')[0],
+          start_date: localDateStr(),
           active: true,
         })
       }
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
       await admin.from('clients').insert({
         profile_id: invited?.user?.id || inviteRow?.profile_id,
         coach_id: user.id,
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: localDateStr(),
         active: false,
       })
     }

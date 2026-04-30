@@ -7,6 +7,7 @@ import { getUnreadInsights } from '@/lib/ai-insights'
 import AiInsightsPanel from '@/components/AiInsightsPanel'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -273,7 +274,7 @@ export default function CoachDashboard() {
       // Check-ins due: clients whose last check-in was > 7 days ago or never
       const sevenDaysAgo = new Date()
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0]
+      const sevenDaysAgoStr = localDateStr(sevenDaysAgo)
       const { count: ciDue } = await supabase
         .from('clients')
         .select('id', { count: 'exact', head: true })

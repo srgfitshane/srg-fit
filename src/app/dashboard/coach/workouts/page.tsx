@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -434,7 +435,7 @@ export default function CoachWorkoutsPage() {
   // ── Action handlers ────────────────────────────────────────────────────
   function openAction(template: any, action: 'client'|'program'|'resource') {
     setActionModal({ template, action })
-    setActionForm({ client_id:'', date: new Date().toISOString().split('T')[0], program_id:'', resource_group_id: resourceGroups[0]?.id || '' })
+    setActionForm({ client_id:'', date: localDateStr(), program_id:'', resource_group_id: resourceGroups[0]?.id || '' })
   }
 
   async function executeAction() {

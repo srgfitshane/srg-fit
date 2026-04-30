@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -83,7 +84,7 @@ export default function InvitesPage() {
       contact_phone: ipPhone.trim() || null,
       client_type: 'offline',
       active: true,
-      start_date: new Date().toISOString().split('T')[0],
+      start_date: localDateStr(),
     })
     if (err) { setIpError(err.message); setIpSaving(false); return }
     setIpDone(true); setIpSaving(false)

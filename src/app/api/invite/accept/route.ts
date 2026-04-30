@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createServerSupabaseClient } from '@/lib/supabase-server'
 import { getInviteAvailability, isInviteClaimAllowed } from '@/lib/invite-utils'
+import { localDateStr } from '@/lib/date'
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
         .from('clients')
         .update({
           active: true,
-          start_date: new Date().toISOString().split('T')[0],
+          start_date: localDateStr(),
         })
         .eq('id', existingClient.id)
     } else {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         profile_id: user.id,
         coach_id: invite.coach_id,
         active: true,
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: localDateStr(),
         invite_id: invite.id,
       })
 

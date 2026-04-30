@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { localDateStr } from '@/lib/date'
 
 type StripeSubscriptionWithPeriods = Stripe.Subscription & {
   current_period_start?: number | null
@@ -162,7 +163,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     const { error: insErr } = await supabase.from('clients').insert({
       profile_id: userId,
       coach_id: coachId,
-      start_date: new Date().toISOString().split('T')[0],
+      start_date: localDateStr(),
       active: true,
       stripe_customer_id: stripeCustomerId,
       subscription_status: 'trialing',

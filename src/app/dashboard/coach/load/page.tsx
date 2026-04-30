@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -108,13 +109,13 @@ export default function ClientLoadManagement() {
         .select('client_id')
         .in('client_id', clientIds)
         .eq('status', 'completed')
-        .gte('scheduled_date', new Date(now - 7*86400000).toISOString().split('T')[0]),
+        .gte('scheduled_date', localDateStr(new Date(now - 7*86400000))),
       // Workouts this month
       supabase.from('workout_sessions')
         .select('client_id')
         .in('client_id', clientIds)
         .eq('status', 'completed')
-        .gte('scheduled_date', new Date(now - 30*86400000).toISOString().split('T')[0]),
+        .gte('scheduled_date', localDateStr(new Date(now - 30*86400000))),
       // Last check-in + total per client
       supabase.from('client_form_assignments')
         .select('client_id, completed_at, response')

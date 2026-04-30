@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -443,7 +444,7 @@ export default function ProgramBuilder() {
 
   // ── Send to Client ────────────────────────────────────────────────────
   const [showSend, setShowSend] = useState(false)
-  const [sendStartDate, setSendStartDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [sendStartDate, setSendStartDate] = useState(() => localDateStr())
   const [sendMode, setSendMode] = useState<'add'|'replace'>('add')
   const [sending, setSendingSessions] = useState(false)
   const [sendDone, setSendDone] = useState(false)
@@ -496,8 +497,8 @@ export default function ProgramBuilder() {
           block_id: block.id,
           coach_id: user?.id,
           title: block.day_label || block.name,
-          scheduled_date: sessionDate.toISOString().split('T')[0],
-          date: sessionDate.toISOString().split('T')[0],
+          scheduled_date: localDateStr(sessionDate),
+          date: localDateStr(sessionDate),
           status: 'assigned',
           week_number: block.week_number,
           day_label: block.day_of_week,
