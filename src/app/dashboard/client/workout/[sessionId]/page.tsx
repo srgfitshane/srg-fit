@@ -522,11 +522,72 @@ ${candidateList}`
       loggedByEx[s.session_exercise_id].push(s as LoggedSetRow)
     }
 
+    // Fetch previous session sets for the same exercises BEFORE building
+    // initSets, so blank pad rows can pre-fill from last week's logged values.
+    // Filter by clients.id (workout_sessions.client_id FK), NOT auth.uid().
+    const prev: Record<string, {reps:number|null, weight:number|null, unit:string}[]> = {}
+    if (exs && exs.length > 0 && safeSession?.client_id) {
+      const { data: completedSessions } = await supabase
+        .from('workout_sessions')
+        .select('id')
+        .eq('client_id', safeSession.client_id)
+        .eq('status', 'completed')
+        .neq('id', sessionId)
+        .order('completed_at', { ascending: false })
+        .limit(20)
+
+      if (completedSessions && completedSessions.length > 0) {
+        const completedIds = completedSessions.map((s:{ id: string }) => s.id)
+        for (const ex of exs as SessionExercise[]) {
+          // Match by exercise_id first (survives renamed/swapped exercises with
+          // the same canonical id), fallback to exercise_name.
+          let priorExs: { id: string }[] | null = null
+          if (ex.exercise_id) {
+            const { data } = await supabase
+              .from('session_exercises')
+              .select('id')
+              .eq('exercise_id', ex.exercise_id)
+              .in('session_id', completedIds)
+              .limit(1)
+            priorExs = data
+          }
+          if ((!priorExs || priorExs.length === 0) && ex.exercise_name) {
+            const { data } = await supabase
+              .from('session_exercises')
+              .select('id')
+              .eq('exercise_name', ex.exercise_name)
+              .in('session_id', completedIds)
+              .limit(1)
+            priorExs = data
+          }
+
+          if (priorExs && priorExs.length > 0) {
+            const { data: priorSets } = await supabase
+              .from('exercise_sets')
+              .select('set_number, reps_completed, weight_value, weight_unit')
+              .eq('session_exercise_id', priorExs[0].id)
+              .order('set_number')
+              .limit(6)
+
+            if (priorSets && priorSets.length > 0) {
+              prev[ex.id] = priorSets.map((s: { reps_completed: number|null; weight_value: number|null; weight_unit: string|null }) => ({
+                reps: s.reps_completed,
+                weight: s.weight_value,
+                unit: (s.weight_unit as 'lbs'|'kg'|'bw') || 'lbs'
+              }))
+            }
+          }
+        }
+      }
+    }
+
     const initSets: Record<string,SetData[]> = {}
     for (const ex of (exs || []) as SessionExercise[]) {
       const already = loggedByEx[ex.id] || []
       const prescribed = ex.sets_prescribed || 3
-      // Build set rows: fill logged ones first, then pad with blank rows up to prescribed count
+      // Build set rows: fill logged ones first, then pad up to prescribed count.
+      // Pad rows pre-fill from last week if available so clients don't retype
+      // weight/reps every session — just confirm or override.
       const rows: SetData[] = already.map((s) => ({
         reps_completed: s.reps_completed != null ? String(s.reps_completed) : '',
         duration_completed: '',
@@ -538,56 +599,26 @@ ${candidateList}`
         logged:         true,   // already in DB — show as logged
         skipped:        false,
       }))
-      // Pad up to prescribed count with blank sets if needed
-      while (rows.length < prescribed) rows.push(defaultSet())
-      initSets[ex.id] = rows
-    }
-
-    // Fetch previous session sets for same exercises
-    const prev: Record<string, {reps:number|null, weight:number|null, unit:string}[]> = {}
-    if (exs && exs.length > 0) {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        // Get all completed sessions for this client
-        const { data: completedSessions } = await supabase
-          .from('workout_sessions')
-          .select('id')
-          .eq('client_id', user.id)
-          .eq('status', 'completed')
-          .neq('id', sessionId)
-          .order('completed_at', { ascending: false })
-          .limit(20)
-
-        if (completedSessions && completedSessions.length > 0) {
-          const completedIds = completedSessions.map((s:{ id: string }) => s.id)
-          for (const ex of exs as SessionExercise[]) {
-            // Find session_exercises with same name in those sessions
-            const { data: priorExs } = await supabase
-              .from('session_exercises')
-              .select('id')
-              .eq('exercise_name', ex.exercise_name)
-              .in('session_id', completedIds)
-              .limit(1)
-
-            if (priorExs && priorExs.length > 0) {
-              const { data: priorSets } = await supabase
-                .from('exercise_sets')
-                .select('set_number, reps_completed, weight_value, weight_unit')
-                .eq('session_exercise_id', priorExs[0].id)
-                .order('set_number')
-                .limit(6)
-
-              if (priorSets && priorSets.length > 0) {
-                prev[ex.id] = priorSets.map((s: { reps_completed: number|null; weight_value: number|null; weight_unit: string|null }) => ({
-                  reps: s.reps_completed,
-                  weight: s.weight_value,
-                  unit: (s.weight_unit as 'lbs'|'kg'|'bw') || 'lbs'
-                }))
-              }
-            }
-          }
+      while (rows.length < prescribed) {
+        const padIdx = rows.length
+        const prior = prev[ex.id]?.[padIdx]
+        if (prior && (prior.reps != null || prior.weight != null)) {
+          rows.push({
+            reps_completed: prior.reps != null ? String(prior.reps) : '',
+            duration_completed: '',
+            weight_value:   prior.weight != null ? String(prior.weight) : '',
+            weight_unit:    (prior.unit || 'lbs') as 'lbs'|'kg'|'bw',
+            rpe:            '',
+            notes:          '',
+            is_warmup:      false,
+            logged:         false,   // pre-filled, awaiting confirmation
+            skipped:        false,
+          })
+        } else {
+          rows.push(defaultSet())
         }
       }
+      initSets[ex.id] = rows
     }
 
     setSession(safeSession)
@@ -1888,7 +1919,8 @@ ${candidateList}`
                                       <div style={{marginBottom:8}}>
                                         <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Duration (seconds)</label>
                                         <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
-                                          placeholder={String(ex.duration_seconds||'')} inputMode="numeric" disabled={s.logged}
+                                          placeholder={String(ex.duration_seconds||'')} inputMode="numeric" enterKeyHint="done"
+                                          onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
                                           style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
                                       </div>
                                     ):(
@@ -1896,7 +1928,8 @@ ${candidateList}`
                                         <div>
                                           <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
                                           <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
-                                            placeholder={ex.reps_prescribed||'—'} inputMode="numeric" disabled={s.logged}
+                                            placeholder={ex.reps_prescribed||'—'} inputMode="numeric" enterKeyHint="done"
+                                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
                                             style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
                                         </div>
                                         <div>
@@ -1910,7 +1943,8 @@ ${candidateList}`
                                             </select>
                                           </label>
                                           <input type="number" value={s.weight_value} onChange={e=>updateSet(ex.id,idx,'weight_value',e.target.value)}
-                                            placeholder={ex.weight_prescribed||'—'} inputMode="decimal" disabled={s.logged||s.weight_unit==='bw'}
+                                            placeholder={ex.weight_prescribed||'—'} inputMode="decimal" enterKeyHint="done"
+                                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged||s.weight_unit==='bw'}
                                             style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:(s.logged||s.weight_unit==='bw')?0.5:1}}/>
                                         </div>
                                       </div>
@@ -2032,6 +2066,8 @@ ${candidateList}`
                   <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Session RPE (1-10)</label>
                   <input type="number" value={finishForm.session_rpe} onChange={e=>setFinishForm(f=>({...f,session_rpe:e.target.value}))}
                     aria-label="Session RPE from 1 to 10"
+                    inputMode="numeric" enterKeyHint="done"
+                    onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
                     min={1} max={10} placeholder="7"
                     style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'8px',color:t.text,fontSize:15,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif"}}/>
                 </div>
