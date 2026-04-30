@@ -482,6 +482,25 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     return () => clearTimeout(timer)
   }, [today])
 
+  // Refetch tick — bumped whenever the tab regains focus so dashboard
+  // data stays fresh after the user has been away. Throttled so the
+  // load doesn't fan out on every quick alt-tab.
+  const [refreshTick, setRefreshTick] = useState(0)
+  const lastRefreshAt = useRef(0)
+  useEffect(() => {
+    if (overrideClientId) return  // coach preview shouldn't refetch
+    if (typeof document === 'undefined') return
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRefreshAt.current < 15_000) return
+      lastRefreshAt.current = now
+      setRefreshTick(t => t + 1)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [overrideClientId])
+
   useEffect(() => {
     const loadClientData = async (clientData: DashboardClientRecord, todayStr: string, profileId: string) => {
         // Fire all queries in parallel — was 11 sequential round trips, now 1 batch
@@ -725,7 +744,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setLoading(false)
     } // end load
     void load()
-  }, [overrideClientId, router, supabase, today])
+  }, [overrideClientId, router, supabase, today, refreshTick])
 
   useEffect(() => {
     if (overrideClientId) return
