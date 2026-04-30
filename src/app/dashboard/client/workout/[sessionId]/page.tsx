@@ -1430,9 +1430,6 @@ ${candidateList}`
             </div>
           </div>
 
-          {/* Logged sets summary */}
-          {loggedSummary}
-
           {/* Coach review */}
           <div style={{border:`1px solid ${alpha(t.teal, 25)}`,borderRadius:14,overflow:'hidden',marginBottom:16}}>
             <div style={{background:t.tealDim,padding:'10px 16px',display:'flex',alignItems:'center',gap:8}}>
@@ -1472,6 +1469,9 @@ ${candidateList}`
               )}
             </div>
           </div>
+
+          {/* Logged sets summary */}
+          {loggedSummary}
         </div>
       </>
     )
