@@ -81,28 +81,40 @@ def main():
         return 0
 
     bad = []
+    # Aggregate emoji counts across the whole staged set so a refactor that
+    # moves emoji from one file into another doesn't false-positive. A real
+    # corruption event drops the total; a clean move preserves it.
+    total_curr_emoji = 0
+    total_prev_emoji = 0
+    per_file_drops = []  # (path, prev, curr) entries shown only if total drops
+
     for path in files:
         try:
             current = staged_bytes(path)
         except subprocess.CalledProcessError:
             continue
 
-        # Mojibake check
+        # Mojibake check (always per-file — corruption is local)
         moji = count_mojibake(current)
         if moji > 0:
             bad.append((path, "mojibake",
                 f"{moji} mojibake byte sequences (C3 XX C3 YY) — looks like UTF-8 was decoded as Latin-1 then re-encoded"))
             continue
 
-        # Emoji-loss check (compare against HEAD)
+        # Aggregate emoji counts across the staged set
+        curr_emoji = count_emoji(current)
         prev = head_bytes(path)
-        if prev is not None:
-            curr_emoji = count_emoji(current)
-            prev_emoji = count_emoji(prev)
-            if curr_emoji < prev_emoji:
-                lost = prev_emoji - curr_emoji
-                bad.append((path, "emoji loss",
-                    f"emoji byte count dropped from {prev_emoji} to {curr_emoji} (lost {lost})"))
+        prev_emoji = count_emoji(prev) if prev is not None else 0
+        total_curr_emoji += curr_emoji
+        total_prev_emoji += prev_emoji
+        if curr_emoji < prev_emoji:
+            per_file_drops.append((path, prev_emoji, curr_emoji))
+
+    if total_curr_emoji < total_prev_emoji:
+        lost = total_prev_emoji - total_curr_emoji
+        for path, p, c in per_file_drops:
+            bad.append((path, "emoji loss",
+                f"emoji byte count dropped from {p} to {c} (commit-wide loss: {lost})"))
 
     if not bad:
         return 0

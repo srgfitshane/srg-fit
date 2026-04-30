@@ -7,7 +7,7 @@ import { getUnreadInsights } from '@/lib/ai-insights'
 import AiInsightsPanel from '@/components/AiInsightsPanel'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
-import { localDateStr } from '@/lib/date'
+import { buildCoachInbox, getDaysSince, type QueueItem as InboxQueueItem, type SemanticColor } from '@/lib/coach-inbox'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -70,104 +70,23 @@ type CoachProfile = {
   full_name?: string | null
 }
 
-type ReviewQueueSession = {
-  id: string
-  title: string
-  review_due_at: string
-  completed_at: string
-  client?: { profile?: { full_name?: string | null } | null } | null
-}
-
 type DashboardInsight = Awaited<ReturnType<typeof getUnreadInsights>>[number]
 
-type InsightQueueItem = {
-  id: string
-  category?: string | null
-  severity?: string | null
-  content?: { title?: string | null; suggested_action?: string | null } | null
-}
-
-type InboxMessage = {
-  sender_id: string
-  body?: string | null
-  created_at: string
-}
-
-type RecentSession = {
-  id: string
-  client_id: string
-  title: string
-  completed_at: string
-  session_rpe?: number | null
-}
-
-type SessionExerciseRow = {
-  session_id: string
-  exercise_name?: string | null
-  original_exercise_name?: string | null
-  swap_reason?: string | null
-  skip_reason?: string | null
-  skipped?: boolean | null
-}
-
-type QueueItem = {
-  id: string
-  type: 'review' | 'insight' | 'message' | 'checkin' | 'friction' | 'silent_client'
-  priority: number
-  title: string
-  detail: string
-  action: string
+// Render-side queue item: shared inbox item + a derived onClick + a hex color
+// resolved from the SemanticColor returned by buildCoachInbox.
+type QueueItem = Omit<InboxQueueItem, 'href' | 'color'> & {
   color: string
   onClick: () => void
 }
 
-const truncate = (value: string | null | undefined, max = 72) => {
-  if (!value) return ''
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value
-}
-
-const getDaysSince = (iso: string | null | undefined) => {
-  if (!iso) return null
-  return Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24))
-}
-
-const formatCheckInGap = (iso: string | null | undefined) => {
-  const days = getDaysSince(iso)
-  if (days === null) return 'No check-in logged yet'
-  if (days <= 0) return 'Checked in today'
-  if (days === 1) return 'Last check-in 1 day ago'
-  return `Last check-in ${days} days ago`
-}
-
-const formatWorkoutGap = (iso: string | null | undefined) => {
-  const days = getDaysSince(iso)
-  if (days === null) return 'No workouts logged in 60+ days'
-  if (days <= 0) return 'Worked out today'
-  if (days === 1) return 'Last workout 1 day ago'
-  return `Last workout ${days} days ago`
-}
-
-// Workout review urgency — based on time remaining until review_due_at (24hr SLA)
-// red: overdue or <2hrs left · yellow: 2-8hrs left · green: 8+hrs left
-type ReviewUrgency = 'red' | 'yellow' | 'green'
-const getReviewUrgency = (dueAt: string | null | undefined): ReviewUrgency => {
-  if (!dueAt) return 'green'
-  const hoursLeft = (new Date(dueAt).getTime() - Date.now()) / (1000 * 60 * 60)
-  if (hoursLeft < 2) return 'red'
-  if (hoursLeft < 8) return 'yellow'
-  return 'green'
-}
-const formatReviewTimeLeft = (dueAt: string | null | undefined): string => {
-  if (!dueAt) return ''
-  const msLeft = new Date(dueAt).getTime() - Date.now()
-  const hoursLeft = msLeft / (1000 * 60 * 60)
-  if (hoursLeft < 0) {
-    const hoursOver = Math.abs(hoursLeft)
-    if (hoursOver < 1) return `overdue ${Math.round(hoursOver * 60)}m`
-    return `overdue ${Math.round(hoursOver)}h`
-  }
-  if (hoursLeft < 1) return `${Math.round(hoursLeft * 60)}m left`
-  return `${Math.round(hoursLeft)}h left`
+// Map semantic colors from buildCoachInbox to coach-page theme hex values.
+const semanticColorHex: Record<SemanticColor, string> = {
+  red: t.red,
+  orange: t.orange,
+  yellow: t.yellow,
+  green: t.green,
+  purple: t.purple,
+  teal: t.teal,
 }
 
 const queueTypeLabel: Record<QueueItem['type'], string> = {
@@ -250,288 +169,30 @@ export default function CoachDashboard() {
       setClients(safeClientList)
       const insights = await getUnreadInsights(user.id)
       setAiInsights(insights)
-      // Pending workout reviews + urgency breakdown
-      const { data: allPendingReviews } = await supabase
-        .from('workout_sessions')
-        .select('id, review_due_at')
-        .eq('coach_id', user.id)
-        .eq('status', 'completed')
-        .is('coach_reviewed_at', null)
-        .not('review_due_at', 'is', null)
-      const pendingReviewsData = allPendingReviews || []
-      setPendingReviews(pendingReviewsData.length)
-      // Count by urgency bucket
-      const urgencyBreakdown = { red: 0, yellow: 0, green: 0 }
-      for (const r of pendingReviewsData) {
-        urgencyBreakdown[getReviewUrgency(r.review_due_at)]++
-      }
-      setReviewUrgency(urgencyBreakdown)
 
-      // Pending check-ins: forms assigned + not yet completed
-      const { count: pendingCi } = await supabase
-        .from('client_form_assignments')
-        .select('id', { count: 'exact', head: true })
-        .eq('coach_id', user.id)
-        .eq('status', 'pending')
-        .not('checkin_schedule_id', 'is', null)
-      setPendingCheckins(pendingCi || 0)
+      // Single source of truth for the unified inbox. buildCoachInbox returns
+      // the queue plus the count summaries the stats density bar reads. The
+      // page layers dismissals + theme color resolution + onClick routing on
+      // top of the shared queue items.
+      const inbox = await buildCoachInbox(supabase, user.id)
+      setPendingReviews(inbox.pendingReviews)
+      setReviewUrgency(inbox.reviewUrgency)
+      setPendingCheckins(inbox.pendingCheckins)
+      setCheckInsDue(inbox.checkInsDue)
+      setUnreadMsgs(inbox.unreadMsgs)
 
-      // Check-ins due: clients whose last check-in was > 7 days ago or never
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const sevenDaysAgoStr = localDateStr(sevenDaysAgo)
-      const { count: ciDue } = await supabase
-        .from('clients')
-        .select('id', { count: 'exact', head: true })
-        .eq('coach_id', user.id)
-        .neq('archived', true)
-        .eq('paused', false)
-        .neq('training_type', 'in_person')
-        .or(`last_checkin_at.is.null,last_checkin_at.lte.${sevenDaysAgoStr}`)
-      setCheckInsDue(ciDue || 0)
-
-      // Unread messages from clients
-      const { count: msgCount } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('recipient_id', user.id)
-        .eq('read', false)
-      setUnreadMsgs(msgCount || 0)
-
-      const reviewWindowStart = new Date()
-      reviewWindowStart.setDate(reviewWindowStart.getDate() - 14)
-
-      const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes] = await Promise.all([
-        supabase
-          .from('workout_sessions')
-          .select(`id, title, review_due_at, completed_at, client:clients!workout_sessions_client_id_fkey(id, profile:profiles!clients_profile_id_fkey(full_name))`)
-          .eq('coach_id', user.id)
-          .eq('status', 'completed')
-          .is('coach_reviewed_at', null)
-          .not('review_due_at', 'is', null)
-          .order('review_due_at', { ascending: true })
-          .limit(5),
-        supabase
-          .from('ai_insights')
-          .select('id, client_id, category, severity, generated_at, content')
-          .eq('coach_id', user.id)
-          .eq('action_status', 'unread')
-          .eq('is_dismissed', false)
-          .order('generated_at', { ascending: false })
-          .limit(6),
-        supabase
-          .from('messages')
-          .select('sender_id, body, created_at')
-          .eq('recipient_id', user.id)
-          .eq('read', false)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('workout_sessions')
-          .select('id, client_id, title, completed_at, session_rpe')
-          .eq('coach_id', user.id)
-          .eq('status', 'completed')
-          .gte('completed_at', reviewWindowStart.toISOString())
-          .order('completed_at', { ascending: false })
-          .limit(12),
-      ])
-
-      const clientNameByProfileId = new Map(
-        safeClientList
-          .filter((client) => client.profile_id)
-          .map((client) => [client.profile_id as string, client.profile?.full_name || 'Client'])
-      )
-
-      // Build per-client engagement signals. A client who keeps checking in
-      // but stops logging workouts (or vice versa, or stops both but is
-      // active in pulse / weekly form check-ins) needs to surface in this
-      // panel. Aggregate the four signals into ONE last_active_at per client,
-      // then flag stale on a single threshold. Same widening that landed on
-      // the per-client "Last active" pill in commit d53c9a5.
-      // Cost: 3 lightweight queries (workout_sessions, daily_checkins,
-      // client_form_assignments) over a 60-day window.
-      const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
-      const sixtyDaysAgoIso = sixtyDaysAgo.toISOString()
-      const sixtyDaysAgoDate = sixtyDaysAgoIso.slice(0, 10)
-      const clientIdList = safeClientList.map(c => c.id)
-      const [
-        { data: clientWorkoutRows },
-        { data: clientPulseRows },
-        { data: clientFormCheckinRows },
-      ] = await Promise.all([
-        supabase.from('workout_sessions')
-          .select('client_id, completed_at')
-          .eq('coach_id', user.id).eq('status', 'completed')
-          .gte('completed_at', sixtyDaysAgoIso)
-          .order('completed_at', { ascending: false })
-          .limit(500),
-        clientIdList.length === 0 ? Promise.resolve({ data: [] as Array<{ client_id: string; checkin_date: string }> })
-          : supabase.from('daily_checkins')
-              .select('client_id, checkin_date')
-              .in('client_id', clientIdList)
-              .gte('checkin_date', sixtyDaysAgoDate)
-              .order('checkin_date', { ascending: false })
-              .limit(500),
-        clientIdList.length === 0 ? Promise.resolve({ data: [] as Array<{ client_id: string; completed_at: string }> })
-          : supabase.from('client_form_assignments')
-              .select('client_id, completed_at')
-              .in('client_id', clientIdList)
-              .eq('status', 'completed')
-              .not('checkin_schedule_id', 'is', null)
-              .gte('completed_at', sixtyDaysAgoIso)
-              .order('completed_at', { ascending: false })
-              .limit(500),
-      ])
-
-      // Most-recent timestamp per client across all four signals.
-      const lastActiveByClient = new Map<string, number>()
-      const lastWorkoutByClient = new Map<string, string>()
-      const setIfNewer = (cid: string, ms: number | null) => {
-        if (ms === null || !Number.isFinite(ms)) return
-        const cur = lastActiveByClient.get(cid) ?? 0
-        if (ms > cur) lastActiveByClient.set(cid, ms)
-      }
-      for (const c of safeClientList) {
-        setIfNewer(c.id, c.last_checkin_at ? new Date(c.last_checkin_at).getTime() : null)
-      }
-      for (const row of (clientWorkoutRows || []) as Array<{ client_id: string; completed_at: string }>) {
-        if (!lastWorkoutByClient.has(row.client_id)) lastWorkoutByClient.set(row.client_id, row.completed_at)
-        setIfNewer(row.client_id, new Date(row.completed_at).getTime())
-      }
-      for (const row of (clientPulseRows || []) as Array<{ client_id: string; checkin_date: string }>) {
-        // checkin_date is YYYY-MM-DD; treat as end-of-day local so today reads as today.
-        setIfNewer(row.client_id, new Date(row.checkin_date + 'T23:59:59').getTime())
-      }
-      for (const row of (clientFormCheckinRows || []) as Array<{ client_id: string; completed_at: string }>) {
-        setIfNewer(row.client_id, new Date(row.completed_at).getTime())
-      }
-
-      // Stamp last_workout_at + last_active_at onto every client so renders
-      // can use them. last_workout_at remains separately exposed because
-      // the rendered card still shows a "last workout" subline when that's
-      // the worst signal.
-      const clientsWithActivity = safeClientList.map((client) => ({
-        ...client,
-        last_workout_at: lastWorkoutByClient.get(client.id) || null,
-        last_active_at: lastActiveByClient.has(client.id)
-          ? new Date(lastActiveByClient.get(client.id)!).toISOString()
-          : null,
-      }))
-
-      // Stale = no signal in 7+ days. One threshold across all four signals
-      // is simpler and more honest than separate per-signal thresholds.
-      const STALE_THRESHOLD_DAYS = 7
-      const attentionList = clientsWithActivity
-        .filter((client) => !client.paused)
-        .filter((client) => client.training_type !== 'in_person')
-        .filter((client) => {
-          const gap = getDaysSince(client.last_active_at)
-          return gap === null || gap >= STALE_THRESHOLD_DAYS
-        })
-        .sort((a, b) => {
-          const ga = getDaysSince(a.last_active_at) ?? 999
-          const gb = getDaysSince(b.last_active_at) ?? 999
-          return gb - ga
-        })
-      // attentionList is consumed below when seeding silent_client queue items
-
-      const recentSessions = (recentSessionsRes.data || []) as RecentSession[]
-      let frictionQueueItems: QueueItem[] = []
-      if (recentSessions.length > 0) {
-        const sessionIds = recentSessions.map((session) => session.id)
-        const { data: sessionExercises } = await supabase
-          .from('session_exercises')
-          .select('session_id, exercise_name, original_exercise_name, swap_reason, skip_reason, skipped')
-          .in('session_id', sessionIds)
-
-        const frictionBySession = new Map<string, { swaps: number; skips: number; reasons: string[] }>()
-        for (const exercise of (sessionExercises || []) as SessionExerciseRow[]) {
-          const current = frictionBySession.get(exercise.session_id) || { swaps: 0, skips: 0, reasons: [] }
-          if (exercise.original_exercise_name || exercise.swap_reason) current.swaps += 1
-          if (exercise.skipped || exercise.skip_reason) current.skips += 1
-          const reason = exercise.skip_reason || exercise.swap_reason
-          if (reason) current.reasons.push(reason)
-          frictionBySession.set(exercise.session_id, current)
-        }
-
-        frictionQueueItems = recentSessions
-          .map((session) => {
-            const friction = frictionBySession.get(session.id)
-            if (!friction || (!friction.swaps && !friction.skips)) return null
-            const totalFriction = friction.swaps + friction.skips
-            return {
-              id: `friction-${session.id}`,
-              type: 'friction' as const,
-              priority: 72 + Math.min(totalFriction * 3, 12),
-              title: `${safeClientList.find((client) => client.id === session.client_id)?.profile?.full_name || 'Client'} hit workout friction`,
-              detail: `${friction.skips ? `${friction.skips} skip${friction.skips === 1 ? '' : 's'}` : ''}${friction.skips && friction.swaps ? ' · ' : ''}${friction.swaps ? `${friction.swaps} swap${friction.swaps === 1 ? '' : 's'}` : ''}${friction.reasons[0] ? ` · ${truncate(friction.reasons[0], 38)}` : ''}`,
-              action: 'Review session',
-              color: t.orange,
-              onClick: () => router.push('/dashboard/coach/reviews'),
-            }
-          })
-          .filter(Boolean)
-          .map((item) => item as QueueItem)
-          .slice(0, 3)
-      }
-
-      const queueItems: QueueItem[] = [
-        ...((reviewSessionsRes.data || []) as ReviewQueueSession[]).map((session) => {
-          const urgency = getReviewUrgency(session.review_due_at)
-          const timeLeft = formatReviewTimeLeft(session.review_due_at)
-          const urgencyColor = urgency === 'red' ? t.red : urgency === 'yellow' ? t.yellow : t.green
-          const urgencyIcon  = urgency === 'red' ? '🔴' : urgency === 'yellow' ? '🟡' : '🟢'
-          return {
-            id: `review-${session.id}`,
-            type: 'review' as const,
-            priority: urgency === 'red' ? 100 : urgency === 'yellow' ? 90 : 80,
-            title: `${session.client?.profile?.full_name || 'Client'} workout review ${urgencyIcon}`,
-            detail: `${session.title} · ${timeLeft} · ${new Date(session.completed_at).toLocaleDateString([], { month:'short', day:'numeric' })}`,
-            action: 'Open review',
-            color: urgencyColor,
-            onClick: () => router.push('/dashboard/coach/reviews'),
-          }
-        }),
-        ...((unreadInsightsRes.data || []) as InsightQueueItem[]).map((insight) => ({
-          id: `insight-${insight.id}`,
-          type: 'insight' as const,
-          priority: insight.severity === 'urgent' ? 95 : insight.severity === 'high' ? 80 : 60,
-          title: insight.content?.title || 'New coaching insight',
-          detail: insight.content?.suggested_action || insight.category || 'Review this client insight',
-          action: 'Open insight',
-          color: insight.severity === 'urgent' || insight.severity === 'high' ? t.orange : t.purple,
-          onClick: () => router.push('/dashboard/coach/insights'),
-        })),
-        ...((unreadMessagesRes.data || []) as InboxMessage[]).slice(0, 4).map((message, index) => ({
-          id: `message-${message.sender_id}-${index}`,
-          type: 'message' as const,
-          priority: 70 - index,
-          title: `${clientNameByProfileId.get(message.sender_id) || 'Client'} needs a reply`,
-          detail: truncate(message.body || 'Unread client message'),
-          action: 'Open inbox',
-          color: t.teal,
-          onClick: () => router.push('/dashboard/coach/messages'),
-        })),
-        ...frictionQueueItems,
-        ...attentionList.slice(0, 6).map((client) => {
-          const days = getDaysSince(client.last_active_at)
-          const urgency: 'red' | 'orange' | 'yellow' = days === null || days >= 14 ? 'red' : days >= 10 ? 'orange' : 'yellow'
-          const icon = urgency === 'red' ? '🔴' : urgency === 'orange' ? '🟠' : '🟡'
-          return {
-            id: `silent-${client.id}`,
-            type: 'silent_client' as const,
-            priority: urgency === 'red' ? 92 : urgency === 'orange' ? 75 : 55,
-            title: `${client.profile?.full_name || 'Client'} going quiet ${icon}`,
-            detail: days === null ? 'No activity in 60+ days' : days === 1 ? 'Last active yesterday' : `Last active ${days} days ago`,
-            action: 'Open client',
-            color: urgency === 'red' ? t.red : urgency === 'orange' ? t.orange : t.yellow,
-            onClick: () => router.push(`/dashboard/coach/clients/${client.id}`),
-          }
-        }),
-      ]
+      const queueItems: QueueItem[] = inbox.queue
         .filter((item) => !dismissed.has(item.id))
-        .sort((a, b) => b.priority - a.priority)
-        .slice(0, 12)
+        .map((item) => ({
+          id: item.id,
+          type: item.type,
+          priority: item.priority,
+          title: item.title,
+          detail: item.detail,
+          action: item.action,
+          color: semanticColorHex[item.color],
+          onClick: () => router.push(item.href),
+        }))
 
       setActionQueue(queueItems)
 
