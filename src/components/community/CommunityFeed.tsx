@@ -562,6 +562,36 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       alert('Could not post reply: ' + error.message)
       return
     }
+
+    // Notify the post author + everyone else who's already replied to the
+    // thread (minus the replier themselves). Fire-and-forget per Rule 8.
+    try {
+      const post = posts.find(p => p.id === postId)
+      const recipientIds = new Set<string>()
+      if (post && post.author_id && post.author_id !== me.id) recipientIds.add(post.author_id)
+      for (const r of (replies[postId] || [])) {
+        if (r.author_id && r.author_id !== me.id) recipientIds.add(r.author_id)
+      }
+      if (recipientIds.size > 0) {
+        const replierName = me.full_name?.split(' ')[0] || (role === 'coach' ? 'Coach Shane' : 'A client')
+        const snippet = body.length > 80 ? body.slice(0, 80) + '…' : body
+        for (const uid of recipientIds) {
+          const link = uid === coachId ? '/dashboard/coach/community' : '/dashboard/client/community'
+          supabase.functions.invoke('send-notification', {
+            body: {
+              user_id: uid,
+              notification_type: 'community_reply',
+              title: `💬 ${replierName} replied to a post`,
+              body: snippet || 'New reply',
+              link_url: link,
+            }
+          }).catch(err => console.warn('[notify:community-reply] failed', err))
+        }
+      }
+    } catch (err) {
+      console.warn('[notify:community-reply] dispatch failed', err)
+    }
+
     setReplyDrafts(p => ({ ...p, [postId]: '' }))
     setReplyOpen(null); await loadPosts()
   }
