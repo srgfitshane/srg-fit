@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import { buildThemeCss } from "@/lib/theme"
+import ToastRoot from "@/components/ui/Toast"
 
 const THEME_CSS = buildThemeCss()
 
@@ -51,6 +52,7 @@ export default function RootLayout({
         <main id="main-content">
           {children}
         </main>
+        <ToastRoot />
       </body>
     </html>
   )

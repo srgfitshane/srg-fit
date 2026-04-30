@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { alpha } from '@/lib/theme'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
@@ -765,7 +766,7 @@ ${candidateList}`
       skipped: true,
       logged_at: new Date().toISOString(),
     })
-    if (error) alert('Could not save skipped set: ' + error.message)
+    if (error) toastError('Could not save skipped set: ' + error.message)
   }
 
   async function skipExercise(exId: string) {

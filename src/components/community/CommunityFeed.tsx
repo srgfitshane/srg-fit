@@ -10,6 +10,7 @@ import Image from 'next/image'
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { toastError } from '@/components/ui/Toast'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
@@ -493,7 +494,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       video_url:   videoPath,
     }).select('id').single()
     if (insertErr) {
-      alert('Could not post: ' + insertErr.message)
+      toastError('Could not post: ' + insertErr.message)
       setPosting(false)
       return
     }
@@ -559,7 +560,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       // Don't clear the draft on failure -- the user keeps what they typed
       // and can retry. Previously the insert silently failed (RLS, network)
       // and the reply just vanished.
-      alert('Could not post reply: ' + error.message)
+      toastError('Could not post reply: ' + error.message)
       return
     }
 
