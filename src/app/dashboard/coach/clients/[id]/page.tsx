@@ -71,6 +71,11 @@ export default function ClientDetail() {
   // Check-in schedule
   const [checkinSchedule,     setCheckinSchedule]     = useState<any>(null)
   const [checkinAssignments,  setCheckinAssignments]  = useState<any[]>([])
+  // Question metadata for the latest check-in's form. Used to bridge two
+  // submission code paths that key answers differently in the response JSON:
+  // forms/[formAssignmentId] writes question.id keys, dashboard/client/checkin
+  // writes maps_to keys. Without this lookup we can't read either reliably.
+  const [latestCheckinQuestions, setLatestCheckinQuestions] = useState<Array<{ id: string; maps_to: string | null }>>([])
   const [scheduleForm,        setScheduleForm]        = useState({ send_day:0, send_time:'08:00', active:true, form_id:'' })
   const [scheduleSaving,      setScheduleSaving]      = useState(false)
   const [scheduleSaved,       setScheduleSaved]       = useState(false)
@@ -201,7 +206,7 @@ export default function ClientDetail() {
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
         supabase.from('client_form_assignments').select('id, completed_at, response, coach_response').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
-        supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(10),
+        supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(60),
         supabase.from('workout_sessions').select('*').eq('client_id', clientId).not('program_id','is',null).order('scheduled_date', { ascending: false }).limit(100),
         supabase.from('nutrition_plans').select('*').eq('client_id', clientId).eq('is_active', true).single(),
         supabase.from('programs').select('*').eq('client_id', clientId).eq('is_template', false).order('created_at', { ascending: false }).limit(1).single(),
@@ -260,6 +265,19 @@ export default function ClientDetail() {
         })
       }
       setCheckinAssignments(assignData || [])
+
+      // Pull questions for the latest check-in's form so the Overview panel
+      // can resolve maps_to-keyed and UUID-keyed responses uniformly.
+      const latestAssign = (assignData || [])[0]
+      if (latestAssign?.form_id) {
+        const { data: latestQs } = await supabase
+          .from('onboarding_questions')
+          .select('id, maps_to')
+          .eq('form_id', latestAssign.form_id)
+        setLatestCheckinQuestions((latestQs || []) as Array<{ id: string; maps_to: string | null }>)
+      } else {
+        setLatestCheckinQuestions([])
+      }
 
       // Load pending call requests
       const { data: callData } = await supabase
@@ -384,8 +402,42 @@ export default function ClientDetail() {
 
   const initials = (client.profile?.full_name || client.display_name || '?').split(' ').map((n:string)=>n[0]).join('')
   const latestMetric = metrics[0]
+  // Most-recent NON-NULL value per metric field. The Latest Metrics panel
+  // was previously reading metrics[0] which is just the newest row -- if
+  // the client only logged weight that day, all other fields render as
+  // dashes even though older rows have measurements. Walk newest-first and
+  // pick the first non-null per field instead.
+  const latestMetricByField: Record<string, number | string | null> = (() => {
+    const fields = ['weight', 'chest', 'waist', 'hips', 'left_arm', 'right_arm', 'body_fat', 'neck', 'calves', 'shoulders', 'left_thigh', 'right_thigh']
+    const out: Record<string, number | string | null> = Object.fromEntries(fields.map(f => [f, null]))
+    for (const m of metrics as Array<Record<string, unknown>>) {
+      for (const f of fields) {
+        if (out[f] === null && m[f] !== null && m[f] !== undefined && m[f] !== '') {
+          out[f] = m[f] as number | string
+        }
+      }
+    }
+    return out
+  })()
   const latestCheckin = checkinAssignments[0] || null
   const latestCheckinResponse = latestCheckin?.response || {}
+
+  // Read a check-in answer by canonical maps_to key, with fallback to the
+  // question.id (UUID) lookup. Accepts multiple aliases since check-in form
+  // templates use varying conventions (`weight`/`weight_lbs`, `stress`/`stress_score`,
+  // `sleep_quality`/`sleep_hours`, etc.). Returns the first non-empty match.
+  const checkinValue = (...aliases: string[]): string | number | null => {
+    for (const key of aliases) {
+      const direct = latestCheckinResponse[key]
+      if (direct !== undefined && direct !== null && direct !== '') return direct
+      const q = latestCheckinQuestions.find(qq => qq.maps_to === key)
+      if (q) {
+        const byId = latestCheckinResponse[q.id]
+        if (byId !== undefined && byId !== null && byId !== '') return byId
+      }
+    }
+    return null
+  }
 
   return (
     <>      <style>{`
@@ -618,20 +670,34 @@ export default function ClientDetail() {
                         : '—'}
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
-                      {[
-                        { label:'Weight',  val: latestCheckinResponse.weight_lbs ? latestCheckinResponse.weight_lbs+'lbs' : '—', color:t.teal   },
-                        { label:'Sleep',   val: latestCheckinResponse.sleep_hours ? latestCheckinResponse.sleep_hours+'hrs' : '—', color:t.purple },
-                        { label:'Stress',  val: latestCheckinResponse.stress_score ? latestCheckinResponse.stress_score+'/10' : latestCheckinResponse.stress ? latestCheckinResponse.stress+'/10' : '—', color:t.red },
-                        { label:'Energy',  val: latestCheckinResponse.energy_score ? latestCheckinResponse.energy_score+'/10' : '—', color:t.orange },
-                      ].map(s => (
-                        <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
-                          <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{String(s.val)}</div>
-                        </div>
-                      ))}
+                      {(() => {
+                        const weight = checkinValue('weight', 'weight_lbs')
+                        const sleep = checkinValue('sleep_quality', 'sleep_hours', 'sleep')
+                        const stress = checkinValue('stress', 'stress_score', 'stress_level')
+                        const energy = checkinValue('energy_score', 'energy', 'energy_level', 'motivation')
+                        return [
+                          { label:'Weight',  val: weight !== null ? weight+'lbs' : '—', color:t.teal   },
+                          { label:'Sleep',   val: sleep  !== null ? String(sleep) : '—', color:t.purple },
+                          { label:'Stress',  val: stress !== null ? stress+'/10' : '—', color:t.red    },
+                          { label:'Energy',  val: energy !== null ? energy+'/10' : '—', color:t.orange },
+                        ].map(s => (
+                          <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:s.color }}>{String(s.val)}</div>
+                          </div>
+                        ))
+                      })()}
                     </div>
-                    {latestCheckinResponse.wins && <div style={{ background:t.greenDim, border:'1px solid '+alpha(t.green, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {String(latestCheckinResponse.wins)}</div>}
-                    {latestCheckinResponse.struggles && <div style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red }}><strong>Struggles:</strong> {String(latestCheckinResponse.struggles)}</div>}
+                    {(() => {
+                      const wins = checkinValue('wins')
+                      const struggles = checkinValue('struggles')
+                      return (
+                        <>
+                          {wins && <div style={{ background:t.greenDim, border:'1px solid '+alpha(t.green, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:8 }}><strong>Wins:</strong> {String(wins)}</div>}
+                          {struggles && <div style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red }}><strong>Struggles:</strong> {String(struggles)}</div>}
+                        </>
+                      )
+                    })()}
                   </div>
                 ) : (
                   <div style={{ textAlign:'center', padding:'20px 0', color:t.textMuted, fontSize:13 }}>No check-ins yet</div>
@@ -644,12 +710,12 @@ export default function ClientDetail() {
                 {latestMetric ? (
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
                     {[
-                      { label:'Weight',  val: latestMetric.weight ? latestMetric.weight+'lbs' : '—'  },
-                      { label:'Chest',   val: latestMetric.chest  ? latestMetric.chest+'"'  : '—'    },
-                      { label:'Waist',   val: latestMetric.waist  ? latestMetric.waist+'"'  : '—'    },
-                      { label:'Hips',    val: latestMetric.hips   ? latestMetric.hips+'"'   : '—'    },
-                      { label:'L Arm',   val: latestMetric.left_arm ? latestMetric.left_arm+'"' : '—' },
-                      { label:'R Arm',   val: latestMetric.right_arm ? latestMetric.right_arm+'"' : '—' },
+                      { label:'Weight',  val: latestMetricByField.weight    ? latestMetricByField.weight+'lbs'    : '—' },
+                      { label:'Chest',   val: latestMetricByField.chest     ? latestMetricByField.chest+'"'       : '—' },
+                      { label:'Waist',   val: latestMetricByField.waist     ? latestMetricByField.waist+'"'       : '—' },
+                      { label:'Hips',    val: latestMetricByField.hips      ? latestMetricByField.hips+'"'        : '—' },
+                      { label:'L Arm',   val: latestMetricByField.left_arm  ? latestMetricByField.left_arm+'"'    : '—' },
+                      { label:'R Arm',   val: latestMetricByField.right_arm ? latestMetricByField.right_arm+'"'   : '—' },
                     ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
                         <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
