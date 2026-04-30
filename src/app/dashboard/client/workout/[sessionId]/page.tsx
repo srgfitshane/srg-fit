@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { alpha } from '@/lib/theme'
-import { toastError } from '@/components/ui/Toast'
+import { toastError, toastInfo, toastSuccess } from '@/components/ui/Toast'
+import { enqueueSetLog, flushQueue, pendingForSession, pendingCount } from '@/lib/workout-offline-queue'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
@@ -201,6 +202,10 @@ export default function ActiveWorkoutPage() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isReopened, setIsReopened] = useState(false)
+  // Offline queue state — true when navigator is offline OR there are
+  // unflushed set logs sitting in localStorage.
+  const [isOffline, setIsOffline] = useState(false)
+  const [queuedSetCount, setQueuedSetCount] = useState(0)
   const [clientGender, setClientGender] = useState<string|null>(null)
   const [isInPerson,   setIsInPerson]   = useState(false)
   const [showCancelSheet, setShowCancelSheet] = useState(false)
@@ -522,6 +527,24 @@ ${candidateList}`
       if (!loggedByEx[s.session_exercise_id]) loggedByEx[s.session_exercise_id] = []
       loggedByEx[s.session_exercise_id].push(s as LoggedSetRow)
     }
+    // Merge any locally-queued (unsynced) set logs for this session so a
+    // refresh-while-offline still shows them as logged. Dedupes by
+    // (session_exercise_id, set_number) — server rows win if both exist.
+    for (const queued of pendingForSession(sessionId)) {
+      const existing = loggedByEx[queued.session_exercise_id] || []
+      if (existing.some(r => r.set_number === queued.set_number)) continue
+      const p = queued.payload as Partial<LoggedSetRow>
+      loggedByEx[queued.session_exercise_id] = [...existing, {
+        session_exercise_id: queued.session_exercise_id,
+        set_number: queued.set_number,
+        reps_completed: typeof p.reps_completed === 'number' ? p.reps_completed : null,
+        weight_value:   typeof p.weight_value   === 'number' ? p.weight_value   : null,
+        weight_unit:    (typeof p.weight_unit === 'string' ? p.weight_unit : 'lbs'),
+        rpe:            typeof p.rpe            === 'number' ? p.rpe            : null,
+        notes:          typeof p.notes === 'string' ? p.notes : null,
+        is_warmup:      !!p.is_warmup,
+      } as LoggedSetRow]
+    }
 
     // Fetch previous session sets for the same exercises BEFORE building
     // initSets, so blank pad rows can pre-fill from last week's logged values.
@@ -640,6 +663,41 @@ ${candidateList}`
     return () => clearTimeout(timeoutId)
   }, [loadSession])
 
+  // Offline queue: track navigator state, drain pending set logs on reconnect.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const initialOnline = window.navigator.onLine !== false
+    setIsOffline(!initialOnline)
+    setQueuedSetCount(pendingCount())
+
+    let flushing = false
+    const tryFlush = async () => {
+      if (flushing) return
+      flushing = true
+      try {
+        const before = pendingCount()
+        const { flushed, remaining } = await flushQueue(supabase)
+        setQueuedSetCount(remaining)
+        if (flushed > 0 && before > 0) {
+          toastSuccess(`Synced ${flushed} pending set log${flushed === 1 ? '' : 's'}`)
+        }
+      } finally {
+        flushing = false
+      }
+    }
+
+    const handleOnline  = () => { setIsOffline(false); void tryFlush() }
+    const handleOffline = () => { setIsOffline(true) }
+    window.addEventListener('online',  handleOnline)
+    window.addEventListener('offline', handleOffline)
+    if (initialOnline) void tryFlush()
+
+    return () => {
+      window.removeEventListener('online',  handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [supabase])
+
   // Scroll the expanded exercise card into view whenever it changes.
   // The card is tall (prescription + sets + actions) so we align to top with
   // a small margin so the card header is just below the sticky top bar.
@@ -712,7 +770,7 @@ ${candidateList}`
       if (!s.reps_completed && !s.weight_value) return
     }
 
-    const { error } = await supabase.from('exercise_sets').insert({
+    const payload = {
       session_exercise_id: exId,
       session_id: sessionId,
       set_number: setIdx + 1,
@@ -724,16 +782,25 @@ ${candidateList}`
       notes: s.notes || null,
       is_warmup: s.is_warmup,
       logged_at: new Date().toISOString()
-    })
+    }
 
-    if (!error) {
+    // Skip the network entirely if the device is offline — queue immediately.
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+    let error: { message: string } | null = null
+    if (!offline) {
+      const result = await supabase.from('exercise_sets').insert(payload)
+      error = result.error
+    } else {
+      error = { message: 'offline' }
+    }
+
+    const handleSuccessSideEffects = () => {
       updateSet(exId, setIdx, 'logged', true)
       loggingSet.current.delete(lockKey)
-      await supabase.from('session_exercises').update({ sets_completed: setIdx+1 }).eq('id', exId)
       // Auto-start rest timer
-      const ex = exercises.find(e=>e.id===exId)
-      if (ex?.rest_seconds) {
-        setRestTimer(ex.rest_seconds)
+      const exNow = exercises.find(e=>e.id===exId)
+      if (exNow?.rest_seconds) {
+        setRestTimer(exNow.rest_seconds)
         setRestActive(true)
       }
       // Pre-fill next set with same values
@@ -743,8 +810,25 @@ ${candidateList}`
           [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
         }))
       }
+    }
+
+    if (!error) {
+      handleSuccessSideEffects()
+      // Bump sets_completed; nice-to-have, ignore failure
+      void supabase.from('session_exercises').update({ sets_completed: setIdx+1 }).eq('id', exId)
     } else {
-      loggingSet.current.delete(lockKey)
+      // Insert failed (offline OR server error) — park in localStorage and
+      // optimistically mark the set logged so the rest timer fires and the
+      // user keeps moving. Queue flushes on the next "online" event.
+      enqueueSetLog({
+        session_id: sessionId,
+        session_exercise_id: exId,
+        set_number: setIdx + 1,
+        payload,
+      })
+      setQueuedSetCount(pendingCount())
+      handleSuccessSideEffects()
+      toastInfo('Saved offline — will sync when you reconnect', 4000)
     }
   }
 
@@ -1586,6 +1670,18 @@ ${candidateList}`
             Cancel
           </button>
         </div>
+
+        {/* Offline / pending-sync banner */}
+        {(isOffline || queuedSetCount > 0) && (
+          <div style={{background:isOffline ? alpha(t.orange, 13) : alpha(t.teal, 13), borderBottom:`1px solid ${isOffline ? alpha(t.orange, 25) : alpha(t.teal, 25)}`,padding:'8px 16px',display:'flex',alignItems:'center',gap:10,fontSize:12}}>
+            <span style={{fontSize:14}}>{isOffline ? '📡' : '⏳'}</span>
+            <span style={{flex:1,color:isOffline ? t.orange : t.teal,fontWeight:700}}>
+              {isOffline
+                ? (queuedSetCount > 0 ? `Offline · ${queuedSetCount} set${queuedSetCount === 1 ? '' : 's'} saved locally` : 'Offline — your sets will sync when you reconnect')
+                : `Syncing ${queuedSetCount} pending set${queuedSetCount === 1 ? '' : 's'}…`}
+            </span>
+          </div>
+        )}
 
         {/* Rest timer banner */}
         {restActive && restTimer !== null && (
