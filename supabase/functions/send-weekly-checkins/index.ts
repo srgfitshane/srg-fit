@@ -68,10 +68,12 @@ serve(async (req: Request) => {
           continue
         }
 
-        // 2. Push Notification to the client's dashboard
+        // 2. Push Notification to the client's dashboard. Nice-to-have:
+        // log if it fails but don't abort -- the assignment row is the
+        // canonical signal; the notification is just a heads-up.
         const userProfileId = sched.clients?.profile_id
         if (userProfileId) {
-          await supabase.from('notifications').insert({
+          const { error: notifErr } = await supabase.from('notifications').insert({
             user_id: userProfileId,
             notification_type: 'checkin_due',
             title: 'Check-in time! 📋',
@@ -79,6 +81,7 @@ serve(async (req: Request) => {
             link_url: '/dashboard/client/checkin',
             is_read: false
           })
+          if (notifErr) console.error(`[send-weekly-checkins] notification insert failed (user=${userProfileId}, sched=${sched.id})`, notifErr.message)
         }
 
         // 3. Update next_send_at to next week
@@ -90,9 +93,16 @@ serve(async (req: Request) => {
             nextDate.setDate(nextDate.getDate() + 7)
         }
 
-        await supabase.from('check_in_schedules').update({
+        // CRITICAL: if next_send_at doesn't advance, the next cron run will
+        // re-fire this schedule and the client gets a duplicate assignment.
+        // Throw so the outer catch logs it and skips counting this as sent.
+        const { error: schedErr } = await supabase.from('check_in_schedules').update({
           next_send_at: nextDate.toISOString()
         }).eq('id', sched.id)
+        if (schedErr) {
+          console.error(`[send-weekly-checkins] check_in_schedules.update next_send_at FAILED (sched=${sched.id})`, schedErr.message)
+          throw new Error(`schedule advance failed: ${schedErr.message}`)
+        }
 
         sentCount++
       } catch (innerErr) {

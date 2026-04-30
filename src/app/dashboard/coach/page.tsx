@@ -525,20 +525,33 @@ export default function CoachDashboard() {
     if (!lifecycleClient || !lifecycleAction) return
     setLifecycleLoading(true)
     const id = lifecycleClient.id
+    // Each branch checks the mutation error before optimistically updating
+    // local state. Previously every branch was silent-fail: the modal closed
+    // and the client list updated visually even if the DB write was rejected
+    // (e.g. RLS, network), leaving coach + DB out of sync until next reload.
+    let mutErr: { message: string } | null = null
     if (lifecycleAction === 'pause') {
-      await supabase.from('clients').update({ paused: true, active: true, paused_at: new Date().toISOString(), pause_reason: lifecycleReason || null }).eq('id', id)
-      setClients(p => p.map(c => c.id === id ? { ...c, paused: true, pause_reason: lifecycleReason } : c))
+      const { error } = await supabase.from('clients').update({ paused: true, active: true, paused_at: new Date().toISOString(), pause_reason: lifecycleReason || null }).eq('id', id)
+      mutErr = error
+      if (!error) setClients(p => p.map(c => c.id === id ? { ...c, paused: true, pause_reason: lifecycleReason } : c))
     } else if (lifecycleAction === 'resume') {
-      await supabase.from('clients').update({ paused: false, paused_at: null, pause_reason: null }).eq('id', id)
-      setClients(p => p.map(c => c.id === id ? { ...c, paused: false } : c))
+      const { error } = await supabase.from('clients').update({ paused: false, paused_at: null, pause_reason: null }).eq('id', id)
+      mutErr = error
+      if (!error) setClients(p => p.map(c => c.id === id ? { ...c, paused: false } : c))
     } else if (lifecycleAction === 'archive') {
-      await supabase.from('clients').update({ active: false, archived: true, archived_at: new Date().toISOString() }).eq('id', id)
-      setClients(p => p.filter(c => c.id !== id))
+      const { error } = await supabase.from('clients').update({ active: false, archived: true, archived_at: new Date().toISOString() }).eq('id', id)
+      mutErr = error
+      if (!error) setClients(p => p.filter(c => c.id !== id))
     } else if (lifecycleAction === 'delete') {
-      await supabase.from('clients').delete().eq('id', id)
-      setClients(p => p.filter(c => c.id !== id))
+      const { error } = await supabase.from('clients').delete().eq('id', id)
+      mutErr = error
+      if (!error) setClients(p => p.filter(c => c.id !== id))
     }
     setLifecycleLoading(false)
+    if (mutErr) {
+      alert(`Could not ${lifecycleAction} this client: ${mutErr.message}`)
+      return // keep modal open so coach can retry
+    }
     setLifecycleClient(null)
     setLifecycleAction(null)
     setLifecycleReason('')
@@ -915,8 +928,9 @@ export default function CoachDashboard() {
                 </div>
                 <button
                   onClick={async () => {
-                    await supabase.from('weekly_digests').update({ seen_at: new Date().toISOString() })
+                    const { error } = await supabase.from('weekly_digests').update({ seen_at: new Date().toISOString() })
                       .eq('coach_id', profile?.id || '').is('seen_at', null)
+                    if (error) alert('Could not mark digests read: ' + error.message)
                   }}
                   style={{ fontSize:10, color:t.textMuted, background:'none', border:'none', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                   Mark all read

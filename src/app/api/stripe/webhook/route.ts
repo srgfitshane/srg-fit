@@ -74,13 +74,18 @@ export async function POST(req: NextRequest) {
         const subId = typeof invoiceSubscription === 'string' ? invoiceSubscription : invoiceSubscription?.id
         const customerId = typeof inv.customer === 'string' ? inv.customer : inv.customer?.id
         if (subId) {
-          await supabase.from('subscriptions')
+          // Critical: customer is now past_due. If the DB write fails we MUST
+          // throw so Stripe retries -- otherwise our app keeps treating them
+          // as active while Stripe is dunning them.
+          const { error: subErr } = await supabase.from('subscriptions')
             .update({ status: 'past_due', updated_at: new Date().toISOString() })
             .eq('stripe_subscription_id', subId)
+          if (subErr) throw new Error(`subscriptions.update past_due failed (sub=${subId}): ${subErr.message}`)
           if (customerId) {
-            await supabase.from('clients')
+            const { error: cliErr } = await supabase.from('clients')
               .update({ subscription_status: 'past_due' })
               .eq('stripe_customer_id', customerId)
+            if (cliErr) throw new Error(`clients.update past_due failed (cust=${customerId}): ${cliErr.message}`)
           }
         }
         break
@@ -129,13 +134,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       return
     }
     userId = invited.user.id
-    // Write full_name to profile immediately
+    // Write full_name to profile immediately. Nice-to-have, not critical:
+    // log and continue if it fails -- the user can edit it later from settings.
     if (customerName) {
-      await supabase.from('profiles').update({ full_name: customerName }).eq('id', userId)
+      const { error: nameErr } = await supabase.from('profiles').update({ full_name: customerName }).eq('id', userId)
+      if (nameErr) console.error(`[stripe-webhook] profiles.update full_name failed (user=${userId}):`, nameErr.message)
     }
   } else if (customerName) {
-    // Update existing profile if name was missing
-    await supabase.from('profiles').update({ full_name: customerName }).eq('id', userId).is('full_name', null)
+    // Backfill name on existing profile if missing. Nice-to-have.
+    const { error: nameErr } = await supabase.from('profiles').update({ full_name: customerName }).eq('id', userId).is('full_name', null)
+    if (nameErr) console.error(`[stripe-webhook] profiles.update full_name backfill failed (user=${userId}):`, nameErr.message)
   }
 
   // 3. Get or create client record
@@ -148,7 +156,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   }
 
   if (!existingClient) {
-    await supabase.from('clients').insert({
+    // Critical: this is the row that ties the paying customer to the coach.
+    // If it fails we MUST throw so Stripe retries -- otherwise the customer
+    // paid and never gets a client record.
+    const { error: insErr } = await supabase.from('clients').insert({
       profile_id: userId,
       coach_id: coachId,
       start_date: new Date().toISOString().split('T')[0],
@@ -156,11 +167,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       stripe_customer_id: stripeCustomerId,
       subscription_status: 'trialing',
     })
+    if (insErr) throw new Error(`clients.insert failed (user=${userId}): ${insErr.message}`)
   } else {
-    await supabase.from('clients').update({
+    // Critical: links existing client to the new Stripe customer + flips status.
+    const { error: updErr } = await supabase.from('clients').update({
       stripe_customer_id: stripeCustomerId,
       subscription_status: 'trialing',
     }).eq('profile_id', userId)
+    if (updErr) throw new Error(`clients.update trialing failed (user=${userId}): ${updErr.message}`)
   }
 
   // 4. Fetch subscription details from Stripe
@@ -174,7 +188,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     .from('clients').select('id').eq('profile_id', userId).single()
 
   if (clientRow && stripeSubId) {
-    await supabase.from('subscriptions').upsert({
+    // Critical: this is the canonical record of the paying relationship.
+    // If this upsert fails Stripe will charge the card on schedule and we
+    // won't know. Throw to force Stripe to retry the webhook.
+    const { error: subErr } = await supabase.from('subscriptions').upsert({
       client_id: clientRow.id,
       stripe_subscription_id: stripeSubId,
       stripe_customer_id: stripeCustomerId,
@@ -187,6 +204,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'stripe_subscription_id' })
+    if (subErr) throw new Error(`subscriptions.upsert failed (sub=${stripeSubId}): ${subErr.message}`)
   }
 
   console.log(`✅ Checkout completed: ${email} (${stripeCustomerId})`)
@@ -212,7 +230,9 @@ async function handleTrialWillEnd(sub: Stripe.Subscription) {
     .from('clients').select('id, profile_id').eq('stripe_customer_id', stripeCustomerId).single()
   if (!client) return
 
-  await supabase.from('notifications').insert({
+  // Nice-to-have: trial-ending reminder. Don't throw on failure -- a
+  // missed reminder is way better than blocking Stripe's retry loop.
+  const { error: notifErr } = await supabase.from('notifications').insert({
     user_id: client.profile_id,
     notification_type: 'trial_ending',
     title: 'Your free trial ends in 3 days',
@@ -220,6 +240,7 @@ async function handleTrialWillEnd(sub: Stripe.Subscription) {
     link_url: '/dashboard/client?tab=billing',
     is_read: false,
   })
+  if (notifErr) console.error(`[stripe-webhook] trial_ending notification insert failed (user=${client.profile_id}):`, notifErr.message)
   console.log(`⚠️ Trial ending reminder sent for customer ${stripeCustomerId}`)
 }
 
@@ -231,7 +252,9 @@ async function handleSubUpdate(sub: Stripe.Subscription, deleted = false) {
   const planName = sub.items?.data?.[0]?.price?.nickname || 'Coaching'
   const stripePriceId = sub.items?.data?.[0]?.price?.id || ''
 
-  await supabase.from('subscriptions').update({
+  // Critical: this is how status flips (e.g. canceled, past_due, active)
+  // propagate from Stripe to our DB. Throw to force a Stripe retry on failure.
+  const { error: subErr } = await supabase.from('subscriptions').update({
     status,
     plan_name: planName,
     stripe_price_id: stripePriceId,
@@ -242,10 +265,13 @@ async function handleSubUpdate(sub: Stripe.Subscription, deleted = false) {
     canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
     updated_at: new Date().toISOString(),
   }).eq('stripe_subscription_id', sub.id)
+  if (subErr) throw new Error(`subscriptions.update status=${status} failed (sub=${sub.id}): ${subErr.message}`)
 
-  await supabase.from('clients')
+  // Critical: keeps the client row's denormalized status in sync.
+  const { error: cliErr } = await supabase.from('clients')
     .update({ subscription_status: status, subscription_plan: planName })
     .eq('stripe_customer_id', stripeCustomerId)
+  if (cliErr) throw new Error(`clients.update subscription_status=${status} failed (cust=${stripeCustomerId}): ${cliErr.message}`)
 }
 
 export const dynamic = 'force-dynamic'

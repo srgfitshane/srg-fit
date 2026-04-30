@@ -153,14 +153,18 @@ export default function CoachCheckins() {
   const handleReview = async () => {
     if (!selected) return
     setSaving(true)
-    await supabase.from('client_form_assignments').update({
+    const { error } = await supabase.from('client_form_assignments').update({
       coach_response: feedback.trim() || null,
       coach_responded_at: new Date().toISOString(),
     }).eq('id', selected.id)
+    setSaving(false)
+    if (error) {
+      alert('Could not save coach response: ' + error.message)
+      return
+    }
     setCheckins(prev => prev.map(c => c.id === selected.id
       ? { ...c, coach_response: feedback.trim() || null, coach_responded_at: new Date().toISOString() }
       : c))
-    setSaving(false)
   }
 
   const visible = filter === 'unreviewed'
