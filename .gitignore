@@ -45,3 +45,12 @@ supabase/.temp/
 
 # Local commit message scratch file
 .git_commit_msg.tmp
+
+# Desktop app build artifacts
+desktop/node_modules
+desktop/dist
+desktop/src-tauri/target
+desktop/src-tauri/gen
+# Icons are regenerated locally via `npx @tauri-apps/cli icon <source.png>`
+# (see desktop/README.md). Keeping the binary set out of git keeps the diff small.
+desktop/src-tauri/icons/
