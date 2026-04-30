@@ -606,29 +606,6 @@ export default function ClientDetail() {
           {activeTab === 'overview' && (
             <div className="overview-grid" style={{ display:"grid" }}>
 
-              {/* ── Pinned coach notes ── */}
-              <div style={{ background:t.surface, border:`1px solid ${coachNotes.trim() ? alpha(t.orange, 38) : t.border}`, borderRadius:16, padding:20 }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-                  <div style={{ fontSize:13, fontWeight:800 }}>📌 Coach Notes</div>
-                  {notesSaved && <div style={{ fontSize:11, color:t.green, fontWeight:700 }}>Saved ✓</div>}
-                </div>
-                <textarea
-                  value={coachNotes}
-                  onChange={e=>{ setCoachNotes(e.target.value); setNotesSaved(false) }}
-                  placeholder="Private notes about this client — goals, preferences, injuries, cues that work..."
-                  rows={4}
-                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'vertical', boxSizing:'border-box', marginBottom:10, colorScheme:'dark' }}
-                />
-                <button onClick={async()=>{
-                    const { error } = await supabase.from('clients').update({ coach_notes: coachNotes }).eq('id', clientId)
-                    if (error) { alert('Could not save notes: ' + error.message); return }
-                    setNotesSaved(true)
-                  }}
-                  style={{ background:coachNotes.trim()?t.orange:'transparent', border:`1px solid ${coachNotes.trim()?t.orange:t.border}`, borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:coachNotes.trim()?'#000':t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  Save Notes
-                </button>
-              </div>
-
               {/* ── Morning pulse (most recent) ── */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
