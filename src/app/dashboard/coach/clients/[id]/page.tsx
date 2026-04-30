@@ -3284,24 +3284,22 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const deleteProgram = async (id: string) => {
     setDeleting(true)
     try {
-      const { data: sessions } = await supabase.from('workout_sessions').select('id').eq('program_id', id).throwOnError()
-      for (const sess of (sessions || [])) {
-        await supabase.from('session_exercises').delete().eq('session_id', sess.id).throwOnError()
-        await supabase.from('exercise_sets').delete().eq('session_id', sess.id).throwOnError()
-      }
-      await supabase.from('workout_sessions').delete().eq('program_id', id).throwOnError()
-      const { data: blocks } = await supabase.from('workout_blocks').select('id').eq('program_id', id).throwOnError()
-      for (const b of (blocks || [])) {
-        await supabase.from('block_exercises').delete().eq('block_id', b.id).throwOnError()
-      }
+      // Only delete sessions that haven't been started. Logged sessions
+      // (in_progress / completed) are preserved as historical records;
+      // FK SET NULL on workout_sessions.program_id makes them orphans
+      // that still appear in the client's history.
+      await supabase.from('workout_sessions').delete()
+        .eq('program_id', id).eq('status', 'assigned').throwOnError()
+      // workout_blocks → block_exercises cascades via FK; just drop the blocks
       await supabase.from('workout_blocks').delete().eq('program_id', id).throwOnError()
+      // Program goes; surviving (logged) sessions get program_id = NULL via FK
       await supabase.from('programs').delete().eq('id', id).throwOnError()
       setClientPrograms(prev => prev.filter(p => p.id !== id))
       if (program?.id === id) onProgramChange(null)
       setDeleteConfirm(null)
     } catch (err: any) {
       console.error('deleteProgram failed:', err)
-      alert('Could not delete program: ' + (err?.message || 'Unknown error') + '. Some pieces may have been removed — please refresh and try again.')
+      alert('Could not delete program: ' + (err?.message || 'Unknown error'))
     } finally {
       setDeleting(false)
     }
