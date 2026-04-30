@@ -185,7 +185,14 @@ export default function ClientProgressPage() {
   }, [loadData])
 
   const first = metrics[0], last = metrics[metrics.length-1]
-  const weightChange = first?.weight != null && last?.weight != null ? (Number(last.weight) - Number(first.weight)).toFixed(1) : null
+  // Current Weight + Change need the most-recent / oldest entries that
+  // ACTUALLY have a weight value. Walking metrics[length-1] alone breaks
+  // when the latest row is a measurements-only log (arms but no weigh-in)
+  // and renders "—" even though earlier rows have weights.
+  const weightSeries = (metrics as Array<MetricEntry & { weight?: number | string | null }>).filter(m => m.weight != null && String(m.weight).trim() !== '')
+  const firstWeight = weightSeries[0]
+  const lastWeight  = weightSeries[weightSeries.length - 1]
+  const weightChange = firstWeight && lastWeight ? (Number(lastWeight.weight) - Number(firstWeight.weight)).toFixed(1) : null
   const latestPulse = pulseHistory[pulseHistory.length - 1]
 
   const activeGroup = METRIC_GROUPS[activeGroupIdx]
@@ -379,7 +386,7 @@ export default function ClientProgressPage() {
       {metrics.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:10, marginBottom:20 }}>
           {[
-            { label:'Current Weight', val: last?.weight ? `${last.weight} lbs` : '—', color:t.teal },
+            { label:'Current Weight', val: lastWeight?.weight ? `${lastWeight.weight} lbs` : '—', color:t.teal },
             { label:'Change', val: weightChange ? `${+weightChange>0?'+':''}${weightChange} lbs` : '—',
               color: weightChange ? (+weightChange<0?t.green:t.red) : t.textMuted },
             { label:'Entries', val: metrics.length, color:t.purple },
