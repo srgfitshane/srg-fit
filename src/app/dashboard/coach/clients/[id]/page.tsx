@@ -560,13 +560,42 @@ export default function ClientDetail() {
               </div>
               <div style={{ fontSize:13, color:t.textMuted }}>{client.profile?.email} · Client since {new Date(client.start_date).toLocaleDateString([], { month:'long', day:'numeric', year:'numeric' })}</div>
               {client.flag_note && <div style={{ fontSize:12, color:t.red, marginTop:4, fontStyle:'italic' }}>Note: {client.flag_note}</div>}
-              {/* Last active signal */}
+              {/* Last active signal -- aggregates every meaningful client signal,
+                  not just last_checkin_at (which only ticks on weekly form check-ins).
+                  A client who logs Morning Pulse, completes a workout, or logs habits
+                  today should read "Today", not "3 days ago". */}
               {(() => {
-                const last = client.last_checkin_at
-                if (!last) return <div style={{ fontSize:12, color:t.red, marginTop:4, fontWeight:600 }}>⚠️ No check-in on record</div>
-                const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000)
-                const color = days >= 7 ? t.red : days >= 4 ? t.orange : t.green
-                const label = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`
+                const candidates: Array<number> = []
+                const pushIso = (iso: string | null | undefined) => {
+                  if (!iso) return
+                  const t = new Date(iso).getTime()
+                  if (Number.isFinite(t)) candidates.push(t)
+                }
+                const pushDate = (dateOnly: string | null | undefined) => {
+                  // YYYY-MM-DD -> end of that day local, so "today" reads as today
+                  if (!dateOnly) return
+                  const d = new Date(dateOnly + 'T23:59:59')
+                  if (Number.isFinite(d.getTime())) candidates.push(d.getTime())
+                }
+                pushIso(client.last_checkin_at)
+                // Latest completed workout (workouts is sorted by scheduled_date,
+                // so we have to scan for the max completed_at).
+                let maxWorkout = 0
+                for (const w of workouts as Array<{ status?: string; completed_at?: string | null }>) {
+                  if (w.status === 'completed' && w.completed_at) {
+                    const t = new Date(w.completed_at).getTime()
+                    if (t > maxWorkout) maxWorkout = t
+                  }
+                }
+                if (maxWorkout > 0) candidates.push(maxWorkout)
+                pushDate(dailyPulse[0]?.checkin_date)
+                pushIso(latestCheckin?.completed_at)
+                if (candidates.length === 0) return <div style={{ fontSize:12, color:t.red, marginTop:4, fontWeight:600 }}>⚠️ No activity on record</div>
+                const last = Math.max(...candidates)
+                const days = Math.floor((Date.now() - last) / 86400000)
+                const safeDays = Math.max(0, days) // future-dated rows shouldn't read negative
+                const color = safeDays >= 7 ? t.red : safeDays >= 4 ? t.orange : t.green
+                const label = safeDays === 0 ? 'Today' : safeDays === 1 ? 'Yesterday' : `${safeDays} days ago`
                 return <div style={{ fontSize:12, color, marginTop:4, fontWeight:600 }}>Last active: {label}</div>
               })()}
             </div>
