@@ -9,6 +9,11 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Coach-only: writes to workout_templates which is shared coach-owned content.
+  // Clients have no business creating or editing workout templates.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'coach') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { template, exercises, template_id } = await req.json()
   if (!template?.title || !exercises?.length) {
     return NextResponse.json({ error: 'template and exercises required' }, { status: 400 })

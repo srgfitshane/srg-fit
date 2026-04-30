@@ -11,6 +11,11 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Coach-only: uses adminDb (service role). Without this gate any logged-in
+  // client could clone any workout_session by id to any target client.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'coach') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { source_session_id, target_date, target_client_id } = await req.json()
   if (!source_session_id || !target_date || !target_client_id) {
     return NextResponse.json({ error: 'source_session_id, target_date, target_client_id required' }, { status: 400 })

@@ -9,6 +9,12 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Coach-only: this route uses adminDb (service role) which bypasses RLS, so
+  // the role check has to live here in code. Without it any logged-in client
+  // could call this endpoint and write workout_sessions for arbitrary clients.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'coach') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { template_id, client_id, scheduled_date } = await req.json()
   if (!template_id || !client_id) {
     return NextResponse.json({ error: 'template_id and client_id required' }, { status: 400 })

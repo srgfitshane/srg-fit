@@ -9,6 +9,12 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Coach-only: writes to workout_templates (a shared coach-owned table) and
+  // creates workout_sessions for an arbitrary client_id via adminDb. Without
+  // this gate a logged-in client could pollute other clients' programs.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'coach') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const { template, exercises, client_id, scheduled_date } = await req.json()
   console.log('[save-and-assign] Received:', { title: template?.title, exerciseCount: exercises?.length, client_id, scheduled_date })
   if (!template?.title || !exercises?.length || !client_id) {
