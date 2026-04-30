@@ -112,6 +112,7 @@ export default function ClientDetail() {
   const [assignedDone,   setAssignedDone]   = useState(false)
   const [resending,      setResending]      = useState(false)
   const [resendDone,     setResendDone]     = useState(false)
+  const [showReportMenu, setShowReportMenu] = useState(false)
   const router   = useRouter()
   const params   = useParams()
   const searchParams = useSearchParams()
@@ -442,6 +443,42 @@ export default function ClientDetail() {
             style={{ background:t.purpleDim, border:'1px solid '+alpha(t.purple, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             📝 Send Form
           </button>
+          {/* Monthly report -- opens a popover of the last 6 months. Each click
+              hits the /api/reports/monthly route which streams back a PDF. */}
+          <div style={{ position:'relative' }}>
+            <button onClick={()=>setShowReportMenu(v => !v)}
+              style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              📊 Monthly Report
+            </button>
+            {showReportMenu && (() => {
+              const now = new Date()
+              const months: Array<{ key: string; label: string; sub: string }> = []
+              for (let i = 0; i < 6; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                months.push({ key, label, sub: i === 0 ? 'This month (in progress)' : i === 1 ? 'Last month' : `${i} months ago` })
+              }
+              return (
+                <>
+                  {/* outside-click catcher */}
+                  <div onClick={()=>setShowReportMenu(false)}
+                    style={{ position:'fixed', inset:0, zIndex:50, background:'transparent' }} />
+                  <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:51, background:t.surface, border:'1px solid '+t.border, borderRadius:10, minWidth:240, boxShadow:'0 8px 24px rgba(0,0,0,0.4)', overflow:'hidden' }}>
+                    {months.map((m) => (
+                      <a key={m.key}
+                        href={`/api/reports/monthly?clientId=${clientId}&month=${m.key}`}
+                        onClick={()=>setShowReportMenu(false)}
+                        style={{ display:'block', padding:'10px 14px', fontSize:13, color:t.text, textDecoration:'none', borderBottom:'1px solid '+t.border, fontFamily:"'DM Sans',sans-serif" }}>
+                        <div style={{ fontWeight:700 }}>{m.label}</div>
+                        <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{m.sub}</div>
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
+          </div>
           <button onClick={()=>router.push('/dashboard/coach/clients/'+clientId+'/habits')}
             style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             ✅ Manage Habits
