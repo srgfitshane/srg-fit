@@ -880,21 +880,20 @@ export default function CoachDashboard() {
             )
           })()}
 
-          {/* Stats */}
-          <div className="coach-stats" style={{ marginBottom:28 }}>
+          {/* Stats density bar — informational only, kept visually light so
+              the action surfaces below get the eye's attention. */}
+          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:'8px 12px', marginBottom:20, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' as const }}>
             {[
-              { label:'Active Clients', val:clients.filter((c)=>!c.paused).length,                      color:t.teal,   icon:'👥' },
-              { label:'Flagged',        val:clients.filter(c=>c.flagged).length, color:t.red,    icon:'🚩' },
-              { label:'Pending Check-ins',  val:pendingCheckins,                                 color:t.orange, icon:'✅', sub: checkInsDue > 0 ? `${checkInsDue} over 7 days` : null },
-              { label:'Unread Msgs',    val:unreadMsgs,                                 color:t.purple, icon:'💬' },
-            ].map(s => (
-              <div key={s.label} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'18px 20px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                  <span style={{ fontSize:18 }}>{s.icon}</span>
-                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>{s.label}</div>
-                </div>
-                <div style={{ fontSize:28, fontWeight:900, color:s.color }}>{s.val}</div>
-                {s.sub && <div style={{ fontSize:11, fontWeight:700, color:t.red, marginTop:4 }}>⚠️ {s.sub}</div>}
+              { label:'Active',      val:clients.filter((c)=>!c.paused).length, color:t.teal,   icon:'👥' },
+              { label:'Flagged',     val:clients.filter(c=>c.flagged).length,   color:t.red,    icon:'🚩' },
+              { label:'Check-ins',   val:pendingCheckins,                       color:t.orange, icon:'✅', sub: checkInsDue > 0 ? `${checkInsDue} stale` : null },
+              { label:'Unread',      val:unreadMsgs,                            color:t.purple, icon:'💬' },
+            ].map((s, i) => (
+              <div key={s.label} style={{ display:'flex', alignItems:'center', gap:6, paddingRight:14, borderRight: i < 3 ? '1px solid '+t.border : 'none' }}>
+                <span style={{ fontSize:14 }} aria-hidden>{s.icon}</span>
+                <span style={{ fontSize:18, fontWeight:900, color:s.color, fontVariantNumeric:'tabular-nums' as const }}>{s.val}</span>
+                <span style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>{s.label}</span>
+                {s.sub && <span style={{ fontSize:10, fontWeight:700, color:t.red, marginLeft:4 }}>· {s.sub}</span>}
               </div>
             ))}
           </div>
@@ -1157,12 +1156,27 @@ export default function CoachDashboard() {
                   ) : filteredClients.map((client, i) => {
                     const initials = (client.profile?.full_name || client.display_name || '?').split(' ').map((n: string) => n[0]).join('')
                     const color = CLIENT_COLORS[i % CLIENT_COLORS.length]
+                    // Activity dot: aggregated last_active_at -> red/orange/yellow/green
+                    // so coach can spot quiet clients without clicking each row.
+                    const activityDays = getDaysSince(client.last_active_at)
+                    const dotColor =
+                      activityDays === null || activityDays >= 14 ? t.red
+                      : activityDays >= 7 ? t.orange
+                      : activityDays >= 3 ? t.yellow
+                      : t.green
+                    const dotTitle =
+                      activityDays === null ? 'No activity logged'
+                      : activityDays === 0 ? 'Active today'
+                      : activityDays === 1 ? 'Active yesterday'
+                      : `Last active ${activityDays} days ago`
                     return (
                       <div key={client.id}
                         style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 20px', borderBottom: i < filteredClients.length-1 ? '1px solid '+t.border : 'none', transition:'background 0.15s' }}
                         className="client-row"
                         onMouseEnter={e=>(e.currentTarget.style.background=t.surfaceUp)}
                         onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                        <span title={dotTitle} aria-label={dotTitle}
+                          style={{ width:8, height:8, borderRadius:'50%', background:dotColor, flexShrink:0, boxShadow:`0 0 0 2px ${dotColor}25` }} />
                         <div onClick={()=>router.push('/dashboard/coach/clients/'+client.id)} style={{ width:42, height:42, borderRadius:13, background:'linear-gradient(135deg,'+color+','+color+'88)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:'#000', flexShrink:0, cursor:'pointer' }}>
                           {initials}
                         </div>
