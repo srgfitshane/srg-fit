@@ -65,10 +65,17 @@ export default function ClientMetrics() {
   const [coachId,   setCoachId]   = useState<string|null>(null)
   const [history,   setHistory]   = useState<MetricEntry[]>([])
   const [values,    setValues]    = useState<Record<string,string>>({})
-  const [logDate,   setLogDate]   = useState(new Date().toISOString().split('T')[0])
+  // Local date, not toISOString -- per Rule 7 in CLAUDE.md, UTC drifts off
+  // the user's wall-clock day on evenings ET and could collide with the
+  // (client_id, logged_date) unique key.
+  const [logDate,   setLogDate]   = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [loading,   setLoading]   = useState(true)
   const [saving,    setSaving]    = useState(false)
   const [saved,     setSaved]     = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -95,16 +102,57 @@ export default function ClientMetrics() {
   const handleSave = async () => {
     if (!clientId) return
     setSaving(true)
+    setSaveError(null)
     const payload: Record<string, string | number | null> = { client_id: clientId, logged_date: logDate }
     if (coachId) payload.coach_id = coachId
-    METRICS.forEach(m => { if (values[m.key]) payload[m.key] = parseFloat(values[m.key]) })
-    await supabase.from('metrics').upsert(payload, { onConflict: 'client_id,logged_date' })
+    // Skip empty fields, and skip NaN -- a typo like "42 in" parses to 42
+    // but "abc" or stray punctuation would yield NaN and the entire upsert
+    // would fail with "invalid input syntax for type numeric: NaN". This is
+    // the most likely reason older measurement saves silently disappeared.
+    let anyMeasurementInPayload = false
+    METRICS.forEach(m => {
+      const raw = values[m.key]
+      if (!raw) return
+      const n = parseFloat(raw)
+      if (!Number.isFinite(n)) return
+      payload[m.key] = n
+      if (m.key !== 'weight') anyMeasurementInPayload = true
+    })
+    // Rule 14: error-check the upsert and surface failure visibly. Previous
+    // version just awaited and fired setSaved(true) regardless -- so any
+    // RLS / validation / network error vanished and the user saw "Saved!"
+    // with nothing actually persisted.
+    const { error: upErr } = await supabase.from('metrics').upsert(payload, { onConflict: 'client_id,logged_date' })
+    if (upErr) {
+      setSaving(false)
+      setSaveError('Could not save measurements. ' + upErr.message)
+      return
+    }
     const { data: hist } = await supabase
       .from('metrics').select('*').eq('client_id', clientId)
       .order('logged_date', { ascending: true }).limit(12)
     setHistory((hist || []) as MetricEntry[])
     setSaving(false)
     setSaved(true)
+    // Belt-and-suspenders: re-fetch the row we just wrote and verify the
+    // measurement columns landed. If they didn't (e.g., a trigger nulled
+    // them out), surface that to the user instead of silently celebrating.
+    if (anyMeasurementInPayload) {
+      const { data: justSaved } = await supabase.from('metrics')
+        .select('*').eq('client_id', clientId).eq('logged_date', logDate).maybeSingle()
+      if (justSaved) {
+        const missing: string[] = []
+        for (const m of METRICS) {
+          if (m.key === 'weight') continue
+          if (payload[m.key] !== undefined && (justSaved as Record<string, unknown>)[m.key] == null) missing.push(m.label)
+        }
+        if (missing.length > 0) {
+          setSaved(false)
+          setSaveError(`Saved weight, but these did not persist: ${missing.join(', ')}. Take a screenshot and ping Shane.`)
+          return
+        }
+      }
+    }
     setTimeout(() => setSaved(false), 2500)
   }
 
@@ -197,6 +245,13 @@ export default function ClientMetrics() {
               )
             })}
           </div>
+
+          {saveError && (
+            <div style={{ background:alpha(t.red, 12), border:'1px solid '+alpha(t.red, 38), borderRadius:10, padding:'10px 14px', fontSize:13, color:t.red, lineHeight:1.5, marginBottom:12, display:'flex', gap:8, alignItems:'flex-start' }}>
+              <span style={{ fontSize:14, lineHeight:1, marginTop:1 }}>⚠</span>
+              <span>{saveError}</span>
+            </div>
+          )}
 
           <button onClick={handleSave} disabled={saving}
             style={{ width:'100%', background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:12, padding:'14px', fontSize:14, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
