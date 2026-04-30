@@ -12,12 +12,15 @@ const t = {
 }
 
 const SITE_URL = 'https://srgfit.app'
-const DIRECT_TOKEN = process.env.NEXT_PUBLIC_COACH_INVITE_TOKEN || ''
 const COACH_ID = '133f93d0-2399-4542-bc57-db4de8b98d79'
 
 type Invite = {
   id: string; email: string; full_name: string | null; status: string
   created_at: string; accepted_at: string | null
+}
+
+type SignupToken = {
+  id: string; token: string; label: string | null; created_at: string
 }
 
 export default function InvitesPage() {
@@ -42,7 +45,13 @@ export default function InvitesPage() {
   const [ipDone,   setIpDone]   = useState(false)
   const [ipError,  setIpError]  = useState('')
 
-  const directLink = `${SITE_URL}/join/direct?token=${DIRECT_TOKEN}`
+  // Single-use share-link state
+  const [activeToken, setActiveToken] = useState<SignupToken | null>(null)
+  const [tokenLabel,  setTokenLabel]  = useState('')
+  const [tokenBusy,   setTokenBusy]   = useState(false)
+  const [tokenError,  setTokenError]  = useState('')
+
+  const directLink = activeToken ? `${SITE_URL}/join/direct?token=${activeToken.token}` : ''
 
   const loadInvites = useCallback(async () => {
     const { data } = await supabase
@@ -52,9 +61,48 @@ export default function InvitesPage() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => { void loadInvites() }, [loadInvites])
+  const loadActiveToken = useCallback(async () => {
+    const { data } = await supabase
+      .from('signup_tokens')
+      .select('id, token, label, created_at')
+      .eq('coach_id', COACH_ID)
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    setActiveToken(data || null)
+  }, [supabase])
+
+  useEffect(() => { void loadInvites(); void loadActiveToken() }, [loadInvites, loadActiveToken])
+
+  const generateToken = async () => {
+    setTokenBusy(true); setTokenError('')
+    // Invalidate any prior unused tokens for this coach so only one is live at a time
+    if (activeToken) {
+      const { error: delErr } = await supabase.from('signup_tokens').delete().eq('id', activeToken.id)
+      if (delErr) { setTokenError(delErr.message); setTokenBusy(false); return }
+    }
+    const { error: insErr } = await supabase.from('signup_tokens').insert({
+      coach_id: COACH_ID,
+      label: tokenLabel.trim() || null,
+    })
+    if (insErr) { setTokenError(insErr.message); setTokenBusy(false); return }
+    setTokenLabel('')
+    await loadActiveToken()
+    setTokenBusy(false)
+  }
+
+  const revokeToken = async () => {
+    if (!activeToken) return
+    setTokenBusy(true); setTokenError('')
+    const { error: delErr } = await supabase.from('signup_tokens').delete().eq('id', activeToken.id)
+    if (delErr) { setTokenError(delErr.message); setTokenBusy(false); return }
+    setActiveToken(null)
+    setTokenBusy(false)
+  }
 
   const copyLink = async () => {
+    if (!directLink) return
     await navigator.clipboard.writeText(directLink)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -112,20 +160,56 @@ export default function InvitesPage() {
 
       <div style={{ maxWidth:640, margin:'0 auto', padding:'32px 24px', display:'flex', flexDirection:'column', gap:20 }}>
 
-        {/* ── Share link ── */}
+        {/* ── Single-use share link ── */}
         <div style={card}>
-          <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>📎 Share Signup Link</div>
+          <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>📎 Single-Use Signup Link</div>
           <div style={{ fontSize:12, color:t.textMuted, marginBottom:16, lineHeight:1.6 }}>
-            For clients who want access to the app. They sign up, set a password, and go through onboarding automatically.
+            For family or clients paying outside the app. Each link works <strong style={{ color:t.text }}>exactly once</strong> — generate a fresh one for each person.
           </div>
-          <div style={{ display:'flex', gap:8 }}>
-            <div style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:12, color:t.textDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
-              {directLink}
+
+          {activeToken ? (
+            <>
+              {activeToken.label && (
+                <div style={{ fontSize:11, color:t.textMuted, marginBottom:8 }}>For: <strong style={{ color:t.text }}>{activeToken.label}</strong></div>
+              )}
+              <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+                <div style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 13px', fontSize:12, color:t.textDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
+                  {directLink}
+                </div>
+                <button onClick={copyLink} style={{ background: copied ? t.green+'20' : t.tealDim, border:`1px solid ${copied ? t.green+'40' : t.teal+'40'}`, borderRadius:10, padding:'10px 16px', fontSize:12, fontWeight:700, color: copied ? t.green : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, whiteSpace:'nowrap' as const }}>
+                  {copied ? '✓ Copied!' : 'Copy Link'}
+                </button>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={generateToken} disabled={tokenBusy} style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.text, cursor: tokenBusy ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {tokenBusy ? '...' : '↻ Replace with new link'}
+                </button>
+                <button onClick={revokeToken} disabled={tokenBusy} style={{ background:t.redDim, border:`1px solid ${t.red}40`, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.red, cursor: tokenBusy ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Revoke
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <input
+                  value={tokenLabel}
+                  onChange={e=>setTokenLabel(e.target.value)}
+                  placeholder="Optional label (e.g. Mom, Aunt Mary)"
+                  style={inp}
+                />
+                <button onClick={generateToken} disabled={tokenBusy} style={{ background: tokenBusy ? t.surfaceHigh : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color: tokenBusy ? t.textMuted : '#000', cursor: tokenBusy ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {tokenBusy ? 'Generating...' : 'Generate Single-Use Link'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {tokenError && (
+            <div style={{ marginTop:10, background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'9px 13px', fontSize:12, color:t.red }}>
+              {tokenError}
             </div>
-            <button onClick={copyLink} style={{ background: copied ? t.green+'20' : t.tealDim, border:`1px solid ${copied ? t.green+'40' : t.teal+'40'}`, borderRadius:10, padding:'10px 16px', fontSize:12, fontWeight:700, color: copied ? t.green : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, whiteSpace:'nowrap' as const }}>
-              {copied ? '✓ Copied!' : 'Copy Link'}
-            </button>
-          </div>
+          )}
         </div>
 
         {/* ── Send invite by email ── */}

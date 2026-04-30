@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
       if (existingInvite) {
         const { data: updatedInvite, error: updateInviteError } = await admin.from('client_invites').update({
           status: 'pending',
+          token: crypto.randomUUID(),
           full_name: normalizedName,
           message: message || existingInvite.message || null,
           onboarding_form_id: onboarding_form_id || existingInvite.onboarding_form_id || null,

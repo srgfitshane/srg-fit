@@ -161,8 +161,8 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
         <div ref={panelRef} style={{
           position: 'fixed',
           top: panelPos.top,
-          right: panelPos.right,
-          width: 340, maxHeight: 480,
+          right: Math.max(panelPos.right, 12),
+          width: 'min(340px, calc(100vw - 24px))', maxHeight: 480,
           background: t.surface, border: `1px solid ${t.border}`,
           borderRadius: 14, boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
           zIndex: 99999, overflow: 'hidden', display: 'flex', flexDirection: 'column',

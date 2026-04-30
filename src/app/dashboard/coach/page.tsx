@@ -611,8 +611,47 @@ export default function CoachDashboard() {
   )
 
   if (loading) return (
-    <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif" }}>
-      <div style={{ color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
+    <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif" }}>
+      <style>{`
+        @keyframes srg-skel-pulse { 0%,100% { opacity:.55 } 50% { opacity:.95 } }
+        .srg-skel { animation: srg-skel-pulse 1.4s ease-in-out infinite; background:${t.surfaceUp}; border-radius:8px; }
+      `}</style>
+      {/* Header strip */}
+      <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 24px', height:60, display:'flex', alignItems:'center', gap:14 }}>
+        <div className="srg-skel" style={{ width:90, height:18 }} />
+        <div style={{ flex:1 }} />
+        <div className="srg-skel" style={{ width:34, height:34, borderRadius:10 }} />
+        <div className="srg-skel" style={{ width:34, height:34, borderRadius:10 }} />
+      </div>
+      {/* Stat cards */}
+      <div style={{ maxWidth:1200, margin:'0 auto', padding:'24px 20px', display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:14 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:18, display:'flex', flexDirection:'column', gap:10 }}>
+            <div className="srg-skel" style={{ width:'60%', height:12 }} />
+            <div className="srg-skel" style={{ width:'40%', height:24 }} />
+          </div>
+        ))}
+      </div>
+      {/* Client rows */}
+      <div style={{ maxWidth:1200, margin:'0 auto', padding:'8px 20px 32px' }}>
+        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, overflow:'hidden' }}>
+          <div style={{ padding:'14px 18px', borderBottom:'1px solid '+t.border, display:'flex', gap:12 }}>
+            <div className="srg-skel" style={{ width:120, height:16 }} />
+            <div style={{ flex:1 }} />
+            <div className="srg-skel" style={{ width:88, height:28, borderRadius:10 }} />
+          </div>
+          {[0,1,2,3,4].map(i => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < 4 ? '1px solid '+t.border : 'none' }}>
+              <div className="srg-skel" style={{ width:42, height:42, borderRadius:13 }} />
+              <div style={{ flex:1, display:'flex', flexDirection:'column', gap:6 }}>
+                <div className="srg-skel" style={{ width:'45%', height:14 }} />
+                <div className="srg-skel" style={{ width:'30%', height:11 }} />
+              </div>
+              <div className="srg-skel" style={{ width:60, height:11 }} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 

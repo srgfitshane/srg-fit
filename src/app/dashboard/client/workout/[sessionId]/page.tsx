@@ -14,6 +14,44 @@ const t = {
   greenDim:"var(--green-dim)", yellow:"var(--yellow)"
 }
 
+// Rest-end cue: short A5 beep. Web Audio context must be created/resumed in a user
+// gesture chain — workout page already qualifies (set log tap → start rest).
+function playRestEndChime() {
+  try {
+    type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
+    const w = window as WindowWithWebkitAudio
+    const Ctx = window.AudioContext || w.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.value = 880
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.5)
+    setTimeout(() => { ctx.close().catch(() => {}) }, 700)
+  } catch { /* audio context unavailable — ok */ }
+}
+
+function fireRestEndAlert() {
+  playRestEndChime()
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate([200, 80, 200])
+    }
+  } catch { /* ignore */ }
+  try {
+    if (typeof window !== 'undefined' && 'Notification' in window
+        && Notification.permission === 'granted' && document.hidden) {
+      new Notification('Rest done', { body: 'Time for the next set', silent: false })
+    }
+  } catch { /* ignore */ }
+}
+
 interface SetData {
   reps_completed: string
   duration_completed: string
@@ -358,6 +396,7 @@ ${candidateList}`
         if (current === null) return current
         if (current <= 1) {
           setRestActive(false)
+          fireRestEndAlert()
           return 0
         }
         return current - 1

@@ -8,9 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const { name, email, token } = await request.json()
 
-    // Validate token
-    const validToken = process.env.COACH_INVITE_TOKEN
-    if (!validToken || token !== validToken) {
+    if (!token || typeof token !== 'string') {
       return NextResponse.json({ error: 'Invalid invite link' }, { status: 403 })
     }
 
@@ -20,6 +18,21 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient()
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srgfit.app'
+
+    // Validate token against signup_tokens table — must exist and be unused
+    const { data: tokenRow, error: tokenError } = await admin
+      .from('signup_tokens')
+      .select('id, coach_id, used_at')
+      .eq('token', token)
+      .maybeSingle()
+
+    if (tokenError || !tokenRow) {
+      return NextResponse.json({ error: 'Invalid invite link' }, { status: 403 })
+    }
+
+    if (tokenRow.used_at) {
+      return NextResponse.json({ error: 'This invite link has already been used. Please request a new one from your coach.' }, { status: 410 })
+    }
 
     // Check if profile already exists
     const { data: existingProfile } = await admin
@@ -51,6 +64,13 @@ export async function POST(request: NextRequest) {
         email: email.trim().toLowerCase(),
         options: { redirectTo: `${siteUrl}/auth/callback?next=/set-password` },
       })
+
+      // Mark token consumed
+      await admin.from('signup_tokens').update({
+        used_at: new Date().toISOString(),
+        used_by_email: email.trim().toLowerCase(),
+        used_by_profile_id: existingProfile.id,
+      }).eq('id', tokenRow.id)
 
       return NextResponse.json({ success: true })
     }
@@ -84,6 +104,13 @@ export async function POST(request: NextRequest) {
         active: false,
       })
     }
+
+    // Mark token consumed
+    await admin.from('signup_tokens').update({
+      used_at: new Date().toISOString(),
+      used_by_email: email.trim().toLowerCase(),
+      used_by_profile_id: invited.user.id,
+    }).eq('id', tokenRow.id)
 
     // Notify coach — fire and forget
     fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-new-client`, {
