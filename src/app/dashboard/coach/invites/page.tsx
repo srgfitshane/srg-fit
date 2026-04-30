@@ -16,7 +16,7 @@ const COACH_ID = '133f93d0-2399-4542-bc57-db4de8b98d79'
 
 type Invite = {
   id: string; email: string; full_name: string | null; status: string
-  created_at: string; accepted_at: string | null
+  created_at: string; accepted_at: string | null; token: string
 }
 
 type SignupToken = {
@@ -51,11 +51,21 @@ export default function InvitesPage() {
   const [tokenBusy,   setTokenBusy]   = useState(false)
   const [tokenError,  setTokenError]  = useState('')
 
+  // Per-row "Copy Link" feedback for the email-invite history
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null)
+
   const directLink = activeToken ? `${SITE_URL}/join/direct?token=${activeToken.token}` : ''
+
+  const copyEmailInviteLink = async (inv: Invite) => {
+    if (!inv.token) return
+    await navigator.clipboard.writeText(`${SITE_URL}/invite/${inv.token}`)
+    setCopiedInviteId(inv.id)
+    setTimeout(() => setCopiedInviteId(prev => prev === inv.id ? null : prev), 2000)
+  }
 
   const loadInvites = useCallback(async () => {
     const { data } = await supabase
-      .from('client_invites').select('id,email,full_name,status,created_at,accepted_at')
+      .from('client_invites').select('id,email,full_name,status,created_at,accepted_at,token')
       .eq('coach_id', COACH_ID).order('created_at', { ascending: false }).limit(50)
     setInvites(data || [])
     setLoading(false)
@@ -271,12 +281,21 @@ export default function InvitesPage() {
             <div style={{ padding:'32px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading...</div>
           ) : invites.length === 0 ? (
             <div style={{ padding:'32px', textAlign:'center', color:t.textMuted, fontSize:13 }}>No invites sent yet.</div>
-          ) : invites.map((inv, i) => (
+          ) : invites.map((inv, i) => {
+            const justCopied = copiedInviteId === inv.id
+            const showCopy = inv.status === 'pending' && !!inv.token
+            return (
             <div key={inv.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom: i < invites.length-1 ? '1px solid '+t.border : 'none' }}>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:13, fontWeight:600 }}>{inv.full_name || inv.email}</div>
                 <div style={{ fontSize:11, color:t.textMuted }}>{inv.email}</div>
               </div>
+              {showCopy && (
+                <button onClick={()=>copyEmailInviteLink(inv)} aria-label={`Copy invite link for ${inv.email}`}
+                  style={{ background: justCopied ? t.green+'20' : t.tealDim, border:`1px solid ${justCopied ? t.green+'40' : t.teal+'40'}`, borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color: justCopied ? t.green : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, whiteSpace:'nowrap' as const }}>
+                  {justCopied ? '✓ Copied' : 'Copy Link'}
+                </button>
+              )}
               <span style={{ fontSize:11, fontWeight:700, flexShrink:0, borderRadius:20, padding:'3px 10px',
                 color: inv.status==='accepted' ? t.green : inv.status==='pending' ? t.orange : t.textMuted,
                 background: inv.status==='accepted' ? t.green+'15' : inv.status==='pending' ? t.orangeDim : t.surfaceHigh }}>
@@ -286,7 +305,8 @@ export default function InvitesPage() {
                 {new Date(inv.created_at).toLocaleDateString([], { month:'short', day:'numeric' })}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
 
       </div>
