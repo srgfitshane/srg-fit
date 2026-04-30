@@ -537,13 +537,16 @@ serve(async (req) => {
       ? await supabase.from('messages').select('id, body, created_at').eq('sender_id', client.profile_id).order('created_at', { ascending: false }).limit(8)
       : { data: [] }
 
-    // Lightweight queries used only to derive per-client baselines. Wider windows
-    // than the main rich-context queries above; we just need timestamps.
+    // Lightweight queries used only to derive per-client baselines + the
+    // most-recent weekly form check-in (a fourth engagement signal alongside
+    // last_workout / last_pulse / last_client_message). Wider windows than
+    // the main rich-context queries above; we just need timestamps.
     const sixtyDaysAgoIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
     const twentyEightDaysAgoIso = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    const [{ data: workoutHistory60d }, { data: nutritionHistory28d }] = await Promise.all([
+    const [{ data: workoutHistory60d }, { data: nutritionHistory28d }, { data: formCheckinHistory }] = await Promise.all([
       supabase.from('workout_sessions').select('completed_at').eq('client_id', client_id).eq('status', 'completed').gte('completed_at', sixtyDaysAgoIso).order('completed_at', { ascending: false }).limit(120),
       supabase.from('nutrition_daily_logs').select('log_date').eq('client_id', client_id).gte('log_date', twentyEightDaysAgoIso).limit(60),
+      supabase.from('client_form_assignments').select('completed_at').eq('client_id', client_id).eq('status', 'completed').not('checkin_schedule_id', 'is', null).order('completed_at', { ascending: false }).limit(1),
     ])
     const typicalWorkoutGapDays = computeWorkoutCadence((workoutHistory60d || []).map((r) => (r as { completed_at: string }).completed_at))
     const typicalNutritionLoggingPerWeek = computeNutritionBaseline((nutritionHistory28d || []).map((r) => (r as { log_date: string }).log_date), 28)
@@ -582,6 +585,21 @@ serve(async (req) => {
     const lastWorkoutAt = workoutEntries[0]?.completed_at || null
     const lastClientMessageAt = messageEntries[0]?.created_at || null
     const lastCheckinAt = checkinEntries[0]?.submitted_at || null
+    // Two more engagement signals for the prompt -- mirror of the dashboard
+    // "Needs Attention" panel widening. Treat checkin_date (date-only) as
+    // end-of-day local so today's pulse reads as "today" not "midnight days ago".
+    const lastPulseAt = pulseEntries[0]?.checkin_date ? `${pulseEntries[0].checkin_date}T23:59:59` : null
+    const lastFormCheckinAt = (formCheckinHistory || [])[0]?.completed_at || null
+    // Aggregated last-activity timestamp = max of every engagement signal.
+    // The model gets ONE clear "is this client going quiet" anchor instead
+    // of having to OR five separate gap fields.
+    const allActivityIsoCandidates = [lastWorkoutAt, lastClientMessageAt, lastCheckinAt, lastPulseAt, lastFormCheckinAt]
+      .filter((iso): iso is string => !!iso)
+      .map((iso) => new Date(iso).getTime())
+      .filter((n) => Number.isFinite(n))
+    const lastActivityAt = allActivityIsoCandidates.length > 0
+      ? new Date(Math.max(...allActivityIsoCandidates)).toISOString()
+      : null
     const adherenceRate14d = pulseEntries.length ? Number((workoutEntries.filter((row) => hoursSince(row.completed_at) !== null && (hoursSince(row.completed_at) as number) <= 24 * 14).length / 4).toFixed(2)) : null
     const nutritionLoggingDays7d = nutritionLogs.filter((row) => row.log_date && ((Date.now() - new Date(`${row.log_date}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24)) <= 7).length
     const strugglingCheckins = checkinEntries.filter((checkin) => `${checkin.struggles || ''}`.trim().length > 0).length
@@ -640,6 +658,12 @@ serve(async (req) => {
       hours_since_last_workout: hoursSince(lastWorkoutAt),
       hours_since_last_client_message: hoursSince(lastClientMessageAt),
       hours_since_last_checkin: hoursSince(lastCheckinAt),
+      hours_since_last_pulse: hoursSince(lastPulseAt),
+      hours_since_last_form_checkin: hoursSince(lastFormCheckinAt),
+      // Aggregated max-of-all-signals. Use this as the primary "is the
+      // client engaged?" anchor; the per-channel fields above are for
+      // diagnosing WHICH channel went quiet.
+      hours_since_last_activity: hoursSince(lastActivityAt),
       struggling_checkins_last_30_days: strugglingCheckins,
       recent_message_count: recentMessageCount,
       recent_prs: personalRecords.map((record) => ({
@@ -709,6 +733,7 @@ Rules:
   as recovery signal; positive delta in stress as a worsening signal; positive delta in
   session_rpe with no progress as plateau or recovery risk
 - nutrition_compliance_pct_last_7_days below 50 is weak; 50-80 is partial; 80+ is strong
+- hours_since_last_activity is the aggregated "is the client still showing up?" signal -- it's the max across every channel: weekly check-in, completed workout, Morning Pulse (daily_checkins), weekly form check-in, and outgoing client message. Use this as the primary engagement anchor; the per-channel hours_since_last_* fields tell you WHICH channel went quiet.
 - typical_workout_gap_days is the client's normal interval between workouts (median over 60 days, null if too little history). Compare hours_since_last_workout to this -- a gap of 2.5x the baseline is unusual for THIS client; an absolute "X days" threshold is misleading because 2x/wk and 5x/wk clients have very different normal cadences.
 - typical_nutrition_logging_per_week is the client's normal logging cadence (over 28 days). A trailing-7-day count below half of this baseline is a real drop; matching the baseline is fine even if the absolute number is low.
 
