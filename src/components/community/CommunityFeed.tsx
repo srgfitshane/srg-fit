@@ -551,11 +551,19 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     const body = replyDrafts[postId]?.trim()
     if (!body || !me || !coachId) return
     setReplyPosting(postId)
-    await supabase.from('community_replies').insert({
+    const { error } = await supabase.from('community_replies').insert({
       post_id: postId, coach_id: coachId, author_id: me.id, author_role: role, body
     })
+    setReplyPosting(null)
+    if (error) {
+      // Don't clear the draft on failure -- the user keeps what they typed
+      // and can retry. Previously the insert silently failed (RLS, network)
+      // and the reply just vanished.
+      alert('Could not post reply: ' + error.message)
+      return
+    }
     setReplyDrafts(p => ({ ...p, [postId]: '' }))
-    setReplyOpen(null); setReplyPosting(null); await loadPosts()
+    setReplyOpen(null); await loadPosts()
   }
 
   const toggleReaction = async (postId:string, emoji:string) => {

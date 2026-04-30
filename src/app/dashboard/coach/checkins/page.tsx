@@ -22,6 +22,26 @@ function ScorePill({ val, max=10, invert=false }: { val:number|null|undefined, m
   return <span style={{ fontWeight:800, color }}>{val}/{max}</span>
 }
 
+// Read a check-in response value by canonical maps_to alias, with fallback
+// to the question's UUID if the response was stored that way (forms/[id]
+// route writes question.id keys; dashboard/client/checkin route writes
+// maps_to keys -- both end up in the same response JSON column). Same
+// helper shape as the client-detail page; kept inline here so this file
+// remains independent.
+function readResponseValue(response: Record<string, unknown> | null | undefined, questions: Array<{ id: string; maps_to: string | null }> | undefined, ...aliases: string[]): unknown {
+  if (!response) return null
+  for (const key of aliases) {
+    const direct = response[key]
+    if (direct !== undefined && direct !== null && direct !== '') return direct
+    const q = questions?.find(qq => qq.maps_to === key)
+    if (q) {
+      const byId = response[q.id]
+      if (byId !== undefined && byId !== null && byId !== '') return byId
+    }
+  }
+  return null
+}
+
 export default function CoachCheckins() {
   const [checkins, setCheckins] = useState<any[]>([])
   const [clients,  setClients]  = useState<any[]>([])
@@ -241,13 +261,15 @@ export default function CoachCheckins() {
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6 }}>
                     {(() => {
                       const pulse = weeklyPulse[ci.client_id]
+                      const qs = questions[ci.form_id]
+                      const num = (v: unknown): number | null | undefined => v == null ? v as null : Number(v)
                       return [
-                        { label:'Mood',      val: pulse?.mood ?? r.mood_score },
-                        { label:'Energy',    val: pulse?.energy ?? r.energy_score },
-                        { label:'Sleep Q',   val: pulse?.sleep ?? r.sleep_quality },
-                        { label:'Stress',    val: pulse?.stress ?? r.stress_score, invert:true },
-                        { label:'Workout',   val:r.workout_adherence, max:100 },
-                        { label:'Nutrition', val:r.nutrition_adherence, max:100 },
+                        { label:'Mood',      val: pulse?.mood ?? num(readResponseValue(r, qs, 'mood_score', 'mood')) },
+                        { label:'Energy',    val: pulse?.energy ?? num(readResponseValue(r, qs, 'energy_score', 'energy')) },
+                        { label:'Sleep Q',   val: pulse?.sleep ?? num(readResponseValue(r, qs, 'sleep_quality', 'sleep')) },
+                        { label:'Stress',    val: pulse?.stress ?? num(readResponseValue(r, qs, 'stress', 'stress_score', 'stress_level')), invert:true },
+                        { label:'Workout',   val: num(readResponseValue(r, qs, 'workout_adherence')), max:100 },
+                        { label:'Nutrition', val: num(readResponseValue(r, qs, 'nutrition_adherence')), max:100 },
                       ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:8, padding:'7px 8px', textAlign:'center' }}>
                         <div style={{ fontSize:9, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:3 }}>{s.label}</div>
@@ -256,12 +278,18 @@ export default function CoachCheckins() {
                     ))
                     })()}
                   </div>
-                  {(r.wins || r.struggles) && (
-                    <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:3 }}>
-                      {r.wins && <div style={{ fontSize:12, color:t.green }}>🏆 {r.wins}</div>}
-                      {r.struggles && <div style={{ fontSize:12, color:t.orange }}>⚡ {r.struggles}</div>}
-                    </div>
-                  )}
+                  {(() => {
+                    const qs = questions[ci.form_id]
+                    const wins = readResponseValue(r, qs, 'wins')
+                    const struggles = readResponseValue(r, qs, 'struggles')
+                    if (!wins && !struggles) return null
+                    return (
+                      <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:3 }}>
+                        {wins ? <div style={{ fontSize:12, color:t.green }}>🏆 {String(wins)}</div> : null}
+                        {struggles ? <div style={{ fontSize:12, color:t.orange }}>⚡ {String(struggles)}</div> : null}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
@@ -288,42 +316,64 @@ export default function CoachCheckins() {
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
                     {(() => {
                       const pulse = weeklyPulse[selected.client_id]
+                      const qs = questions[selected.form_id]
+                      const num = (v: unknown): number | null | undefined => v == null ? v as null : Number(v)
                       return [
-                        { label:'Mood',          val: pulse?.mood ?? r.mood_score,    color:t.pink   },
-                        { label:'Energy',        val: pulse?.energy ?? r.energy_score, color:t.yellow },
-                        { label:'Sleep Quality', val: pulse?.sleep ?? r.sleep_quality, color:t.purple },
-                        { label:'Sleep Hours',   val: pulse?.sleepHours ?? r.sleep_hours, unit:'hrs', raw:true  },
-                        { label:'Stress',        val: pulse?.stress ?? r.stress_score, color:t.red, invert:true },
-                        { label:'Weight',        val:r.weight_lbs || r.weight, unit:'lbs', raw:true  },
+                        { label:'Mood',          val: pulse?.mood ?? num(readResponseValue(r, qs, 'mood_score', 'mood')),    color:t.pink   },
+                        { label:'Energy',        val: pulse?.energy ?? num(readResponseValue(r, qs, 'energy_score', 'energy')), color:t.yellow },
+                        { label:'Sleep Quality', val: pulse?.sleep ?? num(readResponseValue(r, qs, 'sleep_quality', 'sleep')), color:t.purple },
+                        { label:'Sleep Hours',   val: pulse?.sleepHours ?? readResponseValue(r, qs, 'sleep_hours', 'hours_of_sleep'), unit:'hrs', raw:true  },
+                        { label:'Stress',        val: pulse?.stress ?? num(readResponseValue(r, qs, 'stress', 'stress_score', 'stress_level')), color:t.red, invert:true },
+                        { label:'Weight',        val: readResponseValue(r, qs, 'weight', 'weight_lbs'), unit:'lbs', raw:true  },
                       ].map(s => (
                       <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px' }}>
                         <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
                         {(s as any).raw
                           ? <div style={{ fontSize:15, fontWeight:800, color:t.teal }}>{s.val != null ? `${s.val}${(s as any).unit||''}` : '—'}</div>
-                          : <ScorePill val={s.val} invert={s.invert} />
+                          : <ScorePill val={s.val as number | null | undefined} invert={s.invert} />
                         }
                       </div>
                     ))
                     })()}
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
-                    {[
-                      { label:'Workout',   val:r.workout_adherence },
-                      { label:'Nutrition', val:r.nutrition_adherence },
-                      { label:'Habits',    val:r.habit_adherence },
-                    ].map(s => (
-                      <div key={s.label} style={{ background:t.tealDim, border:'1px solid '+t.teal+'25', borderRadius:10, padding:'10px 12px', textAlign:'center' }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
-                        <div style={{ fontSize:15, fontWeight:800, color:t.teal }}>{s.val != null ? `${s.val}%` : '—'}</div>
+                  {(() => {
+                    const qs = questions[selected.form_id]
+                    const workout = readResponseValue(r, qs, 'workout_adherence')
+                    const nutrition = readResponseValue(r, qs, 'nutrition_adherence')
+                    const habits = readResponseValue(r, qs, 'habit_adherence')
+                    return (
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+                        {[
+                          { label:'Workout',   val: workout },
+                          { label:'Nutrition', val: nutrition },
+                          { label:'Habits',    val: habits },
+                        ].map(s => (
+                          <div key={s.label} style={{ background:t.tealDim, border:'1px solid '+t.teal+'25', borderRadius:10, padding:'10px 12px', textAlign:'center' }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
+                            <div style={{ fontSize:15, fontWeight:800, color:t.teal }}>{s.val != null ? `${s.val}%` : '—'}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })()}
 
-                  {r.wins            && <div style={{ background:t.greenDim,  border:'1px solid '+t.green+'30',  borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green,  marginBottom:8 }}><strong>Wins:</strong> {r.wins}</div>}
-                  {r.struggles       && <div style={{ background:t.orangeDim, border:'1px solid '+t.orange+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.orange, marginBottom:8 }}><strong>Struggles:</strong> {r.struggles}</div>}
-                  {r.goals_next_week && <div style={{ background:t.purpleDim, border:'1px solid '+t.purple+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.purple, marginBottom:8 }}><strong>Goals next week:</strong> {r.goals_next_week}</div>}
-                  {r.pain_notes      && <div style={{ background:t.redDim,    border:'1px solid '+t.red+'30',    borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red,    marginBottom:8 }}><strong>Pain notes:</strong> {r.pain_notes}</div>}
-                  {r.message_to_coach && <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal, marginBottom:8 }}><strong>Message:</strong> {r.message_to_coach}</div>}
+                  {(() => {
+                    const qs = questions[selected.form_id]
+                    const wins = readResponseValue(r, qs, 'wins')
+                    const struggles = readResponseValue(r, qs, 'struggles')
+                    const goals = readResponseValue(r, qs, 'goals_next_week')
+                    const pain = readResponseValue(r, qs, 'pain_notes')
+                    const message = readResponseValue(r, qs, 'message_to_coach')
+                    return (
+                      <>
+                        {wins      ? <div style={{ background:t.greenDim,  border:'1px solid '+t.green+'30',  borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green,  marginBottom:8 }}><strong>Wins:</strong> {String(wins)}</div> : null}
+                        {struggles ? <div style={{ background:t.orangeDim, border:'1px solid '+t.orange+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.orange, marginBottom:8 }}><strong>Struggles:</strong> {String(struggles)}</div> : null}
+                        {goals     ? <div style={{ background:t.purpleDim, border:'1px solid '+t.purple+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.purple, marginBottom:8 }}><strong>Goals next week:</strong> {String(goals)}</div> : null}
+                        {pain      ? <div style={{ background:t.redDim,    border:'1px solid '+t.red+'30',    borderRadius:10, padding:'10px 12px', fontSize:12, color:t.red,    marginBottom:8 }}><strong>Pain notes:</strong> {String(pain)}</div> : null}
+                        {message   ? <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.teal, marginBottom:8 }}><strong>Message:</strong> {String(message)}</div> : null}
+                      </>
+                    )
+                  })()}
 
                   {/* Form questions with answers — shown in order */}
                   {(() => {

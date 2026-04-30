@@ -61,6 +61,7 @@ type CoachClient = {
   start_date?: string | null
   last_checkin_at?: string | null
   last_workout_at?: string | null
+  last_active_at?: string | null
   profile?: { full_name?: string | null; email?: string | null; avatar_url?: string | null } | null
 }
 
@@ -337,56 +338,96 @@ export default function CoachDashboard() {
           .map((client) => [client.profile_id as string, client.profile?.full_name || 'Client'])
       )
 
-      // Build last-workout-per-client map. A client who keeps checking in but
-      // stops logging workouts wouldn't show up via last_checkin_at alone, so
-      // we add this as a second engagement-decay signal. 60-day window keeps
-      // the payload bounded; clients with no entry in that window get a null
-      // last_workout_at -> treated as stale.
+      // Build per-client engagement signals. A client who keeps checking in
+      // but stops logging workouts (or vice versa, or stops both but is
+      // active in pulse / weekly form check-ins) needs to surface in this
+      // panel. Aggregate the four signals into ONE last_active_at per client,
+      // then flag stale on a single threshold. Same widening that landed on
+      // the per-client "Last active" pill in commit d53c9a5.
+      // Cost: 3 lightweight queries (workout_sessions, daily_checkins,
+      // client_form_assignments) over a 60-day window.
       const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
-      const { data: clientWorkoutRows } = await supabase
-        .from('workout_sessions')
-        .select('client_id, completed_at')
-        .eq('coach_id', user.id)
-        .eq('status', 'completed')
-        .gte('completed_at', sixtyDaysAgo.toISOString())
-        .order('completed_at', { ascending: false })
-        .limit(500)
+      const sixtyDaysAgoIso = sixtyDaysAgo.toISOString()
+      const sixtyDaysAgoDate = sixtyDaysAgoIso.slice(0, 10)
+      const clientIdList = safeClientList.map(c => c.id)
+      const [
+        { data: clientWorkoutRows },
+        { data: clientPulseRows },
+        { data: clientFormCheckinRows },
+      ] = await Promise.all([
+        supabase.from('workout_sessions')
+          .select('client_id, completed_at')
+          .eq('coach_id', user.id).eq('status', 'completed')
+          .gte('completed_at', sixtyDaysAgoIso)
+          .order('completed_at', { ascending: false })
+          .limit(500),
+        clientIdList.length === 0 ? Promise.resolve({ data: [] as Array<{ client_id: string; checkin_date: string }> })
+          : supabase.from('daily_checkins')
+              .select('client_id, checkin_date')
+              .in('client_id', clientIdList)
+              .gte('checkin_date', sixtyDaysAgoDate)
+              .order('checkin_date', { ascending: false })
+              .limit(500),
+        clientIdList.length === 0 ? Promise.resolve({ data: [] as Array<{ client_id: string; completed_at: string }> })
+          : supabase.from('client_form_assignments')
+              .select('client_id, completed_at')
+              .in('client_id', clientIdList)
+              .eq('status', 'completed')
+              .not('checkin_schedule_id', 'is', null)
+              .gte('completed_at', sixtyDaysAgoIso)
+              .order('completed_at', { ascending: false })
+              .limit(500),
+      ])
+
+      // Most-recent timestamp per client across all four signals.
+      const lastActiveByClient = new Map<string, number>()
       const lastWorkoutByClient = new Map<string, string>()
+      const setIfNewer = (cid: string, ms: number | null) => {
+        if (ms === null || !Number.isFinite(ms)) return
+        const cur = lastActiveByClient.get(cid) ?? 0
+        if (ms > cur) lastActiveByClient.set(cid, ms)
+      }
+      for (const c of safeClientList) {
+        setIfNewer(c.id, c.last_checkin_at ? new Date(c.last_checkin_at).getTime() : null)
+      }
       for (const row of (clientWorkoutRows || []) as Array<{ client_id: string; completed_at: string }>) {
-        if (!lastWorkoutByClient.has(row.client_id)) {
-          lastWorkoutByClient.set(row.client_id, row.completed_at)
-        }
+        if (!lastWorkoutByClient.has(row.client_id)) lastWorkoutByClient.set(row.client_id, row.completed_at)
+        setIfNewer(row.client_id, new Date(row.completed_at).getTime())
+      }
+      for (const row of (clientPulseRows || []) as Array<{ client_id: string; checkin_date: string }>) {
+        // checkin_date is YYYY-MM-DD; treat as end-of-day local so today reads as today.
+        setIfNewer(row.client_id, new Date(row.checkin_date + 'T23:59:59').getTime())
+      }
+      for (const row of (clientFormCheckinRows || []) as Array<{ client_id: string; completed_at: string }>) {
+        setIfNewer(row.client_id, new Date(row.completed_at).getTime())
       }
 
-      // Stamp last_workout_at onto every client so downstream renders can use it.
-      const clientsWithWorkoutGap = safeClientList.map((client) => ({
+      // Stamp last_workout_at + last_active_at onto every client so renders
+      // can use them. last_workout_at remains separately exposed because
+      // the rendered card still shows a "last workout" subline when that's
+      // the worst signal.
+      const clientsWithActivity = safeClientList.map((client) => ({
         ...client,
         last_workout_at: lastWorkoutByClient.get(client.id) || null,
+        last_active_at: lastActiveByClient.has(client.id)
+          ? new Date(lastActiveByClient.get(client.id)!).toISOString()
+          : null,
       }))
 
-      // Attention clients — going quiet on EITHER signal
-      // (7+ days no check-in, OR 10+ days no logged workout).
-      // Clients with both signals stale rank highest.
-      const CHECKIN_THRESHOLD = 7
-      const WORKOUT_THRESHOLD = 10
-      const attentionList = clientsWithWorkoutGap
+      // Stale = no signal in 7+ days. One threshold across all four signals
+      // is simpler and more honest than separate per-signal thresholds.
+      const STALE_THRESHOLD_DAYS = 7
+      const attentionList = clientsWithActivity
         .filter((client) => !client.paused)
         .filter((client) => client.training_type !== 'in_person')
         .filter((client) => {
-          const ciGap = getDaysSince(client.last_checkin_at)
-          const woGap = getDaysSince(client.last_workout_at)
-          const ciStale = ciGap === null || ciGap >= CHECKIN_THRESHOLD
-          const woStale = woGap === null || woGap >= WORKOUT_THRESHOLD
-          return ciStale || woStale
+          const gap = getDaysSince(client.last_active_at)
+          return gap === null || gap >= STALE_THRESHOLD_DAYS
         })
         .sort((a, b) => {
-          // Stale on both signals = most urgent; otherwise bigger of the two gaps.
-          const worst = (c: CoachClient) => {
-            const ci = getDaysSince(c.last_checkin_at) ?? 999
-            const wo = getDaysSince(c.last_workout_at) ?? 999
-            return Math.max(ci, wo)
-          }
-          return worst(b) - worst(a)
+          const ga = getDaysSince(a.last_active_at) ?? 999
+          const gb = getDaysSince(b.last_active_at) ?? 999
+          return gb - ga
         })
       setAttentionClients(attentionList)
 
@@ -873,22 +914,21 @@ export default function CoachDashboard() {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {attentionClients.slice(0, 5).map(client => {
-                  const ciDays = getDaysSince(client.last_checkin_at)
-                  const woDays = getDaysSince(client.last_workout_at)
-                  const ciNever = ciDays === null
-                  const woNever = woDays === null
-                  // Worst-of-both drives the urgency colour.
-                  const worstDays = Math.max(ciDays ?? 999, woDays ?? 999)
-                  const bothStale = (ciNever || ciDays >= 7) && (woNever || woDays >= 10)
-                  const urgency = bothStale || worstDays >= 14 ? t.red : worstDays >= 7 ? t.orange : t.yellow
+                  // last_active_at is the aggregated max of: last_checkin_at,
+                  // last completed workout, last Morning Pulse, last weekly
+                  // form check-in. Single signal drives both badge + urgency.
+                  const days = getDaysSince(client.last_active_at)
+                  const never = days === null
+                  const urgency = never || days >= 14 ? t.red : days >= 7 ? t.orange : t.yellow
                   const initials = (client.profile?.full_name || '?').split(' ').map((n:string)=>n[0]).join('').slice(0,2)
-                  // Lead the secondary line with the more-stale signal.
-                  const detail = (woNever || (woDays ?? 0) > (ciDays ?? 0))
-                    ? formatWorkoutGap(client.last_workout_at)
-                    : formatCheckInGap(client.last_checkin_at)
-                  const badge = bothStale ? '🔴 Quiet on both'
-                    : ciNever ? 'Never checked in'
-                    : worstDays >= 14 ? '🔴 Going quiet'
+                  const detail = never
+                    ? 'No activity in 60+ days'
+                    : days === 0 ? 'Active today'
+                    : days === 1 ? 'Active yesterday'
+                    : `Last active ${days} days ago`
+                  const badge = never ? '🔴 Silent'
+                    : days >= 14 ? '🔴 Going quiet'
+                    : days >= 10 ? '🟠 Quiet'
                     : '🟡 Watch'
                   return (
                     <button key={client.id}
