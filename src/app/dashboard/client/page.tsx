@@ -8,6 +8,7 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 import MorningPulse from '@/components/client/MorningPulse'
 import { localDateStr } from '@/lib/date'
+import { toastError } from '@/components/ui/Toast'
 import {
   CLIENT_ACTIVITY_INTENSITIES,
   CLIENT_ACTIVITY_TYPES,
@@ -1153,11 +1154,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     {/* Header row — always visible, tap to expand */}
                     <div onClick={async () => {
                         if (!isOpen) {
-                          // Mark seen on first open
-                          await supabase.from('workout_sessions')
-                            .update({ coach_review_seen_at: new Date().toISOString() })
-                            .eq('id', r.id)
-                          setPendingReviews(prev => prev.map(x => x.id === r.id ? { ...x, _seen: true } : x))
+                          // Mark seen on first open. Goes through the
+                          // mark_review_seen RPC because the review-lock RLS
+                          // policy blocks direct client UPDATE on reviewed
+                          // sessions -- the RPC is SECURITY DEFINER and only
+                          // touches coach_review_seen_at.
+                          const { error } = await supabase.rpc('mark_review_seen', { p_session_id: r.id })
+                          if (error) {
+                            console.warn('[mark-seen:open] failed', error.message)
+                          } else {
+                            setPendingReviews(prev => prev.map(x => x.id === r.id ? { ...x, _seen: true } : x))
+                          }
                         }
                         setExpandedReview(isOpen ? null : r.id)
                       }}
@@ -1194,9 +1201,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         )}
                         <button
                           onClick={async () => {
-                            await supabase.from('workout_sessions')
-                              .update({ coach_review_seen_at: new Date().toISOString() })
-                              .eq('id', r.id)
+                            const { error } = await supabase.rpc('mark_review_seen', { p_session_id: r.id })
+                            if (error) {
+                              toastError('Could not mark review as seen: ' + error.message)
+                              return
+                            }
                             setPendingReviews(prev => prev.filter(x => x.id !== r.id))
                             setExpandedReview(null)
                           }}
