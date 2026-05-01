@@ -38,7 +38,7 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
   const [open, setOpen]     = useState(false)
   const [loading, setLoading] = useState(true)
   const [nowMs, setNowMs]   = useState(() => Date.now())
-  const [panelPos, setPanelPos] = useState({ top: 0, right: 0 })
+  const [panelPos, setPanelPos] = useState({ top: 0, right: 0, width: 340 })
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef  = useRef<HTMLDivElement>(null)
 
@@ -61,13 +61,29 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
     setLoading(false)
   }, [supabase, userId])
 
-  // Calculate fixed position from button rect when opening
+  // Calculate fixed position from button rect when opening.
+  // We pin the panel near the bell's right edge on wide screens, but clamp
+  // to keep both viewport gutters intact. The previous version only clamped
+  // the right side, so when the bell sat several elements from the right
+  // edge of the screen (coach top bar: bell + brain + Out), the panel's
+  // LEFT edge could go off-screen by 50-100px. clamp(left>=8, right>=8) fixes it.
   const handleOpen = () => {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
+      const vw = window.innerWidth
+      const GUTTER = 8
+      const width = Math.min(340, vw - GUTTER * 2)
+      // Desired right (anchored to the bell). Then clamp:
+      //   right >= GUTTER (don't go off-screen right)
+      //   right <= vw - width - GUTTER (don't go off-screen left)
+      const desiredRight = vw - rect.right
+      const minRight = GUTTER
+      const maxRight = vw - width - GUTTER
+      const safeRight = Math.max(minRight, Math.min(desiredRight, maxRight))
       setPanelPos({
         top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
+        right: safeRight,
+        width,
       })
     }
     setOpen(o => !o)
@@ -161,8 +177,8 @@ export default function NotificationBell({ userId, accentColor = '#c8f545' }: { 
         <div ref={panelRef} style={{
           position: 'fixed',
           top: panelPos.top,
-          right: Math.max(panelPos.right, 12),
-          width: 'min(340px, calc(100vw - 24px))', maxHeight: 480,
+          right: panelPos.right,
+          width: panelPos.width, maxHeight: 480,
           background: t.surface, border: `1px solid ${t.border}`,
           borderRadius: 14, boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
           zIndex: 99999, overflow: 'hidden', display: 'flex', flexDirection: 'column',
