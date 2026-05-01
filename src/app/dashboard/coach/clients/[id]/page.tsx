@@ -18,6 +18,7 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts'
 import { alpha } from '@/lib/theme'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -310,7 +311,7 @@ export default function ClientDetail() {
       status: 'pending',
     })
     setAssigning(false)
-    if (error) { alert('Could not assign form: ' + error.message); return }
+    if (error) { toastError('Could not assign form: ' + error.message); return }
     setAssignedDone(true)
     setTimeout(() => { setShowAssignForm(false); setAssignedDone(false); setAssignFormId(''); setAssignNote('') }, 1800)
   }
@@ -871,7 +872,7 @@ export default function ClientDetail() {
                       setPerms(next)
                       const { error } = await supabase.from('clients').update({ [key]: next[key] }).eq('id', clientId)
                       if (error) {
-                        alert('Could not save toggle: ' + error.message)
+                        toastError('Could not save toggle: ' + error.message)
                         setPerms(perms) // rollback
                       }
                     }} style={{ width:44, height:24, borderRadius:12, background: perms[key] ? t.teal : t.surfaceHigh, border:'1px solid '+(perms[key] ? t.teal : t.border), cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
@@ -1956,7 +1957,7 @@ export default function ClientDetail() {
                     }).select().single()
                     if (error || !newGoal) {
                       setGoalSaving(false)
-                      alert('Could not save goal: ' + (error?.message || 'unknown error'))
+                      toastError('Could not save goal: ' + (error?.message || 'unknown error'))
                       return
                     }
                     setGoals(p => [newGoal, ...p])
@@ -2524,7 +2525,7 @@ function CoachMetricsTab({ metrics, t, clientId, clientProfileId, coachId, onSav
     if (logForm.notes) entry.notes = logForm.notes
     const { error } = await supabase.from('metrics').upsert(entry, { onConflict: 'client_id,logged_date' })
     setSaving(false)
-    if (error) { alert('Could not save metrics: ' + error.message); return }
+    if (error) { toastError('Could not save metrics: ' + error.message); return }
     setLogOpen('none')
     setLogForm({})
     onSaved()
@@ -2852,7 +2853,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
       frequency: schedFreq, active: true, note: schedNote || null,
     }, { onConflict: 'client_id,form_id' }).select('*, form:onboarding_forms(title)').single()
     setScheduling(false)
-    if (error) { alert('Could not save check-in schedule: ' + error.message); return }
+    if (error) { toastError('Could not save check-in schedule: ' + error.message); return }
     if (data) setSchedules(p => { const exists = p.find(s=>s.form_id===schedFormId); return exists ? p.map(s=>s.form_id===schedFormId?data:s) : [...p,data] })
     setShowSchedule(false)
     setSchedFormId(''); setSchedFreq('weekly'); setSchedNote('')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { getUnreadInsights } from '@/lib/ai-insights'
@@ -138,8 +138,7 @@ export default function CoachDashboard() {
   const router   = useRouter()
   const supabase = createClient()
 
-  useEffect(() => {
-    const load = async () => {
+  const load = useCallback(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       const { data: prof } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single()
@@ -211,9 +210,18 @@ export default function CoachDashboard() {
       setWeeklyDigests(digestData || [])
 
       setLoading(false)
-    }
-    void load()
   }, [router, supabase])
+
+  // Initial load on mount
+  useEffect(() => { void load() }, [load])
+
+  // Visibility refetch — coach pops back from Messages or another app, list
+  // reflects fresh check-ins, reviews, etc. without a manual reload.
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden) void load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [load])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()

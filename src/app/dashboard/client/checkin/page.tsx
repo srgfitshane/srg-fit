@@ -381,8 +381,26 @@ export default function CheckinForm() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif" }}>
-      <div style={{ color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
+    // Skeleton matches the real check-in shape: header strip + 4 question cards.
+    // Same surface tones and shapes so the form snaps in without layout shift.
+    <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif" }}>
+      <style>{`
+        @keyframes srg-ci-skel { 0%,100% { opacity:.55 } 50% { opacity:.95 } }
+        .srg-ci-skel { animation: srg-ci-skel 1.4s ease-in-out infinite; background:${t.surfaceUp}; border-radius:8px; }
+      `}</style>
+      <div style={{ background:t.surface, borderBottom:`1px solid ${t.border}`, padding:'0 20px', height:56, display:'flex', alignItems:'center', gap:12 }}>
+        <div className="srg-ci-skel" style={{ width:60, height:14 }} />
+        <div style={{ flex:1 }} />
+        <div className="srg-ci-skel" style={{ width:120, height:14 }} />
+      </div>
+      <div style={{ maxWidth:640, margin:'0 auto', padding:'20px 16px', display:'flex', flexDirection:'column', gap:14 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'16px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+            <div className="srg-ci-skel" style={{ width:'70%', height:14 }} />
+            <div className="srg-ci-skel" style={{ width:'100%', height:i === 1 ? 80 : 38 }} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 

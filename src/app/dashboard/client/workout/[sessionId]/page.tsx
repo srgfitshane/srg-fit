@@ -865,7 +865,7 @@ ${candidateList}`
       skipped_at: new Date().toISOString(),
     }).eq('id', exId)
     if (error) {
-      alert('Could not skip exercise: ' + error.message)
+      toastError('Could not skip exercise: ' + error.message)
       return
     }
     setSkipped(prev => ({ ...prev, [exId]: true }))
@@ -891,7 +891,7 @@ ${candidateList}`
       added_by_client: true,
     }).select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)').single()
     if (error || !newRow) {
-      if (error) alert('Could not add exercise: ' + error.message)
+      if (error) toastError('Could not add exercise: ' + error.message)
       return
     }
     setExercises(prev => [...prev, { ...newRow, exercise_name: ex.name }])
@@ -912,7 +912,7 @@ ${candidateList}`
       slot_filled_by_client: true,
     }).eq('id', exId)
     if (error) {
-      alert('Could not fill slot: ' + error.message)
+      toastError('Could not fill slot: ' + error.message)
       return
     }
 
@@ -1002,7 +1002,7 @@ ${candidateList}`
     }).eq('id', exerciseRow.id)
 
     if (error) {
-      alert('Could not swap exercise: ' + error.message)
+      toastError('Could not swap exercise: ' + error.message)
       return
     }
 
@@ -1026,7 +1026,7 @@ ${candidateList}`
   async function uploadFormVideo(exId: string, file: File) {
     const MAX_MB = 200 // ~2 min video at mobile quality
     if (file.size > MAX_MB * 1024 * 1024) {
-      alert(`Video too large. Please keep clips under 2 minutes (${MAX_MB}MB max). Tip: trim it in your camera roll before uploading.`)
+      toastError(`Video too large. Please keep clips under 2 minutes (${MAX_MB}MB max). Tip: trim it in your camera roll before uploading.`)
       return
     }
     setVideoUploading(prev => ({ ...prev, [exId]: true }))
@@ -1037,13 +1037,13 @@ ${candidateList}`
     const { error } = await supabase.storage.from('form-checks').upload(path, file)
     if (error) {
       console.error('Form check upload error:', error.message)
-      alert(`Upload failed: ${error.message}`)
+      toastError(`Upload failed: ${error.message}`)
     } else {
       const { data: signedData } = await supabase.storage.from('form-checks').createSignedUrl(path, 60 * 60)
       const signedUrl = signedData?.signedUrl || null
       setVideoUploads(prev => ({ ...prev, [exId]: signedUrl || path }))
       const { error: updateErr } = await supabase.from('session_exercises').update({ client_video_url: path }).eq('id', exId)
-      if (updateErr) alert('Video uploaded but could not link it to the exercise: ' + updateErr.message)
+      if (updateErr) toastError('Video uploaded but could not link it to the exercise: ' + updateErr.message)
     }
     setVideoUploading(prev => ({ ...prev, [exId]: false }))
   }
@@ -1051,7 +1051,7 @@ ${candidateList}`
   async function removeFormVideo(exId: string) {
     const { error } = await supabase.from('session_exercises').update({ client_video_url: null }).eq('id', exId)
     if (error) {
-      alert('Could not remove video: ' + error.message)
+      toastError('Could not remove video: ' + error.message)
       return
     }
     setVideoUploads(prev => { const next = { ...prev }; delete next[exId]; return next })
@@ -1124,7 +1124,7 @@ ${candidateList}`
       router.push(returnUrl)
     } catch (err: any) {
       console.error('cancelWorkout failed:', err)
-      alert('Could not clear the workout: ' + (err?.message || 'Unknown error') + '. Please try again.')
+      toastError('Could not clear the workout: ' + (err?.message || 'Unknown error') + '. Please try again.')
     }
   }
 
@@ -1146,7 +1146,7 @@ ${candidateList}`
       started_at: newStartedAt,
     }).eq('id', sessionId)
     if (error) {
-      alert('Could not reopen workout: ' + error.message)
+      toastError('Could not reopen workout: ' + error.message)
       return
     }
     // Sync local session state — without this, the timer useEffect won't run
@@ -1178,7 +1178,7 @@ ${candidateList}`
 
     if (error) {
       console.error('finishWorkout error:', error)
-      alert('Something went wrong saving your workout. Please try again.')
+      toastError('Something went wrong saving your workout. Please try again.')
       setSaving(false)
       return
     }
@@ -1456,7 +1456,33 @@ ${candidateList}`
   )
 
   if (loading) return (
-    <div style={{minHeight:'100vh',background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',color:t.textMuted,fontFamily:"'DM Sans',sans-serif"}}>Loading workout...</div>
+    // Skeleton mimics the loaded layout: sticky header + 3 exercise cards.
+    // Same backgrounds, paddings, and rounded shapes as the real UI so there's
+    // no jump when the data lands.
+    <div style={{ minHeight:'100vh', background:t.bg, fontFamily:"'DM Sans',sans-serif" }}>
+      <style>{`
+        @keyframes srg-wo-skel { 0%,100% { opacity:.55 } 50% { opacity:.95 } }
+        .srg-wo-skel { animation: srg-wo-skel 1.4s ease-in-out infinite; background:${t.surfaceUp}; border-radius:8px; }
+      `}</style>
+      <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
+        <div className="srg-wo-skel" style={{ width:80, height:14 }} />
+        <div style={{ flex:1 }} />
+        <div className="srg-wo-skel" style={{ width:60, height:14 }} />
+      </div>
+      <div style={{ padding:'18px 16px', display:'flex', flexDirection:'column', gap:14 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:12, padding:16, display:'flex', flexDirection:'column', gap:10 }}>
+            <div className="srg-wo-skel" style={{ width:'62%', height:16 }} />
+            <div className="srg-wo-skel" style={{ width:'38%', height:12 }} />
+            <div style={{ display:'flex', gap:8, marginTop:6 }}>
+              <div className="srg-wo-skel" style={{ flex:1, height:36 }} />
+              <div className="srg-wo-skel" style={{ flex:1, height:36 }} />
+              <div className="srg-wo-skel" style={{ width:64, height:36 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 
   if (!loading && exercises.length === 0) return (
@@ -2442,7 +2468,7 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, ret
       completed_at: null,
     }).eq('id', sessionId)
     if (error) {
-      alert('Could not reopen workout: ' + error.message)
+      toastError('Could not reopen workout: ' + error.message)
       setCancelled(false)
       return
     }
