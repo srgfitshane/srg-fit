@@ -776,7 +776,18 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         {previewFile && (
           <div style={{ borderTop:'1px solid '+c.border, padding:'10px 16px', background:c.surfaceUp, display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ fontSize:12, color:c.textDim, flex:1 }}>📎 {previewFile.name}</div>
-            <button onClick={()=>uploadAndSend(previewFile, previewFile.type.startsWith('image') ? 'image' : 'file')}
+            <button onClick={() => {
+                // The picker accepts image/video/audio/files; route each to the
+                // matching bubble renderer. Before this fix, anything that wasn't
+                // an image fell through to 'file', so a .mov from the camera roll
+                // came through as a clickable link instead of an inline player.
+                const mt = previewFile.type
+                const kind = mt.startsWith('image') ? 'image'
+                           : mt.startsWith('video') ? 'video'
+                           : mt.startsWith('audio') ? 'audio'
+                           : 'file'
+                void uploadAndSend(previewFile, kind)
+              }}
               disabled={uploading}
               style={{ ...btnBase, background:c.teal, color:'#000', opacity:uploading?.6:1 }}>
               {uploading ? 'Uploading...' : '↑ Send'}
