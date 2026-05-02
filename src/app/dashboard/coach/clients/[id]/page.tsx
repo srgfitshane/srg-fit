@@ -3352,6 +3352,12 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
+  // F2a Phase 1: AI Program Builder. Form + result, no save-to-DB yet.
+  const [showAiBuilder, setShowAiBuilder] = useState(false)
+  const [aiForm, setAiForm] = useState({ duration_weeks: 8, days_per_week: 3, focus: 'hypertrophy', sport: '', special_constraints: '' })
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiResult, setAiResult] = useState<any>(null)
   // Start date + scheduling
   const [startDates, setStartDates] = useState<Record<string,string>>({})
   const [scheduling, setScheduling] = useState<string|null>(null)
@@ -3603,17 +3609,186 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
             {clientPrograms.length} program{clientPrograms.length !== 1 ? 's' : ''} for this client
           </div>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={()=>{ setShowAssign(true); setShowCreate(false) }}
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
+          <button onClick={()=>{ setShowAssign(true); setShowCreate(false); setShowAiBuilder(false) }}
             style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             + Assign Template
           </button>
-          <button onClick={()=>{ setShowCreate(true); setShowAssign(false) }}
+          <button onClick={()=>{ setShowCreate(true); setShowAssign(false); setShowAiBuilder(false) }}
             style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             + New Program
           </button>
+          <button onClick={()=>{ setShowAiBuilder(v => !v); setShowAssign(false); setShowCreate(false) }}
+            style={{ background: showAiBuilder ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color: showAiBuilder ? t.textMuted : '#fff', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+            {showAiBuilder ? 'Cancel' : '✨ AI Build'}
+          </button>
         </div>
       </div>
+
+      {/* F2a Phase 1: AI Program Builder panel. Form + result. No save-to-DB yet —
+          coach reviews the proposal as a brainstorming/reference doc. Phase 2
+          will materialize selected proposal into programs/blocks/exercises. */}
+      {showAiBuilder && (
+        <div style={{ background:t.surface, border:'1px solid '+alpha(t.purple, 25), borderRadius:14, padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:800 }}>✨ AI Program Builder</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>
+              Pulls intake (injuries, equipment, experience, goals) + recent PRs. Sonnet 4 builds a periodized block.
+              Phase 1 shows the proposal — it does not save to programs yet.
+            </div>
+          </div>
+
+          {/* Form — duration + days + focus on one row */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10 }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Duration</div>
+              <select value={aiForm.duration_weeks} onChange={e=>setAiForm(f=>({ ...f, duration_weeks: Number(e.target.value) }))}
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, appearance:'none' as const, boxSizing:'border-box' as const }}>
+                <option value={4}>4 weeks</option>
+                <option value={8}>8 weeks</option>
+                <option value={12}>12 weeks</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Days / week</div>
+              <select value={aiForm.days_per_week} onChange={e=>setAiForm(f=>({ ...f, days_per_week: Number(e.target.value) }))}
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, appearance:'none' as const, boxSizing:'border-box' as const }}>
+                {[2,3,4,5,6].map(n => <option key={n} value={n}>{n} days</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Focus</div>
+              <select value={aiForm.focus} onChange={e=>setAiForm(f=>({ ...f, focus: e.target.value }))}
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, appearance:'none' as const, boxSizing:'border-box' as const }}>
+                <option value="strength">Strength</option>
+                <option value="hypertrophy">Hypertrophy</option>
+                <option value="fat_loss">Fat loss</option>
+                <option value="mobility">Mobility</option>
+                <option value="sport_specific">Sport-specific</option>
+              </select>
+            </div>
+            {aiForm.focus === 'sport_specific' && (
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Sport</div>
+                <input value={aiForm.sport} onChange={e=>setAiForm(f=>({ ...f, sport: e.target.value }))} placeholder="e.g. powerlifting"
+                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }} />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>Special constraints (optional)</div>
+            <input value={aiForm.special_constraints} onChange={e=>setAiForm(f=>({ ...f, special_constraints: e.target.value }))} placeholder="e.g. avoid overhead pressing for first 4 weeks; loves trap bar deadlifts"
+              style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }} />
+          </div>
+
+          <button
+            onClick={async () => {
+              setAiLoading(true); setAiError(null); setAiResult(null)
+              try {
+                const res = await fetch('/api/ai-program/build', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ clientId, ...aiForm }),
+                })
+                const data = await res.json()
+                if (!res.ok) {
+                  setAiError(data?.error || 'Could not generate program')
+                  setAiLoading(false); return
+                }
+                setAiResult(data)
+              } catch (e: any) {
+                setAiError(e?.message || 'Network error')
+              }
+              setAiLoading(false)
+            }}
+            disabled={aiLoading || (aiForm.focus === 'sport_specific' && !aiForm.sport.trim())}
+            style={{ background: aiLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'10px 18px', fontSize:13, fontWeight:800, color: aiLoading ? t.textMuted : '#fff', cursor: aiLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif", alignSelf:'flex-start' }}>
+            {aiLoading ? 'Generating program… (15-40s)' : aiResult ? '🔄 Regenerate' : '✨ Generate Program'}
+          </button>
+
+          {aiError && (
+            <div style={{ padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red }}>
+              {aiError}
+            </div>
+          )}
+
+          {aiResult && (
+            <div style={{ display:'flex', flexDirection:'column', gap:14, marginTop:6 }}>
+              {/* Header */}
+              <div style={{ background:t.surfaceHigh, borderRadius:10, padding:'12px 14px' }}>
+                <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>{aiResult.name || 'Program proposal'}</div>
+                {aiResult.weekly_split && <div style={{ fontSize:12, color:t.textMuted }}>{aiResult.weekly_split}</div>}
+              </div>
+
+              {/* Rationale */}
+              {aiResult.rationale && (
+                <div>
+                  <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Rationale</div>
+                  <div style={{ fontSize:12, color:t.text, lineHeight:1.6, whiteSpace:'pre-wrap' as const }}>{aiResult.rationale}</div>
+                </div>
+              )}
+
+              {/* Weeks → days → exercises */}
+              {Array.isArray(aiResult.weeks) && aiResult.weeks.map((w: any) => (
+                <div key={w.week} style={{ background:alpha(t.purple, 6), border:'1px solid '+alpha(t.purple, 19), borderRadius:10, padding:'12px 14px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, flexWrap:'wrap' as const }}>
+                    <span style={{ fontSize:13, fontWeight:800, color:t.purple }}>Week {w.week}</span>
+                    {w.phase && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6, background:t.surfaceHigh, color:t.textDim, textTransform:'capitalize' as const }}>{w.phase}</span>}
+                    {w.deload && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6, background:t.orangeDim, color:t.orange }}>DELOAD</span>}
+                    {w.focus && <span style={{ fontSize:11, color:t.textMuted }}>· {w.focus}</span>}
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {Array.isArray(w.days) && w.days.map((d: any, di: number) => (
+                      <div key={di} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'10px 12px' }}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6, flexWrap:'wrap' as const, gap:6 }}>
+                          <div>
+                            <span style={{ fontSize:12, fontWeight:800 }}>{d.day || `Day ${di+1}`}</span>
+                            {d.label && <span style={{ fontSize:11, color:t.textMuted }}> · {d.label}</span>}
+                          </div>
+                          {d.estimated_minutes && <span style={{ fontSize:10, color:t.textMuted }}>~{d.estimated_minutes} min</span>}
+                        </div>
+                        {Array.isArray(d.exercises) && d.exercises.length > 0 && (
+                          <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                            {d.exercises.map((ex: any, ei: number) => (
+                              <div key={ei} style={{ display:'flex', flexDirection:'column', gap:2, padding:'6px 0', borderTop: ei === 0 ? 'none' : '1px dashed '+t.border }}>
+                                <div style={{ display:'flex', alignItems:'baseline', gap:6, flexWrap:'wrap' as const }}>
+                                  <span style={{ fontSize:12, fontWeight:700 }}>{ex.name}</span>
+                                  {ex.category && <span style={{ fontSize:9, fontWeight:700, padding:'1px 5px', borderRadius:4, background:t.surfaceHigh, color:t.textMuted, textTransform:'uppercase' as const }}>{ex.category}</span>}
+                                </div>
+                                <div style={{ fontSize:11, color:t.textDim }}>
+                                  {ex.sets}×{ex.reps}
+                                  {ex.load_guidance ? ` · ${ex.load_guidance}` : ''}
+                                  {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
+                                  {ex.tempo ? ` · tempo ${ex.tempo}` : ''}
+                                </div>
+                                {ex.rationale && <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' as const }}>↳ {ex.rationale}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Coach notes */}
+              {aiResult.coach_notes && (
+                <div style={{ background:alpha(t.teal, 8), border:'1px solid '+alpha(t.teal, 25), borderRadius:10, padding:'12px 14px' }}>
+                  <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Coach notes for the block</div>
+                  <div style={{ fontSize:12, color:t.text, lineHeight:1.6, whiteSpace:'pre-wrap' as const }}>{aiResult.coach_notes}</div>
+                </div>
+              )}
+
+              {/* Phase-1 disclaimer */}
+              <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' as const, padding:'4px 2px' }}>
+                Phase 1: this is a proposal only — no program rows have been created. Use it as a reference while building the real program with "+ New Program."
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Assign template panel */}
       {showAssign && (
