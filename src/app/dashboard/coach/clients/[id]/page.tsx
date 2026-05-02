@@ -3358,6 +3358,10 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiResult, setAiResult] = useState<any>(null)
+  // F2a Phase 2: save the proposal as a real program
+  const [aiSaving, setAiSaving] = useState(false)
+  const [aiSaveError, setAiSaveError] = useState<string | null>(null)
+  const [aiSaveResult, setAiSaveResult] = useState<any>(null)
   // Start date + scheduling
   const [startDates, setStartDates] = useState<Record<string,string>>({})
   const [scheduling, setScheduling] = useState<string|null>(null)
@@ -3781,10 +3785,91 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                 </div>
               )}
 
-              {/* Phase-1 disclaimer */}
-              <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' as const, padding:'4px 2px' }}>
-                Phase 1: this is a proposal only — no program rows have been created. Use it as a reference while building the real program with "+ New Program."
-              </div>
+              {/* Phase 2: save the proposal as a real program */}
+              {!aiSaveResult && (
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' as const, paddingTop:4 }}>
+                  <button
+                    onClick={async () => {
+                      setAiSaving(true); setAiSaveError(null)
+                      try {
+                        const res = await fetch('/api/ai-program/save', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            clientId,
+                            programName: aiResult?.name,
+                            proposal: aiResult,
+                            meta: aiResult?.meta,
+                          }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setAiSaveError(data?.error || 'Could not save program')
+                          setAiSaving(false); return
+                        }
+                        setAiSaveResult(data)
+                        // Refresh program list so the new program shows up below
+                        await load()
+                      } catch (e: any) {
+                        setAiSaveError(e?.message || 'Network error')
+                      }
+                      setAiSaving(false)
+                    }}
+                    disabled={aiSaving}
+                    style={{ background: aiSaving ? t.surfaceHigh : 'linear-gradient(135deg,'+t.green+','+alpha(t.green, 80)+')', border:'none', borderRadius:9, padding:'10px 18px', fontSize:13, fontWeight:800, color: aiSaving ? t.textMuted : '#000', cursor: aiSaving ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {aiSaving ? 'Saving program…' : '💾 Save as Program'}
+                  </button>
+                  <span style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' as const }}>
+                    Materializes weeks/days/exercises into a real program for this client.
+                  </span>
+                </div>
+              )}
+
+              {aiSaveError && (
+                <div style={{ padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red }}>
+                  {aiSaveError}
+                </div>
+              )}
+
+              {aiSaveResult && (
+                <div style={{ background:alpha(t.green, 10), border:'1px solid '+alpha(t.green, 25), borderRadius:10, padding:'12px 14px', display:'flex', flexDirection:'column', gap:6 }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:t.green }}>
+                    ✓ Program saved — "{aiSaveResult.program_name}"
+                  </div>
+                  <div style={{ fontSize:12, color:t.text }}>
+                    Created <strong>{aiSaveResult.blocks_created}</strong> workout block{aiSaveResult.blocks_created === 1 ? '' : 's'} with <strong>{aiSaveResult.exercises_created}</strong> exercise{aiSaveResult.exercises_created === 1 ? '' : 's'}.
+                  </div>
+                  {aiSaveResult.warning && (
+                    <div style={{ fontSize:12, color:t.orange, padding:'8px 10px', background:t.orangeDim, border:'1px solid '+alpha(t.orange, 25), borderRadius:8 }}>
+                      ⚠ {aiSaveResult.warning}
+                      {Array.isArray(aiSaveResult.unresolved_names) && aiSaveResult.unresolved_names.length > 0 && (
+                        <div style={{ marginTop:4, fontSize:11, color:t.textDim }}>
+                          {aiSaveResult.unresolved_names.slice(0, 6).join(' · ')}
+                          {aiSaveResult.unresolved_names.length > 6 && ` · +${aiSaveResult.unresolved_names.length - 6} more`}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                    <button
+                      onClick={() => {
+                        // Reset for another build
+                        setAiResult(null); setAiSaveResult(null); setAiSaveError(null)
+                      }}
+                      style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      Build another
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Collapse the AI panel — coach can find program in list below
+                        setAiResult(null); setAiSaveResult(null); setShowAiBuilder(false)
+                      }}
+                      style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      Done — close builder
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
