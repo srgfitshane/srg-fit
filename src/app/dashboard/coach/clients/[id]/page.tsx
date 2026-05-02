@@ -4065,6 +4065,9 @@ function ProgramTab({ clientId, coachId, program, workouts, supabase, router, t,
                 <option value="strength">Strength</option>
                 <option value="hypertrophy">Hypertrophy</option>
                 <option value="fat_loss">Fat loss</option>
+                <option value="recomp">Recomp</option>
+                <option value="endurance">Endurance</option>
+                <option value="general_fitness">General fitness</option>
                 <option value="mobility">Mobility</option>
                 <option value="sport_specific">Sport-specific</option>
               </select>

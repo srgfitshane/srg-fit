@@ -22,7 +22,16 @@ import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 // to exercises.id at save time. Phase 1 just renders.
 // =================================================================
 
-const FOCUS_OPTIONS = ['strength', 'hypertrophy', 'fat_loss', 'mobility', 'sport_specific'] as const
+const FOCUS_OPTIONS = [
+  'strength',
+  'hypertrophy',
+  'fat_loss',
+  'recomp',          // body recomposition: simultaneous fat loss + lean mass
+  'endurance',       // aerobic capacity: running, cycling, rowing, conditioning
+  'general_fitness', // balanced beginner default — strength + cardio + mobility
+  'mobility',
+  'sport_specific',
+] as const
 type Focus = typeof FOCUS_OPTIONS[number]
 
 export async function POST(req: NextRequest) {
@@ -104,7 +113,8 @@ export async function POST(req: NextRequest) {
 - NASM Corrective Exercise Specialist (CES) — movement screen, regional interdependence, exercise progressions
 - Postural Restoration Institute (PRI) — breathing patterns, asymmetry, neuromuscular reset
 - Kinesiology and applied biomechanics — joint actions, force-vector matching, tempo prescription
-- Periodization for strength, hypertrophy, fat-loss, mobility, and sport-specific (powerlifting, strongman, endurance, team sports, tactical)
+- Periodization for strength, hypertrophy, fat-loss, recomposition, endurance, general fitness, mobility, and sport-specific (powerlifting, strongman, endurance racing, team sports, tactical)
+- Recomp specifically: high-protein, moderate calorie deficit framing, prioritize compound lifts at RPE 7-8, minimize cardio interference. Endurance: zone 2 base + threshold + intervals, periodized across the block. General fitness: balanced — 50% strength, 30% conditioning, 20% mobility/skill — for clients who want "look good, feel good, move well" without a single bias.
 
 You write programs for the coach who will supervise the athlete in person — not the athlete. Be direct, prescriptive, and specific. When you program a corrective or specialty movement, name the principle in one phrase (e.g. "scapular upward rotation deficit → serratus activation", "anterior pelvic tilt → posterior chain bias"). When you choose loading or progression, name the rationale (e.g. "RPE 7 to leave PR attempts for week 4 retest").
 
