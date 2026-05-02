@@ -88,21 +88,127 @@ export async function POST(req: NextRequest) {
     .order('logged_date', { ascending: false }).limit(1).maybeSingle()
   const weightLbs = Number(latestMetric?.weight) || Number(intake.current_weight_lbs) || null
 
-  // Recent PRs — sets baseline loads. Top 8 by date.
-  const { data: prs } = await supabase
-    .from('personal_records')
-    .select('weight_pr, rep_pr_reps, rep_pr_weight, pr_type, logged_date, exercise:exercises(name)')
-    .eq('client_id', clientId).order('logged_date', { ascending: false }).limit(8)
+  // ── Training history context ────────────────────────────────────────
+  // Previously the build was a cold-start: same intake + PRs every time,
+  // so a follow-on program for a client who'd just done 4 weeks of upper/
+  // lower would be identical to a fresh start. This block pulls "what
+  // they just did" so the AI can build a logical NEXT block — vary if
+  // appropriate, repeat if appropriate. The coach owns the decision; we
+  // just give the AI enough context to be smart instead of generic.
+  const sixWeeksAgo = new Date(Date.now() - 42 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+  const [{ data: prs }, { data: lastProgram }, { data: recentSessions }, { data: recentCheckins }] = await Promise.all([
+    supabase.from('personal_records')
+      .select('weight_pr, rep_pr_reps, rep_pr_weight, pr_type, logged_date, exercise:exercises(name)')
+      .eq('client_id', clientId).order('logged_date', { ascending: false }).limit(8),
+    supabase.from('programs')
+      .select('id, name, goal, duration_weeks, status, created_at, start_date')
+      .eq('client_id', clientId).eq('is_template', false)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('workout_sessions')
+      .select('status, scheduled_date, completed_at, session_rpe, overall_rpe, energy_level, mood')
+      .eq('client_id', clientId).gte('scheduled_date', sixWeeksAgo)
+      .order('scheduled_date', { ascending: false }),
+    supabase.from('daily_checkins')
+      .select('checkin_date, stress_score, mood_score, energy_score, sleep_quality')
+      .eq('client_id', clientId).gte('checkin_date', twoWeeksAgo),
+  ])
 
   const prLines = (prs || [])
     .map(p => {
       const name = (p as any).exercise?.name || '?'
-      if (p.pr_type === 'weight' && p.weight_pr) return `- ${name}: ${p.weight_pr} lbs (heaviest)`
-      if (p.pr_type === 'reps' && p.rep_pr_weight && p.rep_pr_reps) return `- ${name}: ${p.rep_pr_weight} lbs × ${p.rep_pr_reps} reps`
+      const recent = p.logged_date && p.logged_date >= sixWeeksAgo ? '  ← new this block' : ''
+      if (p.pr_type === 'weight' && p.weight_pr) return `- ${name}: ${p.weight_pr} lbs (heaviest)${recent}`
+      if (p.pr_type === 'reps' && p.rep_pr_weight && p.rep_pr_reps) return `- ${name}: ${p.rep_pr_weight} lbs × ${p.rep_pr_reps} reps${recent}`
       return null
     })
     .filter(Boolean)
     .join('\n')
+
+  // Aggregate the previous block's movement-pattern volume so the AI sees
+  // "what got hammered vs what was undertrained". Only pull blocks if a
+  // prior program exists.
+  let movementSummary = ''
+  if (lastProgram?.id) {
+    const { data: blockExercises } = await supabase
+      .from('block_exercises')
+      .select('sets, exercise:exercises(movement_pattern), block:workout_blocks!inner(program_id)')
+      .eq('block.program_id', lastProgram.id)
+    const setsByPattern: Record<string, number> = {}
+    for (const be of blockExercises || []) {
+      const pattern = (be as any).exercise?.movement_pattern || 'other'
+      const sets = Number(be.sets) || 0
+      setsByPattern[pattern] = (setsByPattern[pattern] || 0) + sets
+    }
+    const sorted = Object.entries(setsByPattern).sort((a, b) => b[1] - a[1])
+    if (sorted.length > 0) {
+      movementSummary = sorted.map(([k, v]) => `${k} ${v}`).join(' · ')
+    }
+  }
+
+  // Compliance + RPE summary — last 6 weeks, completed sessions only
+  const sessionsArr = recentSessions || []
+  const completedSessions = sessionsArr.filter(s => s.completed_at)
+  const totalScheduled = sessionsArr.filter(s => ['assigned','active','completed'].includes(s.status || '')).length
+  const avgSessionRpe = (() => {
+    const vals = completedSessions.map(s => Number(s.session_rpe)).filter(v => !isNaN(v) && v > 0)
+    if (vals.length === 0) return null
+    return Number((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1))
+  })()
+  const avgOverallRpe = (() => {
+    const vals = completedSessions.map(s => Number(s.overall_rpe)).filter(v => !isNaN(v) && v > 0)
+    if (vals.length === 0) return null
+    return Number((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1))
+  })()
+
+  // Recent check-in pulse trend
+  const checkinsArr = recentCheckins || []
+  const avgPulse = (key: 'stress_score' | 'mood_score' | 'energy_score' | 'sleep_quality') => {
+    const vals = checkinsArr.map(c => Number(c[key])).filter(v => !isNaN(v) && v > 0)
+    if (vals.length === 0) return null
+    return Number((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1))
+  }
+
+  // Build the history block. Empty string when there's no prior program
+  // AND no compliance/check-in data — first-time build stays as before.
+  let trainingHistory = ''
+  if (lastProgram || completedSessions.length > 0 || checkinsArr.length > 0) {
+    const lines: string[] = ['', 'TRAINING HISTORY (last 4-6 weeks):']
+    if (lastProgram) {
+      const startedNote = lastProgram.start_date ? ` (started ${lastProgram.start_date})` : ''
+      lines.push(`- Most recent program: "${lastProgram.name}" — ${lastProgram.duration_weeks || '?'} weeks, focus: ${lastProgram.goal || 'unspecified'}${startedNote}, status: ${lastProgram.status}`)
+      if (movementSummary) lines.push(`- Block volume by pattern (sets across the block): ${movementSummary}`)
+    } else {
+      lines.push('- No prior program on file (first program for this client).')
+    }
+    if (totalScheduled > 0) {
+      const pct = Math.round((completedSessions.length / totalScheduled) * 100)
+      lines.push(`- Compliance: ${completedSessions.length}/${totalScheduled} sessions completed (${pct}%)`)
+    }
+    if (avgSessionRpe !== null) lines.push(`- Avg session RPE: ${avgSessionRpe}${avgOverallRpe !== null ? ` · avg overall RPE: ${avgOverallRpe}` : ''}`)
+
+    const stress = avgPulse('stress_score'), mood = avgPulse('mood_score'), energy = avgPulse('energy_score'), sleep = avgPulse('sleep_quality')
+    if (stress || mood || energy || sleep) {
+      const parts: string[] = []
+      if (stress !== null) parts.push(`stress ${stress}`)
+      if (mood !== null) parts.push(`mood ${mood}`)
+      if (energy !== null) parts.push(`energy ${energy}`)
+      if (sleep !== null) parts.push(`sleep ${sleep}`)
+      lines.push(`- Recent pulse (last 14 days, 1-10 each): ${parts.join(' · ')}`)
+    }
+
+    lines.push('')
+    lines.push('PROGRESSION TARGET FOR THE NEW BLOCK:')
+    lines.push('- This is a follow-on block. Use the history above to inform the build.')
+    lines.push('- Whether to repeat, vary, or progress is a judgment call based on the athlete\'s stage:')
+    lines.push('  • Returning client / restarting / general fitness → repeating familiar work is often correct.')
+    lines.push('  • Mid-block trainee with stable RPE → progress loads or volume on the compounds that progressed.')
+    lines.push('  • RPE drift high (avg ≥ 8) or compliance dropping → reduce stress, simplify, or program a deload.')
+    lines.push('- If new PRs are flagged above, anchor the new block\'s starting loads off those, not the older PRs.')
+    lines.push('- If a movement pattern was clearly hammered last block, you may vary it (e.g. back squat → front squat, conventional DL → trap bar) — but only if it serves the athlete\'s stage and goals.')
+    trainingHistory = lines.join('\n')
+  }
 
   const ageNote = intake.date_of_birth ? ` (DOB ${intake.date_of_birth})` : ''
   const equipment = Array.isArray(intake.equipment_access) ? intake.equipment_access.join(', ') : 'standard gym'
@@ -166,6 +272,7 @@ EQUIPMENT: ${equipment}
 
 RECENT PRS (use to anchor starting loads):
 ${prLines || '(no PR history yet — start conservatively, plan a Week 1 retest if appropriate)'}
+${trainingHistory}
 
 PROGRAM SPEC:
 - Duration: ${duration_weeks} weeks
