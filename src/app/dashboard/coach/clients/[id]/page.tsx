@@ -111,6 +111,19 @@ export default function ClientDetail() {
   const [showAddGoal,   setShowAddGoal]   = useState(false)
   const [goalForm,      setGoalForm]      = useState({ title:'', description:'', type:'weight_lifted', target_value:'', unit:'lbs', target_date:'', exercise_id:'' })
   const [goalSaving,    setGoalSaving]    = useState(false)
+  // F4.4: AI-suggested SMART goals from intake
+  const [goalProposals, setGoalProposals] = useState<any[]>([])
+  const [goalProposalsLoading, setGoalProposalsLoading] = useState(false)
+  const [goalProposalsError, setGoalProposalsError] = useState<string | null>(null)
+  const [goalAddingIndex, setGoalAddingIndex] = useState<number | null>(null)
+  // F4.1: Quick session note structurer. Coach pastes raw, AI structures,
+  // coach saves to coach_notes table.
+  const [noteRaw, setNoteRaw] = useState('')
+  const [noteStructuring, setNoteStructuring] = useState(false)
+  const [noteStructured, setNoteStructured] = useState<any>(null)
+  const [noteError, setNoteError] = useState<string | null>(null)
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [noteSavedFlash, setNoteSavedFlash] = useState(false)
   const [editingGoalId, setEditingGoalId] = useState<string|null>(null)
   const [editingGoalVal, setEditingGoalVal] = useState('')
   const [exerciseSearch, setExerciseSearch] = useState('')
@@ -763,6 +776,147 @@ export default function ClientDetail() {
                         </ul>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* F4.1: Quick session note. Coach pastes raw observations,
+                  AI structures (headline + category + tags + bullets), coach
+                  reviews + saves into the coach_notes table. */}
+              <div style={{ gridColumn:'1 / -1', background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'18px 22px' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:12, flexWrap:'wrap' as const }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:800 }}>📝 Quick session note</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                      Paste raw observations after a session. AI structures into headline + category + tags. Save to keep a searchable journal.
+                    </div>
+                  </div>
+                  {noteSavedFlash && (
+                    <span style={{ fontSize:11, fontWeight:800, color:t.green, padding:'4px 10px', background:alpha(t.green, 12), border:'1px solid '+alpha(t.green, 25), borderRadius:6 }}>
+                      ✓ Saved
+                    </span>
+                  )}
+                </div>
+
+                {!noteStructured && (
+                  <>
+                    <textarea
+                      value={noteRaw}
+                      onChange={e => setNoteRaw(e.target.value)}
+                      rows={4}
+                      placeholder="e.g. Lindsey came in tired, said she only slept 5h, squat felt heavy at 135, mood seemed flat — talked about her mom's surgery."
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'vertical' as const, boxSizing:'border-box' as const, lineHeight:1.5 }}/>
+                    <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:10, flexWrap:'wrap' as const }}>
+                      <button
+                        onClick={async () => {
+                          if (!noteRaw.trim()) return
+                          setNoteStructuring(true); setNoteError(null)
+                          try {
+                            const res = await fetch('/api/ai-coach-note', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ clientId, raw: noteRaw }),
+                            })
+                            const data = await res.json()
+                            if (!res.ok) {
+                              setNoteError(data?.error || 'Could not structure note')
+                              setNoteStructuring(false); return
+                            }
+                            setNoteStructured(data)
+                          } catch (e: any) {
+                            setNoteError(e?.message || 'Network error')
+                          }
+                          setNoteStructuring(false)
+                        }}
+                        disabled={!noteRaw.trim() || noteStructuring}
+                        style={{ background: !noteRaw.trim() || noteStructuring ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:800, color: !noteRaw.trim() || noteStructuring ? t.textMuted : '#fff', cursor: !noteRaw.trim() || noteStructuring ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {noteStructuring ? 'Structuring…' : '✨ Structure'}
+                      </button>
+                      {noteRaw && (
+                        <button
+                          onClick={() => setNoteRaw('')}
+                          style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {noteError && (
+                  <div style={{ marginTop:10, padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red }}>
+                    {noteError}
+                  </div>
+                )}
+
+                {noteStructured && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {/* Headline + meta */}
+                    <div style={{ background:alpha(t.purple, 6), border:'1px solid '+alpha(t.purple, 19), borderRadius:10, padding:'12px 14px' }}>
+                      <div style={{ fontSize:13, fontWeight:800, color:t.text, marginBottom:6, lineHeight:1.4 }}>{noteStructured.headline}</div>
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const, alignItems:'center' }}>
+                        {noteStructured.category && (
+                          <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:5, background:t.surfaceHigh, color:t.purple, textTransform:'capitalize' as const }}>
+                            {noteStructured.category}
+                          </span>
+                        )}
+                        {Array.isArray(noteStructured.tags) && noteStructured.tags.map((tag: string, ti: number) => (
+                          <span key={ti} style={{ fontSize:10, color:t.textMuted, padding:'2px 7px', borderRadius:5, background:t.surfaceHigh }}>#{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Structured bullets — editable so coach can tweak before save */}
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Structured (editable)</div>
+                      <textarea
+                        value={noteStructured.structured || ''}
+                        onChange={e => setNoteStructured((s: any) => ({ ...s, structured: e.target.value }))}
+                        rows={4}
+                        style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'vertical' as const, boxSizing:'border-box' as const, lineHeight:1.5 }}/>
+                    </div>
+
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
+                      <button
+                        onClick={async () => {
+                          if (!noteStructured?.headline) return
+                          setNoteSaving(true)
+                          // Build content body: headline + tags + structured bullets,
+                          // so the saved row stays useful even without the metadata fields.
+                          const tagsLine = Array.isArray(noteStructured.tags) && noteStructured.tags.length > 0
+                            ? `Tags: ${noteStructured.tags.map((x: string) => '#' + x).join(' ')}\n\n`
+                            : ''
+                          const content = `${noteStructured.headline}\n\n${tagsLine}${noteStructured.structured || ''}`.trim()
+                          const { error } = await supabase.from('coach_notes').insert({
+                            client_id: clientId,
+                            coach_id: coachId,
+                            content,
+                            note_type: noteStructured.category || 'general',
+                          })
+                          setNoteSaving(false)
+                          if (error) {
+                            setNoteError('Could not save note: ' + error.message)
+                            return
+                          }
+                          setNoteRaw(''); setNoteStructured(null); setNoteError(null)
+                          setNoteSavedFlash(true)
+                          setTimeout(() => setNoteSavedFlash(false), 2200)
+                        }}
+                        disabled={noteSaving}
+                        style={{ background: noteSaving ? t.surfaceHigh : 'linear-gradient(135deg,'+t.green+','+alpha(t.green, 80)+')', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:800, color: noteSaving ? t.textMuted : '#000', cursor: noteSaving ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {noteSaving ? 'Saving…' : '💾 Save note'}
+                      </button>
+                      <button
+                        onClick={() => { setNoteStructured(null); setNoteError(null) }}
+                        style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Edit raw
+                      </button>
+                      <button
+                        onClick={() => { setNoteStructured(null); setNoteRaw(''); setNoteError(null) }}
+                        style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Discard
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2487,16 +2641,114 @@ export default function ClientDetail() {
           {activeTab === 'goals' && (
             <div className="tab-content">
               {/* Header */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, gap:8, flexWrap:'wrap' as const }}>
                 <div>
                   <div style={{ fontSize:16, fontWeight:800 }}>Client Goals</div>
                   <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>Set targets. Track progress. Celebrate wins.</div>
                 </div>
-                <button onClick={()=>setShowAddGoal(true)}
-                  style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  + Add Goal
-                </button>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button
+                    onClick={async () => {
+                      setGoalProposalsLoading(true); setGoalProposalsError(null); setGoalProposals([])
+                      try {
+                        const res = await fetch('/api/ai-extract-goals', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ clientId }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setGoalProposalsError(data?.error || 'Could not generate proposals')
+                          setGoalProposalsLoading(false); return
+                        }
+                        setGoalProposals(Array.isArray(data?.goals) ? data.goals : [])
+                      } catch (e: any) {
+                        setGoalProposalsError(e?.message || 'Network error')
+                      }
+                      setGoalProposalsLoading(false)
+                    }}
+                    disabled={goalProposalsLoading}
+                    style={{ background: goalProposalsLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:800, color: goalProposalsLoading ? t.textMuted : '#fff', cursor: goalProposalsLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {goalProposalsLoading ? 'Suggesting…' : '✨ AI Suggest'}
+                  </button>
+                  <button onClick={()=>setShowAddGoal(true)}
+                    style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    + Add Goal
+                  </button>
+                </div>
               </div>
+
+              {/* F4.4: AI-suggested goal proposals. Per-card "Add" inserts a row. */}
+              {goalProposalsError && (
+                <div style={{ padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red, marginBottom:14 }}>
+                  {goalProposalsError}
+                </div>
+              )}
+
+              {goalProposals.length > 0 && (
+                <div style={{ background:alpha(t.purple, 6), border:'1px solid '+alpha(t.purple, 25), borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                    <div style={{ fontSize:12, fontWeight:800, color:t.purple, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>✨ AI proposals from intake</div>
+                    <button
+                      onClick={() => setGoalProposals([])}
+                      style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:11, fontFamily:"'DM Sans',sans-serif" }}>
+                      Dismiss all
+                    </button>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {goalProposals.map((g: any, idx: number) => (
+                      <div key={idx} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:10, padding:'12px 14px', display:'flex', flexDirection:'column', gap:6 }}>
+                        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, flexWrap:'wrap' as const }}>
+                          <div style={{ flex:1, minWidth:200 }}>
+                            <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{g.title}</div>
+                            {g.description && <div style={{ fontSize:12, color:t.textMuted, marginTop:2, lineHeight:1.5 }}>{g.description}</div>}
+                            <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const, marginTop:6 }}>
+                              {g.type && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6, background:t.surfaceHigh, color:t.textDim, textTransform:'capitalize' as const }}>{String(g.type).replace('_', ' ')}</span>}
+                              {g.target_value != null && <span style={{ fontSize:10, color:t.textDim }}>Target: <strong style={{ color:t.text }}>{g.target_value}{g.unit ? ' ' + g.unit : ''}</strong></span>}
+                              {g.target_date && <span style={{ fontSize:10, color:t.textDim }}>📅 {g.target_date}</span>}
+                            </div>
+                            {g.rationale && <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' as const, marginTop:4 }}>↳ {g.rationale}</div>}
+                          </div>
+                          <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                            <button
+                              disabled={goalAddingIndex !== null}
+                              onClick={async () => {
+                                setGoalAddingIndex(idx)
+                                const { data: newGoal, error } = await supabase.from('client_goals').insert({
+                                  client_id: clientId,
+                                  coach_id: coachId,
+                                  title: g.title,
+                                  description: g.description || null,
+                                  type: g.type || 'custom',
+                                  target_value: g.target_value != null ? Number(g.target_value) : null,
+                                  unit: g.unit || null,
+                                  deadline: g.target_date || null,
+                                  status: 'active',
+                                  suggested_by: 'ai',
+                                }).select().single()
+                                if (error || !newGoal) {
+                                  toastError('Could not add goal: ' + (error?.message || 'unknown'))
+                                  setGoalAddingIndex(null); return
+                                }
+                                setGoals(p => [newGoal, ...p])
+                                setGoalProposals(p => p.filter((_, i) => i !== idx))
+                                setGoalAddingIndex(null)
+                              }}
+                              style={{ background: goalAddingIndex === idx ? t.surfaceHigh : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'6px 14px', fontSize:11, fontWeight:800, color: goalAddingIndex === idx ? t.textMuted : '#000', cursor: goalAddingIndex !== null ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              {goalAddingIndex === idx ? 'Adding…' : '+ Add'}
+                            </button>
+                            <button
+                              onClick={() => setGoalProposals(p => p.filter((_, i) => i !== idx))}
+                              style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Goals list */}
               {goals.length === 0 ? (
