@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 
 // =================================================================
 // Weekly Brief — proactive Monday-morning summary per client (F3).
@@ -227,15 +228,12 @@ Respond ONLY with this JSON, no other text:
 
   const data = await res.json()
   const text = data?.content?.[0]?.text || ''
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return NextResponse.json({ error: 'Invalid AI response', raw: text }, { status: 500 })
-
-  let parsed
-  try {
-    parsed = JSON.parse(match[0])
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON from AI', raw: text }, { status: 500 })
+  const result = parseClaudeJsonResponse(data, text)
+  if (!result.ok) {
+    console.error(`[weekly-brief] parse failed stop=${data?.stop_reason} error=${result.error}`)
+    return NextResponse.json({ error: result.error, raw: result.raw }, { status: result.status })
   }
+  const parsed = result.data
 
   // Cache in ai_insights so the brain-icon modal + insights page pick
   // it up automatically. Dedupe per (client_id, type, week_start) so

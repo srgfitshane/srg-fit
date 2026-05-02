@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 
 // =================================================================
 // SRG Fit deterministic calorie math.
@@ -203,16 +204,14 @@ Respond ONLY with a JSON object, no other text:
 
   const data = await res.json()
   const text = data?.content?.[0]?.text || ''
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) return NextResponse.json({ error: 'Invalid AI response', raw: text }, { status: 500 })
-  try {
-    const parsed = JSON.parse(jsonMatch[0])
-    // Defensive: force the calorie field to our calculation regardless
-    // of what the LLM produced. The macro grams are still the LLM's call,
-    // but the headline number is ours.
-    parsed.calories = calories
-    return NextResponse.json(parsed)
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON from AI', raw: text }, { status: 500 })
+  const result = parseClaudeJsonResponse(data, text)
+  if (!result.ok) {
+    console.error(`[suggest-macros] parse failed stop=${data?.stop_reason} error=${result.error}`)
+    return NextResponse.json({ error: result.error, raw: result.raw }, { status: result.status })
   }
+  // Defensive: force the calorie field to our calculation regardless
+  // of what the LLM produced. The macro grams are still the LLM's call,
+  // but the headline number is ours.
+  result.data.calories = calories
+  return NextResponse.json(result.data)
 }

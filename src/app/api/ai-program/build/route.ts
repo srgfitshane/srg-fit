@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 
 // =================================================================
 // AI Program Builder (F2a, Phase 1) — coach-only.
@@ -198,7 +199,12 @@ Make the weeks array exactly ${duration_weeks} entries. Each day should have 4-8
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
+      // Sonnet 4 supports up to 64k output tokens. A 12-week × 4-day × 7-ex
+      // program lands around ~30-40k tokens of structured JSON, so we
+      // size accordingly. The previous 8000 cap truncated mid-JSON for
+      // anything past a 4-week / 3-day plan and produced "Invalid JSON
+      // from AI" errors with no actionable message.
+      max_tokens: 16000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     }),
@@ -211,19 +217,16 @@ Make the weeks array exactly ${duration_weeks} entries. Each day should have 4-8
 
   const data = await res.json()
   const text = data?.content?.[0]?.text || ''
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return NextResponse.json({ error: 'Invalid AI response', raw: text }, { status: 500 })
-
-  let parsed
-  try {
-    parsed = JSON.parse(match[0])
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON from AI', raw: text }, { status: 500 })
+  const result = parseClaudeJsonResponse(data, text)
+  if (!result.ok) {
+    console.error(`[ai-program/build] parse failed stop=${data?.stop_reason} usage=${JSON.stringify(data?.usage || {})} error=${result.error}`)
+    return NextResponse.json({ error: result.error, raw: result.raw }, { status: result.status })
   }
+  const parsed = result.data
 
   // Cost log so we can monitor spend during early dogfooding
   const elapsedMs = Date.now() - startedAt
-  console.log(`[ai-program/build] ok client=${clientId} weeks=${duration_weeks} days=${days_per_week} focus=${focus} ms=${elapsedMs} usage=${JSON.stringify(data?.usage || {})}`)
+  console.log(`[ai-program/build] ok client=${clientId} weeks=${duration_weeks} days=${days_per_week} focus=${focus} ms=${elapsedMs} stop=${data?.stop_reason} usage=${JSON.stringify(data?.usage || {})}`)
 
   return NextResponse.json({
     ...parsed,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 
 // Coach-only: generates a sample day meal plan from confirmed macros + client intake.
 export async function POST(req: NextRequest) {
@@ -83,11 +84,10 @@ Respond ONLY with a JSON object, no other text:
 
   const data = await res.json()
   const text = data?.content?.[0]?.text || ''
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) return NextResponse.json({ error: 'Invalid AI response', raw: text }, { status: 500 })
-  try {
-    return NextResponse.json(JSON.parse(jsonMatch[0]))
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON from AI', raw: text }, { status: 500 })
+  const result = parseClaudeJsonResponse(data, text)
+  if (!result.ok) {
+    console.error(`[generate-meal-plan] parse failed stop=${data?.stop_reason} error=${result.error}`)
+    return NextResponse.json({ error: result.error, raw: result.raw }, { status: result.status })
   }
+  return NextResponse.json(result.data)
 }

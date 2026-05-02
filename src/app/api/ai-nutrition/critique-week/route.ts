@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 
 // =================================================================
 // 7-day nutrition adherence audit. Coach-only.
@@ -238,15 +239,12 @@ Respond ONLY with a JSON object, no other text:
 
   const data = await res.json()
   const text = data?.content?.[0]?.text || ''
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) return NextResponse.json({ error: 'Invalid AI response', raw: text }, { status: 500 })
-
-  let parsed
-  try {
-    parsed = JSON.parse(match[0])
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON from AI', raw: text }, { status: 500 })
+  const result = parseClaudeJsonResponse(data, text)
+  if (!result.ok) {
+    console.error(`[critique-week] parse failed stop=${data?.stop_reason} error=${result.error}`)
+    return NextResponse.json({ error: result.error, raw: result.raw }, { status: result.status })
   }
+  const parsed = result.data
 
   return NextResponse.json({
     ...parsed,
