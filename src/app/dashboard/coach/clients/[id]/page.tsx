@@ -58,6 +58,10 @@ export default function ClientDetail() {
   const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
   const [nutritionSaving, setNutritionSaving] = useState(false)
   const [aiMacrosLoading, setAiMacrosLoading] = useState(false)
+  // F1a: 7-day nutrition critique. Lazy-loaded — coach hits the button.
+  const [weekCritique, setWeekCritique] = useState<any>(null)
+  const [critiqueLoading, setCritiqueLoading] = useState(false)
+  const [critiqueError, setCritiqueError] = useState<string | null>(null)
   const [aiMacrosRationale, setAiMacrosRationale] = useState('')
   const [mealPlan, setMealPlan] = useState<any[]>([])
   const [mealPlanNotes, setMealPlanNotes] = useState('')
@@ -1374,6 +1378,101 @@ export default function ClientDetail() {
                   </div>
                 )
               })()}
+
+              {/* F1a: AI Critique this week. Server pulls food_entries + active
+                  plan, computes daily totals + adherence math, LLM writes
+                  prose summary + 3 prescriptions. Lazy: coach hits the button. */}
+              <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'18px 22px' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' as const }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:800 }}>🧠 AI weekly critique</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                      Last 7 days of food logs vs target. Patterns + prescriptions for next week.
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setCritiqueLoading(true); setCritiqueError(null)
+                      try {
+                        const res = await fetch('/api/ai-nutrition/critique-week', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ clientId }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setCritiqueError(data?.error || 'Could not generate critique')
+                          setCritiqueLoading(false); return
+                        }
+                        setWeekCritique(data)
+                      } catch (e: any) {
+                        setCritiqueError(e?.message || 'Network error')
+                      }
+                      setCritiqueLoading(false)
+                    }}
+                    disabled={critiqueLoading}
+                    style={{ background: critiqueLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color: critiqueLoading ? t.textMuted : '#fff', cursor: critiqueLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {critiqueLoading ? 'Analyzing…' : weekCritique ? 'Refresh' : '✨ Critique this week'}
+                  </button>
+                </div>
+
+                {critiqueError && (
+                  <div style={{ marginTop:14, padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red }}>
+                    {critiqueError}
+                  </div>
+                )}
+
+                {weekCritique && !critiqueError && (
+                  <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:14 }}>
+                    {/* Stats strip */}
+                    <div style={{ display:'flex', gap:10, flexWrap:'wrap' as const }}>
+                      <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                        <strong style={{ color:t.text }}>{weekCritique.stats?.logged_days ?? 0}/7</strong> days logged
+                      </span>
+                      {weekCritique.has_plan && weekCritique.stats?.hits && (
+                        <>
+                          <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                            Cal hits <strong style={{ color:t.text }}>{weekCritique.stats.hits.calories}/{weekCritique.stats.logged_days}</strong>
+                          </span>
+                          <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                            Protein hits <strong style={{ color:t.text }}>{weekCritique.stats.hits.protein}/{weekCritique.stats.logged_days}</strong>
+                          </span>
+                        </>
+                      )}
+                      {weekCritique.stats?.averages && (
+                        <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                          Avg <strong style={{ color:t.text }}>{weekCritique.stats.averages.calories}</strong> kcal · <strong style={{ color:t.text }}>{weekCritique.stats.averages.protein_g}g</strong> P
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Summary */}
+                    {weekCritique.summary && (
+                      <div style={{ fontSize:13, color:t.text, lineHeight:1.55 }}>{weekCritique.summary}</div>
+                    )}
+
+                    {/* Patterns */}
+                    {Array.isArray(weekCritique.patterns) && weekCritique.patterns.length > 0 && (
+                      <div>
+                        <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Patterns</div>
+                        <ul style={{ margin:0, paddingLeft:18, fontSize:12, color:t.textDim, lineHeight:1.6 }}>
+                          {weekCritique.patterns.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Prescriptions */}
+                    {Array.isArray(weekCritique.prescriptions) && weekCritique.prescriptions.length > 0 && (
+                      <div style={{ background:alpha(t.purple, 8), border:'1px solid '+alpha(t.purple, 25), borderRadius:10, padding:'12px 14px' }}>
+                        <div style={{ fontSize:11, fontWeight:800, color:t.purple, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>⚡ Prescribe next week</div>
+                        <ul style={{ margin:0, paddingLeft:18, fontSize:12, color:t.text, lineHeight:1.6 }}>
+                          {weekCritique.prescriptions.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:24 }}>
 
