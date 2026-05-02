@@ -646,19 +646,34 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             <div style={{ position:'fixed', inset:0, zIndex:100 }}
               onClick={()=>setReactTarget(null)}
               onTouchEnd={()=>setReactTarget(null)} />
-            {/* Picker */}
+            {/* Picker — clamped to viewport so emojis don't get cut off on
+                narrow phones. Old code assumed a 300px width, but the picker
+                is actually ~420px (8 emojis × ~46px + gaps + padding), so the
+                rightmost emoji got clipped on anything <380px wide. We now
+                size to viewport with safe gutters, allow flexWrap as a
+                fallback for very narrow screens, and clamp `left` against
+                the real width. */}
+            {(() => {
+              const vw = typeof window !== 'undefined' ? window.innerWidth : 380
+              const pickerWidth = Math.min(380, vw - 16)
+              const left = Math.max(8, Math.min(reactPos.x - pickerWidth / 2, vw - pickerWidth - 8))
+              return (
             <div className="rmt-picker" style={{
               position:'fixed',
-              left: Math.min(Math.max(reactPos.x - 140, 8), window.innerWidth - 300),
+              left,
               top: Math.max(reactPos.y - 70, 60),
+              width: pickerWidth,
               background:c.surfaceHigh,
               border:'1px solid '+c.border,
-              borderRadius:32,
-              padding:'8px 12px',
+              borderRadius:24,
+              padding:'8px 10px',
               display:'flex',
-              gap:4,
+              flexWrap:'wrap',
+              justifyContent:'center',
+              gap:2,
               zIndex:101,
               boxShadow:'0 8px 32px rgba(0,0,0,.7)',
+              boxSizing:'border-box' as const,
             }} onClick={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
               {QUICK_REACTIONS.map(emoji => (
                 <button key={emoji}
@@ -670,6 +685,8 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                 </button>
               ))}
             </div>
+              )
+            })()}
           </>
         )}
 
