@@ -72,6 +72,11 @@ export default function ClientDetail() {
   const [mealPlan, setMealPlan] = useState<any[]>([])
   const [mealPlanNotes, setMealPlanNotes] = useState('')
   const [aiPlanLoading, setAiPlanLoading] = useState(false)
+  // F1b: 7-day meal plan + grocery list. Read-only display, separate
+  // from the editable 1-day Sample Plan above. Coach copies to send.
+  const [weeklyPlan, setWeeklyPlan] = useState<any>(null)
+  const [weeklyPlanLoading, setWeeklyPlanLoading] = useState(false)
+  const [weeklyPlanError, setWeeklyPlanError] = useState<string | null>(null)
   const [monthlyMacros, setMonthlyMacros] = useState<any[]>([])
   const [program,       setProgram]       = useState<any>(null)
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0)
@@ -1912,6 +1917,147 @@ export default function ClientDetail() {
                           rows={2}
                           style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'8px 12px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none' as const, colorScheme:'dark' as const, boxSizing:'border-box' as const }}/>
                       </div>
+                    </div>
+
+                    {/* F1b: 7-day meal plan + grocery list ────────────────── */}
+                    <div style={{ marginTop:8, paddingTop:18, borderTop:'1px solid '+t.border }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, gap:10, flexWrap:'wrap' as const }}>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:800 }}>📋 7-day plan + grocery list</div>
+                          <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>Coach-only read-only view — copy/paste to send to client</div>
+                        </div>
+                        <button
+                          disabled={weeklyPlanLoading || !nutritionForm.calories}
+                          onClick={async () => {
+                            setWeeklyPlanLoading(true); setWeeklyPlanError(null)
+                            try {
+                              const res = await fetch('/api/ai-nutrition/weekly-meal-plan', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  clientId,
+                                  calories: parseInt(nutritionForm.calories) || 2000,
+                                  protein_g: parseInt(nutritionForm.protein) || 150,
+                                  carbs_g: parseInt(nutritionForm.carbs) || 200,
+                                  fat_g: parseInt(nutritionForm.fat) || 65,
+                                  meals_per_day: 4,
+                                }),
+                              })
+                              const data = await res.json()
+                              if (!res.ok) {
+                                setWeeklyPlanError(data?.error || 'Could not generate weekly plan')
+                                setWeeklyPlanLoading(false); return
+                              }
+                              setWeeklyPlan(data)
+                            } catch (e: any) {
+                              setWeeklyPlanError(e?.message || 'Network error')
+                            }
+                            setWeeklyPlanLoading(false)
+                          }}
+                          style={{ background: weeklyPlanLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color: weeklyPlanLoading ? t.textMuted : '#fff', cursor: weeklyPlanLoading || !nutritionForm.calories ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif", opacity: !nutritionForm.calories ? 0.5 : 1 }}>
+                          {weeklyPlanLoading ? 'Generating… (20-40s)' : weeklyPlan ? '🔄 Regenerate' : '✨ Generate 7-day plan'}
+                        </button>
+                      </div>
+
+                      {weeklyPlanError && (
+                        <div style={{ padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red, marginBottom:10 }}>
+                          {weeklyPlanError}
+                        </div>
+                      )}
+
+                      {weeklyPlan && (
+                        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                          {/* Copy-as-text button */}
+                          <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                            <button
+                              onClick={() => {
+                                const lines: string[] = []
+                                lines.push('=== 7-DAY MEAL PLAN ===\n')
+                                for (const d of (weeklyPlan.days || [])) {
+                                  lines.push(`--- ${d.day} ---`)
+                                  if (d.totals) lines.push(`Targets: ${d.totals.calories}kcal · ${d.totals.protein_g}P / ${d.totals.carbs_g}C / ${d.totals.fat_g}F`)
+                                  for (const m of (d.meals || [])) {
+                                    lines.push(`\n${m.name}${m.time ? ' (' + m.time + ')' : ''}`)
+                                    for (const it of (m.items || [])) lines.push(`  • ${it.food} — ${it.qty}`)
+                                    if (m.calories) lines.push(`  → ${m.calories}kcal · ${m.protein_g}P / ${m.carbs_g}C / ${m.fat_g}F`)
+                                  }
+                                  lines.push('')
+                                }
+                                lines.push('=== GROCERY LIST ===\n')
+                                for (const cat of (weeklyPlan.grocery_list || [])) {
+                                  if (!Array.isArray(cat.items) || cat.items.length === 0) continue
+                                  lines.push(`${cat.category}:`)
+                                  for (const it of cat.items) lines.push(`  - ${it}`)
+                                  lines.push('')
+                                }
+                                if (weeklyPlan.rotation_notes) lines.push(`Rotation: ${weeklyPlan.rotation_notes}\n`)
+                                if (weeklyPlan.notes) lines.push(`Coach notes: ${weeklyPlan.notes}`)
+                                navigator.clipboard.writeText(lines.join('\n'))
+                              }}
+                              style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'5px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              📋 Copy as text
+                            </button>
+                          </div>
+
+                          {/* Days */}
+                          {Array.isArray(weeklyPlan.days) && weeklyPlan.days.map((d: any, di: number) => (
+                            <div key={di} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'12px 14px' }}>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, flexWrap:'wrap' as const, gap:6 }}>
+                                <span style={{ fontSize:13, fontWeight:800 }}>{d.day}</span>
+                                {d.totals && <span style={{ fontSize:10, color:t.textMuted }}>{d.totals.calories}kcal · {d.totals.protein_g}P / {d.totals.carbs_g}C / {d.totals.fat_g}F</span>}
+                              </div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                                {Array.isArray(d.meals) && d.meals.map((m: any, mi: number) => (
+                                  <div key={mi} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px' }}>
+                                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, marginBottom:4 }}>
+                                      <span style={{ fontSize:12, fontWeight:700 }}>{m.name}{m.time ? ' · ' + m.time : ''}</span>
+                                      {m.calories && <span style={{ fontSize:10, color:t.textMuted }}>{m.calories}kcal · {m.protein_g}P/{m.carbs_g}C/{m.fat_g}F</span>}
+                                    </div>
+                                    {Array.isArray(m.items) && m.items.length > 0 && (
+                                      <div style={{ fontSize:11, color:t.textDim, lineHeight:1.5 }}>
+                                        {m.items.map((it: any, ii: number) => (
+                                          <div key={ii}>• {it.food} <span style={{ color:t.textMuted }}>— {it.qty}</span></div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Grocery list */}
+                          {Array.isArray(weeklyPlan.grocery_list) && weeklyPlan.grocery_list.length > 0 && (
+                            <div style={{ background:alpha(t.green, 8), border:'1px solid '+alpha(t.green, 25), borderRadius:10, padding:'12px 14px' }}>
+                              <div style={{ fontSize:12, fontWeight:800, color:t.green, marginBottom:8, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>🛒 Grocery list</div>
+                              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:10 }}>
+                                {weeklyPlan.grocery_list.map((cat: any, ci: number) => (
+                                  Array.isArray(cat.items) && cat.items.length > 0 && (
+                                    <div key={ci}>
+                                      <div style={{ fontSize:11, fontWeight:800, color:t.text, marginBottom:4 }}>{cat.category}</div>
+                                      <ul style={{ margin:0, paddingLeft:18, fontSize:11, color:t.textDim, lineHeight:1.6 }}>
+                                        {cat.items.map((it: string, ii: number) => <li key={ii}>{it}</li>)}
+                                      </ul>
+                                    </div>
+                                  )
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Rotation + coach notes */}
+                          {weeklyPlan.rotation_notes && (
+                            <div style={{ fontSize:12, color:t.textDim, padding:'8px 0' }}>
+                              <strong style={{ color:t.text }}>Rotation:</strong> {weeklyPlan.rotation_notes}
+                            </div>
+                          )}
+                          {weeklyPlan.notes && (
+                            <div style={{ background:alpha(t.purple, 6), border:'1px solid '+alpha(t.purple, 19), borderRadius:8, padding:'10px 12px', fontSize:12, color:t.text, lineHeight:1.5 }}>
+                              <strong style={{ color:t.purple }}>Coach note for client:</strong> {weeklyPlan.notes}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
