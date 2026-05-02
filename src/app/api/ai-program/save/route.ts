@@ -257,9 +257,20 @@ export async function POST(req: NextRequest) {
               rpe: null,            // load_guidance carries this for now
               notes,
               order_index: exIdx,
-              exercise_role: (ex.category && ['warmup','corrective','main','accessory','conditioning','cooldown'].includes(String(ex.category).toLowerCase()))
-                ? String(ex.category).toLowerCase()
-                : 'main',
+              // exercise_role MUST match session_exercises_exercise_role_check
+              // because schedule-program copies the value verbatim into
+              // session_exercises rows. Map any AI drift to the canonical set:
+              //   - 'corrective'   → 'warmup'   (correctives are pre-work)
+              //   - 'conditioning' → 'finisher' (conditioning lives at session end)
+              //   - anything unrecognized → 'main' (safe default)
+              exercise_role: (() => {
+                const raw = String(ex.category || '').toLowerCase().trim()
+                const ALLOWED = ['warmup','main','secondary','accessory','finisher','cooldown','variation']
+                if (ALLOWED.includes(raw)) return raw
+                if (raw === 'corrective') return 'warmup'
+                if (raw === 'conditioning') return 'finisher'
+                return 'main'
+              })(),
             })
 
           if (exErr) {

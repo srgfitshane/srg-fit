@@ -197,7 +197,10 @@ Respond with this exact JSON shape (no extra fields, no commentary):
           "exercises": [
             {
               "name": "<common exercise name>",
-              "category": "<warmup | corrective | main | accessory | conditioning | cooldown>",
+              "category": "<warmup | main | secondary | accessory | finisher | cooldown>",
+              // Pick from the canonical list above. Treat correctives as
+              // warmup, treat conditioning blocks as finisher. These
+              // categories must match what the schedule step accepts.
               "sets": <int>,
               "reps": "<string, e.g. '8-10' or '5x3' or '30s'>",
               "load_guidance": "<string, e.g. 'RPE 7' or '70% est-1RM' or 'bodyweight + 25 lbs'>",
