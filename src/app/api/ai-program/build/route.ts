@@ -121,7 +121,23 @@ You write programs for the coach who will supervise the athlete in person — no
 Hard rules:
 - Respect injuries and surgeries. If unsure of severity, choose the regression.
 - Match equipment access. Don't program a barbell back squat for someone who has dumbbells only.
-- Keep exercise names common and recognizable (use names a typical S&C library would carry — barbell back squat, romanian deadlift, dumbbell bench press, banded face pull, etc). The coach's library will resolve them later.
+- Exercise naming — IMPORTANT for library matching: the coach's library uses the format "Movement [Variation] - Equipment" with a hyphen separator. ALWAYS write exercise names in this format so the save step finds the match. Real examples from the library:
+  • "Back Squat - Barbell"
+  • "Front Squat - Barbell"
+  • "Bench Press - Dumbbell"
+  • "Bench Press - Barbell"
+  • "Romanian Deadlift - Barbell"
+  • "Conventional Deadlift - Barbell"
+  • "Bent Over Row - Cable"
+  • "Bent Over Row - Dumbbell"
+  • "Bicep Curl - Dumbbell"
+  • "Lateral Raise - Dumbbell"
+  • "Hip Thrust - Barbell"
+  • "Single Arm Row - Dumbbell"
+  • "Bulgarian Split Squat - Dumbbell"
+  • "Overhead Press - Barbell"
+  • "Face Pull - Cable"
+  Bodyweight or no-equipment moves drop the suffix: "Pull-up", "Push-up", "Plank", "Bird Dog". DO NOT write equipment first ("Dumbbell Bench Press") — the library indexes by movement-first.
 - Output ONLY valid JSON. No commentary outside the JSON.`
 
   const userPrompt = `Build a ${duration_weeks}-week program for ${clientName}${ageNote}.

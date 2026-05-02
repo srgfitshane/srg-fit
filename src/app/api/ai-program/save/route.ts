@@ -97,34 +97,78 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
   }
 
-  // ── Exercise-name resolution map ─────────────────────────────────────
-  // Pull library once (system + this coach's custom). Build two indexes:
-  // exact-icase match map and a slug map for forgiving lookup.
+  // ── Exercise-name resolution ─────────────────────────────────────────
+  // Pull library once (system + this coach's custom). Build three layers:
+  //   1. exact-icase  — fastest, perfect format match
+  //   2. slug-equal   — punctuation/whitespace tolerant
+  //   3. token overlap (Jaccard + containment) — bridges naming-convention
+  //      gaps. The library uses "Movement [Variation] - Equipment" format
+  //      ("Bench Press - Dumbbell"), but the AI may emit "Dumbbell Bench
+  //      Press". The exact + slug lookups can't bridge that — token
+  //      scoring can.
+  //
+  // Why this matters: before token scoring, the AI's program proposals
+  // landed with exercise_id=null on every row, which the program editor
+  // renders as empty cards. Coaches saw "the save canceled out".
   const { data: library } = await supabase
     .from('exercises')
     .select('id, name')
     .eq('is_active', true)
     .or(`is_system.eq.true,coach_id.eq.${user.id}`)
 
-  const byExact = new Map<string, string>()  // lowercased name → id
-  const bySlug = new Map<string, string>()   // slug → id
+  const byExact = new Map<string, string>()
+  const bySlug = new Map<string, string>()
+  // Pre-tokenized library for the fuzzy fallback. Avoids retokenizing 1163
+  // entries per proposal lookup (a 12-week × 4-day program does ~336
+  // lookups; pre-tokenize once).
+  const tokenized: Array<{ id: string; tokens: Set<string> }> = []
+
+  // Tiny stopword list — keep equipment/modifier words like "barbell",
+  // "front", "single" since they carry meaning.
+  const STOPWORDS = new Set(['the', 'a', 'an', 'with', 'and', 'or', 'of', 'to', 'on', 'for'])
+  const tokenize = (s: string): Set<string> =>
+    new Set(
+      s.toLowerCase()
+        .replace(/[^a-z0-9 ]/g, ' ')   // strip hyphens, parens, etc → spaces
+        .split(/\s+/)
+        .filter(t => t.length >= 2 && !STOPWORDS.has(t))
+    )
+
   for (const ex of library || []) {
     if (!ex?.name || !ex?.id) continue
     byExact.set(ex.name.toLowerCase(), ex.id)
     bySlug.set(slugify(ex.name), ex.id)
+    tokenized.push({ id: ex.id, tokens: tokenize(ex.name) })
   }
+
   const resolveExerciseId = (name: string): string | null => {
+    if (!name) return null
     const lc = name.toLowerCase()
-    const exact = byExact.get(lc)
-    if (exact) return exact
+    if (byExact.has(lc)) return byExact.get(lc)!
     const slug = slugify(name)
-    const slugHit = bySlug.get(slug)
-    if (slugHit) return slugHit
-    // Final-fallback: contains. Pick first match. Cost: O(n) per unmatched.
-    for (const [k, id] of bySlug) {
-      if (k.includes(slug) || slug.includes(k)) return id
+    if (bySlug.has(slug)) return bySlug.get(slug)!
+
+    // Token-overlap scoring across the whole library. Combined score is
+    // average of containment (how much of the proposal lives in the lib
+    // entry) and Jaccard (overall overlap). Containment helps short
+    // proposals like "Romanian Deadlift" match "Romanian Deadlift -
+    // Barbell"; Jaccard breaks ties between similar entries.
+    const proposalTokens = tokenize(name)
+    if (proposalTokens.size === 0) return null
+    let best = { id: null as string | null, score: 0 }
+    for (const lib of tokenized) {
+      if (lib.tokens.size === 0) continue
+      let inter = 0
+      for (const t of proposalTokens) if (lib.tokens.has(t)) inter++
+      if (inter === 0) continue
+      const containment = inter / proposalTokens.size
+      const jaccard = inter / (proposalTokens.size + lib.tokens.size - inter)
+      const score = (containment + jaccard) / 2
+      if (score > best.score) best = { id: lib.id, score }
     }
-    return null
+    // 0.5 threshold catches "Banded Face Pull" → "Face Pull - Resistance
+    // Band" (score ~0.54) without false-matching unrelated movements.
+    return best.score >= 0.5 ? best.id : null
   }
 
   // ── Insert program row ───────────────────────────────────────────────
