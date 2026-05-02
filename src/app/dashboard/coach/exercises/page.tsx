@@ -231,6 +231,11 @@ export default function ExerciseLibrary() {
             {stats.withVideo}/{stats.total} videos · {stats.withMuscles}/{stats.total} muscles · {stats.withPattern}/{stats.total} patterns
           </div>
           <div style={{flex:1}}/>
+          <button onClick={()=>router.push('/dashboard/coach/admin/enrich')}
+            title="Run all exercises through Claude to clean names, muscles, movement patterns, and equipment"
+            style={{background:'#8b5cf61a',border:'1px solid #8b5cf640',borderRadius:9,padding:'8px 14px',fontSize:13,fontWeight:700,color:'#a78bfa',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+            🤖 AI Enrich
+          </button>
           <button onClick={()=>setShowNew(true)} style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             + Add Exercise
           </button>
