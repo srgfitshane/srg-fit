@@ -2,7 +2,9 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
-const TOTAL_BATCHES = 29
+// Fallback only — the Edge Function returns the real total in `data.totalBatches`
+// (Math.ceil(exercise_count / 40)). 30 = ceil(1163 / 40) at time of writing.
+const TOTAL_BATCHES = 30
 
 export default function EnrichExercisesPage() {
   const [running,  setRunning]  = useState(false)
