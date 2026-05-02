@@ -62,6 +62,12 @@ export default function ClientDetail() {
   const [weekCritique, setWeekCritique] = useState<any>(null)
   const [critiqueLoading, setCritiqueLoading] = useState(false)
   const [critiqueError, setCritiqueError] = useState<string | null>(null)
+  // F3: Weekly Brief — proactive summary of last 7 days across all areas.
+  // Lazy: coach hits the button. Result is also cached in ai_insights so
+  // the brain-icon modal picks it up automatically.
+  const [weeklyBrief, setWeeklyBrief] = useState<any>(null)
+  const [briefLoading, setBriefLoading] = useState(false)
+  const [briefError, setBriefError] = useState<string | null>(null)
   const [aiMacrosRationale, setAiMacrosRationale] = useState('')
   const [mealPlan, setMealPlan] = useState<any[]>([])
   const [mealPlanNotes, setMealPlanNotes] = useState('')
@@ -640,6 +646,121 @@ export default function ClientDetail() {
           {/* OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="overview-grid" style={{ display:"grid" }}>
+
+              {/* F3: Weekly Brief banner — span full width above pulse/checkin cards.
+                  Coach hits Generate, server aggregates last 7 days, LLM frames
+                  summary + 3 prescriptions. Result cached in ai_insights. */}
+              <div style={{ gridColumn:'1 / -1', background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'18px 22px' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' as const }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:800 }}>📋 AI Weekly Brief</div>
+                    <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                      Last 7 days across check-ins, training, nutrition, habits — with prescriptions for the week ahead.
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setBriefLoading(true); setBriefError(null)
+                      try {
+                        const res = await fetch('/api/ai-insight/weekly-brief', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ clientId }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setBriefError(data?.error || 'Could not generate brief')
+                          setBriefLoading(false); return
+                        }
+                        setWeeklyBrief(data)
+                      } catch (e: any) {
+                        setBriefError(e?.message || 'Network error')
+                      }
+                      setBriefLoading(false)
+                    }}
+                    disabled={briefLoading}
+                    style={{ background: briefLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color: briefLoading ? t.textMuted : '#fff', cursor: briefLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {briefLoading ? 'Analyzing…' : weeklyBrief ? 'Refresh brief' : '✨ Generate weekly brief'}
+                  </button>
+                </div>
+
+                {briefError && (
+                  <div style={{ marginTop:14, padding:'10px 12px', background:t.redDim, border:'1px solid '+alpha(t.red, 25), borderRadius:9, fontSize:12, color:t.red }}>
+                    {briefError}
+                  </div>
+                )}
+
+                {weeklyBrief && !briefError && (
+                  <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:14 }}>
+                    {weeklyBrief.title && (
+                      <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{weeklyBrief.title}</div>
+                    )}
+                    {/* Stats strip — week pulse + training + logging adherence */}
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
+                      {weeklyBrief.stats?.checkins_logged != null && (
+                        <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                          Check-ins <strong style={{ color:t.text }}>{weeklyBrief.stats.checkins_logged}/7</strong>
+                        </span>
+                      )}
+                      {weeklyBrief.stats?.sessions && (
+                        <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                          Workouts <strong style={{ color:t.text }}>{weeklyBrief.stats.sessions.completed}/{weeklyBrief.stats.sessions.assigned}</strong>
+                        </span>
+                      )}
+                      {weeklyBrief.stats?.nutrition?.days_logged != null && (
+                        <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                          Food logs <strong style={{ color:t.text }}>{weeklyBrief.stats.nutrition.days_logged}/7</strong>
+                        </span>
+                      )}
+                      {weeklyBrief.stats?.avg_sleep != null && (
+                        <span style={{ background:t.surfaceHigh, borderRadius:8, padding:'6px 10px', fontSize:11, color:t.textDim }}>
+                          Sleep avg <strong style={{ color:t.text }}>{weeklyBrief.stats.avg_sleep}</strong> ({weeklyBrief.stats.trend?.sleep})
+                        </span>
+                      )}
+                      {weeklyBrief.stats?.prs && weeklyBrief.stats.prs.length > 0 && (
+                        <span style={{ background:alpha(t.green, 12), border:'1px solid '+alpha(t.green, 25), borderRadius:8, padding:'6px 10px', fontSize:11, color:t.green, fontWeight:700 }}>
+                          🏆 {weeklyBrief.stats.prs.length} new PR{weeklyBrief.stats.prs.length === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Summary */}
+                    {weeklyBrief.summary && (
+                      <div style={{ fontSize:13, color:t.text, lineHeight:1.55 }}>{weeklyBrief.summary}</div>
+                    )}
+
+                    {/* Highlights + Concerns side-by-side on wide, stack on narrow */}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:12 }}>
+                      {Array.isArray(weeklyBrief.highlights) && weeklyBrief.highlights.length > 0 && (
+                        <div style={{ background:alpha(t.green, 8), border:'1px solid '+alpha(t.green, 25), borderRadius:10, padding:'12px 14px' }}>
+                          <div style={{ fontSize:11, fontWeight:800, color:t.green, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Highlights</div>
+                          <ul style={{ margin:0, paddingLeft:18, fontSize:12, color:t.text, lineHeight:1.6 }}>
+                            {weeklyBrief.highlights.map((h: string, i: number) => <li key={i}>{h}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {Array.isArray(weeklyBrief.concerns) && weeklyBrief.concerns.length > 0 && (
+                        <div style={{ background:alpha(t.orange, 8), border:'1px solid '+alpha(t.orange, 25), borderRadius:10, padding:'12px 14px' }}>
+                          <div style={{ fontSize:11, fontWeight:800, color:t.orange, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Concerns</div>
+                          <ul style={{ margin:0, paddingLeft:18, fontSize:12, color:t.text, lineHeight:1.6 }}>
+                            {weeklyBrief.concerns.map((c: string, i: number) => <li key={i}>{c}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Prescriptions */}
+                    {Array.isArray(weeklyBrief.prescriptions) && weeklyBrief.prescriptions.length > 0 && (
+                      <div style={{ background:alpha(t.purple, 8), border:'1px solid '+alpha(t.purple, 25), borderRadius:10, padding:'12px 14px' }}>
+                        <div style={{ fontSize:11, fontWeight:800, color:t.purple, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>⚡ Prescribe next week</div>
+                        <ul style={{ margin:0, paddingLeft:18, fontSize:12, color:t.text, lineHeight:1.6 }}>
+                          {weeklyBrief.prescriptions.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* ── Morning pulse (most recent) ── */}
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20 }}>
