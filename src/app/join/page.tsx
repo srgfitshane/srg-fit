@@ -24,10 +24,10 @@ const PLANS = [
 // Copy lead with what the CLIENT experiences and gains; coach support
 // is the enabler, not the feature. Aim for ~70/30 client/coach framing.
 const FEATURES = [
-  { icon:'🎯', title:'A Plan That\'s Actually Yours', desc:'Built around your goals, schedule, equipment, and body — and adjusted weekly based on how you\'re actually doing.' },
+  { icon:'🎯', title:'A Plan That\'s Actually Yours', desc:'Built around your goals, schedule, equipment, and body. Adjusted weekly based on how you\'re actually doing.' },
   { icon:'🏋️', title:'Train Without Guessing', desc:'Every workout you log gets eyes on it. Form notes back within 24 hours so you train smarter, recover faster, and trust what you\'re doing.' },
-  { icon:'📈', title:'See Yourself Get Stronger', desc:'Workouts, nutrition, sleep, and mood — all in one place. Patterns get obvious, wins stack up, and the work pays off.' },
-  { icon:'💬', title:'Never Train Alone', desc:'Real messaging with a real coach who shows up. No bots, no autoresponders — someone in your corner when you need it.' },
+  { icon:'📈', title:'See Yourself Get Stronger', desc:'Workouts, nutrition, sleep, and mood, all in one place. Patterns get obvious, wins stack up, and the work pays off.' },
+  { icon:'💬', title:'Never Train Alone', desc:'Real messaging with a real coach who shows up. No bots, no autoresponders. Just someone in your corner when you need it.' },
 ]
 
 export default function JoinPage() {
@@ -72,7 +72,7 @@ export default function JoinPage() {
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
       <div style={{ background:'#080810', minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:'#eeeef8' }}>
 
-        {/* Top bar — link back to the marketing site so visitors who land
+        {/* Top bar: link back to the marketing site so visitors who land
             here can still browse Shane's full story without backtracking. */}
         <div style={{ maxWidth:600, margin:'0 auto', padding:'18px 24px 0', display:'flex', justifyContent:'flex-end' }}>
           <a href="https://srgfit.training" style={{ fontSize:11, color:'#5a5a78', textDecoration:'none', letterSpacing:'0.05em', borderBottom:'1px dashed #5a5a7855', paddingBottom:1 }}>
@@ -174,7 +174,7 @@ export default function JoinPage() {
           <div style={{ marginTop:28, background:'#00c9b115', border:'1px solid #00c9b130', borderRadius:14, padding:'16px 18px', textAlign:'center' }}>
             <div style={{ fontSize:13, fontWeight:800, color:'#00c9b1', marginBottom:5 }}>Not sure if it's right for you?</div>
             <div style={{ fontSize:12, color:'#5a5a78', lineHeight:1.6 }}>
-              Send a note to <a href="mailto:shane@srgfit.training" style={{ color:'#00c9b1', textDecoration:'none' }}>shane@srgfit.training</a> — Shane reads and answers every one personally. No pressure either way.
+              Send a note to <a href="mailto:shane@srgfit.training" style={{ color:'#00c9b1', textDecoration:'none' }}>shane@srgfit.training</a>. Shane reads and answers every one personally. No pressure either way.
             </div>
           </div>
           <div style={{ textAlign:'center', marginTop:28, fontSize:11, color:'#8888a8' }}>Be Kind to Yourself & Stay Awesome 💪</div>
