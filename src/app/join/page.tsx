@@ -21,11 +21,13 @@ const PLANS = [
   },
 ]
 
+// Copy lead with what the CLIENT experiences and gains; coach support
+// is the enabler, not the feature. Aim for ~70/30 client/coach framing.
 const FEATURES = [
-  { icon:'🎥', title:'Async Video Review', desc:'Every workout reviewed with personal video feedback within 24 hours.' },
-  { icon:'📋', title:'Custom Programming', desc:'Programs built specifically for you, adjusted based on how you\'re actually doing.' },
-  { icon:'📊', title:'Full Progress Tracking', desc:'Workouts, nutrition, sleep, mood — all in one place.' },
-  { icon:'💬', title:'Direct Access to Shane', desc:'Real messaging, real accountability. You get me, not a chatbot.' },
+  { icon:'🎯', title:'A Plan That\'s Actually Yours', desc:'Built around your goals, schedule, equipment, and body — and adjusted weekly based on how you\'re actually doing.' },
+  { icon:'🏋️', title:'Train Without Guessing', desc:'Every workout you log gets eyes on it. Form notes back within 24 hours so you train smarter, recover faster, and trust what you\'re doing.' },
+  { icon:'📈', title:'See Yourself Get Stronger', desc:'Workouts, nutrition, sleep, and mood — all in one place. Patterns get obvious, wins stack up, and the work pays off.' },
+  { icon:'💬', title:'Never Train Alone', desc:'Real messaging with a real coach who shows up. No bots, no autoresponders — someone in your corner when you need it.' },
 ]
 
 export default function JoinPage() {
@@ -70,18 +72,26 @@ export default function JoinPage() {
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:#080810;}`}</style>
       <div style={{ background:'#080810', minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:'#eeeef8' }}>
 
+        {/* Top bar — link back to the marketing site so visitors who land
+            here can still browse Shane's full story without backtracking. */}
+        <div style={{ maxWidth:600, margin:'0 auto', padding:'18px 24px 0', display:'flex', justifyContent:'flex-end' }}>
+          <a href="https://srgfit.training" style={{ fontSize:11, color:'#5a5a78', textDecoration:'none', letterSpacing:'0.05em', borderBottom:'1px dashed #5a5a7855', paddingBottom:1 }}>
+            ← srgfit.training
+          </a>
+        </div>
+
         {/* Hero */}
-        <div style={{ maxWidth:600, margin:'0 auto', padding:'60px 24px 32px', textAlign:'center' }}>
+        <div style={{ maxWidth:600, margin:'0 auto', padding:'40px 24px 32px', textAlign:'center' }}>
           <div style={{ marginBottom:24 }}>
             <div style={{ fontSize:34, fontWeight:900, background:'linear-gradient(135deg,#00c9b1,#f5a623)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:4 }}>SRG FIT</div>
             <div style={{ fontSize:11, color:'#5a5a78', letterSpacing:'0.15em', textTransform:'uppercase' }}>Strength · Compassion · Legendary Support</div>
           </div>
           <div style={{ fontSize:30, fontWeight:900, lineHeight:1.2, marginBottom:12 }}>
-            Real Coaching.<br/>
-            <span style={{ background:'linear-gradient(135deg,#00c9b1,#f5a623)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Not a Template.</span>
+            Your Plan. Your Pace.<br/>
+            <span style={{ background:'linear-gradient(135deg,#00c9b1,#f5a623)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Real Support.</span>
           </div>
           <div style={{ fontSize:15, color:'#5a5a78', lineHeight:1.7, maxWidth:460, margin:'0 auto' }}>
-            1-on-1 online coaching built around you. Every workout reviewed personally by Coach Shane within 24 hours.
+            For the person who's done with cookie-cutter apps and ready to actually feel strong, capable, and at home in their own body. You bring the work. Shane brings the plan, the eyes-on, and the steady support.
           </div>
         </div>
 
@@ -151,7 +161,7 @@ export default function JoinPage() {
 
         {/* Features */}
         <div style={{ maxWidth:600, margin:'32px auto 0', padding:'0 24px 80px' }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:16 }}>What's Included</div>
+          <div style={{ fontSize:12, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:16 }}>What You'll Get</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:10 }}>
             {FEATURES.map(f => (
               <div key={f.title} style={{ background:'#0f0f1a', border:'1px solid #252538', borderRadius:14, padding:'16px 18px' }}>
@@ -162,12 +172,16 @@ export default function JoinPage() {
             ))}
           </div>
           <div style={{ marginTop:28, background:'#00c9b115', border:'1px solid #00c9b130', borderRadius:14, padding:'16px 18px', textAlign:'center' }}>
-            <div style={{ fontSize:13, fontWeight:800, color:'#00c9b1', marginBottom:5 }}>Questions before you join?</div>
+            <div style={{ fontSize:13, fontWeight:800, color:'#00c9b1', marginBottom:5 }}>Not sure if it's right for you?</div>
             <div style={{ fontSize:12, color:'#5a5a78', lineHeight:1.6 }}>
-              Reach out at <a href="mailto:shane@srgfit.training" style={{ color:'#00c9b1', textDecoration:'none' }}>shane@srgfit.training</a> — I personally respond to every message.
+              Send a note to <a href="mailto:shane@srgfit.training" style={{ color:'#00c9b1', textDecoration:'none' }}>shane@srgfit.training</a> — Shane reads and answers every one personally. No pressure either way.
             </div>
           </div>
           <div style={{ textAlign:'center', marginTop:28, fontSize:11, color:'#8888a8' }}>Be Kind to Yourself & Stay Awesome 💪</div>
+          <div style={{ textAlign:'center', marginTop:14, fontSize:11, color:'#5a5a78' }}>
+            Want to learn more first? Visit{' '}
+            <a href="https://srgfit.training" style={{ color:'#5a5a78', textDecoration:'underline' }}>srgfit.training</a>
+          </div>
         </div>
       </div>
     </>
