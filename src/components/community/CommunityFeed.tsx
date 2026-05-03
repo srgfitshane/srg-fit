@@ -261,6 +261,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [shoutoutClientPid,  setShoutoutClientPid]  = useState<string|null>(null)
   const [showShoutoutPicker, setShowShoutoutPicker] = useState(false)
   const [coachClients,       setCoachClients]       = useState<Array<{ id:string; profile_id:string|null; name:string }>>([])
+  // First-name-only lookup keyed by clients.id. Populated alongside
+  // posts in loadPosts so the shoutout banner can render the featured
+  // client's first name for ALL viewers (coach + clients), preserving
+  // privacy by never exposing surnames in the public feed.
+  const [featuredFirstNames, setFeaturedFirstNames] = useState<Record<string, string>>({})
 
   const loadPosts = useCallback(async (cid?: string) => {
     const id = cid || coachId
@@ -301,6 +306,24 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       }
     }))
     setPosts(resolvedPosts)
+    // Resolve first names for any featured clients (shoutout posts).
+    // First-name-only by design — clients see WHO's being celebrated
+    // but not their full identity. Keyed by clients.id.
+    const featuredIds = [...new Set(
+      resolvedPosts.map(p => p.featured_client_id).filter((x): x is string => !!x)
+    )]
+    if (featuredIds.length) {
+      const { data: clientRows } = await supabase
+        .from('clients')
+        .select('id, display_name, profile:profiles!profile_id(full_name)')
+        .in('id', featuredIds)
+      const map: Record<string, string> = {}
+      for (const c of clientRows || []) {
+        const full = ((c as any).profile?.full_name || c.display_name || '').trim()
+        map[c.id] = full.split(' ')[0] || 'a client'
+      }
+      setFeaturedFirstNames(prev => ({ ...prev, ...map }))
+    }
     if (resolvedPosts.length) {
       const { data: replyData } = await supabase
         .from('community_replies').select('*').eq('coach_id', id)
@@ -839,7 +862,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                           letterSpacing: 0.3,
                           fontFamily: "'DM Sans',sans-serif",
                         }}>
-                        🎉 {shoutoutClientId ? `Shouting: ${shoutoutClientName}` : 'Shoutout'}
+                        🎉 {shoutoutClientId ? `Shouting: ${shoutoutClientName.split(' ')[0]}` : 'Shoutout'}
                       </button>
                     )}
                   </div>
@@ -957,8 +980,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
             // Featured client name for the shoutout banner. Coach has the
             // full client list; client role doesn't (their lookup is only
             // their own profile), so we omit the name for them.
-            const featuredClientName = isShoutout && role === 'coach'
-              ? (coachClients.find(c => c.id === p.featured_client_id)?.name || 'a client')
+            // First name only — privacy. Works for both coach + client
+            // viewers because featuredFirstNames is populated server-side
+            // in loadPosts (not from the coach-only client list).
+            const featuredClientName = isShoutout
+              ? (featuredFirstNames[p.featured_client_id!] || 'a client')
               : 'a client'
             // Shoutouts get the same gradient treatment as announcements
             // (they ARE auto-flagged is_announcement=true at insert) PLUS
@@ -982,7 +1008,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
               <div key={p.id} style={cardStyle}>
                 {shoutoutActive && (
                   <div style={{ background:`linear-gradient(135deg, ${alpha(t.teal, 80)}, ${alpha(t.orange, 60)})`, padding:'5px 12px', fontSize:10, fontWeight:800, color:'#000', letterSpacing:0.5, display:'flex', alignItems:'center', gap:6 }}>
-                    🌟 COACH SHOUTOUT{role === 'coach' ? ' · ' + featuredClientName.toUpperCase() : ''}
+                    🌟 COACH SHOUTOUT · {featuredClientName.toUpperCase()}
                   </div>
                 )}
                 {isAnnounce && !shoutoutActive && (
