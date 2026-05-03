@@ -181,9 +181,25 @@ type CommunityPost = {
   pinned?: boolean | null
   archived?: boolean | null
   is_announcement?: boolean | null
+  // Coach shoutout: when set, the post features a specific client.
+  // Renders a "🌟 Coach Shoutout" badge + client name chip and auto-pins
+  // for 24h. Push notification goes to that client only.
+  featured_client_id?: string | null
   created_at: string
   reactions?: CommunityReaction[]
 }
+
+// Pin auto-expiration windows. Manual pins (coach hits "Pin to top" on a
+// regular post) stay until the coach unpins them. Announcements and
+// shoutouts auto-revert in the renderer past the cutoff so they don't
+// stay at the top of the feed forever.
+const ANNOUNCEMENT_PIN_MS = 3 * 24 * 60 * 60 * 1000
+const SHOUTOUT_PIN_MS     = 1 * 24 * 60 * 60 * 1000
+const SHOUTOUT_TEMPLATES = (name: string) => [
+  `Happy birthday, ${name}! 🎂`,
+  `Welcome to the family, ${name}! 👋`,
+  `Crushing it this week, ${name} 💪`,
+]
 
 type CommunityReply = {
   id: string
@@ -237,6 +253,14 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [nowMs,        setNowMs]        = useState(() => Date.now())
   const [showArchived, setShowArchived] = useState(false)
   const [coachMenu,    setCoachMenu]    = useState<string|null>(null)
+  // Coach shoutout state (coach-only). Selected client + picker
+  // visibility. Stays unconditional even on the client role so React
+  // hooks order is stable.
+  const [shoutoutClientId,   setShoutoutClientId]   = useState<string|null>(null)
+  const [shoutoutClientName, setShoutoutClientName] = useState<string>('')
+  const [shoutoutClientPid,  setShoutoutClientPid]  = useState<string|null>(null)
+  const [showShoutoutPicker, setShowShoutoutPicker] = useState(false)
+  const [coachClients,       setCoachClients]       = useState<Array<{ id:string; profile_id:string|null; name:string }>>([])
 
   const loadPosts = useCallback(async (cid?: string) => {
     const id = cid || coachId
@@ -332,6 +356,21 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         if (prof) profMap[user.id] = prof
         setProfiles(profMap)
         await loadPosts(resolvedCoachId)
+        // Load coach's active clients for the shoutout picker. Coach-only,
+        // and only enough columns to populate the dropdown + push targets.
+        if (role === 'coach') {
+          const { data: clientRows } = await supabase
+            .from('clients')
+            .select('id, profile_id, display_name, profile:profiles!profile_id(full_name)')
+            .eq('coach_id', resolvedCoachId)
+            .neq('archived', true)
+          const list = (clientRows || []).map((c: any) => ({
+            id: c.id,
+            profile_id: c.profile_id,
+            name: c.profile?.full_name || c.display_name || 'Client',
+          })).sort((a, b) => a.name.localeCompare(b.name))
+          setCoachClients(list)
+        }
         setLoading(false)
       })()
     }, 0)
@@ -482,11 +521,17 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     const coverImage = p1 ?? (gifUrl && !p1 ? gifUrl : null)
 
     const isAnnouncement = role === 'coach' && asAnnouncement
+    // Coach shoutout: pre-pin (renderer auto-expires after 24h). Auto-flag
+    // as announcement so it gets the prominent gradient border too — a
+    // shoutout IS a kind of announcement.
+    const isShoutout = role === 'coach' && !!shoutoutClientId
     const postBody = draft.trim()
     const { data: inserted, error: insertErr } = await supabase.from('community_posts').insert({
       coach_id: coachId, author_id: me.id, author_role: role,
       body: postBody,
-      is_announcement: isAnnouncement,
+      is_announcement: isAnnouncement || isShoutout,
+      featured_client_id: isShoutout ? shoutoutClientId : null,
+      pinned: isShoutout ? true : undefined,
       image_url:   coverImage,
       image_url_2: p2 ?? null,
       image_url_3: p3 ?? null,
@@ -497,6 +542,21 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       toastError('Could not post: ' + insertErr.message)
       setPosting(false)
       return
+    }
+
+    // Shoutout → push only the featured client (not a fan-out). Fire-and-
+    // forget per rule 8.
+    if (isShoutout && shoutoutClientPid && inserted) {
+      const coachName = me.full_name?.split(' ')[0] || 'Coach Shane'
+      supabase.functions.invoke('send-notification', {
+        body: {
+          user_id: shoutoutClientPid,
+          notification_type: 'shoutout',
+          title: `${coachName} shouted you out in the community 🌟`,
+          body: postBody.length > 80 ? postBody.slice(0, 80) + '…' : (postBody || 'New shoutout'),
+          link_url: '/dashboard/client/community',
+        }
+      }).catch(err => console.warn('[notify:shoutout] failed', err))
     }
 
     // Announcement → fan out push. Fire-and-forget per rule 8.
@@ -522,7 +582,9 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         }).catch(err => console.warn('[notify:community] failed', err))
       }
     }
-    setDraft(''); clearAllMedia(); setGifUrl(null); setAsAnnouncement(false); setPosting(false); await loadPosts()
+    setDraft(''); clearAllMedia(); setGifUrl(null); setAsAnnouncement(false)
+    setShoutoutClientId(null); setShoutoutClientName(''); setShoutoutClientPid(null); setShowShoutoutPicker(false)
+    setPosting(false); await loadPosts()
   }
 
   const deletePost = async (postId: string) => {
@@ -757,7 +819,76 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                         📣 {asAnnouncement ? 'Announcement ON' : 'Announce'}
                       </button>
                     )}
+                    {/* Coach-only shoutout toggle — opens a picker panel
+                        to feature one client. Auto-pins the post for 24h
+                        and pushes a notification to the chosen client. */}
+                    {role === 'coach' && (
+                      <button
+                        onClick={()=>setShowShoutoutPicker(v => !v)}
+                        title={shoutoutClientId ? `Shouting out ${shoutoutClientName}` : 'Shout out a specific client'}
+                        style={{
+                          background: shoutoutClientId ? `linear-gradient(135deg, ${alpha(t.teal, 25)}, ${alpha(t.orange, 19)})` : 'none',
+                          border: '1px solid ' + (shoutoutClientId ? t.teal : t.border),
+                          borderRadius: 8,
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          color: shoutoutClientId ? t.teal : t.textMuted,
+                          lineHeight: 1,
+                          letterSpacing: 0.3,
+                          fontFamily: "'DM Sans',sans-serif",
+                        }}>
+                        🎉 {shoutoutClientId ? `Shouting: ${shoutoutClientName}` : 'Shoutout'}
+                      </button>
+                    )}
                   </div>
+
+                  {/* Coach shoutout picker — appears below the icon row when
+                      the coach taps 🎉. Pick a client + tap a template to
+                      pre-fill the draft. Coach can also write their own
+                      message; picking a template just fills the textarea. */}
+                  {role === 'coach' && showShoutoutPicker && (
+                    <div style={{ marginTop: 8, padding: 10, background: alpha(t.teal, 8), border: '1px solid ' + alpha(t.teal, 25), borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: t.teal, textTransform: 'uppercase' as const, letterSpacing: 0.06 }}>🎉 Coach shoutout</div>
+                        {shoutoutClientId && (
+                          <button onClick={()=>{ setShoutoutClientId(null); setShoutoutClientName(''); setShoutoutClientPid(null) }}
+                            style={{ background: 'none', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}>
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <select
+                        value={shoutoutClientId || ''}
+                        onChange={e => {
+                          const id = e.target.value || null
+                          if (!id) { setShoutoutClientId(null); setShoutoutClientName(''); setShoutoutClientPid(null); return }
+                          const c = coachClients.find(x => x.id === id)
+                          if (!c) return
+                          setShoutoutClientId(c.id)
+                          setShoutoutClientName(c.name)
+                          setShoutoutClientPid(c.profile_id)
+                        }}
+                        style={{ width: '100%', background: t.surfaceHigh, border: '1px solid ' + t.border, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: t.text, outline: 'none', fontFamily: "'DM Sans',sans-serif", colorScheme: 'dark' as const, appearance: 'none' as const, boxSizing: 'border-box' as const }}>
+                        <option value="">— Pick a client —</option>
+                        {coachClients.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      {shoutoutClientId && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
+                          {SHOUTOUT_TEMPLATES(shoutoutClientName.split(' ')[0]).map((tmpl, i) => (
+                            <button key={i}
+                              onClick={()=>setDraft(tmpl)}
+                              style={{ background: t.surfaceHigh, border: '1px solid ' + t.border, borderRadius: 6, padding: '5px 10px', fontSize: 11, color: t.text, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+                              {tmpl}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button onClick={post} disabled={posting||uploading||(!draft.trim()&&imageFiles.length===0&&!videoFile&&!gifUrl)}
                     style={{ background:(draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':'transparent', border:'1px solid '+((draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'transparent':t.border), borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:800, color:(draft.trim()||imageFiles.length>0||videoFile||gifUrl)?'#000':t.textMuted, cursor:(posting||uploading||(!draft.trim()&&imageFiles.length===0&&!videoFile&&!gifUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {uploading?'Uploading...':posting?'...':'Post 🔥'}
@@ -774,18 +905,64 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
             </div>
           )}
 
-          {posts.map((p) => {
+          {(() => {
+            // Sort with auto-expire awareness: effective announcements
+            // first (within their window), then effective pins, then
+            // chronological. SQL already orders is_announcement DESC →
+            // pinned DESC → created_at DESC; we re-sort client-side so a
+            // 4-day-old announcement doesn't stay at the top forever.
+            const effectiveStatus = (p: CommunityPost) => {
+              const ageMs = nowMs - new Date(p.created_at).getTime()
+              const isShoutout = !!p.featured_client_id
+              const announceEff = !!p.is_announcement && (
+                isShoutout ? ageMs < SHOUTOUT_PIN_MS : ageMs < ANNOUNCEMENT_PIN_MS
+              )
+              const pinEff = !!p.pinned && (
+                isShoutout ? ageMs < SHOUTOUT_PIN_MS :
+                p.is_announcement ? ageMs < ANNOUNCEMENT_PIN_MS :
+                true   // manual pin on a regular post — stays until coach unpins
+              )
+              return { ageMs, isShoutout, announceEff, pinEff }
+            }
+            return [...posts].sort((a, b) => {
+              const aS = effectiveStatus(a), bS = effectiveStatus(b)
+              if (aS.announceEff !== bS.announceEff) return aS.announceEff ? -1 : 1
+              if (aS.pinEff !== bS.pinEff) return aS.pinEff ? -1 : 1
+              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            })
+          })().map((p) => {
             const author      = profiles[p.author_id]
             const isCoach     = p.author_role === 'coach'
-            const isAnnounce  = !!p.is_announcement
+            const isShoutout  = !!p.featured_client_id
             const color       = getColor(p.author_id, p.author_role)
             const grouped     = groupReactions(p.reactions)
             const postReplies = replies[p.id] || []
             const showReplyBox = replyOpen === p.id
-            // Announcement cards get a prominent gradient border. We use
-            // the double-gradient trick (padding-box for body, border-box
-            // for the border image) so the border renders as a filled
-            // gradient, not a muted solid.
+            // Effective values — same logic as the sort above. Used for
+            // visual treatment so a post past its window renders like a
+            // normal post.
+            const ageMs = nowMs - new Date(p.created_at).getTime()
+            const isAnnounce = !!p.is_announcement && (
+              isShoutout ? ageMs < SHOUTOUT_PIN_MS : ageMs < ANNOUNCEMENT_PIN_MS
+            )
+            const effectivePinned = !!p.pinned && (
+              isShoutout ? ageMs < SHOUTOUT_PIN_MS :
+              p.is_announcement ? ageMs < ANNOUNCEMENT_PIN_MS :
+              true   // manual pin on a regular post — stays until coach unpins
+            )
+            // Shoutout banner only renders within the 24h window. After
+            // that the post becomes a regular announcement-style card,
+            // and after 3 days a regular post.
+            const shoutoutActive = isShoutout && ageMs < SHOUTOUT_PIN_MS
+            // Featured client name for the shoutout banner. Coach has the
+            // full client list; client role doesn't (their lookup is only
+            // their own profile), so we omit the name for them.
+            const featuredClientName = isShoutout && role === 'coach'
+              ? (coachClients.find(c => c.id === p.featured_client_id)?.name || 'a client')
+              : 'a client'
+            // Shoutouts get the same gradient treatment as announcements
+            // (they ARE auto-flagged is_announcement=true at insert) PLUS
+            // a teal-tinted shoutout banner with the featured client name.
             const cardStyle: React.CSSProperties = isAnnounce
               ? {
                   border: '2px solid transparent',
@@ -797,18 +974,23 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                 }
               : {
                   background: t.surface,
-                  border: '1px solid ' + (p.pinned ? alpha(t.teal, 25) : t.border),
+                  border: '1px solid ' + (effectivePinned ? alpha(t.teal, 25) : t.border),
                   borderRadius: 14,
                   overflow: 'hidden',
                 }
             return (
               <div key={p.id} style={cardStyle}>
-                {isAnnounce && (
+                {shoutoutActive && (
+                  <div style={{ background:`linear-gradient(135deg, ${alpha(t.teal, 80)}, ${alpha(t.orange, 60)})`, padding:'5px 12px', fontSize:10, fontWeight:800, color:'#000', letterSpacing:0.5, display:'flex', alignItems:'center', gap:6 }}>
+                    🌟 COACH SHOUTOUT{role === 'coach' ? ' · ' + featuredClientName.toUpperCase() : ''}
+                  </div>
+                )}
+                {isAnnounce && !shoutoutActive && (
                   <div style={{ background:`linear-gradient(135deg, ${alpha(t.orange, 80)}, ${alpha(t.teal, 60)})`, padding:'5px 12px', fontSize:10, fontWeight:800, color:'#000', letterSpacing:0.5, display:'flex', alignItems:'center', gap:6 }}>
                     📣 COACH ANNOUNCEMENT
                   </div>
                 )}
-                {!isAnnounce && p.pinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>📌 Pinned</div>}
+                {!isAnnounce && !shoutoutActive && effectivePinned && <div style={{ background:t.tealDim, padding:'4px 12px', fontSize:10, fontWeight:800, color:t.teal }}>📌 Pinned</div>}
                 <div style={{ padding:'12px 14px' }}>
                   <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:8 }}>
                     <Avatar name={author?.full_name||'?'} role={p.author_role} color={color} size={30}/>
