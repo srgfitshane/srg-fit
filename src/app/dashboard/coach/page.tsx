@@ -134,6 +134,17 @@ export default function CoachDashboard() {
   // so we no longer keep a separate state for them. attentionList stays as a
   // local in the load effect to seed those queue items.
   const [weeklyDigests, setWeeklyDigests]   = useState<any[]>([])
+  // Upcoming-birthday surfacing. Loaded from client_intake_profiles.date_of_birth.
+  // Each entry holds the next-birthday delta in days (0 = today) so the dash
+  // can highlight today / soon and link to the community shoutout flow.
+  const [birthdays, setBirthdays] = useState<Array<{
+    clientId: string
+    firstName: string
+    fullName: string
+    dob: string
+    monthDay: string   // e.g. "May 3"
+    daysUntil: number
+  }>>([])
   const [digestExpanded, setDigestExpanded] = useState<string|null>(null)
   const router   = useRouter()
   const supabase = createClient()
@@ -208,6 +219,49 @@ export default function CoachDashboard() {
         .eq('week_start', thisMonday)
         .order('created_at', { ascending: false })
       setWeeklyDigests(digestData || [])
+
+      // ── Upcoming birthdays ─────────────────────────────────────────
+      // Pulls intake DOBs for active clients, computes days-until-next-
+      // birthday in JS (handles year wrap), filters to 14-day window.
+      // Today's birthdays float to the top.
+      const activeClientIds = safeClientList.map(c => c.id)
+      if (activeClientIds.length > 0) {
+        const { data: intakeRows } = await supabase
+          .from('client_intake_profiles')
+          .select('client_id, date_of_birth')
+          .in('client_id', activeClientIds)
+          .not('date_of_birth', 'is', null)
+
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+        const upcoming = (intakeRows || []).flatMap((row: any) => {
+          const client = safeClientList.find(c => c.id === row.client_id)
+          if (!client || !row.date_of_birth) return []
+          // Parse date as local-noon to dodge any timezone shifting.
+          const dob = new Date(row.date_of_birth + 'T12:00:00')
+          if (isNaN(dob.getTime())) return []
+          const m = dob.getMonth(), d = dob.getDate()
+          let next = new Date(today.getFullYear(), m, d)
+          if (next < today) next = new Date(today.getFullYear() + 1, m, d)
+          const daysUntil = Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          if (daysUntil > 14) return []
+          const fullName = client.profile?.full_name || client.display_name || 'Client'
+          return [{
+            clientId: client.id,
+            firstName: fullName.split(' ')[0],
+            fullName,
+            dob: row.date_of_birth,
+            monthDay: `${MONTH_NAMES[m]} ${d}`,
+            daysUntil,
+          }]
+        }).sort((a, b) => a.daysUntil - b.daysUntil)
+
+        setBirthdays(upcoming)
+      } else {
+        setBirthdays([])
+      }
 
       setLoading(false)
   }, [router, supabase])
@@ -535,6 +589,75 @@ export default function CoachDashboard() {
 
           {/* Needs Attention block removed -- silent clients now appear as
               silent_client items in the unified inbox above ("Today's Coaching"). */}
+
+          {/* ── UPCOMING BIRTHDAYS ──
+              Surfaces clients with birthdays in the next 14 days so coach
+              can plan a shoutout. Today's birthdays bubble to the top with
+              a 🎂 callout. Each row deep-links to the community page with
+              ?shoutout=<clientId> so the picker opens pre-loaded. */}
+          {birthdays.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em' }}>
+                  🎂 Upcoming Birthdays
+                </div>
+                <div style={{ fontSize:10, color:t.textMuted }}>
+                  Next 14 days
+                </div>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:10 }}>
+                {birthdays.map(b => {
+                  const isToday = b.daysUntil === 0
+                  const isSoon  = b.daysUntil > 0 && b.daysUntil <= 3
+                  const accent  = isToday ? t.orange : isSoon ? t.yellow : t.teal
+                  const accentDim = isToday ? t.orangeDim : isSoon ? '#eab30815' : t.tealDim
+                  const whenLabel = isToday ? 'TODAY 🎉' : b.daysUntil === 1 ? 'Tomorrow' : `In ${b.daysUntil} days`
+                  return (
+                    <div key={b.clientId}
+                      style={{
+                        background: t.surface,
+                        border: '1px solid ' + (isToday ? accent : t.border),
+                        borderRadius: 12,
+                        padding: '12px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        boxShadow: isToday ? `0 0 0 2px ${accentDim}` : 'none',
+                      }}>
+                      <div style={{ width:40, height:40, borderRadius:10, background: accentDim, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+                        🎂
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:800, color: t.text, whiteSpace:'nowrap' as const, overflow:'hidden' as const, textOverflow:'ellipsis' as const }}>
+                          {b.firstName}
+                        </div>
+                        <div style={{ fontSize:11, color: t.textMuted, marginTop: 2 }}>
+                          {b.monthDay} · <span style={{ color: accent, fontWeight: isToday ? 800 : 600 }}>{whenLabel}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/dashboard/coach/community?shoutout=${b.clientId}`)}
+                        title={`Open community with shoutout ready for ${b.firstName}`}
+                        style={{
+                          background: isToday ? `linear-gradient(135deg, ${t.orange}, ${t.orange}cc)` : t.tealDim,
+                          border: isToday ? 'none' : '1px solid ' + t.teal + '40',
+                          borderRadius: 8,
+                          padding: '6px 10px',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color: isToday ? '#000' : t.teal,
+                          cursor: 'pointer',
+                          fontFamily: "'DM Sans',sans-serif",
+                          flexShrink: 0,
+                        }}>
+                        🎉 Shout out
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ── WEEKLY DIGEST ── */}
           {weeklyDigests.length > 0 && (

@@ -401,6 +401,27 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     return () => clearTimeout(timeoutId)
   }, [loadPosts, role, router, supabase])
 
+  // Deep-link from the coach dashboard "🎂 Upcoming birthdays" card:
+  // /dashboard/coach/community?shoutout=<clientId>. When this lands, we
+  // auto-pre-load the shoutout picker with that client so the coach can
+  // immediately tap a template and post. Only fires once coachClients
+  // is loaded (we need the name + profile_id to populate state).
+  // Reads window.location.search instead of useSearchParams to avoid
+  // requiring a Suspense boundary on the static-prerendered client page.
+  useEffect(() => {
+    if (role !== 'coach') return
+    if (coachClients.length === 0) return
+    if (typeof window === 'undefined') return
+    const targetId = new URLSearchParams(window.location.search).get('shoutout')
+    if (!targetId) return
+    const c = coachClients.find(x => x.id === targetId)
+    if (!c) return
+    setShoutoutClientId(c.id)
+    setShoutoutClientName(c.name)
+    setShoutoutClientPid(c.profile_id)
+    setShowShoutoutPicker(true)
+  }, [role, coachClients])
+
   useEffect(() => {
     if (!coachId) return
     const ch = supabase.channel('community-shared-v1')
