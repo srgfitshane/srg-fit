@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { localDateStr } from '@/lib/date'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -399,10 +400,37 @@ export default function CoachCheckins() {
                         {qAndA.map((qa: any, i: number) => (
                           <div key={i} style={{ background:t.surfaceHigh, borderRadius:10, padding:'10px 12px', marginBottom:6 }}>
                             <div style={{ fontSize:10, fontWeight:700, color:t.teal, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>{qa.label}</div>
-                            {qa.type === 'file' || String(qa.value).startsWith('http')
-                              ? <a href={String(qa.value)} target="_blank" rel="noreferrer" style={{ color:t.teal, fontSize:12 }}>View photo</a>
-                              : <div style={{ fontSize:13, color:t.text, lineHeight:1.5 }}>{String(qa.value)}</div>
-                            }
+                            {qa.type === 'file' || String(qa.value).startsWith('http') ? (
+                              (() => {
+                                // File-question answers store an array of raw
+                                // storage paths (or a single path / legacy URL
+                                // string). Bucket is private (progress-photos)
+                                // so we sign on click. resolveSignedMediaUrl
+                                // passes through already-signed http URLs, so
+                                // legacy data still opens correctly.
+                                const paths: string[] = Array.isArray(qa.value)
+                                  ? (qa.value as any[]).map(String).filter(Boolean)
+                                  : [String(qa.value)].filter(Boolean)
+                                return (
+                                  <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                    {paths.map((p, idx) => (
+                                      <button
+                                        key={idx}
+                                        onClick={async () => {
+                                          const url = await resolveSignedMediaUrl(supabase, 'progress-photos', p)
+                                          if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                                          else alert('Could not open photo. The file may be missing or you may not have access.')
+                                        }}
+                                        style={{ background:'none', border:'none', color:t.teal, fontSize:12, cursor:'pointer', textDecoration:'underline', textAlign:'left' as const, padding:0, fontFamily:"'DM Sans',sans-serif" }}>
+                                        📸 View photo{paths.length > 1 ? ' ' + (idx + 1) : ''}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )
+                              })()
+                            ) : (
+                              <div style={{ fontSize:13, color:t.text, lineHeight:1.5 }}>{String(qa.value)}</div>
+                            )}
                           </div>
                         ))}
                       </div>
