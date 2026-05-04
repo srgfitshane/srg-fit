@@ -137,6 +137,113 @@ export default function ProgramBuilder() {
     await load(); setActiveWeek(nextWeek)
   }
 
+  // Reorder weeks. Swap week_number between this week and its
+  // neighbor (-1 = move earlier, +1 = move later). Uses a temporary
+  // sentinel value to avoid the unique-pair conflict during the
+  // two-step swap. Lets a coach insert a deload mid-program by adding
+  // a new week and walking it backwards into position.
+  const moveWeek = async (weekNum: number, dir: -1 | 1) => {
+    const target = weekNum + dir
+    if (target < 1 || target > totalWeeks) return
+    const TEMP = 999
+    // 1. Park source week at sentinel
+    await supabase.from('workout_blocks').update({ week_number: TEMP }).eq('program_id', programId).eq('week_number', weekNum)
+    // 2. Move target into source's slot
+    await supabase.from('workout_blocks').update({ week_number: weekNum }).eq('program_id', programId).eq('week_number', target)
+    // 3. Move parked rows into target slot
+    await supabase.from('workout_blocks').update({ week_number: target }).eq('program_id', programId).eq('week_number', TEMP)
+    await load()
+    setActiveWeek(target)
+  }
+
+  // ── Bulk progression ─────────────────────────────────────────────────
+  // Walks weeks 2..N and increments target_weight on matching exercises
+  // based on the previous week's value. Skips empty/non-numeric loads
+  // (RPE-anchored, % 1RM strings, etc.) so the rule only touches sets
+  // the coach actually prescribed in lbs/kg.
+  const [showBulkProg, setShowBulkProg] = useState(false)
+  const [bulkRole,     setBulkRole]     = useState<'main'|'all'|'main_secondary'>('main')
+  const [bulkAmount,   setBulkAmount]   = useState('5')
+  const [bulkUnit,     setBulkUnit]     = useState<'lbs'|'%'>('lbs')
+  const [bulkRunning,  setBulkRunning]  = useState(false)
+  const [bulkResult,   setBulkResult]   = useState<string|null>(null)
+
+  // Pull the leading number out of "135 lbs" / "70 kg" / "70%". Returns
+  // {value, suffix} or null if the field doesn't lead with a number.
+  // Plain digits ("135") parse fine and round-trip without a unit.
+  const parseLoad = (raw: string): { value: number; suffix: string } | null => {
+    const m = String(raw || '').trim().match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/)
+    if (!m) return null
+    return { value: Number(m[1]), suffix: m[2] }
+  }
+
+  const applyBulkProgression = async () => {
+    setBulkRunning(true); setBulkResult(null)
+    const amount = Number(bulkAmount) || 0
+    if (amount <= 0) { setBulkRunning(false); setBulkResult('Amount must be > 0'); return }
+
+    const roleFilter = (role: string) => {
+      if (bulkRole === 'all') return true
+      if (bulkRole === 'main') return role === 'main'
+      if (bulkRole === 'main_secondary') return role === 'main' || role === 'secondary'
+      return false
+    }
+
+    let touched = 0
+    let skipped = 0
+    // Walk week 2..N. For each block, find the matching block in the
+    // previous week (by day_of_week + order_index — same identity as
+    // schedule-program uses). Pull each exercise's load from the prior
+    // week and bump.
+    const sortedWeeks = [...weeks].sort((a, b) => a - b)
+    for (let i = 1; i < sortedWeeks.length; i++) {
+      const wPrev = sortedWeeks[i - 1]
+      const wCur  = sortedWeeks[i]
+      const prevBlocks = blocksForWeek(wPrev)
+      const curBlocks  = blocksForWeek(wCur)
+      for (const cur of curBlocks) {
+        // Match by day_of_week first; fall back to order_index
+        const prev = prevBlocks.find(p =>
+          (cur.day_of_week && p.day_of_week === cur.day_of_week) ||
+          p.order_index === cur.order_index
+        )
+        if (!prev) continue
+        const prevExs = prev.block_exercises || []
+        const curExs  = cur.block_exercises || []
+        for (let j = 0; j < curExs.length; j++) {
+          const cx = curExs[j]
+          if (!roleFilter(cx.exercise_role)) continue
+          // Match by exercise_id when present, otherwise by order_index
+          const px = cx.exercise_id
+            ? prevExs.find((p: any) => p.exercise_id === cx.exercise_id)
+            : prevExs[j]
+          if (!px) continue
+          const parsed = parseLoad(px.target_weight || '')
+          if (!parsed) { skipped++; continue }
+          const next = bulkUnit === 'lbs'
+            ? parsed.value + amount * i  // cumulative lbs (week 2 = +5, week 3 = +10, ...)
+            : parsed.value * Math.pow(1 + amount / 100, i)  // cumulative %
+          // For % progression, match parseLoad's suffix (lbs/kg/etc).
+          // For lbs progression, force " lbs" if the prior had no suffix.
+          const suffix = parsed.suffix || (bulkUnit === 'lbs' ? 'lbs' : '')
+          // Drop trailing .0 to keep "135" / "140" tidy
+          const rounded = Math.round(next * 10) / 10
+          const formatted = `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)}${suffix ? ' ' + suffix.trim() : ''}`
+          await supabase.from('block_exercises').update({ target_weight: formatted }).eq('id', cx.id)
+          touched++
+        }
+      }
+    }
+    await load()
+    setBulkRunning(false)
+    setBulkResult(`Applied to ${touched} exercise${touched === 1 ? '' : 's'}${skipped > 0 ? ` (skipped ${skipped} non-numeric loads)` : ''}.`)
+  }
+
+  // ── Visual diff between two weeks ────────────────────────────────────
+  const [showDiff,    setShowDiff]    = useState(false)
+  const [diffWeekA,   setDiffWeekA]   = useState<number>(1)
+  const [diffWeekB,   setDiffWeekB]   = useState<number>(1)
+
   const deleteWeek = async (weekNum: number) => {
     if (totalWeeks <= 1) return // can't delete the only week
     // Delete all blocks (cascades to block_exercises via FK)
@@ -808,10 +915,38 @@ export default function ProgramBuilder() {
                 onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                 style={{ flex:'1 1 200px', minWidth:160, maxWidth:320, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:600, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
               />
+              <button onClick={()=>moveWeek(activeWeek, -1)} disabled={activeWeek <= 1}
+                title="Move this week earlier"
+                style={{ padding:'3px 8px', borderRadius:8, border:'1px solid '+t.border, background:'transparent', color: activeWeek <= 1 ? t.textMuted : t.textDim, fontSize:11, fontWeight:700, cursor: activeWeek <= 1 ? 'not-allowed' : 'pointer', opacity: activeWeek <= 1 ? 0.4 : 1, fontFamily:"'DM Sans',sans-serif" }}>
+                ◀
+              </button>
+              <button onClick={()=>moveWeek(activeWeek, 1)} disabled={activeWeek >= totalWeeks}
+                title="Move this week later"
+                style={{ padding:'3px 8px', borderRadius:8, border:'1px solid '+t.border, background:'transparent', color: activeWeek >= totalWeeks ? t.textMuted : t.textDim, fontSize:11, fontWeight:700, cursor: activeWeek >= totalWeeks ? 'not-allowed' : 'pointer', opacity: activeWeek >= totalWeeks ? 0.4 : 1, fontFamily:"'DM Sans',sans-serif" }}>
+                ▶
+              </button>
               <button onClick={()=>duplicateWeek(activeWeek)}
                 style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:4 }}>
                 📋 Duplicate
               </button>
+              {totalWeeks >= 2 && (
+                <>
+                  <button onClick={()=>{ setShowBulkProg(true); setBulkResult(null) }}
+                    title="Apply a load progression rule across all weeks"
+                    style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.orange+'40', background:t.orangeDim, color:t.orange, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    ✨ Bulk progress
+                  </button>
+                  <button onClick={()=>{
+                      setDiffWeekA(activeWeek)
+                      setDiffWeekB(weeks.find(w => w !== activeWeek) || activeWeek)
+                      setShowDiff(true)
+                    }}
+                    title="Compare two weeks side-by-side"
+                    style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.purple+'40', background:t.purpleDim, color:t.purple, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    🔍 Compare
+                  </button>
+                </>
+              )}
               {totalWeeks > 1 && (
                 <button onClick={()=>{ if (confirm(`Delete Week ${activeWeek} and all its exercises?`)) deleteWeek(activeWeek) }}
                   style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.red+'40', background:t.redDim, color:t.red, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:4 }}>
@@ -1462,6 +1597,167 @@ export default function ProgramBuilder() {
           Saving...
         </div>
       )}
+
+      {/* ── Bulk progression modal ──────────────────────────────────── */}
+      {showBulkProg && (
+        <>
+          <div onClick={()=>{ setShowBulkProg(false); setBulkResult(null) }}
+            style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:300 }}/>
+          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'92%', maxWidth:520, zIndex:301, fontFamily:"'DM Sans',sans-serif", maxHeight:'90vh', overflowY:'auto' as const }}>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:6 }}>✨ Bulk progression</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:18, lineHeight:1.5 }}>
+              Walks every week after week 1 and bumps loads relative to the previous week.
+              Skips RPE-only / non-numeric loads. Cumulative — week 3 = +2× the increment, etc.
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Apply to</div>
+              <div style={{ display:'flex', gap:6 }}>
+                {([['main','Main lifts only'],['main_secondary','Main + Secondary'],['all','All exercises']] as const).map(([v,lbl]) => (
+                  <button key={v} onClick={()=>setBulkRole(v)}
+                    style={{ flex:1, padding:'8px', borderRadius:8, border:'1px solid '+(bulkRole===v?t.teal:t.border), background:bulkRole===v?t.tealDim:'transparent', fontSize:11, fontWeight:700, color:bulkRole===v?t.teal:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Increment per week</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input type="number" value={bulkAmount} onChange={e=>setBulkAmount(e.target.value)}
+                  style={{ flex:1, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', fontSize:14, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}/>
+                <div style={{ display:'flex', background:t.surfaceUp, borderRadius:8, padding:3 }}>
+                  {(['lbs','%'] as const).map(u => (
+                    <button key={u} onClick={()=>setBulkUnit(u)}
+                      style={{ padding:'5px 14px', borderRadius:6, border:'none', background:bulkUnit===u?t.teal:'transparent', color:bulkUnit===u?'#000':t.textDim, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {bulkResult && (
+              <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'10px 12px', fontSize:12, color:t.teal, marginBottom:14 }}>
+                ✓ {bulkResult}
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={()=>{ setShowBulkProg(false); setBulkResult(null) }}
+                style={{ padding:'9px 16px', borderRadius:9, border:'1px solid '+t.border, background:'transparent', color:t.textDim, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                {bulkResult ? 'Close' : 'Cancel'}
+              </button>
+              {!bulkResult && (
+                <button onClick={applyBulkProgression} disabled={bulkRunning}
+                  style={{ padding:'9px 16px', borderRadius:9, border:'none', background: bulkRunning ? t.surfaceHigh : 'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', color:'#000', fontSize:12, fontWeight:800, cursor: bulkRunning ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {bulkRunning ? 'Applying...' : 'Apply progression'}
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Visual diff modal ──────────────────────────────────────── */}
+      {showDiff && (() => {
+        const blocksA = blocksForWeek(diffWeekA)
+        const blocksB = blocksForWeek(diffWeekB)
+        // Pair A's blocks with B's by day_of_week (fall back to order_index)
+        const pairs: Array<{ a: any|null; b: any|null }> = []
+        const usedB = new Set<string>()
+        for (const a of blocksA) {
+          const match = blocksB.find(b =>
+            !usedB.has(b.id) && (
+              (a.day_of_week && b.day_of_week === a.day_of_week) ||
+              b.order_index === a.order_index
+            )
+          )
+          if (match) usedB.add(match.id)
+          pairs.push({ a, b: match || null })
+        }
+        for (const b of blocksB) if (!usedB.has(b.id)) pairs.push({ a: null, b })
+
+        const fmtEx = (ex: any) => ex ? `${ex.sets}×${ex.reps}${ex.target_weight ? ' @ '+ex.target_weight : ''}${ex.rpe ? ' RPE '+ex.rpe : ''}` : '—'
+
+        return (
+          <>
+            <div onClick={()=>setShowDiff(false)}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:300 }}/>
+            <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:20, width:'95%', maxWidth:1100, zIndex:301, fontFamily:"'DM Sans',sans-serif", maxHeight:'92vh', overflowY:'auto' as const }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+                <div style={{ fontSize:16, fontWeight:800 }}>🔍 Compare weeks</div>
+                <button onClick={()=>setShowDiff(false)}
+                  style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
+                <select value={diffWeekA} onChange={e=>setDiffWeekA(Number(e.target.value))}
+                  style={{ background:t.surfaceUp, border:'1px solid '+t.purple+'40', borderRadius:8, padding:'8px 12px', fontSize:13, fontWeight:700, color:t.purple, fontFamily:"'DM Sans',sans-serif" }}>
+                  {weeks.map(w => <option key={w} value={w}>Week {w}</option>)}
+                </select>
+                <select value={diffWeekB} onChange={e=>setDiffWeekB(Number(e.target.value))}
+                  style={{ background:t.surfaceUp, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'8px 12px', fontSize:13, fontWeight:700, color:t.teal, fontFamily:"'DM Sans',sans-serif" }}>
+                  {weeks.map(w => <option key={w} value={w}>Week {w}</option>)}
+                </select>
+              </div>
+
+              {pairs.map((pair, idx) => {
+                const aExs = (pair.a?.block_exercises || []).slice().sort((x:any,y:any)=>x.order_index-y.order_index)
+                const bExs = (pair.b?.block_exercises || []).slice().sort((x:any,y:any)=>x.order_index-y.order_index)
+                const maxRows = Math.max(aExs.length, bExs.length)
+                return (
+                  <div key={idx} style={{ marginBottom:14, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:12, overflow:'hidden' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:0, background:t.surfaceHigh }}>
+                      <div style={{ padding:'8px 12px', fontSize:12, fontWeight:800, color:t.purple, borderRight:'1px solid '+t.border }}>
+                        {pair.a ? (pair.a.day_label || pair.a.name || `Day ${pair.a.order_index+1}`) : <span style={{ color:t.textMuted, fontStyle:'italic' }}>(no match)</span>}
+                      </div>
+                      <div style={{ padding:'8px 12px', fontSize:12, fontWeight:800, color:t.teal }}>
+                        {pair.b ? (pair.b.day_label || pair.b.name || `Day ${pair.b.order_index+1}`) : <span style={{ color:t.textMuted, fontStyle:'italic' }}>(no match)</span>}
+                      </div>
+                    </div>
+                    {Array.from({ length: maxRows }).map((_, r) => {
+                      const aEx = aExs[r], bEx = bExs[r]
+                      const aLine = fmtEx(aEx)
+                      const bLine = fmtEx(bEx)
+                      const changed = aEx && bEx && aLine !== bLine
+                      const onlyA = aEx && !bEx
+                      const onlyB = !aEx && bEx
+                      return (
+                        <div key={r} style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:0, borderTop:'1px solid '+t.border }}>
+                          <div style={{ padding:'8px 12px', borderRight:'1px solid '+t.border, background: onlyA ? t.redDim : changed ? t.yellowDim : 'transparent' }}>
+                            {aEx ? (
+                              <>
+                                <div style={{ fontSize:12, fontWeight:700, color:t.text }}>{aEx.exercise?.name || aEx.slot_constraint || 'Exercise'}</div>
+                                <div style={{ fontSize:11, color:t.textDim, marginTop:2 }}>{aLine}</div>
+                              </>
+                            ) : <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' }}>—</div>}
+                          </div>
+                          <div style={{ padding:'8px 12px', background: onlyB ? t.greenDim : changed ? t.yellowDim : 'transparent' }}>
+                            {bEx ? (
+                              <>
+                                <div style={{ fontSize:12, fontWeight:700, color:t.text }}>{bEx.exercise?.name || bEx.slot_constraint || 'Exercise'}</div>
+                                <div style={{ fontSize:11, color:changed ? t.yellow : t.textDim, marginTop:2 }}>{bLine}</div>
+                              </>
+                            ) : <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic' }}>—</div>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+
+              <div style={{ display:'flex', gap:14, fontSize:11, color:t.textMuted, padding:'8px 4px' }}>
+                <span>🟡 changed</span>
+                <span style={{ color:t.red }}>🔴 only in W{diffWeekA}</span>
+                <span style={{ color:t.green }}>🟢 only in W{diffWeekB}</span>
+              </div>
+            </div>
+          </>
+        )
+      })()}
 
       {/* Open Slot Modal */}
       {openSlotModal && (
