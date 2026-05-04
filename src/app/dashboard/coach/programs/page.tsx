@@ -41,6 +41,15 @@ export default function ProgramsList() {
   // Assign form
   const [assignClient, setAssignClient] = useState('')
   const [assignStart,  setAssignStart]  = useState('')
+  // 📄 Import-from-file flow state
+  const [showImport,         setShowImport]         = useState(false)
+  const [importFile,         setImportFile]         = useState<File | null>(null)
+  const [importLoading,      setImportLoading]      = useState(false)
+  const [importError,        setImportError]        = useState<string | null>(null)
+  const [importProposal,     setImportProposal]     = useState<any | null>(null)
+  const [importTemplateName, setImportTemplateName] = useState('')
+  const [importSaving,       setImportSaving]       = useState(false)
+  const [importSaveResult,   setImportSaveResult]   = useState<any | null>(null)
 
   const router   = useRouter()
   const supabase = createClient()
@@ -392,6 +401,12 @@ export default function ProgramsList() {
           <div style={{ width:1, height:28, background:t.border }} />
           <div style={{ fontSize:14, fontWeight:800 }}>Programs</div>
           <div style={{ flex:1 }} />
+          <button
+            onClick={()=>{ setShowImport(true); setImportFile(null); setImportError(null); setImportProposal(null); setImportSaveResult(null); setImportTemplateName('') }}
+            title="Upload a PDF, Excel, or CSV of an existing program. AI will translate it into a template you can save and assign."
+            style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:9, padding:'8px 14px', fontSize:13, fontWeight:700, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginRight:8 }}>
+            📄 Import from File
+          </button>
           <button onClick={()=>openNew()}
             style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'8px 18px', fontSize:13, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             + New Template
@@ -511,6 +526,223 @@ export default function ProgramsList() {
                 style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', color:'#000', fontSize:14, fontWeight:800, cursor:!assignClient||copying?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:!assignClient||copying?0.6:1 }}>
                 {copying ? 'Copying program...' : '✓ Assign to Client →'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* 📄 Import from File modal — upload PDF/Excel/CSV, AI parses,
+            coach reviews, saves as template via /api/ai-program/save with
+            asTemplate=true. Reuses the same proposal JSON shape as the AI
+            Program Builder so the same save endpoint works for both flows. */}
+        {showImport && (
+          <div onClick={()=>{ if (!importLoading && !importSaving) setShowImport(false) }}
+            style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', zIndex:200, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:20, overflowY:'auto' }}>
+            <div onClick={e=>e.stopPropagation()}
+              style={{ background:t.surface, border:'1px solid '+t.purple+'40', borderRadius:18, width:'100%', maxWidth:640, padding:24, marginTop:40, marginBottom:40 }}>
+
+              {/* Header */}
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, marginBottom:8 }}>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:900 }}>📄 Import program from file</div>
+                  <div style={{ fontSize:12, color:t.textMuted, marginTop:4, lineHeight:1.5 }}>
+                    Upload a PDF, Excel, or CSV. AI translates it into a template you can review and save.
+                  </div>
+                </div>
+                <button onClick={()=>{ if (!importLoading && !importSaving) setShowImport(false) }}
+                  disabled={importLoading || importSaving}
+                  style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor: (importLoading||importSaving) ? 'default' : 'pointer', padding:'4px 8px', lineHeight:1 }}>×</button>
+              </div>
+
+              {/* Step 1: file picker — visible until proposal arrives */}
+              {!importProposal && (
+                <div style={{ marginTop:18 }}>
+                  <label style={{ display:'block', cursor: importLoading ? 'default' : 'pointer' }}>
+                    <input
+                      type="file"
+                      accept=".pdf,.xlsx,.xls,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { setImportFile(f); setImportError(null) } }}
+                      disabled={importLoading}
+                      style={{ display:'none' }}
+                    />
+                    <div style={{ background:t.surfaceUp, border:'2px dashed '+(importFile ? t.purple : t.border), borderRadius:12, padding:'24px 18px', textAlign:'center' as const }}>
+                      {importFile ? (
+                        <>
+                          <div style={{ fontSize:24, marginBottom:8 }}>📄</div>
+                          <div style={{ fontSize:13, fontWeight:700, color:t.text, marginBottom:4, wordBreak:'break-word' as const }}>{importFile.name}</div>
+                          <div style={{ fontSize:11, color:t.textMuted }}>
+                            {(importFile.size / 1024).toFixed(1)} KB · click to change
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize:30, marginBottom:8 }}>📤</div>
+                          <div style={{ fontSize:13, fontWeight:700, color:t.text, marginBottom:4 }}>Click to choose a file</div>
+                          <div style={{ fontSize:11, color:t.textMuted }}>PDF, Excel (.xlsx/.xls), or CSV · max 20 MB</div>
+                        </>
+                      )}
+                    </div>
+                  </label>
+
+                  <button
+                    onClick={async () => {
+                      if (!importFile) return
+                      setImportLoading(true); setImportError(null); setImportProposal(null)
+                      try {
+                        const fd = new FormData()
+                        fd.append('file', importFile)
+                        const res = await fetch('/api/ai-program/import-from-file', { method:'POST', body: fd })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setImportError(data?.error || 'Could not parse file')
+                          setImportLoading(false); return
+                        }
+                        setImportProposal(data)
+                        setImportTemplateName(data?.name || importFile.name.replace(/\.(pdf|xlsx?|csv)$/i, ''))
+                      } catch (e: any) {
+                        setImportError(e?.message || 'Network error')
+                      }
+                      setImportLoading(false)
+                    }}
+                    disabled={!importFile || importLoading}
+                    style={{ width:'100%', marginTop:14, padding:'13px', borderRadius:11, border:'none', background: !importFile || importLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', color: !importFile || importLoading ? t.textMuted : '#fff', fontSize:14, fontWeight:800, cursor: !importFile || importLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {importLoading ? 'Parsing… (20–60s)' : '✨ Translate with AI'}
+                  </button>
+
+                  {importError && (
+                    <div style={{ marginTop:12, padding:'10px 12px', background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:9, fontSize:12, color:t.red }}>
+                      {importError}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 2: proposal review — visible once Claude returns */}
+              {importProposal && !importSaveResult && (
+                <div style={{ marginTop:18, display:'flex', flexDirection:'column', gap:14 }}>
+                  <div style={{ background:t.surfaceHigh, borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.08em', marginBottom:6 }}>Template name</div>
+                    <input
+                      value={importTemplateName}
+                      onChange={e => setImportTemplateName(e.target.value)}
+                      style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:8, padding:'9px 11px', fontSize:13, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' as const }}/>
+                    {importProposal.weekly_split && (
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:8 }}>{importProposal.weekly_split}</div>
+                    )}
+                  </div>
+
+                  {importProposal.rationale && (
+                    <div style={{ fontSize:12, color:t.textDim, lineHeight:1.6, whiteSpace:'pre-wrap' as const }}>{importProposal.rationale}</div>
+                  )}
+
+                  {/* Compact week/day/exercise summary — collapsed enough
+                      to scan but detailed enough to verify accuracy. */}
+                  {Array.isArray(importProposal.weeks) && importProposal.weeks.map((w: any, wi: number) => (
+                    <div key={wi} style={{ background:t.purple+'0d', border:'1px solid '+t.purple+'30', borderRadius:10, padding:'10px 12px' }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:t.purple, marginBottom:8 }}>Week {w.week ?? wi+1}{w.focus ? ' · ' + w.focus : ''}{w.deload ? ' · DELOAD' : ''}</div>
+                      {Array.isArray(w.days) && w.days.map((d: any, di: number) => (
+                        <div key={di} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', marginBottom:6 }}>
+                          <div style={{ fontSize:12, fontWeight:700, marginBottom:4 }}>
+                            {d.day || `Day ${di+1}`}{d.label ? ' · ' + d.label : ''}
+                          </div>
+                          {Array.isArray(d.exercises) && d.exercises.map((ex: any, ei: number) => (
+                            <div key={ei} style={{ fontSize:11, color:t.textDim, lineHeight:1.5, paddingLeft:8 }}>
+                              • <strong style={{ color:t.text }}>{ex.name || '?'}</strong>
+                              {' '}— {ex.sets ?? '?'}×{ex.reps ?? '?'}
+                              {ex.load_guidance ? ` · ${ex.load_guidance}` : ''}
+                              {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+
+                  {importProposal.coach_notes && (
+                    <div style={{ background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:9, padding:'10px 12px', fontSize:12, color:t.text, lineHeight:1.5, whiteSpace:'pre-wrap' as const }}>
+                      <strong style={{ color:t.teal }}>Coach notes:</strong> {importProposal.coach_notes}
+                    </div>
+                  )}
+
+                  {/* Save / discard / re-translate */}
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const, marginTop:6 }}>
+                    <button
+                      onClick={async () => {
+                        if (!importTemplateName.trim()) { setImportError('Template name required'); return }
+                        setImportSaving(true); setImportError(null)
+                        try {
+                          const res = await fetch('/api/ai-program/save', {
+                            method:'POST',
+                            headers:{ 'Content-Type':'application/json' },
+                            body: JSON.stringify({
+                              asTemplate: true,
+                              programName: importTemplateName.trim(),
+                              proposal: importProposal,
+                              meta: importProposal?.meta,
+                            }),
+                          })
+                          const data = await res.json()
+                          if (!res.ok) { setImportError(data?.error || 'Save failed'); setImportSaving(false); return }
+                          setImportSaveResult(data)
+                          await load()
+                        } catch (e: any) {
+                          setImportError(e?.message || 'Network error')
+                        }
+                        setImportSaving(false)
+                      }}
+                      disabled={importSaving || !importTemplateName.trim()}
+                      style={{ flex:'1 1 200px', padding:'12px', borderRadius:11, border:'none', background: importSaving ? t.surfaceHigh : 'linear-gradient(135deg,'+t.green+','+t.green+'cc)', color: importSaving ? t.textMuted : '#000', fontSize:14, fontWeight:800, cursor: importSaving ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      {importSaving ? 'Saving…' : '💾 Save as Template'}
+                    </button>
+                    <button
+                      onClick={()=>{ setImportProposal(null); setImportError(null); setImportTemplateName('') }}
+                      disabled={importSaving}
+                      style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:11, padding:'12px 16px', fontSize:13, fontWeight:700, color:t.textMuted, cursor: importSaving ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      ↻ Try again
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: success — green confirmation card with counts */}
+              {importSaveResult && (
+                <div style={{ marginTop:18, background:t.greenDim, border:'1px solid '+t.green+'40', borderRadius:11, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:t.green }}>✓ Template saved — "{importSaveResult.program_name}"</div>
+                  <div style={{ fontSize:12, color:t.text }}>
+                    Created <strong>{importSaveResult.blocks_created}</strong> workout block{importSaveResult.blocks_created === 1 ? '' : 's'} with <strong>{importSaveResult.exercises_created}</strong> exercise{importSaveResult.exercises_created === 1 ? '' : 's'}.
+                  </div>
+                  {importSaveResult.warning && (
+                    <div style={{ fontSize:12, color:t.orange, padding:'8px 10px', background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:8 }}>
+                      ⚠ {importSaveResult.warning}
+                      {Array.isArray(importSaveResult.unresolved_names) && importSaveResult.unresolved_names.length > 0 && (
+                        <div style={{ marginTop:4, fontSize:11, color:t.textDim }}>
+                          {importSaveResult.unresolved_names.slice(0, 6).join(' · ')}
+                          {importSaveResult.unresolved_names.length > 6 && ` · +${importSaveResult.unresolved_names.length - 6} more`}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ display:'flex', gap:8, marginTop:6, flexWrap:'wrap' as const }}>
+                    <button
+                      onClick={()=>{ setImportFile(null); setImportProposal(null); setImportSaveResult(null); setImportError(null); setImportTemplateName('') }}
+                      style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      Import another
+                    </button>
+                    <button
+                      onClick={()=>setShowImport(false)}
+                      style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      Done — close
+                    </button>
+                    {importSaveResult.program_id && (
+                      <button
+                        onClick={()=>router.push(`/dashboard/coach/programs/${importSaveResult.program_id}`)}
+                        style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        Open template →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         )}

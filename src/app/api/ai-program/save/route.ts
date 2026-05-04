@@ -84,17 +84,25 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { clientId, programName, proposal, meta } = (body || {}) as { clientId?: string, programName?: string, proposal?: Proposal, meta?: any }
-  if (!clientId)  return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+  const { clientId, programName, proposal, meta, asTemplate } = (body || {}) as { clientId?: string, programName?: string, proposal?: Proposal, meta?: any, asTemplate?: boolean }
+
   if (!proposal || !Array.isArray(proposal.weeks) || proposal.weeks.length === 0) {
     return NextResponse.json({ error: 'proposal.weeks required and must be non-empty' }, { status: 400 })
   }
 
-  // Coach ownership gate
-  const { data: client } = await supabase
-    .from('clients').select('id, coach_id').eq('id', clientId).single()
-  if (!client || client.coach_id !== user.id) {
-    return NextResponse.json({ error: 'Not your client' }, { status: 403 })
+  // Two save modes:
+  //   1. Client-bound program: requires clientId + coach owns that client
+  //   2. Template (asTemplate=true): no client, just owned by this coach.
+  //      Used by the import-from-file flow on the templates page.
+  if (asTemplate) {
+    // Templates only need a logged-in coach. No client gate.
+  } else {
+    if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+    const { data: client } = await supabase
+      .from('clients').select('id, coach_id').eq('id', clientId).single()
+    if (!client || client.coach_id !== user.id) {
+      return NextResponse.json({ error: 'Not your client' }, { status: 403 })
+    }
   }
 
   // ── Exercise-name resolution ─────────────────────────────────────────
@@ -180,11 +188,14 @@ export async function POST(req: NextRequest) {
     .from('programs')
     .insert({
       coach_id: user.id,
-      client_id: clientId,
+      // Templates have no client; client-bound programs do. The status
+      // 'draft' on templates matches the existing manual template flow
+      // where coaches build a template and assign later.
+      client_id: asTemplate ? null : clientId,
       name: finalName,
       description: proposal.rationale || null,
-      is_template: false,
-      status: 'active',
+      is_template: !!asTemplate,
+      status: asTemplate ? 'draft' : 'active',
       goal,
       duration_weeks: durationWeeks,
     })
