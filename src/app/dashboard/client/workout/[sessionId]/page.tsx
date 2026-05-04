@@ -1628,7 +1628,6 @@ ${candidateList}`
                     <div key={idx} style={{fontSize:13,color:t.text,fontVariantNumeric:'tabular-nums' as const}}>
                       <span style={{color:t.textMuted,marginRight:8}}>Set {idx + 1}{s.is_warmup ? ' (warmup)' : ''}:</span>
                       {s.weight_value ? `${s.weight_value}${s.weight_unit}` : '—'} × {s.reps_completed || '—'}{s.rpe ? ` · RPE ${s.rpe}` : ''}
-                      {s.notes && <div style={{fontSize:11,color:t.textMuted,paddingLeft:0,marginTop:2,fontStyle:'italic'}}>{s.notes}</div>}
                     </div>
                   ))}
                 </div>
@@ -2168,21 +2167,18 @@ ${candidateList}`
                                         </div>
                                       </div>
                                     )}
-                                    {/* Per-set quick note (RPE, the rep that moved slow, etc.).
-                                        Coexists with the per-exercise notes textarea below the
-                                        sets grid — set-level captures in-the-moment thoughts,
-                                        exercise-level captures the overall how-it-felt. */}
-                                    <div className="workout-set-note-row">
-                                      <input value={s.notes} onChange={e=>updateSet(ex.id,idx,'notes',e.target.value)}
-                                        placeholder="Set note (RPE, slow rep, etc.)" disabled={s.logged}
-                                        style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                                      {!s.logged&&(
+                                    {/* Set notes consolidated to per-exercise — see textarea
+                                        below the sets grid. The Log ✓ button stays here so the
+                                        gym-floor flow (type → log → rest timer) keeps the same
+                                        gestures. */}
+                                    {!s.logged && (
+                                      <div style={{display:'flex',justifyContent:'flex-end'}}>
                                         <button onClick={()=>logSet(ex.id,idx)}
-                                          style={{background:t.accent,border:'none',borderRadius:8,padding:'7px 16px',fontSize:13,fontWeight:700,color:'#0f0f0f',cursor:'pointer',whiteSpace:'nowrap'}}>
+                                          style={{background:t.accent,border:'none',borderRadius:8,padding:'7px 18px',fontSize:13,fontWeight:700,color:'#0f0f0f',cursor:'pointer',whiteSpace:'nowrap'}}>
                                           Log ✓
                                         </button>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                     </>)}
                                   </div>
                                 )

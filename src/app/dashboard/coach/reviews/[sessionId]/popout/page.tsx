@@ -165,7 +165,7 @@ export default function ReviewPopout() {
                   <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:13 }}>
                     <thead>
                       <tr>
-                        {['#', 'Reps', 'Weight', 'Notes'].map(h => (
+                        {['#', 'Reps', 'Weight'].map(h => (
                           <th key={h} style={{ textAlign:'left' as const, fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', paddingBottom:8, paddingRight:12 }}>{h}</th>
                         ))}
                       </tr>
@@ -178,7 +178,6 @@ export default function ReviewPopout() {
                           <td style={{ padding:'5px 12px 5px 0', color:s.weight_value ? t.orange : t.textMuted, fontWeight:s.weight_value ? 700 : 400 }}>
                             {s.weight_value ? `${s.weight_value}${s.weight_unit && s.weight_unit !== 'bw' ? s.weight_unit : ''}` : s.weight_unit === 'bw' ? 'BW' : '—'}
                           </td>
-                          <td style={{ padding:'5px 0', color:t.textMuted, fontSize:12 }}>{s.notes || ''}</td>
                         </tr>
                       ))}
                     </tbody>

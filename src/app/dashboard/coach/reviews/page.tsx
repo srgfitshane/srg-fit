@@ -569,8 +569,15 @@ export default function ReviewsPage() {
                     📌 {ex.notes_coach}
                   </div>
                 )}
-                {ex.notes_client && (
-                  <div style={{ fontSize:12, color:ex.notes_client.startsWith('[SKIPPED]')?t.textMuted:t.orange, marginBottom:8, fontStyle:'italic' }}>{ex.notes_client}</div>
+                {/* Client's per-exercise note — written in the workout logger.
+                    Styled as a callout so it can't be missed during review. */}
+                {ex.notes_client && !ex.notes_client.startsWith('[SKIPPED]') && (
+                  <div style={{ fontSize:12, color:t.orange, background:'#1a1a0a', border:'1px solid #3a3a1a', borderRadius:8, padding:'6px 10px', marginBottom:8 }}>
+                    💬 {ex.notes_client}
+                  </div>
+                )}
+                {ex.notes_client && ex.notes_client.startsWith('[SKIPPED]') && (
+                  <div style={{ fontSize:12, color:t.textMuted, marginBottom:8, fontStyle:'italic' }}>{ex.notes_client}</div>
                 )}
                 {(ex.original_exercise_name || ex.skipped) && (
                   <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:8 }}>
@@ -590,26 +597,15 @@ export default function ReviewsPage() {
                   </div>
                 )}
                 {ex.sets.length > 0 && (
-                  <div style={{ marginBottom: ex.client_video_url ? 8 : 0 }}>
-                    {/* Header row */}
-                    <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12, marginBottom:4 }}>
-                      {['#','Reps','Weight','RPE'].map(h=><div key={h} style={{ color:t.textMuted, fontWeight:700 }}>{h}</div>)}
-                    </div>
-                    {/* One block per set so a per-set note can sit underneath. */}
-                    {ex.sets.map(s => (
-                      <div key={s.set_number} style={{ marginBottom: 2 }}>
-                        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12 }}>
-                          <div style={{ color:t.textDim }}>{s.set_number}</div>
-                          <div style={{ color:t.text, fontWeight:700 }}>{s.reps_completed??'—'}</div>
-                          <div style={{ color:t.teal, fontWeight:700 }}>{s.weight_unit==='bw'?'BW':s.weight_value!=null?`${s.weight_value}${s.weight_unit||'lbs'}`:'—'}</div>
-                          <div style={{ color:t.orange }}>{s.rpe??'—'}</div>
-                        </div>
-                        {s.notes && (
-                          <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic', paddingLeft:18, marginTop:2 }}>
-                            💬 {s.notes}
-                          </div>
-                        )}
-                      </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12, marginBottom: ex.client_video_url ? 8 : 0 }}>
+                    {['#','Reps','Weight','RPE'].map(h=><div key={h} style={{ color:t.textMuted, fontWeight:700 }}>{h}</div>)}
+                    {ex.sets.map(s=>(
+                      <>
+                        <div key={`n${s.set_number}`} style={{ color:t.textDim }}>{s.set_number}</div>
+                        <div key={`r${s.set_number}`} style={{ color:t.text, fontWeight:700 }}>{s.reps_completed??'—'}</div>
+                        <div key={`w${s.set_number}`} style={{ color:t.teal, fontWeight:700 }}>{s.weight_unit==='bw'?'BW':s.weight_value!=null?`${s.weight_value}${s.weight_unit||'lbs'}`:'—'}</div>
+                        <div key={`p${s.set_number}`} style={{ color:t.orange }}>{s.rpe??'—'}</div>
+                      </>
                     ))}
                   </div>
                 )}
