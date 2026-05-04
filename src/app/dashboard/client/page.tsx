@@ -795,6 +795,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   }, [clientId, supabase, today])
 
 
+  // Habits whose unit implies multiple logs across the day should ADD
+  // each entry to the running total instead of replacing it. Water is
+  // the canonical case — clients sip throughout the day, they shouldn't
+  // have to mentally re-add their morning glass to log the afternoon one.
+  const isAdditiveHabit = (h: { unit?: string|null, label?: string|null }) => {
+    const u = (h.unit || '').toLowerCase().trim()
+    return u === 'oz' || u === 'ml' || u === 'cups' || u === 'glasses'
+  }
+
   const logHabit = async (habitId: string, value: number) => {
     if (!clientRecord) return
     setHabitLogs(prev => ({ ...prev, [habitId]: value }))
@@ -1435,7 +1444,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   )
 
                   return (
-                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft: h.unit==='hrs' ? (val ? (() => { const v=Number(val); const hh=Math.floor(v); const mm=Math.round((v-hh)*60); return hh+':'+(mm<10?'0':'')+mm })() : '') : String(val||'') })}
+                    <div key={h.id} onClick={()=>setLogPopup({ habit:h, draft: h.unit==='hrs' ? (val ? (() => { const v=Number(val); const hh=Math.floor(v); const mm=Math.round((v-hh)*60); return hh+':'+(mm<10?'0':'')+mm })() : '') : isAdditiveHabit(h) ? '' : String(val||'') })}
                       style={{ padding:'12px 14px', background:done?alpha(color, 7):t.surface, border:'1px solid '+(done?alpha(color, 25):t.border), borderRadius:13, cursor:'pointer', transition:'all 0.2s ease' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                         <span style={{ fontSize:18 }}>{h.icon||'📊'}</span>
@@ -1772,9 +1781,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }} />
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
                 <span style={{ fontSize:24 }}>{logPopup.habit.icon||'📊'}</span>
-                <div>
+                <div style={{ flex:1 }}>
                   <div style={{ fontSize:16, fontWeight:800 }}>{logPopup.habit.label}</div>
-                  <div style={{ fontSize:12, color:t.textMuted }}>Target: {logPopup.habit.target}{logPopup.habit.unit}</div>
+                  <div style={{ fontSize:12, color:t.textMuted }}>
+                    Target: {logPopup.habit.target}{logPopup.habit.unit}
+                    {isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 && (
+                      <> &nbsp;·&nbsp; <span style={{ color:t.teal, fontWeight:700 }}>So far today: {habitLogs[logPopup.habit.id]}{logPopup.habit.unit}</span></>
+                    )}
+                  </div>
                 </div>
               </div>
               <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:20 }}>
@@ -1786,7 +1800,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         placeholder="0"
                         value={(logPopup.draft||'').split(':')[0] || ''}
                         onChange={e => {
-                          const mm = (logPopup.draft||'').split(':')[1] || '00'
+                          // Don't auto-fill minutes — leave them blank so the
+                          // client can type the real value without backspacing
+                          // a default '00'.
+                          const mm = (logPopup.draft||'').split(':')[1] || ''
                           setLogPopup(p=>p?{...p, draft: e.target.value+':'+mm}:null)
                         }}
                         style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
@@ -1812,10 +1829,21 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 ) : (
                   <>
                     <input
-                      type="number" autoFocus inputMode="numeric" placeholder="0"
+                      type="number" autoFocus inputMode="numeric"
+                      placeholder={isAdditiveHabit(logPopup.habit) ? 'Add amount' : '0'}
                       value={logPopup.draft}
                       onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
-                      onKeyDown={e=>{ if(e.key==='Enter'){ const v = +logPopup.draft||0; if(v > 0){ logHabit(logPopup.habit.id, v); setLogPopup(null) } }}}
+                      onKeyDown={e=>{
+                        if(e.key==='Enter'){
+                          const v = +logPopup.draft||0
+                          if(v > 0){
+                            const finalValue = isAdditiveHabit(logPopup.habit)
+                              ? (habitLogs[logPopup.habit.id] || 0) + v
+                              : v
+                            logHabit(logPopup.habit.id, finalValue); setLogPopup(null)
+                          }
+                        }
+                      }}
                       style={{ flex:1, background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
                     />
                     <div style={{ fontSize:16, fontWeight:700, color:t.textMuted, flexShrink:0 }}>{logPopup.habit.unit}</div>
@@ -1823,15 +1851,21 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 )}
               </div>
               <button
-                onClick={()=>{ 
-                  const v = logPopup.habit.unit==='hrs' 
-                    ? (() => { const parts=(logPopup.draft||'0:0').split(':'); const hh=parseInt(parts[0]||'0'); const mm=parseInt(parts[1]||'0'); return hh+(mm/60) })() 
+                onClick={()=>{
+                  const v = logPopup.habit.unit==='hrs'
+                    ? (() => { const parts=(logPopup.draft||'0:0').split(':'); const hh=parseInt(parts[0]||'0'); const mm=parseInt(parts[1]||'0'); return hh+(mm/60) })()
                     : (+logPopup.draft||0)
                   if (!v || v <= 0) { setLogPopup(null); return }
-                  logHabit(logPopup.habit.id, v); setLogPopup(null) 
+                  // Additive habits (water, etc.) accumulate across the day —
+                  // the popup input is the AMOUNT JUST CONSUMED, not the day's
+                  // running total.
+                  const finalValue = isAdditiveHabit(logPopup.habit)
+                    ? (habitLogs[logPopup.habit.id] || 0) + v
+                    : v
+                  logHabit(logPopup.habit.id, finalValue); setLogPopup(null)
                 }}
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                Save ✓
+                {isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 ? 'Add ✓' : 'Save ✓'}
               </button>
             </div>
           </>
