@@ -12,8 +12,13 @@ behind **SRG Fit**, a full-stack SaaS fitness coaching platform for 1-on-1
 online coaching. Live at **srgfit.app** since March 31, 2026.
 
 Shane is both product owner and engineer. He iterates rapidly against
-real client feedback — Lindsey Nadler (a long-term client) is the live
-QA tester. Shane prefers:
+real client feedback. He dogfoods from his own client account
+(`shanehcpt@gmail.com`) — when a workout, check-in, or note shows up
+from that account it's Shane himself, not a client. The user base has
+grown past one tester; Lindsey Nadler was the original long-term
+client + live QA, but several other clients are now active. Don't
+default to Lindsey when referencing test data unless the data
+specifically points to her. Shane prefers:
 
 - Direct, concise communication. Root cause + fix beats long preambles.
 - Confirming fix-by-fix before moving on — ship small, verify, ship next.
@@ -66,12 +71,16 @@ QA tester. Shane prefers:
 - Repo root: `C:\Users\Shane\OneDrive\Desktop\srg-fit`
 - Coach profile ID: `133f93d0-2399-4542-bc57-db4de8b98d79`
 - Domain: `srgfit.app` | Contact: `shane@srgfit.training`
-- Test client ID: `d4b20a0d-d1de-4b91-83ca-6acfd4f6d82d`
-  (this is also Shane's personal dogfooding client account —
-  `shanehcpt@gmail.com`, profile_id `aba0fe07-3690-460b-a35a-cb4e33d3665d`)
-- Lindsey (long-term real client, live QA): `037e0e4c-3ea5-42f6-8218-d0d8772bacef`
-  — `subscription_status: 'none'` (pays outside Stripe); all manually
-  invited clients follow this pattern
+- Shane's personal dogfooding client: `d4b20a0d-d1de-4b91-83ca-6acfd4f6d82d`
+  (`shanehcpt@gmail.com`, profile_id `aba0fe07-3690-460b-a35a-cb4e33d3665d`)
+  — when this client_id shows up in a workout / note / check-in, that's
+  Shane testing, not a real client.
+- Lindsey (the original long-term client, was sole live QA):
+  `037e0e4c-3ea5-42f6-8218-d0d8772bacef` — `subscription_status: 'none'`
+  (pays outside Stripe); all manually invited clients follow this pattern.
+- Active client roster has grown beyond Lindsey. When debugging or
+  writing test references, query for the real client by id rather than
+  hard-coding a name.
 
 ## Git workflow (important — don't skip)
 
