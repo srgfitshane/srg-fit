@@ -42,6 +42,13 @@ const GROUP_TYPE_MAP: Record<string,{label:string,icon:string}> = Object.fromEnt
 
 export default function ProgramBuilder() {
   const [program,    setProgram]    = useState<any>(null)
+  // Inline rename for the program/template name in the top bar.
+  // Click the name to edit, Enter or blur to save, Escape to cancel.
+  // Especially helpful for AI-imported templates whose parsed names
+  // need a quick cleanup before assigning to clients.
+  const [renamingProgram,   setRenamingProgram]   = useState(false)
+  const [programNameDraft,  setProgramNameDraft]  = useState('')
+  const [renamingProgSaving, setRenamingProgSaving] = useState(false)
   const [blocks,     setBlocks]     = useState<any[]>([])
   const [exercises,  setExercises]  = useState<any[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -603,7 +610,43 @@ export default function ProgramBuilder() {
           <div style={{ width:1, height:28, background:t.border }} />
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <div style={{ fontSize:14, fontWeight:800 }}>{program?.name || 'Program'}</div>
+              {renamingProgram ? (
+                <input
+                  autoFocus
+                  value={programNameDraft}
+                  onChange={e => setProgramNameDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    if (e.key === 'Escape') { setRenamingProgram(false); setProgramNameDraft('') }
+                  }}
+                  onBlur={async () => {
+                    const next = programNameDraft.trim()
+                    // Empty or unchanged → just exit edit mode
+                    if (!next || next === program?.name) { setRenamingProgram(false); return }
+                    setRenamingProgSaving(true)
+                    const { error } = await supabase.from('programs').update({ name: next }).eq('id', programId)
+                    setRenamingProgSaving(false)
+                    if (error) {
+                      alert('Could not rename: ' + error.message)
+                      setRenamingProgram(false)
+                      return
+                    }
+                    setProgram((p: any) => p ? { ...p, name: next } : p)
+                    setRenamingProgram(false)
+                  }}
+                  disabled={renamingProgSaving}
+                  style={{ background:t.surfaceUp, border:'1px solid '+t.teal, borderRadius:6, padding:'4px 8px', fontSize:14, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", minWidth:200 }}
+                />
+              ) : (
+                <div
+                  onClick={() => { setProgramNameDraft(program?.name || ''); setRenamingProgram(true) }}
+                  title="Click to rename"
+                  style={{ fontSize:14, fontWeight:800, cursor:'pointer', borderBottom:'1px dashed transparent' }}
+                  onMouseEnter={e => (e.currentTarget.style.borderBottomColor = t.textMuted)}
+                  onMouseLeave={e => (e.currentTarget.style.borderBottomColor = 'transparent')}>
+                  {program?.name || 'Program'}
+                </div>
+              )}
               {program?.is_template
                 ? <span style={{ background:t.orange+'18', border:'1px solid '+t.orange+'40', borderRadius:5, padding:'2px 8px', fontSize:9, fontWeight:900, color:t.orange, letterSpacing:'0.08em' }}>TEMPLATE</span>
                 : <span style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:5, padding:'2px 8px', fontSize:9, fontWeight:900, color:t.teal, letterSpacing:'0.08em' }}>CLIENT</span>
