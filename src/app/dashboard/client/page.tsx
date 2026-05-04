@@ -8,7 +8,7 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 import MorningPulse from '@/components/client/MorningPulse'
 import { localDateStr } from '@/lib/date'
-import { toastError } from '@/components/ui/Toast'
+import { toastError, toastSuccess } from '@/components/ui/Toast'
 import {
   CLIENT_ACTIVITY_INTENSITIES,
   CLIENT_ACTIVITY_TYPES,
@@ -216,6 +216,7 @@ type HabitRecord = {
 type HabitLogRecord = {
   habit_id: string
   value: number
+  logged_date: string
 }
 
 type MilestoneRecord = {
@@ -373,6 +374,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])
   const [habitLogs,    setHabitLogs]    = useState<Record<string,number>>({})
+  // Most recent prior-day value per habit, used by the popup's
+  // "Repeat last" shortcut for stable habits like sleep/weight.
+  const [lastValueByHabit, setLastValueByHabit] = useState<Record<string,number>>({})
   const [clientTasks,  setClientTasks]  = useState<{id:string,title:string,repeat:string,due_date:string|null,last_completed_date:string|null,icon:string|null}[]>([])
   const [milestones,   setMilestones]   = useState<MilestoneRecord[]>([])
   const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
@@ -525,7 +529,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: taskData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
-          supabase.from('habit_logs').select('*').eq('client_id', cid).eq('logged_date', todayStr),
+          // Pull last 30 days so we can surface "Repeat last" prefills
+          // alongside today's totals — single round-trip vs. separate query.
+          supabase.from('habit_logs').select('*').eq('client_id', cid)
+            .gte('logged_date', localDateStr(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)))
+            .order('logged_date', { ascending: false }),
           supabase.from('milestones').select('*').eq('client_id', cid).eq('seen', false).order('created_at', { ascending: false }),
           supabase.from('personal_records').select('*, exercise:exercises(name)').eq('client_id', cid).gte('logged_date', localDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))).order('logged_date', { ascending: false }).limit(3),
           supabase.from('workout_sessions')
@@ -560,9 +568,19 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setHabits((habitData || []) as HabitRecord[])
         setClientTasks(taskData || [])
 
-        const logMap: Record<string,number> = {}
-        ;((habitLogData || []) as HabitLogRecord[]).forEach((log) => { logMap[log.habit_id] = log.value })
+        const logMap:  Record<string,number> = {}
+        const lastMap: Record<string,number> = {}
+        // Logs are sorted desc by date, so the first prior-day entry per
+        // habit is the most recent one — perfect seed for "Repeat last".
+        ;((habitLogData || []) as HabitLogRecord[]).forEach((log) => {
+          if (log.logged_date === todayStr) {
+            logMap[log.habit_id] = log.value
+          } else if (lastMap[log.habit_id] === undefined && log.value && log.value > 0) {
+            lastMap[log.habit_id] = log.value
+          }
+        })
         setHabitLogs(logMap)
+        setLastValueByHabit(lastMap)
         setHabitLoadDate(todayStr)
 
         setMilestones((milestoneData || []) as MilestoneRecord[])
@@ -799,9 +817,24 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   // each entry to the running total instead of replacing it. Water is
   // the canonical case — clients sip throughout the day, they shouldn't
   // have to mentally re-add their morning glass to log the afternoon one.
+  // Steps gets the same treatment for clients who log morning vs evening
+  // walks separately instead of pulling a single total from a tracker.
   const isAdditiveHabit = (h: { unit?: string|null, label?: string|null }) => {
     const u = (h.unit || '').toLowerCase().trim()
-    return u === 'oz' || u === 'ml' || u === 'cups' || u === 'glasses'
+    return u === 'oz' || u === 'ml' || u === 'cups' || u === 'glasses' || u === 'steps'
+  }
+
+  // One-tap presets shown above the input on additive habits. Sized to
+  // typical real-world increments per unit so a client can log a glass
+  // of water without typing.
+  const quickAddPresets = (unit: string|null|undefined): number[] => {
+    const u = (unit || '').toLowerCase().trim()
+    if (u === 'oz')      return [8, 16, 24]
+    if (u === 'ml')      return [250, 500, 750]
+    if (u === 'cups')    return [1, 2]
+    if (u === 'glasses') return [1, 2]
+    if (u === 'steps')   return [500, 1000, 2500]
+    return []
   }
 
   const logHabit = async (habitId: string, value: number) => {
@@ -1791,6 +1824,64 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   </div>
                 </div>
               </div>
+              {/* Quick-add presets for additive habits — one tap = log a glass / a walk. */}
+              {isAdditiveHabit(logPopup.habit) && quickAddPresets(logPopup.habit.unit).length > 0 && (
+                <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+                  {quickAddPresets(logPopup.habit.unit).map(amt => {
+                    const color = logPopup.habit.color || t.teal
+                    return (
+                      <button
+                        key={amt}
+                        onClick={() => {
+                          const finalValue = (habitLogs[logPopup.habit.id] || 0) + amt
+                          logHabit(logPopup.habit.id, finalValue)
+                          toastSuccess(`+${amt}${logPopup.habit.unit||''} · ${finalValue}${logPopup.habit.unit||''} today`)
+                          setLogPopup(null)
+                        }}
+                        style={{
+                          flex:1, minWidth:80,
+                          background:t.surfaceUp,
+                          border:'1px solid '+color+'55',
+                          borderRadius:10, padding:'10px 8px',
+                          fontSize:13, fontWeight:800, color:color,
+                          cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
+                        }}>
+                        +{amt}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {/* "Repeat last" prefill for stable single-value habits (sleep, weight, etc.). */}
+              {!isAdditiveHabit(logPopup.habit) && lastValueByHabit[logPopup.habit.id] !== undefined && (
+                <button
+                  onClick={() => {
+                    const last = lastValueByHabit[logPopup.habit.id]
+                    if (logPopup.habit.unit === 'hrs') {
+                      const hh = Math.floor(last)
+                      const mm = Math.round((last - hh) * 60)
+                      setLogPopup(p => p ? { ...p, draft: `${hh}:${mm < 10 ? '0' : ''}${mm}` } : null)
+                    } else {
+                      setLogPopup(p => p ? { ...p, draft: String(last) } : null)
+                    }
+                  }}
+                  style={{
+                    width:'100%', marginBottom:14,
+                    background:'transparent',
+                    border:'1px dashed '+t.border,
+                    borderRadius:10, padding:'9px',
+                    fontSize:12, fontWeight:700, color:t.textMuted,
+                    cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
+                  }}>
+                  ↻ Repeat last ({logPopup.habit.unit === 'hrs'
+                    ? (() => {
+                        const v = lastValueByHabit[logPopup.habit.id]
+                        const hh = Math.floor(v); const mm = Math.round((v - hh) * 60)
+                        return mm > 0 ? `${hh}h ${mm}m` : `${hh}h`
+                      })()
+                    : `${lastValueByHabit[logPopup.habit.id]}${logPopup.habit.unit||''}`})
+                </button>
+              )}
               <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:20 }}>
                 {logPopup.habit.unit==='hrs' ? (
                   <div style={{ flex:1, display:'flex', alignItems:'center', gap:8 }}>
@@ -1837,10 +1928,13 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         if(e.key==='Enter'){
                           const v = +logPopup.draft||0
                           if(v > 0){
-                            const finalValue = isAdditiveHabit(logPopup.habit)
+                            const isAdd = isAdditiveHabit(logPopup.habit)
+                            const finalValue = isAdd
                               ? (habitLogs[logPopup.habit.id] || 0) + v
                               : v
-                            logHabit(logPopup.habit.id, finalValue); setLogPopup(null)
+                            logHabit(logPopup.habit.id, finalValue)
+                            if (isAdd) toastSuccess(`+${v}${logPopup.habit.unit||''} · ${finalValue}${logPopup.habit.unit||''} today`)
+                            setLogPopup(null)
                           }
                         }
                       }}
@@ -1859,10 +1953,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   // Additive habits (water, etc.) accumulate across the day —
                   // the popup input is the AMOUNT JUST CONSUMED, not the day's
                   // running total.
-                  const finalValue = isAdditiveHabit(logPopup.habit)
+                  const isAdd = isAdditiveHabit(logPopup.habit)
+                  const finalValue = isAdd
                     ? (habitLogs[logPopup.habit.id] || 0) + v
                     : v
-                  logHabit(logPopup.habit.id, finalValue); setLogPopup(null)
+                  logHabit(logPopup.habit.id, finalValue)
+                  if (isAdd) {
+                    toastSuccess(`+${v}${logPopup.habit.unit||''} · ${finalValue}${logPopup.habit.unit||''} today`)
+                  }
+                  setLogPopup(null)
                 }}
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 {isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 ? 'Add ✓' : 'Save ✓'}
