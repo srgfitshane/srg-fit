@@ -156,16 +156,21 @@ export default function ProgramBuilder() {
     setActiveWeek(weekNum > 1 ? weekNum - 1 : 1)
   }
 
-  const addWeek = async () => {
+  // Add a new week. The "source" week is whichever the coach picks
+  // (defaults to the active week so progressive programs stay consistent —
+  // hitting +Week on week 4 of a build phase produces a copy of week 4,
+  // not a stale copy of week 1). Pass null/0 for an empty week.
+  const addWeek = async (sourceWeek: number | null = activeWeek) => {
     const nextWeek = totalWeeks + 1
-    const week1Blocks = blocksForWeek(1)
-    if (week1Blocks.length > 0) {
-      for (const b of week1Blocks) {
+    const srcBlocks = sourceWeek ? blocksForWeek(sourceWeek) : []
+    if (srcBlocks.length > 0) {
+      for (const b of srcBlocks) {
         const { data: nb } = await supabase.from('workout_blocks').insert({
           program_id: programId, name: b.name, day_label: b.day_label,
           day_of_week: b.day_of_week,
           block_label: b.block_label, week_number: nextWeek, order_index: b.order_index,
           group_types: b.group_types || {},
+          description: b.description || null,  // carry phase/focus across
         }).select().single()
         if (nb) {
           for (const ex of (b.block_exercises || [])) {
@@ -174,6 +179,9 @@ export default function ProgramBuilder() {
               target_weight: ex.target_weight, rest_seconds: ex.rest_seconds, rpe: ex.rpe,
               tut: ex.tut, superset_group: ex.superset_group, exercise_role: ex.exercise_role,
               notes: ex.notes, order_index: ex.order_index, progression_note: ex.progression_note,
+              tracking_type: ex.tracking_type, duration_seconds: ex.duration_seconds,
+              is_open_slot: ex.is_open_slot, slot_constraint: ex.slot_constraint,
+              slot_filter_type: ex.slot_filter_type, slot_filter_value: ex.slot_filter_value,
             })
           }
         }
@@ -187,6 +195,57 @@ export default function ProgramBuilder() {
       }
     }
     await load(); setActiveWeek(nextWeek)
+    setShowAddWeekMenu(false)
+  }
+
+  // Copy a single day from this week into one or more target weeks.
+  // Lets a coach build "Heavy Mon" once and stamp it onto weeks 1, 3, 5
+  // for undulating programs. If the target week already has a block on
+  // the same day_of_week, we still append (coach can clean up duplicates
+  // — silently overwriting is worse).
+  const copyDayToWeek = async (block: any, targetWeek: number) => {
+    const targetBlocks = blocksForWeek(targetWeek)
+    const orderIdx = targetBlocks.length
+    const { data: nb } = await supabase.from('workout_blocks').insert({
+      program_id: programId,
+      name: block.name,
+      day_label: block.day_label,
+      day_of_week: block.day_of_week,
+      block_label: block.block_label,
+      week_number: targetWeek,
+      order_index: orderIdx,
+      group_types: block.group_types || {},
+      description: block.description || null,
+    }).select().single()
+    if (nb) {
+      for (const ex of (block.block_exercises || [])) {
+        await supabase.from('block_exercises').insert({
+          block_id: nb.id, exercise_id: ex.exercise_id, sets: ex.sets, reps: ex.reps,
+          target_weight: ex.target_weight, rest_seconds: ex.rest_seconds, rpe: ex.rpe,
+          tut: ex.tut, superset_group: ex.superset_group, exercise_role: ex.exercise_role,
+          notes: ex.notes, order_index: ex.order_index, progression_note: ex.progression_note,
+          tracking_type: ex.tracking_type, duration_seconds: ex.duration_seconds,
+          is_open_slot: ex.is_open_slot, slot_constraint: ex.slot_constraint,
+          slot_filter_type: ex.slot_filter_type, slot_filter_value: ex.slot_filter_value,
+        })
+      }
+    }
+    await load()
+    setCopyDayMenu(null)
+  }
+
+  // Per-week phase label (Accumulation / Intensification / Deload / etc).
+  // Stored on workout_blocks.description for every block in the week —
+  // single source of truth, no schema migration needed. The AI import
+  // already writes this column, so existing imported programs will
+  // surface their phase automatically.
+  const updateWeekPhase = async (weekNum: number, phase: string) => {
+    const trimmed = phase.trim() || null
+    const wBlocks = blocksForWeek(weekNum)
+    for (const b of wBlocks) {
+      await supabase.from('workout_blocks').update({ description: trimmed }).eq('id', b.id)
+    }
+    setBlocks(prev => prev.map(b => b.week_number === weekNum ? { ...b, description: trimmed } : b))
   }
 
   const duplicateDay = async (block: any) => {
@@ -449,6 +508,15 @@ export default function ProgramBuilder() {
   const [addDayTmplLoading, setAddDayTmplLoading] = useState(false)
   const [addDayTemplates, setAddDayTemplates] = useState<any[]>([])
 
+  // Top-bar +Week now opens a small picker so coach can choose which
+  // week to copy from (defaults to active week) or start blank. Open
+  // state lives here.
+  const [showAddWeekMenu, setShowAddWeekMenu] = useState(false)
+
+  // "Copy day to week..." menu attached to a specific block. null when
+  // closed, holds the block id when open.
+  const [copyDayMenu, setCopyDayMenu] = useState<string|null>(null)
+
   // ── Send to Client ────────────────────────────────────────────────────
   const [showSend, setShowSend] = useState(false)
   const [sendStartDate, setSendStartDate] = useState(() => localDateStr())
@@ -663,7 +731,39 @@ export default function ProgramBuilder() {
               </button>
             ))}
           </div>
-          <button onClick={addWeek} style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Week</button>
+          <div style={{ position:'relative' }}>
+            <button onClick={()=>setShowAddWeekMenu(v=>!v)}
+              style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              + Week ▾
+            </button>
+            {showAddWeekMenu && (
+              <>
+                <div onClick={()=>setShowAddWeekMenu(false)}
+                  style={{ position:'fixed', inset:0, zIndex:50 }} />
+                <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:51, minWidth:220, background:t.surface, border:'1px solid '+t.border, borderRadius:10, boxShadow:'0 12px 32px rgba(0,0,0,0.5)', padding:6 }}>
+                  <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', padding:'8px 10px 4px' }}>
+                    Copy from
+                  </div>
+                  {weeks.length > 0 && (
+                    <button onClick={()=>addWeek(activeWeek)}
+                      style={{ display:'block', width:'100%', textAlign:'left', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'8px 10px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:4 }}>
+                      📋 Active week (W{activeWeek}) ← default
+                    </button>
+                  )}
+                  {weeks.filter(w=>w!==activeWeek).map(w => (
+                    <button key={w} onClick={()=>addWeek(w)}
+                      style={{ display:'block', width:'100%', textAlign:'left', background:'transparent', border:'1px solid '+t.border, borderRadius:7, padding:'8px 10px', fontSize:12, fontWeight:600, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:4 }}>
+                      Week {w}
+                    </button>
+                  ))}
+                  <button onClick={()=>addWeek(null)}
+                    style={{ display:'block', width:'100%', textAlign:'left', background:'transparent', border:'1px dashed '+t.border, borderRadius:7, padding:'8px 10px', fontSize:12, fontWeight:600, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginTop:6 }}>
+                    + Empty week (3 blank days)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {program?.client_id && (
             <button onClick={()=>{ setShowSend(true); setSendDone(false); setSendError('') }}
               style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -686,13 +786,28 @@ export default function ProgramBuilder() {
               )
             })}
             {weeks.length === 0 && (
-              <button onClick={addWeek} style={{ padding:'6px 16px', borderRadius:20, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Add First Week</button>
+              <button onClick={()=>addWeek(null)} style={{ padding:'6px 16px', borderRadius:20, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>+ Add First Week</button>
             )}
           </div>
           {/* Week actions — shown below tabs, no overflow clipping */}
           {weeks.length > 0 && (
-            <div style={{ padding:'0 24px 8px', display:'flex', alignItems:'center', gap:6 }}>
+            <div style={{ padding:'0 24px 8px', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
               <span style={{ fontSize:11, color:t.textMuted, marginRight:4 }}>Week {activeWeek}:</span>
+              {/* Phase / focus label — single source of truth via blocks.description.
+                  Free text so coach can write "Accumulation", "Deload", "Block 2 –
+                  Intensification", whatever. Stored on every block in the week. */}
+              <input
+                key={`phase-${activeWeek}-${blocksForWeek(activeWeek)[0]?.description || ''}`}
+                defaultValue={blocksForWeek(activeWeek)[0]?.description || ''}
+                placeholder="Phase / focus (e.g. Accumulation, Deload, Heavy)"
+                onBlur={e => {
+                  const next = e.target.value
+                  const cur = blocksForWeek(activeWeek)[0]?.description || ''
+                  if (next !== cur) updateWeekPhase(activeWeek, next)
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                style={{ flex:'1 1 200px', minWidth:160, maxWidth:320, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:600, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
+              />
               <button onClick={()=>duplicateWeek(activeWeek)}
                 style={{ padding:'3px 10px', borderRadius:8, border:'1px solid '+t.teal+'40', background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:4 }}>
                 📋 Duplicate
@@ -743,10 +858,36 @@ export default function ProgramBuilder() {
                           📋 Save
                         </button>
                         <button onClick={()=>duplicateDay(block)}
-                          title="Duplicate this day"
+                          title="Duplicate this day in this week"
                           style={{ background:t.purpleDim, border:'1px solid '+t.purple+'40', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.purple, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                           ⧉ Dupe
                         </button>
+                        {weeks.filter(w => w !== block.week_number).length > 0 && (
+                          <div style={{ position:'relative' }}>
+                            <button onClick={()=>setCopyDayMenu(copyDayMenu===block.id?null:block.id)}
+                              title="Copy this day into another week"
+                              style={{ background:t.blueDim, border:'1px solid '+t.blue+'40', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.blue, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              → Wk
+                            </button>
+                            {copyDayMenu === block.id && (
+                              <>
+                                <div onClick={()=>setCopyDayMenu(null)}
+                                  style={{ position:'fixed', inset:0, zIndex:50 }} />
+                                <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:51, minWidth:160, background:t.surface, border:'1px solid '+t.border, borderRadius:10, boxShadow:'0 12px 28px rgba(0,0,0,0.5)', padding:6 }}>
+                                  <div style={{ fontSize:9, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', padding:'6px 8px 4px' }}>
+                                    Copy to week...
+                                  </div>
+                                  {weeks.filter(w => w !== block.week_number).map(w => (
+                                    <button key={w} onClick={()=>copyDayToWeek(block, w)}
+                                      style={{ display:'block', width:'100%', textAlign:'left', background:'transparent', border:'1px solid '+t.border, borderRadius:6, padding:'6px 10px', fontSize:11, fontWeight:600, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", marginBottom:3 }}>
+                                      Week {w}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                         <button onClick={()=>deleteBlock(block.id)}
                           style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:7, padding:'4px 10px', fontSize:11, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>✕</button>
                       </div>
