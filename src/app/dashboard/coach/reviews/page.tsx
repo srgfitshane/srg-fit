@@ -590,15 +590,26 @@ export default function ReviewsPage() {
                   </div>
                 )}
                 {ex.sets.length > 0 && (
-                  <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12, marginBottom: ex.client_video_url ? 8 : 0 }}>
-                    {['#','Reps','Weight','RPE'].map(h=><div key={h} style={{ color:t.textMuted, fontWeight:700 }}>{h}</div>)}
-                    {ex.sets.map(s=>(
-                      <>
-                        <div key={`n${s.set_number}`} style={{ color:t.textDim }}>{s.set_number}</div>
-                        <div key={`r${s.set_number}`} style={{ color:t.text, fontWeight:700 }}>{s.reps_completed??'—'}</div>
-                        <div key={`w${s.set_number}`} style={{ color:t.teal, fontWeight:700 }}>{s.weight_unit==='bw'?'BW':s.weight_value!=null?`${s.weight_value}${s.weight_unit||'lbs'}`:'—'}</div>
-                        <div key={`p${s.set_number}`} style={{ color:t.orange }}>{s.rpe??'—'}</div>
-                      </>
+                  <div style={{ marginBottom: ex.client_video_url ? 8 : 0 }}>
+                    {/* Header row */}
+                    <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12, marginBottom:4 }}>
+                      {['#','Reps','Weight','RPE'].map(h=><div key={h} style={{ color:t.textMuted, fontWeight:700 }}>{h}</div>)}
+                    </div>
+                    {/* One block per set so a per-set note can sit underneath. */}
+                    {ex.sets.map(s => (
+                      <div key={s.set_number} style={{ marginBottom: 2 }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:'4px 10px', fontSize:12 }}>
+                          <div style={{ color:t.textDim }}>{s.set_number}</div>
+                          <div style={{ color:t.text, fontWeight:700 }}>{s.reps_completed??'—'}</div>
+                          <div style={{ color:t.teal, fontWeight:700 }}>{s.weight_unit==='bw'?'BW':s.weight_value!=null?`${s.weight_value}${s.weight_unit||'lbs'}`:'—'}</div>
+                          <div style={{ color:t.orange }}>{s.rpe??'—'}</div>
+                        </div>
+                        {s.notes && (
+                          <div style={{ fontSize:11, color:t.textMuted, fontStyle:'italic', paddingLeft:18, marginTop:2 }}>
+                            💬 {s.notes}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
