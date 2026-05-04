@@ -562,6 +562,13 @@ export default function ReviewsPage() {
                   <div style={{ fontSize:11, color:t.textMuted }}>{ex.sets_completed??0}/{ex.sets_prescribed??'?'} sets</div>
                   {ex.client_video_url && <span style={{ fontSize:11, fontWeight:800, color:t.teal, background:t.tealDim, borderRadius:6, padding:'2px 8px' }}>📹 Form Check</span>}
                 </div>
+                {/* Coach's per-exercise note from the program — written in the
+                    Builder, propagated through session_exercises.notes_coach. */}
+                {ex.notes_coach && (
+                  <div style={{ fontSize:12, color:t.teal, background:t.tealDim, border:'1px solid '+t.teal+'30', borderRadius:8, padding:'6px 10px', marginBottom:8 }}>
+                    📌 {ex.notes_coach}
+                  </div>
+                )}
                 {ex.notes_client && (
                   <div style={{ fontSize:12, color:ex.notes_client.startsWith('[SKIPPED]')?t.textMuted:t.orange, marginBottom:8, fontStyle:'italic' }}>{ex.notes_client}</div>
                 )}

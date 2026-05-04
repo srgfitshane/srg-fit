@@ -10,7 +10,7 @@ const t = {
 }
 
 type SetRow = { set_number: number; reps_completed: number | null; weight_value: string | null; weight_unit: string | null; notes: string | null }
-type Exercise = { id: string; exercise_name: string; sets_prescribed: number | null; reps_prescribed: string | null; sets_completed: number | null; client_video_url: string | null; notes_client: string | null; skipped: boolean | null; sets: SetRow[] }
+type Exercise = { id: string; exercise_name: string; sets_prescribed: number | null; reps_prescribed: string | null; sets_completed: number | null; client_video_url: string | null; notes_client: string | null; notes_coach: string | null; skipped: boolean | null; sets: SetRow[] }
 type Session = { title: string; client_name: string; scheduled_date: string; duration_seconds: number | null; session_rpe: number | null; notes_client: string | null; exercises: Exercise[] }
 
 function fmtDuration(s: number | null) {
@@ -41,7 +41,7 @@ export default function ReviewPopout() {
 
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('id, exercise_name, sets_prescribed, reps_prescribed, sets_completed, client_video_url, notes_client, skipped, exercise:exercises!session_exercises_exercise_id_fkey(name)')
+        .select('id, exercise_name, sets_prescribed, reps_prescribed, sets_completed, client_video_url, notes_client, notes_coach, skipped, exercise:exercises!session_exercises_exercise_id_fkey(name)')
         .eq('session_id', sessionId).order('order_index')
 
       const exercises: Exercise[] = await Promise.all((exs || []).map(async (ex: any) => {
@@ -145,6 +145,11 @@ export default function ReviewPopout() {
                   {ex.sets_prescribed} sets · {ex.reps_prescribed} reps prescribed
                   {ex.skipped && <span style={{ color:t.red, marginLeft:8, fontWeight:700 }}>SKIPPED</span>}
                 </div>
+                {ex.notes_coach && (
+                  <div style={{ fontSize:12, color:t.teal, marginTop:6, lineHeight:1.5 }}>
+                    📌 {ex.notes_coach}
+                  </div>
+                )}
               </div>
               {ex.client_video_url && (
                 <div style={{ background:t.teal+'22', border:`1px solid ${t.teal}40`, borderRadius:8, padding:'4px 10px', fontSize:11, fontWeight:800, color:t.teal }}>
