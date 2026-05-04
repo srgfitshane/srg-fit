@@ -2168,9 +2168,13 @@ ${candidateList}`
                                         </div>
                                       </div>
                                     )}
+                                    {/* Per-set quick note (RPE, the rep that moved slow, etc.).
+                                        Coexists with the per-exercise notes textarea below the
+                                        sets grid — set-level captures in-the-moment thoughts,
+                                        exercise-level captures the overall how-it-felt. */}
                                     <div className="workout-set-note-row">
                                       <input value={s.notes} onChange={e=>updateSet(ex.id,idx,'notes',e.target.value)}
-                                        placeholder="RPE, pain, how it felt..." disabled={s.logged}
+                                        placeholder="Set note (RPE, slow rep, etc.)" disabled={s.logged}
                                         style={{flex:1,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'7px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
                                       {!s.logged&&(
                                         <button onClick={()=>logSet(ex.id,idx)}
@@ -2183,6 +2187,32 @@ ${candidateList}`
                                   </div>
                                 )
                               })}
+                            </div>
+                          )}
+
+                          {/* Per-exercise note — overall how-it-felt for the whole movement.
+                              Coexists with set-level notes above. Saves to
+                              session_exercises.notes_client on blur. SKIPPED is reserved
+                              by the skip flow so it's only editable when not skipped. */}
+                          {!isSkipped && (
+                            <div style={{marginBottom:10}}>
+                              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>
+                                Notes for this exercise
+                              </div>
+                              <textarea
+                                key={`notes-${ex.id}-${ex.notes_client || ''}`}
+                                defaultValue={(ex.notes_client && !ex.notes_client.startsWith('[SKIPPED]')) ? ex.notes_client : ''}
+                                onBlur={async e => {
+                                  const next = e.target.value.trim() || null
+                                  const cur = (ex.notes_client && !ex.notes_client.startsWith('[SKIPPED]')) ? ex.notes_client : null
+                                  if (next === cur) return
+                                  setExercises(prev => prev.map(x => x.id === ex.id ? { ...x, notes_client: next } : x))
+                                  await supabase.from('session_exercises').update({ notes_client: next }).eq('id', ex.id)
+                                }}
+                                placeholder="How the whole movement felt — pain, fatigue, cues that worked..."
+                                rows={2}
+                                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'9px 12px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",resize:'vertical',outline:'none'}}
+                              />
                             </div>
                           )}
 
