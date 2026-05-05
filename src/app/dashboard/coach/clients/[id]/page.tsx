@@ -473,22 +473,35 @@ export default function ClientDetail() {
     <>      <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:${t.bg};}
+        /* Page-level overflow guard. The topbar row and client hero used to
+           force the document wider than the viewport on phones; once that
+           happened any position:fixed modal looked off-center because the
+           visible viewport had shifted. Belt-and-suspenders: hide x-overflow
+           on the wrapper AND give the topbar real wrapping behavior. */
+        .client-detail-root{overflow-x:hidden;max-width:100vw;}
         .tab-content{padding:28px;max-width:1200px;margin:0 auto;}
         .overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
         .client-topbar{padding:0 28px;}
+        .client-topbar-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:1;justify-content:flex-end;}
+        .client-hero-row{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+        .client-hero-stats{display:flex;gap:12px;flex-wrap:wrap;}
         @media(max-width:768px){
           .tab-content{padding:14px 12px;}
           .overview-grid{grid-template-columns:1fr!important;}
-          .client-topbar{padding:0 14px;}
+          .client-topbar{padding:0 14px;height:auto!important;flex-wrap:wrap;padding-top:8px!important;padding-bottom:8px!important;}
+          .client-hero-row{padding:0!important;}
           .tab-bar{padding:0 10px!important;}
           .tab-item{padding:12px 12px!important;font-size:12px!important;}
           .sticky-bar{padding:10px 12px!important;}
         }
         @media(max-width:500px){
           .tab-item span:first-child{display:none;}
+          /* On a real phone the hero stats are noisy under the name --
+             let them stack to their own row so nothing clips. */
+          .client-hero-stats{width:100%;justify-content:space-between;}
         }
       `}</style>
-      <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
+      <div className="client-detail-root" style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text }}>
 
         {/* Top bar */}
         <div className="client-topbar" style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
@@ -578,7 +591,7 @@ export default function ClientDetail() {
 
         {/* Client hero */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'24px 28px' }}>
-          <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', gap:20 }}>
+          <div className="client-hero-row" style={{ maxWidth:1200, margin:'0 auto', display:'flex', alignItems:'center', gap:20 }}>
             <div style={{ width:64, height:64, borderRadius:18, background:'linear-gradient(135deg,'+t.teal+','+t.teal+'88)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:'#000', flexShrink:0 }}>
               {initials}
             </div>
@@ -630,7 +643,7 @@ export default function ClientDetail() {
               })()}
             </div>
             {/* Quick stats */}
-            <div style={{ display:'flex', gap:12 }}>
+            <div className="client-hero-stats" style={{ display:'flex', gap:12 }}>
               {[
                 { label:'Check-ins',    val:checkinAssignments.filter((a:any)=>a.status==='completed').length, color:t.teal   },
                 { label:'Workouts',     val:workouts.length,  color:t.orange },
