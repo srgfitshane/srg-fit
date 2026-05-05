@@ -12,10 +12,13 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate()
 }
 
-// Quick-add modal
-function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose, returnUrl }: any) {
+// Quick-add modal. Date is editable inline so the coach can open this from
+// a top-bar shortcut (today's date as default) and pick a different day
+// without leaving the modal — saves the scroll-to-day-cell flow.
+function AddDayModal({ date: initialDate, clientId, coachId, supabase, t, onSave, onClose, returnUrl }: any) {
   const router = useRouter()
   const inp = { background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", width:'100%', colorScheme:'dark' as const }
+  const [date,       setDate]       = useState<string>(initialDate)
   const [mode,       setMode]       = useState<'pick'|'workout'|'event'>('pick')
   const [wkMode,     setWkMode]     = useState<'template'|'build'>('template')
   const [title,      setTitle]      = useState('')
@@ -66,8 +69,15 @@ function AddDayModal({ date, clientId, coachId, supabase, t, onSave, onClose, re
   if (mode === 'pick') return (
     <div style={{ position:'fixed', inset:0, background:'#00000090', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:24, width:'100%', maxWidth:420 }}>
-        <div style={{ fontSize:13, fontWeight:800, color:t.textMuted, marginBottom:16, textAlign:'center' }}>
-          {new Date(date+'T12:00').toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:10, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6, textAlign:'center' as const }}>
+            Schedule for
+          </div>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+            style={{ ...inp, fontSize:14, fontWeight:800, textAlign:'center' as const }} />
+          <div style={{ fontSize:11, color:t.textMuted, marginTop:6, textAlign:'center' as const }}>
+            {new Date(date+'T12:00').toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}
+          </div>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
           <button onClick={()=>setMode('workout')}
@@ -287,16 +297,45 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
     <div style={{ padding:'16px 12px', maxWidth:900, margin:'0 auto' }}>
 
       {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:15, fontWeight:800 }}>📅 Schedule</div>
-          <div style={{ fontSize:12, color:t.textMuted }}>Click any day to add a workout or event</div>
+          <div style={{ fontSize:12, color:t.textMuted }}>Tap any day, or use the buttons below</div>
         </div>
         <button onClick={()=>{ setViewMonth(today.getMonth()); setViewYear(today.getFullYear()) }}
           style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'6px 12px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer' }}>
           Today
         </button>
       </div>
+
+      {/* Quick actions — saves scrolling around the calendar to find a day cell.
+          "+ Schedule" opens the AddDayModal pre-filled with today; the modal lets
+          you change the date inline. "💪 Log Today" is shown when an assigned or
+          in-progress session exists for today, so logging-on-behalf-of is one tap. */}
+      {(() => {
+        const todayStr = toDateStr(today)
+        const todayLoggable = sessions.find(s =>
+          s.scheduled_date === todayStr && (s.status === 'assigned' || s.status === 'in_progress')
+        )
+        return (
+          <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+            <button onClick={()=>setAddModal(todayStr)}
+              style={{ flex:1, background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+              + Schedule Workout / Event
+            </button>
+            {todayLoggable && (
+              <button onClick={()=>{
+                const returnUrl = encodeURIComponent(`/dashboard/coach/clients/${clientId}?tab=calendar`)
+                router.push(`/dashboard/client/workout/${todayLoggable.id}?return=${returnUrl}`)
+              }}
+                title={todayLoggable.title}
+                style={{ flex:1, background:`linear-gradient(135deg,#f5a623,#f5a623cc)`, border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                {todayLoggable.status === 'in_progress' ? '▶ Continue Today' : '💪 Log Today'}
+              </button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Month nav */}
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
