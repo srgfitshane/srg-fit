@@ -27,7 +27,9 @@ import * as XLSX from 'xlsx'
 // =================================================================
 
 export const runtime = 'nodejs'  // xlsx + Buffer need Node, not Edge
-export const maxDuration = 60    // Claude PDF parsing can take 30-50s
+// PDF parsing + 32k-token output for an 8-week program can run 60-90s.
+// Vercel Pro allows up to 300s for serverless; 120 gives plenty of margin.
+export const maxDuration = 120
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024  // 20 MB hard cap
 
@@ -70,7 +72,21 @@ export async function POST(req: NextRequest) {
 
   // Build the prompt that explains the output shape. Same JSON schema as
   // /api/ai-program/build so the existing save endpoint can materialize.
+  //
+  // The "expand every week fully" instruction is load-bearing — for a real
+  // 8-week powerlifting program a coach uploads, the output has to land
+  // ALL eight weeks materialized (not week 1 + a "repeat with progression"
+  // note), or the editor opens half-empty and the coach has to rebuild.
   const schemaPrompt = `Translate the attached workout program into a structured JSON proposal.
+
+You MUST fully materialize EVERY week the document covers — if the
+document is 8 weeks long, output 8 week entries with the actual load /
+rep / set values for each. Do not collapse weeks into a single template
+plus a progression note. If the document shows a progression rule like
+"+5 lbs each week" or "wave: 70/75/80%", apply that rule yourself and
+write out every week's concrete numbers in the JSON. The output is
+materialized directly into a database — the editor cannot re-derive
+week 5 from a rule.
 
 Output ONLY this JSON shape, no commentary:
 {
@@ -110,10 +126,16 @@ Output ONLY this JSON shape, no commentary:
 CRITICAL rules:
 - Exercise names: use "Movement [Variation] - Equipment" format with a hyphen separator (e.g. "Back Squat - Barbell", "Bench Press - Dumbbell", "Bent Over Row - Cable", "Hip Thrust - Barbell"). Bodyweight moves drop the suffix ("Pull-up", "Push-up", "Plank"). DO NOT write equipment first ("Dumbbell Bench Press") — the library indexes movement-first and the save step matches against this format.
 - category MUST be one of: warmup | main | secondary | accessory | finisher | cooldown. Map any document terminology (e.g. "primary lift" → "main", "conditioning" → "finisher", "mobility" → "warmup", "corrective" → "warmup").
+- WEEK COVERAGE — non-negotiable:
+   * Look at the entire document. Count the weeks.
+   * Output one entry in "weeks" for EVERY week. An 8-week program returns weeks: [{week:1...},{week:2...},...,{week:8...}].
+   * Each week must have its full days[] array with the full exercises[] for that week. No "see week 1" placeholders, no empty weeks, no collapsing.
+   * If a week is a deload, mark deload:true AND still write out the deload prescription.
+   * If the document encodes weeks compactly (e.g. one row per week with rep/load deltas, or "Week N: 3x5 @ X lbs"), expand each into a full day/exercise structure for that week.
 - If the document doesn't specify weeks (just shows one workout), output a single-week proposal with that workout as one or more days.
-- If the document specifies multiple weeks, output them as separate week entries.
 - If a value is missing in the document, use null (numbers) or empty string (strings) — don't invent details.
-- Be faithful to what's in the document. Don't add exercises that aren't there.`
+- Be faithful to what's in the document. Don't add exercises that aren't there.
+- Output JSON only. No prose before or after. Start with { and end with }.`
 
   // Compose the message content blocks per file type
   const content: AnthropicContentBlock[] = []
@@ -171,7 +193,10 @@ CRITICAL rules:
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 16000,
+      // 32k is needed to fully materialize an 8-week program. A 4-day x 8-week
+      // x ~6-exercise program runs ~25-30k tokens of JSON output. 16k was
+      // chopping week 5+ off in the wild.
+      max_tokens: 32000,
       messages: [{ role: 'user', content }],
     }),
   })
@@ -187,7 +212,12 @@ CRITICAL rules:
   const result = parseClaudeJsonResponse(data, text)
   if (!result.ok) {
     console.error(`[ai-program/import] parse failed stop=${data?.stop_reason} error=${result.error}`)
-    return NextResponse.json({ error: result.error, raw: result.raw }, { status: result.status })
+    // Override the generic "shorter program" message — the coach uploaded
+    // a real document, they can't just shorten it. Suggest splitting.
+    const friendlyError = data?.stop_reason === 'max_tokens'
+      ? 'AI ran out of room before finishing this program. If it spans more than ~8 weeks or has dense set-by-set tables, try uploading it in two halves (e.g. weeks 1-4 and 5-8 as separate files) and the editor will let you copy weeks across.'
+      : result.error
+    return NextResponse.json({ error: friendlyError, raw: result.raw }, { status: result.status })
   }
 
   const elapsedMs = Date.now() - startedAt

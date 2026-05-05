@@ -605,7 +605,7 @@ export default function ProgramsList() {
                     }}
                     disabled={!importFile || importLoading}
                     style={{ width:'100%', marginTop:14, padding:'13px', borderRadius:11, border:'none', background: !importFile || importLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', color: !importFile || importLoading ? t.textMuted : '#fff', fontSize:14, fontWeight:800, cursor: !importFile || importLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {importLoading ? 'Parsing… (20–60s)' : '✨ Translate with AI'}
+                    {importLoading ? 'Parsing every week… (30–120s for long programs)' : '✨ Translate with AI'}
                   </button>
 
                   {importError && (
