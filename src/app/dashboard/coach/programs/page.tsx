@@ -591,9 +591,28 @@ export default function ProgramsList() {
                         const fd = new FormData()
                         fd.append('file', importFile)
                         const res = await fetch('/api/ai-program/import-from-file', { method:'POST', body: fd })
-                        const data = await res.json()
-                        if (!res.ok) {
-                          setImportError(data?.error || 'Could not parse file')
+                        // Read as text first — when Vercel kills the function past
+                        // maxDuration it returns an HTML/text error page that starts
+                        // with "An error occurred…", and a blind res.json() crashes
+                        // with "Unexpected token 'A'…". Decode JSON only if the body
+                        // actually starts with { (or [).
+                        const txt = await res.text()
+                        const trimmed = txt.trim()
+                        const looksJson = trimmed.startsWith('{') || trimmed.startsWith('[')
+                        let data: any = null
+                        if (looksJson) {
+                          try { data = JSON.parse(txt) } catch { /* fall through */ }
+                        }
+                        if (!res.ok || !data) {
+                          // Status-aware fallback message. 504 / 502 / "An error
+                          // occurred" almost always means Vercel timeout for this
+                          // route; any other non-JSON is a server crash.
+                          const looksTimeout = res.status === 504 || res.status === 502
+                            || /^An error occurred/i.test(trimmed)
+                          const fallback = looksTimeout
+                            ? 'AI ran past the 2-minute server limit on this program. Long multi-week programs sometimes need to be split — try uploading weeks 1-4 and 5-8 as separate templates, or simplify the file (one week per page is faster than dense per-set tables). The week tools in the editor will let you copy weeks across.'
+                            : `Server returned a non-JSON response (status ${res.status}). This usually means the function crashed — please try again in a moment.`
+                          setImportError(data?.error || fallback)
                           setImportLoading(false); return
                         }
                         setImportProposal(data)

@@ -135,6 +135,11 @@ CRITICAL rules:
 - If the document doesn't specify weeks (just shows one workout), output a single-week proposal with that workout as one or more days.
 - If a value is missing in the document, use null (numbers) or empty string (strings) — don't invent details.
 - Be faithful to what's in the document. Don't add exercises that aren't there.
+- COMPACTNESS — every token spent on prose is a week we might lose to truncation:
+   * Keep "rationale" empty unless the document explicitly explains an exercise. Most rows should just be empty string.
+   * Keep "focus" short (3-6 words) or null.
+   * Use null instead of empty objects or arrays.
+   * Output minified JSON — no trailing whitespace, no pretty indentation. The save endpoint doesn't care.
 - Output JSON only. No prose before or after. Start with { and end with }.`
 
   // Compose the message content blocks per file type
@@ -193,10 +198,13 @@ CRITICAL rules:
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      // 32k is needed to fully materialize an 8-week program. A 4-day x 8-week
-      // x ~6-exercise program runs ~25-30k tokens of JSON output. 16k was
-      // chopping week 5+ off in the wild.
-      max_tokens: 32000,
+      // Sonnet 4 streams output around 150-250 tokens/sec. The 120s
+      // function ceiling caps useful output at roughly 24k tokens with
+      // margin for PDF processing. 32k was triggering Vercel timeouts
+      // mid-stream, returning an HTML error page that crashed the
+      // client's JSON.parse. Combined with the "compact JSON" prompt
+      // rule below, 24k fits an 8-week program in real-world programs.
+      max_tokens: 24000,
       messages: [{ role: 'user', content }],
     }),
   })
