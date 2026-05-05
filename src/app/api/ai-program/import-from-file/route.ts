@@ -12,30 +12,77 @@ import * as XLSX from 'xlsx'
 // endpoint then materializes the proposal into programs / blocks /
 // exercises rows. Import is template-only — there's no client context.
 //
-// Why this exists: the AI Program Builder pulls intake + injuries +
-// PRs + library convention + history every build, which is great for
-// personalization but burns a lot of tokens. For digitizing coach's
-// existing PDF/Excel programs, none of that context applies — we just
-// need to parse the document. Smaller prompt, cheaper, and lets coach
-// move years of programs out of their drives and into the library.
+// Architecture: TWO-PASS PARALLEL CHUNKING
+// ----------------------------------------
+// A single 24k-token call could not reliably hold a 12-week program;
+// Sonnet 4 streams ~150-250 tok/sec so a fully-materialized 12-week
+// program at ~36k tokens would blow past the 120s function ceiling.
 //
-// PDF strategy: send to Claude as a document content block (Sonnet 4
-// has native PDF support — sees text + tables + headings together).
-// Excel/CSV strategy: parse with xlsx to a markdown-ish text table
-// per sheet and send as a text block. Cheaper tokens, identical
-// output schema.
+// Phase 1 (~5-10s): metadata pass. Returns name, total_weeks, phases,
+// weekly_split, coach_notes — short structural skeleton, ~1-2k tokens.
+//
+// Phase 2 (~20-40s wall time, parallel): N/4 chunked expansion calls,
+// each fully materializing 4 weeks. Promise.all means total wall time
+// ≈ slowest single chunk, not sum. A 12-week program runs as 3 chunks
+// in parallel ≈ 30s total instead of ~90s sequential.
+//
+// PDF strategy: send to Claude as a document content block. Sonnet 4
+// reads tables, headings, and layout natively. Same PDF goes into
+// each phase-2 call (Anthropic prompt cache amortizes the cost).
+// Excel/CSV strategy: parse with xlsx to a CSV-per-sheet text block
+// and reuse across phases.
 // =================================================================
 
 export const runtime = 'nodejs'  // xlsx + Buffer need Node, not Edge
-// PDF parsing + 32k-token output for an 8-week program can run 60-90s.
-// Vercel Pro allows up to 300s for serverless; 120 gives plenty of margin.
+// Phase 1 (~10s) + parallel phase 2 (~30-40s) + JSON merging gives us
+// real-world ~50-60s wall time. 120s leaves margin for slow chunks.
 export const maxDuration = 120
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024  // 20 MB hard cap
+const WEEKS_PER_CHUNK = 4
 
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
   | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+
+// Minimal exercise/day/week shapes — kept loose because Claude's
+// output occasionally includes extra fields and we just pass through.
+type ProposalDay = { day: string; label?: string; estimated_minutes?: number | null; exercises?: any[] }
+type ProposalWeek = { week: number; phase?: string; focus?: string | null; deload?: boolean; days?: ProposalDay[] }
+type Metadata = {
+  name: string
+  rationale?: string
+  weekly_split?: string
+  total_weeks: number
+  coach_notes?: string
+}
+
+async function callAnthropic(
+  apiKey: string,
+  content: AnthropicContentBlock[],
+  maxTokens: number,
+): Promise<{ ok: boolean; data?: any; rawText?: string; error?: string }> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content }],
+    }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    return { ok: false, error: t.slice(0, 400) }
+  }
+  const data = await res.json()
+  const rawText = data?.content?.[0]?.text || ''
+  return { ok: true, data, rawText }
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerSupabaseClient()
@@ -70,85 +117,12 @@ export async function POST(req: NextRequest) {
   const ext = fileName.split('.').pop() || ''
   const buf = Buffer.from(await file.arrayBuffer())
 
-  // Build the prompt that explains the output shape. Same JSON schema as
-  // /api/ai-program/build so the existing save endpoint can materialize.
-  //
-  // The "expand every week fully" instruction is load-bearing — for a real
-  // 8-week powerlifting program a coach uploads, the output has to land
-  // ALL eight weeks materialized (not week 1 + a "repeat with progression"
-  // note), or the editor opens half-empty and the coach has to rebuild.
-  const schemaPrompt = `Translate the attached workout program into a structured JSON proposal.
-
-You MUST fully materialize EVERY week the document covers — if the
-document is 8 weeks long, output 8 week entries with the actual load /
-rep / set values for each. Do not collapse weeks into a single template
-plus a progression note. If the document shows a progression rule like
-"+5 lbs each week" or "wave: 70/75/80%", apply that rule yourself and
-write out every week's concrete numbers in the JSON. The output is
-materialized directly into a database — the editor cannot re-derive
-week 5 from a rule.
-
-Output ONLY this JSON shape, no commentary:
-{
-  "name": "<program name from the document, or a sensible default>",
-  "rationale": "<short note describing what this program is — pulled from the document if present, otherwise inferred from the structure>",
-  "weekly_split": "<one-line summary of the split, e.g. 'Push / Pull / Legs x2'>",
-  "weeks": [
-    {
-      "week": 1,
-      "phase": "accumulation",
-      "focus": "<short phrase from the document, or null>",
-      "deload": false,
-      "days": [
-        {
-          "day": "Mon",
-          "label": "<short label, e.g. 'Lower A — squat focus'>",
-          "estimated_minutes": <int or null>,
-          "exercises": [
-            {
-              "name": "<exercise name in 'Movement [Variation] - Equipment' format if possible — e.g. 'Back Squat - Barbell'>",
-              "category": "<warmup | main | secondary | accessory | finisher | cooldown>",
-              "sets": <int>,
-              "reps": "<string, e.g. '8-10' or '5x3' or '30s'>",
-              "load_guidance": "<string, e.g. 'RPE 7' or '70% 1RM' or '135 lbs' or whatever the document specifies>",
-              "rest_seconds": <int or null>,
-              "tempo": "<string, e.g. '3-1-1-0', or null>",
-              "rationale": "<short note if the document explains why; otherwise empty string>"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "coach_notes": "<any general notes / cues / progression rules pulled from the document, joined with newlines, or empty string>"
-}
-
-CRITICAL rules:
-- Exercise names: use "Movement [Variation] - Equipment" format with a hyphen separator (e.g. "Back Squat - Barbell", "Bench Press - Dumbbell", "Bent Over Row - Cable", "Hip Thrust - Barbell"). Bodyweight moves drop the suffix ("Pull-up", "Push-up", "Plank"). DO NOT write equipment first ("Dumbbell Bench Press") — the library indexes movement-first and the save step matches against this format.
-- category MUST be one of: warmup | main | secondary | accessory | finisher | cooldown. Map any document terminology (e.g. "primary lift" → "main", "conditioning" → "finisher", "mobility" → "warmup", "corrective" → "warmup").
-- WEEK COVERAGE — non-negotiable:
-   * Look at the entire document. Count the weeks.
-   * Output one entry in "weeks" for EVERY week. An 8-week program returns weeks: [{week:1...},{week:2...},...,{week:8...}].
-   * Each week must have its full days[] array with the full exercises[] for that week. No "see week 1" placeholders, no empty weeks, no collapsing.
-   * If a week is a deload, mark deload:true AND still write out the deload prescription.
-   * If the document encodes weeks compactly (e.g. one row per week with rep/load deltas, or "Week N: 3x5 @ X lbs"), expand each into a full day/exercise structure for that week.
-- If the document doesn't specify weeks (just shows one workout), output a single-week proposal with that workout as one or more days.
-- If a value is missing in the document, use null (numbers) or empty string (strings) — don't invent details.
-- Be faithful to what's in the document. Don't add exercises that aren't there.
-- COMPACTNESS — every token spent on prose is a week we might lose to truncation:
-   * Keep "rationale" empty unless the document explicitly explains an exercise. Most rows should just be empty string.
-   * Keep "focus" short (3-6 words) or null.
-   * Use null instead of empty objects or arrays.
-   * Output minified JSON — no trailing whitespace, no pretty indentation. The save endpoint doesn't care.
-- Output JSON only. No prose before or after. Start with { and end with }.`
-
-  // Compose the message content blocks per file type
-  const content: AnthropicContentBlock[] = []
-
+  // Build the source content blocks once. Same blocks are reused for
+  // phase 1 (metadata) and every phase 2 call (chunked weeks). Anthropic
+  // prompt caching dedupes the document cost across the parallel calls.
+  const sourceBlocks: AnthropicContentBlock[] = []
   if (ext === 'pdf' || file.type === 'application/pdf') {
-    // PDF → send directly as a document block. Sonnet 4 reads tables,
-    // headings, and layout natively.
-    content.push({
+    sourceBlocks.push({
       type: 'document',
       source: {
         type: 'base64',
@@ -156,11 +130,8 @@ CRITICAL rules:
         data: buf.toString('base64'),
       },
     })
-    content.push({ type: 'text', text: schemaPrompt })
   } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv' ||
              file.type.includes('spreadsheet') || file.type === 'text/csv') {
-    // Excel / CSV → parse with xlsx, render each sheet as a markdown-ish
-    // table joined by sheet headers. Send as one text block.
     let workbook
     try {
       workbook = XLSX.read(buf, { type: 'buffer' })
@@ -180,8 +151,7 @@ CRITICAL rules:
     if (parts.length <= 2) {
       return NextResponse.json({ error: 'File has no readable content' }, { status: 400 })
     }
-    content.push({ type: 'text', text: parts.join('\n') })
-    content.push({ type: 'text', text: schemaPrompt })
+    sourceBlocks.push({ type: 'text', text: parts.join('\n') })
   } else {
     return NextResponse.json({
       error: `Unsupported file type: ${ext || file.type || 'unknown'}. Use PDF, Excel (.xlsx/.xls), or CSV.`
@@ -189,55 +159,164 @@ CRITICAL rules:
   }
 
   const startedAt = Date.now()
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      // Sonnet 4 streams output around 150-250 tokens/sec. The 120s
-      // function ceiling caps useful output at roughly 24k tokens with
-      // margin for PDF processing. 32k was triggering Vercel timeouts
-      // mid-stream, returning an HTML error page that crashed the
-      // client's JSON.parse. Combined with the "compact JSON" prompt
-      // rule below, 24k fits an 8-week program in real-world programs.
-      max_tokens: 24000,
-      messages: [{ role: 'user', content }],
-    }),
-  })
 
-  if (!res.ok) {
-    const errText = await res.text()
-    console.error('[ai-program/import] Anthropic error:', errText.slice(0, 400))
-    return NextResponse.json({ error: 'AI request failed' }, { status: 500 })
+  // ── PHASE 1: METADATA ────────────────────────────────────────────────
+  // Quick, cheap call. Determines total_weeks so phase 2 knows how many
+  // chunks to fire off. Output is small (~1-2k tokens) so it returns in
+  // 5-10 seconds even for huge documents.
+  const metaPrompt = `Look at the attached workout program document and extract ONLY its top-level structure as JSON. Do NOT enumerate exercises here — that's a separate pass.
+
+Output this exact JSON shape and nothing else (no commentary, no code fences):
+{
+  "name": "<program name from the document, or a sensible default>",
+  "rationale": "<short note describing what this program is, pulled from the doc if present, otherwise inferred>",
+  "weekly_split": "<one-line summary of the split, e.g. 'Push / Pull / Legs x2'>",
+  "total_weeks": <integer — the actual number of distinct weeks the program covers>,
+  "coach_notes": "<any general notes/cues/progression rules pulled from the document, joined with newlines, or empty string>"
+}
+
+CRITICAL:
+- total_weeks must be the document's actual week count. Look at headers ("Week 1", "Week 2"...), tables (one column or row per week), or progression rules. If the document only shows ONE week and gives a progression rule like "+5 lbs each week for 8 weeks", total_weeks = 8. If it only shows one workout with no progression, total_weeks = 1.
+- Output minified JSON — no whitespace beyond what's needed. Start with { and end with }.`
+
+  const metaContent: AnthropicContentBlock[] = [...sourceBlocks, { type: 'text', text: metaPrompt }]
+  const metaCall = await callAnthropic(apiKey, metaContent, 2000)
+  if (!metaCall.ok) {
+    console.error('[ai-program/import] phase 1 anthropic error:', metaCall.error)
+    return NextResponse.json({ error: 'AI request failed (metadata pass)' }, { status: 500 })
+  }
+  const metaResult = parseClaudeJsonResponse(metaCall.data, metaCall.rawText || '')
+  if (!metaResult.ok) {
+    console.error(`[ai-program/import] phase 1 parse failed: ${metaResult.error}`)
+    return NextResponse.json({ error: metaResult.error, raw: metaResult.raw }, { status: metaResult.status })
+  }
+  const metadata = metaResult.data as Metadata
+  const totalWeeks = Math.max(1, Math.min(52, Number(metadata.total_weeks) || 1))
+
+  // ── PHASE 2: CHUNKED WEEK EXPANSION (PARALLEL) ───────────────────────
+  // Build chunks of WEEKS_PER_CHUNK weeks each. Run all chunks in
+  // parallel — Promise.all means total wall time ≈ slowest single
+  // chunk, not sum. A 12-week program: 3 chunks × ~30s ≈ 30s total.
+  const chunkRanges: Array<[number, number]> = []
+  for (let start = 1; start <= totalWeeks; start += WEEKS_PER_CHUNK) {
+    chunkRanges.push([start, Math.min(start + WEEKS_PER_CHUNK - 1, totalWeeks)])
   }
 
-  const data = await res.json()
-  const text = data?.content?.[0]?.text || ''
-  const result = parseClaudeJsonResponse(data, text)
-  if (!result.ok) {
-    console.error(`[ai-program/import] parse failed stop=${data?.stop_reason} error=${result.error}`)
-    // Override the generic "shorter program" message — the coach uploaded
-    // a real document, they can't just shorten it. Suggest splitting.
-    const friendlyError = data?.stop_reason === 'max_tokens'
-      ? 'AI ran out of room before finishing this program. If it spans more than ~8 weeks or has dense set-by-set tables, try uploading it in two halves (e.g. weeks 1-4 and 5-8 as separate files) and the editor will let you copy weeks across.'
-      : result.error
-    return NextResponse.json({ error: friendlyError, raw: result.raw }, { status: result.status })
+  const chunkPromises = chunkRanges.map(async ([startWeek, endWeek]): Promise<{ weeks: ProposalWeek[]; truncated: boolean; error?: string }> => {
+    const weeksLabel = startWeek === endWeek ? `week ${startWeek}` : `weeks ${startWeek} through ${endWeek}`
+    const chunkPrompt = `Look at the attached workout program. The document covers ${totalWeeks} total week${totalWeeks === 1 ? '' : 's'} of training.
+
+Output ONLY ${weeksLabel}, fully materialized, in this exact JSON shape (no commentary, no code fences):
+{
+  "weeks": [
+    {
+      "week": <integer, ${startWeek}..${endWeek}>,
+      "phase": "<short phrase like 'accumulation' / 'intensification' / 'realization' / 'deload', from the document if present>",
+      "focus": "<3-6 word phrase from the document, or null>",
+      "deload": <true|false>,
+      "days": [
+        {
+          "day": "<Mon|Tue|Wed|Thu|Fri|Sat|Sun>",
+          "label": "<short label, e.g. 'Lower A — squat focus'>",
+          "estimated_minutes": <int or null>,
+          "exercises": [
+            {
+              "name": "<exercise name in 'Movement [Variation] - Equipment' format — e.g. 'Back Squat - Barbell'>",
+              "category": "<warmup|main|secondary|accessory|finisher|cooldown>",
+              "sets": <int>,
+              "reps": "<string, e.g. '8-10' or '5x3' or '30s'>",
+              "load_guidance": "<string, e.g. 'RPE 7' or '70% 1RM' or '135 lbs' — whatever the document specifies>",
+              "rest_seconds": <int or null>,
+              "tempo": "<string, e.g. '3-1-1-0', or null>",
+              "rationale": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+CRITICAL:
+- Output ONLY ${weeksLabel}. Do NOT include other weeks in this response — they're being processed in parallel.
+- Materialize EACH week fully — full days[] with full exercises[] for that specific week. No "see week 1" placeholders, no empty weeks.
+- If the document encodes weeks compactly (one row per week with deltas, "wave: 70/75/80%"), apply the rule yourself and write each week's concrete numbers.
+- Exercise names: "Movement [Variation] - Equipment" (e.g. "Back Squat - Barbell"). Bodyweight drops the suffix ("Pull-up", "Plank"). Movement-first, NOT equipment-first.
+- category MUST be one of: warmup | main | secondary | accessory | finisher | cooldown. Map "primary lift" → "main", "conditioning" → "finisher", "mobility" → "warmup", "corrective" → "warmup".
+- Keep "rationale" empty string. Keep "focus" short or null.
+- Use null instead of empty objects or arrays. Output minified JSON — no extra whitespace. Start with { and end with }.`
+
+    const chunkContent: AnthropicContentBlock[] = [...sourceBlocks, { type: 'text', text: chunkPrompt }]
+    const chunkCall = await callAnthropic(apiKey, chunkContent, 16000)
+    if (!chunkCall.ok) {
+      return { weeks: [], truncated: false, error: chunkCall.error }
+    }
+    const parsed = parseClaudeJsonResponse(chunkCall.data, chunkCall.rawText || '')
+    if (!parsed.ok) {
+      return {
+        weeks: [],
+        truncated: chunkCall.data?.stop_reason === 'max_tokens',
+        error: parsed.error,
+      }
+    }
+    const weeks = (parsed.data?.weeks || []) as ProposalWeek[]
+    return { weeks, truncated: chunkCall.data?.stop_reason === 'max_tokens' }
+  })
+
+  const chunkResults = await Promise.all(chunkPromises)
+
+  // Merge chunks into a single weeks array, sorted by week number.
+  const allWeeks: ProposalWeek[] = []
+  const failedChunks: string[] = []
+  for (let i = 0; i < chunkResults.length; i++) {
+    const result = chunkResults[i]
+    const [s, e] = chunkRanges[i]
+    if (result.error) {
+      failedChunks.push(`weeks ${s}-${e}: ${result.error}`)
+      continue
+    }
+    if (result.truncated) {
+      failedChunks.push(`weeks ${s}-${e}: AI truncated mid-output`)
+      // Still keep whatever weeks made it through before truncation
+    }
+    allWeeks.push(...result.weeks)
+  }
+  allWeeks.sort((a, b) => (a.week || 0) - (b.week || 0))
+
+  // If literally nothing came back, surface a clear error.
+  if (allWeeks.length === 0) {
+    return NextResponse.json({
+      error: 'AI could not produce any weeks. ' + (failedChunks[0] || 'Unknown reason. Try again, or split the file.')
+    }, { status: 500 })
   }
 
   const elapsedMs = Date.now() - startedAt
-  console.log(`[ai-program/import] ok user=${user.id} ext=${ext} bytes=${buf.length} ms=${elapsedMs} stop=${data?.stop_reason} usage=${JSON.stringify(data?.usage || {})}`)
+  console.log(`[ai-program/import] ok user=${user.id} ext=${ext} bytes=${buf.length} ms=${elapsedMs} weeks_planned=${totalWeeks} weeks_returned=${allWeeks.length} chunks=${chunkRanges.length} failed=${failedChunks.length}`)
+
+  // Final proposal — same shape as before, built from the metadata pass
+  // and the merged weeks. The save endpoint can ingest this unchanged.
+  const proposal = {
+    name: metadata.name,
+    rationale: metadata.rationale || '',
+    weekly_split: metadata.weekly_split || '',
+    weeks: allWeeks,
+    coach_notes: metadata.coach_notes || '',
+  }
 
   return NextResponse.json({
-    ...result.data,
+    ...proposal,
     meta: {
       source_filename: file.name,
       source_size_bytes: buf.length,
       generated_at: new Date().toISOString(),
-      usage: data?.usage,
+      total_weeks_detected: totalWeeks,
+      weeks_returned: allWeeks.length,
+      chunks: chunkRanges.length,
+      failed_chunks: failedChunks,
+      elapsed_ms: elapsedMs,
     },
+    warning: failedChunks.length > 0
+      ? `Some weeks did not import cleanly: ${failedChunks.join('; ')}. The editor will let you fill in the gaps or re-import the missing range.`
+      : null,
   })
 }

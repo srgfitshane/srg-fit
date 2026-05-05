@@ -624,7 +624,7 @@ export default function ProgramsList() {
                     }}
                     disabled={!importFile || importLoading}
                     style={{ width:'100%', marginTop:14, padding:'13px', borderRadius:11, border:'none', background: !importFile || importLoading ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+t.purple+'cc)', color: !importFile || importLoading ? t.textMuted : '#fff', fontSize:14, fontWeight:800, cursor: !importFile || importLoading ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    {importLoading ? 'Parsing every week… (30–120s for long programs)' : '✨ Translate with AI'}
+                    {importLoading ? 'Translating in parallel… (~30-60s for long programs)' : '✨ Translate with AI'}
                   </button>
 
                   {importError && (
@@ -651,6 +651,22 @@ export default function ProgramsList() {
 
                   {importProposal.rationale && (
                     <div style={{ fontSize:12, color:t.textDim, lineHeight:1.6, whiteSpace:'pre-wrap' as const }}>{importProposal.rationale}</div>
+                  )}
+
+                  {/* Surfaced when one or more parallel chunks didn't return cleanly.
+                      User can still save what came through and fill gaps in the editor. */}
+                  {importProposal.warning && (
+                    <div style={{ fontSize:11, color:t.orange, background:t.orangeDim, border:'1px solid '+t.orange+'40', borderRadius:8, padding:'8px 10px', lineHeight:1.5 }}>
+                      ⚠ {importProposal.warning}
+                    </div>
+                  )}
+
+                  {/* Pulled-week count when totals were detected. Helps the coach
+                      eyeball whether all weeks landed before saving. */}
+                  {importProposal.meta?.total_weeks_detected && (
+                    <div style={{ fontSize:10, color:t.textMuted, fontWeight:700 }}>
+                      {importProposal.meta.weeks_returned}/{importProposal.meta.total_weeks_detected} weeks · {importProposal.meta.chunks} chunks · {Math.round((importProposal.meta.elapsed_ms || 0) / 1000)}s
+                    </div>
                   )}
 
                   {/* Compact week/day/exercise summary — collapsed enough
