@@ -1692,6 +1692,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     otherName="Coach Shane"
                     myName={profile?.full_name || 'Client'}
                     height="100%"
+                    recipientRole="coach"
                   />
                 ) : (
                   <div style={{ padding:40, textAlign:'center', color:t.textMuted, fontSize:13 }}>

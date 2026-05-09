@@ -138,10 +138,16 @@ function MessagesInner() {
         ])
       }
 
-      // Auto-open if ?client= param passed
+      // Auto-open if ?client= (clients.id) or ?profile= (profiles.id) passed.
+      // Notifications fired from RichMessageThread only know the sender's
+      // profile id, so they pass ?profile=. Direct deeplinks from the coach
+      // dashboard pass ?client= for the clients-table id.
       const pid = params.get('client')
-      if (pid) {
-        const match = enrichedClients.find((c: any) => c.id === pid)
+      const profileId = params.get('profile')
+      if (pid || profileId) {
+        const match = enrichedClients.find((c: any) =>
+          (pid && c.id === pid) || (profileId && c.profile?.id === profileId)
+        )
         if (match) openThread(user.id, match)
       }
       setLoading(false)

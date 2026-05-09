@@ -65,11 +65,19 @@ interface Props {
   myName?: string
   otherAvatar?: string | null
   height?: string
+  // Role of the OTHER party (the recipient of any message I send).
+  // Used to deep-link the push notification to the correct dashboard:
+  // a coach receiving a client's message gets sent to /dashboard/coach/messages,
+  // a client receiving a coach's message gets sent to /dashboard/client?tab=messages.
+  // Without this, notifications hardcoded the client URL — which the coach's
+  // middleware would bounce back to /dashboard/coach, looking like "the
+  // dashboard reloaded".
+  recipientRole?: 'coach' | 'client'
 
   quickReplies?: Array<{ id: string; title: string; body: string }>
 }
 
-export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [] }: Props) {
+export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [], recipientRole = 'client' }: Props) {
   const supabase = useMemo(() => createClient(), [])
 
   // Fire-and-forget push notification to the recipient
@@ -86,9 +94,15 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       body: JSON.stringify({
         user_id: otherId,
         notification_type: 'new_message',
-        title: `New message from ${myName || 'your coach'}`,
+        title: `New message from ${myName || (recipientRole === 'coach' ? 'a client' : 'your coach')}`,
         body: body.slice(0, 100),
-        link_url: '/dashboard/client?tab=messages&view=coach',
+        // Coach gets the coach messages page with the sender pre-selected;
+        // client gets their messages tab. The bell click does
+        // window.location.assign on this URL, so it MUST land on a route
+        // the recipient's middleware actually allows.
+        link_url: recipientRole === 'coach'
+          ? `/dashboard/coach/messages?profile=${myId}`
+          : '/dashboard/client?tab=messages&view=coach',
       })
     }).catch(err => console.warn('[notify:message-recipient] failed', err))
   }
