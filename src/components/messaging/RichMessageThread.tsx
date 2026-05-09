@@ -630,7 +630,13 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         .rmt-input-row{display:flex;gap:8px;align-items:flex-end;}
         .rmt-macro-row{display:flex;gap:6px;flex-wrap:wrap;}
 .rmt-picker{animation:scaleIn .15s ease;transform-origin:bottom center;}
-        .rmt-bubble{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+        /* Disable text selection ONLY on touch devices so the long-press
+           reaction picker fires cleanly without selecting text first.
+           Desktop (mouse + keyboard) keeps full text selection so a coach
+           can copy a long message into ChatGPT, an email, etc. */
+        @media (hover: none) and (pointer: coarse) {
+          .rmt-bubble{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+        }
         @media(max-width:400px){
 .rmt-input-row{align-items:stretch;}
         }
