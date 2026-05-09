@@ -791,7 +791,15 @@ ${candidateList}`
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false
     let error: { message: string } | null = null
     if (!offline) {
-      const result = await supabase.from('exercise_sets').insert(payload)
+      // Upsert on (session_exercise_id, set_number). Prevents duplicate
+      // rows when the client hits "edit" on a logged set and re-logs:
+      // before this, each re-log was a fresh INSERT and the review
+      // surface showed set 1 / set 1 / set 1 stacked. The unique index
+      // on those two columns is the schema-level guard; this keeps the
+      // happy path off the conflict altogether.
+      const result = await supabase
+        .from('exercise_sets')
+        .upsert(payload, { onConflict: 'session_exercise_id,set_number' })
       error = result.error
     } else {
       error = { message: 'offline' }
@@ -845,14 +853,15 @@ ${candidateList}`
       ...prev,
       [exId]: prev[exId].map((s,i) => i===setIdx ? {...s, skipped:true, logged:true} : s)
     }))
-    // Save to DB with skipped=true
-    const { error } = await supabase.from('exercise_sets').insert({
+    // Save to DB with skipped=true. Upsert so toggling skip on/off,
+    // or skipping then logging then skipping again, doesn't stack rows.
+    const { error } = await supabase.from('exercise_sets').upsert({
       session_exercise_id: exId,
       session_id: sessionId,
       set_number: setIdx + 1,
       skipped: true,
       logged_at: new Date().toISOString(),
-    })
+    }, { onConflict: 'session_exercise_id,set_number' })
     if (error) toastError('Could not save skipped set: ' + error.message)
   }
 

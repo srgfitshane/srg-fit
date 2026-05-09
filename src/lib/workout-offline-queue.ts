@@ -98,7 +98,14 @@ export async function flushQueue(supabase: SupabaseClient): Promise<FlushResult>
         continue
       }
 
-      const { error } = await supabase.from('exercise_sets').insert(item.payload)
+      // Upsert on (session_exercise_id, set_number) — the unique index
+      // on those two columns will reject a plain insert if the row was
+      // already created via a different path (e.g. logSet succeeded but
+       // we lost the network ack and queued anyway).
+      const { error } = await supabase.from('exercise_sets').upsert(
+        item.payload,
+        { onConflict: 'session_exercise_id,set_number' },
+      )
       if (error) {
         survivors.push(item)
       } else {
