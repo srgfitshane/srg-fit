@@ -732,15 +732,15 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
               <div style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation:'fadeUp .15s ease' }}>
                 <div style={{ position:'relative', maxWidth: isMedia ? '80%' : '74%', width: isMedia ? '80%' : 'auto' }}>
 
-                  {/* Bubble — long-press to react, normal tap for media */}
+                  {/* Bubble — long-press to react on touch; right-click on
+                      desktop opens the same picker. The mouse-based long-press
+                      timer was removed because it fired mid-drag while a coach
+                      was trying to select text to copy a client's message. */}
                   <div
                     className="rmt-bubble"
                     onTouchStart={e=>handlePressStart(msg.id, e)}
                     onTouchEnd={handlePressEnd}
                     onTouchMove={handlePressEnd}
-                    onMouseDown={e=>handlePressStart(msg.id, e)}
-                    onMouseUp={handlePressEnd}
-                    onMouseLeave={handlePressEnd}
                     onContextMenu={e=>{ e.preventDefault(); setReactTarget(msg.id); setReactPos({x:e.clientX,y:e.clientY}) }}
                     style={{
                       background: isMe ? c.teal : c.surfaceHigh,
