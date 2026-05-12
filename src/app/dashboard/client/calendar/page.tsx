@@ -255,7 +255,28 @@ export default function ClientCalendarPage() {
   }
 
   if (loading) return (
-    <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.teal, fontSize:14, fontWeight:700 }}>Loading...</div>
+    <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", padding:'20px 16px 100px', maxWidth:680, margin:'0 auto' }}>
+      {/* Header placeholder */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+        <div style={{ width:60, height:14, borderRadius:6, background:t.surfaceHigh }} />
+        <div style={{ flex:1 }} />
+        <div style={{ width:90, height:14, borderRadius:6, background:t.surfaceHigh }} />
+      </div>
+      {/* Day-of-week strip */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:4, marginBottom:6 }}>
+        {Array.from({ length:7 }).map((_, i) => (
+          <div key={i} style={{ height:11, borderRadius:5, background:t.surface }} />
+        ))}
+      </div>
+      {/* 5 calendar week rows */}
+      {Array.from({ length:5 }).map((_, r) => (
+        <div key={r} style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:4, marginBottom:4 }}>
+          {Array.from({ length:7 }).map((__, c) => (
+            <div key={c} style={{ aspectRatio:'1', borderRadius:8, background:t.surface, border:'1px solid '+t.border }} />
+          ))}
+        </div>
+      ))}
+    </div>
   )
 
   return (

@@ -83,8 +83,10 @@ function QuestionField({ q, value, onChange }: { q: Question; value: unknown; on
     return (
       <div style={{ marginBottom:20 }}>
         <label style={{ display:'block', fontSize:13, fontWeight:700, marginBottom:8 }}>{q.label}{q.required && <span style={{ color:t.red }}> *</span>}</label>
-        <input type="number" step="0.1" value={String(value ?? '')} placeholder={q.placeholder || ''}
+        <input type="number" step="0.1" inputMode="decimal" enterKeyHint="done"
+          value={String(value ?? '')} placeholder={q.placeholder || ''}
           onChange={e => onChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
           style={{ ...inp, maxWidth:200 }} />
         {q.helper_text && <div style={{ fontSize:11, color:t.textMuted, marginTop:4 }}>{q.helper_text}</div>}
       </div>

@@ -15,9 +15,33 @@ const t = {
   red:"#ef4444",
 }
 
+// Skeleton matching the messages sidebar shape so the cold-load flash
+// reads as "loading my conversations" instead of a blank dark screen.
+function MessagesSkeleton() {
+  return (
+    <div style={{ background:'#080810', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+      <div style={{ padding:'16px 18px', borderBottom:'1px solid #252538', height:60, display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ width:28, height:14, borderRadius:6, background:'#1d1d2e' }} />
+        <div style={{ width:80, height:14, borderRadius:6, background:'#1d1d2e' }} />
+      </div>
+      <div style={{ padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:'#0f0f1a', border:'1px solid #252538', borderRadius:10 }}>
+            <div style={{ width:36, height:36, borderRadius:'50%', background:'#1d1d2e' }} />
+            <div style={{ flex:1, display:'flex', flexDirection:'column', gap:5 }}>
+              <div style={{ width:'40%', height:11, borderRadius:5, background:'#1d1d2e' }} />
+              <div style={{ width:'70%', height:9,  borderRadius:5, background:'#161624' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function MessagesPage() {
   return (
-    <Suspense fallback={<div style={{ background:'#080810', minHeight:'100vh' }} />}>
+    <Suspense fallback={<MessagesSkeleton />}>
       <MessagesInner />
     </Suspense>
   )
