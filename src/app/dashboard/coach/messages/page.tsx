@@ -443,9 +443,14 @@ function MessagesInner() {
 
             {/* Thread header */}
             <div style={{ height:56, borderBottom:'1px solid '+t.border, padding:'0 16px', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-              {/* Back button — always visible, critical on mobile */}
-              <button onClick={()=>setActiveId(null)}
-                aria-label="Back to client list"
+              {/* Back button — one tap straight to dashboard. The old
+                  behavior (deselect to inbox) needed a second back press
+                  to actually leave Messages, which is the most common
+                  reason coaches hit back on a thread. Thread-switching
+                  on mobile still works via the Messages nav or the
+                  sidebar on desktop (always visible). */}
+              <button onClick={()=>router.push('/dashboard/coach')}
+                aria-label="Back to dashboard"
                 style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:20, lineHeight:1, flexShrink:0, padding:'4px' }}>←</button>
               <div style={{ width:30, height:30, borderRadius:'50%', background:t.surfaceHigh, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:t.teal, overflow:'hidden', flexShrink:0 }}>
                 {activeClient.profile?.avatar_url

@@ -309,13 +309,28 @@ export default function ReviewsPage() {
           .from('exercise_sets')
           .select('set_number, reps_completed, weight_value, weight_unit, rpe, notes')
           .eq('session_exercise_id', ex.id).order('set_number')
+        // Derive sets_completed from the actual exercise_sets rows rather
+        // than trusting session_exercises.sets_completed — that field is
+        // updated fire-and-forget from the logger and drifts after re-opens,
+        // edit-then-relog, and offline-queue replays. Showed up as "0/3 sets"
+        // on reviews where all 3 sets were clearly logged. A set counts as
+        // completed if it has reps or weight or a duration — anything that
+        // proves the client actually performed it. RPE is optional and
+        // doesn't gate completion.
+        const setsList = sets || []
+        const actualCompleted = setsList.filter((s: any) =>
+          (s.reps_completed != null && s.reps_completed > 0)
+          || (s.weight_value != null && s.weight_value > 0)
+          || (s.weight_unit === 'bw' && s.reps_completed != null)
+        ).length
         return {
           ...ex,
+          sets_completed: actualCompleted,
           exercise_name: ex.exercise_name || (ex as any).exercise?.name || '',
           client_video_url: ex.client_video_url
             ? (await supabase.storage.from('form-checks').createSignedUrl(ex.client_video_url, 60 * 60)).data?.signedUrl || null
             : null,
-          sets: sets || [],
+          sets: setsList,
         }
       }))
       return {
