@@ -56,7 +56,21 @@ export default function CoachCheckins() {
   const router = useRouter()
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    // Visibility refetch — clients submit check-ins while coach has the
+    // tab in background; this brings new submissions in on tab return.
+    let lastRefreshAt = 0
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRefreshAt < 15_000) return
+      lastRefreshAt = now
+      load()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()

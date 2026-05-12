@@ -64,7 +64,21 @@ export default function ExerciseLibrary() {
   const supabase = createClient()
   const searchRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    // Visibility refetch — coach uploads a video / edits on another
+    // device, returns to this tab; library now reflects current state.
+    let lastRefreshAt = 0
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRefreshAt < 15_000) return
+      lastRefreshAt = now
+      load()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
