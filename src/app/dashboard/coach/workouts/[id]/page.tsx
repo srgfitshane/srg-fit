@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
+import { toastError, toastSuccess } from '@/components/ui/Toast'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -53,8 +54,13 @@ export default function CoachSessionDetailPage() {
 
   async function saveCoachNote() {
     setSaving(true)
-    await supabase.from('workout_sessions').update({ notes_coach: coachNote }).eq('id', id)
+    const { error } = await supabase.from('workout_sessions').update({ notes_coach: coachNote }).eq('id', id)
     setSaving(false)
+    if (error) {
+      toastError('Could not save coach note: ' + error.message)
+      return
+    }
+    toastSuccess('Note saved ✓')
   }
 
   const totalVolume = Object.values(sets).flat()

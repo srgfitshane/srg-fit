@@ -138,6 +138,7 @@ export default function ClientDetail() {
   const [genderSaved, setGenderSaved] = useState(false)
   const [trainingType, setTrainingType] = useState('remote')
   const [trainingTypeSaved, setTrainingTypeSaved] = useState(false)
+  const [trainingTypeSaving, setTrainingTypeSaving] = useState(false)
   const [perms, setPerms] = useState({ show_nutrition:true, show_macros:true, show_body_metrics:true, show_progress_photos:true })
   const [forms,        setForms]        = useState<any[]>([])
   const [showAssignForm, setShowAssignForm] = useState(false)
@@ -1100,13 +1101,17 @@ export default function ClientDetail() {
                       <option value="in_person">🏋️ In-Person</option>
                     </select>
                     <button onClick={async () => {
+                      if (trainingTypeSaving) return
+                      setTrainingTypeSaving(true)
                       const { error } = await supabase.from('clients').update({ training_type: trainingType }).eq('id', clientId)
+                      setTrainingTypeSaving(false)
                       if (error) { alert('Could not save training type: ' + error.message); return }
                       setTrainingTypeSaved(true)
                       setTimeout(() => setTrainingTypeSaved(false), 2000)
                     }}
-                      style={{ background: trainingTypeSaved ? t.green : t.tealDim, border:'1px solid '+(trainingTypeSaved ? t.green : t.teal)+'40', borderRadius:9, padding:'9px 16px', fontSize:12, fontWeight:700, color: trainingTypeSaved ? '#000' : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, transition:'background .3s' }}>
-                      {trainingTypeSaved ? '✓ Saved!' : 'Save'}
+                      disabled={trainingTypeSaving}
+                      style={{ background: trainingTypeSaved ? t.green : t.tealDim, border:'1px solid '+(trainingTypeSaved ? t.green : t.teal)+'40', borderRadius:9, padding:'9px 16px', fontSize:12, fontWeight:700, color: trainingTypeSaved ? '#000' : t.teal, cursor:trainingTypeSaving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, transition:'background .3s', opacity: trainingTypeSaving ? 0.6 : 1 }}>
+                      {trainingTypeSaving ? 'Saving...' : trainingTypeSaved ? '✓ Saved!' : 'Save'}
                     </button>
                   </div>
                 </div>
@@ -3460,6 +3465,12 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
   const [schedFreq,    setSchedFreq]    = useState('weekly')
   const [schedNote,    setSchedNote]    = useState('')
   const [scheduling,   setScheduling]   = useState(false)
+  // Pending-delete state for schedule + assignment. Forces an explicit
+  // confirm before removing recurring check-ins or assigned forms.
+  const [pendingDeleteSchedule,   setPendingDeleteSchedule]   = useState<{ id: string; title: string } | null>(null)
+  const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<{ id: string; title: string } | null>(null)
+  const [deletingSchedule,        setDeletingSchedule]        = useState(false)
+  const [deletingAssignment,      setDeletingAssignment]      = useState(false)
 
   const checkinForms = forms.filter((f: any) => f.form_type === 'check_in' || f.is_checkin_type)
 
@@ -3490,16 +3501,24 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
     setSchedFormId(''); setSchedFreq('weekly'); setSchedNote('')
   }
 
-  const deleteSchedule = async (id: string) => {
-    const { error } = await supabase.from('check_in_schedules').delete().eq('id', id)
+  const confirmDeleteSchedule = async () => {
+    if (!pendingDeleteSchedule) return
+    setDeletingSchedule(true)
+    const { error } = await supabase.from('check_in_schedules').delete().eq('id', pendingDeleteSchedule.id)
+    setDeletingSchedule(false)
     if (error) { alert('Could not delete schedule: ' + error.message); return }
-    setSchedules(p => p.filter(s => s.id !== id))
+    setSchedules(p => p.filter(s => s.id !== pendingDeleteSchedule.id))
+    setPendingDeleteSchedule(null)
   }
 
-  const deleteAssignment = async (id: string) => {
-    const { error } = await supabase.from('client_form_assignments').delete().eq('id', id)
+  const confirmDeleteAssignment = async () => {
+    if (!pendingDeleteAssignment) return
+    setDeletingAssignment(true)
+    const { error } = await supabase.from('client_form_assignments').delete().eq('id', pendingDeleteAssignment.id)
+    setDeletingAssignment(false)
     if (error) { alert('Could not delete assignment: ' + error.message); return }
-    setAssignments(p => p.filter(a => a.id !== id))
+    setAssignments(p => p.filter(a => a.id !== pendingDeleteAssignment.id))
+    setPendingDeleteAssignment(null)
   }
 
   const sty = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const, boxSizing:'border-box' as const, appearance:'none' as const }
@@ -3540,7 +3559,7 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:2, textTransform:'capitalize' }}>{s.frequency} · {s.active ? 'Active' : 'Paused'}</div>
                   {s.note && <div style={{ fontSize:11, color:t.textDim, marginTop:2, fontStyle:'italic' }}>"{s.note}"</div>}
                 </div>
-                <button onClick={()=>deleteSchedule(s.id)} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
+                <button onClick={()=>setPendingDeleteSchedule({ id: s.id, title: s.form?.title || 'this check-in' })} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
               </div>
             ))}
           </div>
@@ -3607,10 +3626,60 @@ function FormsTab({ clientId, coachId, forms, onAssign, supabase, router, t }: a
               </div>
               {a.note && <div style={{ fontSize:11, color:t.textDim, fontStyle:'italic' }}>"{a.note}"</div>}
             </div>
-            <button onClick={()=>deleteAssignment(a.id)} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
+            <button onClick={()=>setPendingDeleteAssignment({ id: a.id, title: a.form?.title || 'this assignment' })} style={{ background:t.redDim, border:'1px solid '+alpha(t.red, 19), borderRadius:7, padding:'5px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
           </div>
         ))}
       </div>
+
+      {/* Delete check-in schedule confirm. Stops future automated check-ins. */}
+      {pendingDeleteSchedule && (
+        <>
+          <div onClick={()=>{ if (!deletingSchedule) setPendingDeleteSchedule(null) }}
+            style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:200,backdropFilter:'blur(4px)'}}/>
+          <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:440,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:201,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 32px'}}>
+            <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 18px'}}/>
+            <div style={{fontSize:17,fontWeight:800,color:t.text,marginBottom:8}}>Remove this check-in schedule?</div>
+            <div style={{fontSize:13,color:t.textMuted,marginBottom:18,lineHeight:1.5}}>
+              <strong style={{color:t.text}}>{pendingDeleteSchedule.title}</strong> will stop being sent automatically. Past submissions stay in the client&apos;s history.
+            </div>
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button onClick={()=>setPendingDeleteSchedule(null)} disabled={deletingSchedule}
+                style={{background:'transparent',border:'1px solid '+t.border,borderRadius:10,padding:'10px 18px',fontSize:13,fontWeight:700,color:t.textDim,cursor:deletingSchedule?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                Cancel
+              </button>
+              <button onClick={confirmDeleteSchedule} disabled={deletingSchedule}
+                style={{background:deletingSchedule?t.surfaceHigh:'linear-gradient(135deg,'+t.red+','+t.red+'cc)',border:'none',borderRadius:10,padding:'10px 20px',fontSize:13,fontWeight:800,color:deletingSchedule?t.textMuted:'#fff',cursor:deletingSchedule?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                {deletingSchedule ? 'Removing...' : 'Remove schedule'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Delete form assignment confirm. */}
+      {pendingDeleteAssignment && (
+        <>
+          <div onClick={()=>{ if (!deletingAssignment) setPendingDeleteAssignment(null) }}
+            style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:200,backdropFilter:'blur(4px)'}}/>
+          <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:440,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:201,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 32px'}}>
+            <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 18px'}}/>
+            <div style={{fontSize:17,fontWeight:800,color:t.text,marginBottom:8}}>Remove this form assignment?</div>
+            <div style={{fontSize:13,color:t.textMuted,marginBottom:18,lineHeight:1.5}}>
+              <strong style={{color:t.text}}>{pendingDeleteAssignment.title}</strong> will be removed. If the client already completed it, their submission goes with it.
+            </div>
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button onClick={()=>setPendingDeleteAssignment(null)} disabled={deletingAssignment}
+                style={{background:'transparent',border:'1px solid '+t.border,borderRadius:10,padding:'10px 18px',fontSize:13,fontWeight:700,color:t.textDim,cursor:deletingAssignment?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                Cancel
+              </button>
+              <button onClick={confirmDeleteAssignment} disabled={deletingAssignment}
+                style={{background:deletingAssignment?t.surfaceHigh:'linear-gradient(135deg,'+t.red+','+t.red+'cc)',border:'none',borderRadius:10,padding:'10px 20px',fontSize:13,fontWeight:800,color:deletingAssignment?t.textMuted:'#fff',cursor:deletingAssignment?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                {deletingAssignment ? 'Removing...' : 'Remove assignment'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

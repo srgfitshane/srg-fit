@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -55,6 +56,10 @@ export default function ExerciseLibrary() {
   const [uploading, setUploading]   = useState<string|null>(null)
   const [saving,    setSaving]      = useState(false)
   const [newEx,     setNewEx]       = useState({...blank})
+  // Delete-exercise confirmation. Replaces the old browser confirm()
+  // with a styled bottom-sheet matching the rest of the app.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
+  const [deleting,       setDeleting]       = useState(false)
   const router   = useRouter()
   const supabase = createClient()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -162,10 +167,18 @@ export default function ExerciseLibrary() {
     }
   }
 
-  const deleteExercise = async (id: string) => {
-    if (!confirm('Delete this exercise? This cannot be undone.')) return
-    await supabase.from('exercises').delete().eq('id', id)
-    setExercises(p => p.filter(e => e.id !== id))
+  const confirmDeleteExercise = async () => {
+    if (!pendingDelete) return
+    setDeleting(true)
+    const { error } = await supabase.from('exercises').delete().eq('id', pendingDelete.id)
+    if (error) {
+      setDeleting(false)
+      toastError('Could not delete exercise: ' + error.message)
+      return
+    }
+    setExercises(p => p.filter(e => e.id !== pendingDelete.id))
+    setDeleting(false)
+    setPendingDelete(null)
   }
 
   const duplicateExercise = async (ex: any) => {
@@ -224,7 +237,7 @@ export default function ExerciseLibrary() {
 
         {/* Top bar */}
         <div style={{background:t.surface,borderBottom:'1px solid '+t.border,padding:'0 24px',display:'flex',alignItems:'center',height:60,gap:12}}>
-          <button onClick={()=>router.back()} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
+          <button onClick={()=>router.push('/dashboard/coach')} style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
           <div style={{width:1,height:28,background:t.border}}/>
           <div style={{fontSize:14,fontWeight:800}}>Exercise Library</div>
           <div style={{fontSize:12,color:t.textMuted}}>
@@ -291,7 +304,7 @@ export default function ExerciseLibrary() {
                   onSave={(changes:any)=>saveEdit(ex.id,changes)}
                   onUpload={(f:File)=>quickUpload(ex.id,f,'video_url')}
                   onUploadFemale={(f:File)=>quickUpload(ex.id,f,'video_url_female')}
-                  onDelete={()=>deleteExercise(ex.id)}
+                  onDelete={()=>setPendingDelete({ id: ex.id, name: ex.name })}
                   onDuplicate={()=>duplicateExercise(ex)}
                   saving={saving} t={t}/>
               ))}
@@ -443,6 +456,31 @@ export default function ExerciseLibrary() {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Delete-exercise confirm modal. Replaces browser confirm(). */}
+        {pendingDelete && (
+          <>
+            <div onClick={()=>{ if (!deleting) setPendingDelete(null) }}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:440,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 32px'}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 18px'}}/>
+              <div style={{fontSize:17,fontWeight:800,color:t.text,marginBottom:8}}>Delete this exercise?</div>
+              <div style={{fontSize:13,color:t.textMuted,marginBottom:18,lineHeight:1.5}}>
+                <strong style={{color:t.text}}>{pendingDelete.name}</strong> will be removed from your library. Any assigned workouts already using it keep their record but won&apos;t resolve a thumbnail. This can&apos;t be undone.
+              </div>
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                <button onClick={()=>setPendingDelete(null)} disabled={deleting}
+                  style={{background:'transparent',border:'1px solid '+t.border,borderRadius:10,padding:'10px 18px',fontSize:13,fontWeight:700,color:t.textDim,cursor:deleting?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancel
+                </button>
+                <button onClick={confirmDeleteExercise} disabled={deleting}
+                  style={{background:deleting?t.surfaceHigh:'linear-gradient(135deg,'+t.red+','+t.red+'cc)',border:'none',borderRadius:10,padding:'10px 20px',fontSize:13,fontWeight:800,color:deleting?t.textMuted:'#fff',cursor:deleting?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  {deleting ? 'Deleting...' : 'Delete exercise'}
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
       </div>

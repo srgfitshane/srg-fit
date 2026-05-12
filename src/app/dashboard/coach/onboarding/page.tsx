@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -81,6 +82,9 @@ function FormsBuilderInner() {
   const [filterType, setFilterType] = useState<string>('all')
   const [creating, setCreating] = useState(false)
   const [newFormType, setNewFormType] = useState<string>('')
+  // Delete-question confirmation. Affects every form using this question.
+  const [pendingDeleteQ, setPendingDeleteQ] = useState<{ id: string; label: string } | null>(null)
+  const [deletingQ,       setDeletingQ]       = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -148,11 +152,20 @@ function FormsBuilderInner() {
   }
 
   const deleteForm = async (formId: string) => {
-    await supabase.from('onboarding_forms').delete().eq('id', formId)
+    const { error } = await supabase.from('onboarding_forms').delete().eq('id', formId)
+    if (error) {
+      toastError('Could not delete form: ' + error.message)
+      return
+    }
     const remaining = forms.filter(f => f.id !== formId)
     setForms(remaining)
-    if (remaining.length > 0) loadForm(remaining[0])
-    else { setActiveForm(null); setQuestions([]) }
+    if (remaining.length > 0) {
+      loadForm(remaining[0])
+    } else {
+      // No forms left — bounce to coach dashboard instead of leaving
+      // the coach stuck on an empty editor with no nav path.
+      router.push('/dashboard/coach')
+    }
   }
 
   const addQuestion = async (type: string) => {
@@ -173,9 +186,18 @@ function FormsBuilderInner() {
     setEditingQ(null)
   }
 
-  const deleteQuestion = async (id: string) => {
-    await supabase.from('onboarding_questions').delete().eq('id', id)
-    setQuestions(p => p.filter(q => q.id !== id))
+  const confirmDeleteQuestion = async () => {
+    if (!pendingDeleteQ) return
+    setDeletingQ(true)
+    const { error } = await supabase.from('onboarding_questions').delete().eq('id', pendingDeleteQ.id)
+    if (error) {
+      setDeletingQ(false)
+      toastError('Could not delete question: ' + error.message)
+      return
+    }
+    setQuestions(p => p.filter(q => q.id !== pendingDeleteQ.id))
+    setDeletingQ(false)
+    setPendingDeleteQ(null)
   }
 
   const moveQuestion = async (id: string, dir: -1|1) => {
@@ -381,7 +403,7 @@ function FormsBuilderInner() {
                         <button onClick={()=>moveQuestion(q.id,-1)} disabled={idx===0} style={{ background:'none', border:'none', color:idx===0?t.textMuted:t.textDim, cursor:idx===0?'not-allowed':'pointer', fontSize:14 }}>↑</button>
                         <button onClick={()=>moveQuestion(q.id,1)} disabled={idx===questions.length-1} style={{ background:'none', border:'none', color:idx===questions.length-1?t.textMuted:t.textDim, cursor:idx===questions.length-1?'not-allowed':'pointer', fontSize:14 }}>↓</button>
                         <button onClick={()=>setEditingQ(editingQ?.id===q.id?null:q)} style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:6, padding:'4px 10px', fontSize:11, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>{editingQ?.id===q.id?'Done':'Edit'}</button>
-                        <button onClick={()=>deleteQuestion(q.id)} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:6, padding:'4px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
+                        <button onClick={()=>setPendingDeleteQ({ id: q.id, label: q.label })} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:6, padding:'4px 8px', fontSize:11, color:t.red, cursor:'pointer' }}>✕</button>
                       </div>
                     </div>
                     {editingQ?.id === q.id && (
@@ -413,6 +435,31 @@ function FormsBuilderInner() {
             </div>
           )}
         </div>
+
+        {/* Delete-question confirm modal. Affects every form using it. */}
+        {pendingDeleteQ && (
+          <>
+            <div onClick={()=>{ if (!deletingQ) setPendingDeleteQ(null) }}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:440,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 32px'}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 18px'}}/>
+              <div style={{fontSize:17,fontWeight:800,color:t.text,marginBottom:8}}>Delete this question?</div>
+              <div style={{fontSize:13,color:t.textMuted,marginBottom:18,lineHeight:1.5}}>
+                <strong style={{color:t.text}}>{pendingDeleteQ.label}</strong> will be removed from this form. This can&apos;t be undone.
+              </div>
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                <button onClick={()=>setPendingDeleteQ(null)} disabled={deletingQ}
+                  style={{background:'transparent',border:'1px solid '+t.border,borderRadius:10,padding:'10px 18px',fontSize:13,fontWeight:700,color:t.textDim,cursor:deletingQ?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancel
+                </button>
+                <button onClick={confirmDeleteQuestion} disabled={deletingQ}
+                  style={{background:deletingQ?t.surfaceHigh:'linear-gradient(135deg,'+t.red+','+t.red+'cc)',border:'none',borderRadius:10,padding:'10px 20px',fontSize:13,fontWeight:800,color:deletingQ?t.textMuted:'#fff',cursor:deletingQ?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  {deletingQ ? 'Deleting...' : 'Delete question'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   )

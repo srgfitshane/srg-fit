@@ -60,8 +60,10 @@ function MessagesInner() {
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const init = async () => {
+  // Refetch client list + unread counts. Fired on mount AND on tab visibility
+  // (the coach goes to a thread, swaps apps for 10 min, comes back — without
+  // this the unread/preview shown in the sidebar is stale).
+  const refreshClients = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCoachId(user.id)
@@ -152,7 +154,23 @@ function MessagesInner() {
       }
       setLoading(false)
     }
-    init()
+
+  useEffect(() => {
+    refreshClients()
+    // Visibility refetch — when the coach returns to the tab after >15s,
+    // re-pull the client list so unread counts and last-message previews
+    // reflect anything that happened while they were away.
+    let lastRefreshAt = 0
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRefreshAt < 15_000) return
+      lastRefreshAt = now
+      refreshClients()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Realtime subscription ─────────────────────────────────────────────────

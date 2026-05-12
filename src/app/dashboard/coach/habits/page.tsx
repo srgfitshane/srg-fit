@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { toastError, toastSuccess } from '@/components/ui/Toast'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -47,6 +48,12 @@ export default function CoachHabits() {
   const [fCategory, setFCategory] = useState('fitness')
   const [fDesc,     setFDesc]     = useState('')
 
+  // Delete-habit confirmation. Habit row's ✕ used to fire deleteHabit
+  // immediately, which silently nuked every habit log for that habit
+  // (cascade). Modal forces a tap on Confirm before anything is gone.
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string } | null>(null)
+  const [deleting,       setDeleting]       = useState(false)
+
   const router   = useRouter()
   const supabase = createClient()
 
@@ -74,12 +81,20 @@ export default function CoachHabits() {
   const saveHabit = async () => {
     if (!selClient || !fLabel) return
     setSaving(true)
-    await supabase.from('habits').insert({
+    // Rule 14: check error. Previously this closed the form modal
+    // regardless of insert success, so a failed insert (RLS, network)
+    // looked like a successful save.
+    const { error } = await supabase.from('habits').insert({
       coach_id: coachId, client_id: selClient, label: fLabel, icon: fIcon,
       habit_type: fTarget ? 'number' : 'check',
       unit: fUnit || null, target: fTarget ? +fTarget : null, color: fColor,
       category: fCategory, description: fDesc || null, active: true, frequency: 'daily',
     })
+    if (error) {
+      setSaving(false)
+      toastError('Could not save habit: ' + error.message)
+      return
+    }
     await loadHabits(selClient)
     setSaving(false)
     setShowForm(false)
@@ -91,9 +106,18 @@ export default function CoachHabits() {
     setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, active: !h.active } : h))
   }
 
-  const deleteHabit = async (id: string) => {
-    await supabase.from('habits').delete().eq('id', id)
-    setHabits(prev => prev.filter(h => h.id !== id))
+  const confirmDeleteHabit = async () => {
+    if (!pendingDelete) return
+    setDeleting(true)
+    const { error } = await supabase.from('habits').delete().eq('id', pendingDelete.id)
+    if (error) {
+      setDeleting(false)
+      toastError('Could not delete habit: ' + error.message)
+      return
+    }
+    setHabits(prev => prev.filter(h => h.id !== pendingDelete.id))
+    setDeleting(false)
+    setPendingDelete(null)
   }
 
   const moveHabit = async (id: string, dir: -1|1) => {
@@ -184,7 +208,7 @@ export default function CoachHabits() {
                     style={{ background:h.active?t.greenDim:t.surfaceHigh, border:'1px solid '+(h.active?t.green+'40':t.border), borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:h.active?t.green:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     {h.active ? '✓ Active' : 'Paused'}
                   </button>
-                  <button onClick={()=>deleteHabit(h.id)}
+                  <button onClick={()=>setPendingDelete({ id: h.id, label: h.label })}
                     style={{ background:t.redDim, border:'1px solid '+t.red+'30', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                     ✕
                   </button>
@@ -291,6 +315,32 @@ export default function CoachHabits() {
             )}
           </div>
         </div>
+
+        {/* Delete habit confirm modal — destructive: removes habit row
+            AND cascades to every habit_log for it. */}
+        {pendingDelete && (
+          <>
+            <div onClick={()=>{ if (!deleting) setPendingDelete(null) }}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:440,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 32px'}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 18px'}}/>
+              <div style={{fontSize:17,fontWeight:800,color:t.text,marginBottom:8}}>Delete this habit?</div>
+              <div style={{fontSize:13,color:t.textMuted,marginBottom:18,lineHeight:1.5}}>
+                <strong style={{color:t.text}}>{pendingDelete.label}</strong> will be permanently removed, along with every log this client has for it. This can&apos;t be undone.
+              </div>
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                <button onClick={()=>setPendingDelete(null)} disabled={deleting}
+                  style={{background:'transparent',border:'1px solid '+t.border,borderRadius:10,padding:'10px 18px',fontSize:13,fontWeight:700,color:t.textDim,cursor:deleting?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancel
+                </button>
+                <button onClick={confirmDeleteHabit} disabled={deleting}
+                  style={{background:deleting?t.surfaceHigh:'linear-gradient(135deg,'+t.red+','+t.red+'cc)',border:'none',borderRadius:10,padding:'10px 20px',fontSize:13,fontWeight:800,color:deleting?t.textMuted:'#fff',cursor:deleting?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  {deleting ? 'Deleting...' : 'Delete habit'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   )

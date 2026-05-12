@@ -492,7 +492,10 @@ export default function ReviewsPage() {
         <div style={{ background:t.bg, minHeight:'100vh', fontFamily:"'DM Sans',sans-serif", color:t.text, maxWidth:680, margin:'0 auto', padding:'20px 16px 100px' }}>
 
           <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
-            <button onClick={()=>{setSelected(null);setReviewVideoUrl('')}} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:22 }}>←</button>
+            {/* Back arrow goes straight to dashboard. The previous behavior
+                (close detail → require second back to leave Reviews) hit the
+                same 2-tap-exit pattern the messages thread had. */}
+            <button onClick={()=>router.push('/dashboard/coach')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:22 }}>←</button>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:18, fontWeight:900 }}>{selected.title}</div>
               <div style={{ fontSize:12, color:t.textMuted }}>{selected.client?.full_name} · {new Date(selected.completed_at).toLocaleDateString()}</div>

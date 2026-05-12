@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { toastError } from '@/components/ui/Toast'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -243,19 +244,35 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
     setLoading(false)
   }
 
+  // Rule 14: each mutation checks error and only mutates UI state on
+  // success. Previously these used optimistic delete/reschedule that
+  // would leave the list out of sync with the DB if Supabase rejected
+  // the operation (e.g. RLS, network blip).
   const deleteSession = async (id: string) => {
-    await supabase.from('workout_sessions').delete().eq('id', id)
+    const { error } = await supabase.from('workout_sessions').delete().eq('id', id)
+    if (error) {
+      toastError('Could not delete session: ' + error.message)
+      return
+    }
     setSessions(p => p.filter(s => s.id !== id))
     setDelConfirm(null)
   }
   const deleteEvent = async (id: string) => {
-    await supabase.from('calendar_events').delete().eq('id', id)
+    const { error } = await supabase.from('calendar_events').delete().eq('id', id)
+    if (error) {
+      toastError('Could not delete event: ' + error.message)
+      return
+    }
     setCalEvents(p => p.filter(e => e.id !== id))
     setDelConfirm(null)
   }
   const rescheduleSession = async () => {
     if (!reschedDate || !delConfirm?.id) return
-    await supabase.from('workout_sessions').update({ scheduled_date: reschedDate }).eq('id', delConfirm.id)
+    const { error } = await supabase.from('workout_sessions').update({ scheduled_date: reschedDate }).eq('id', delConfirm.id)
+    if (error) {
+      toastError('Could not reschedule: ' + error.message)
+      return
+    }
     setSessions(p => p.map(s => s.id === delConfirm.id ? { ...s, scheduled_date: reschedDate } : s))
     setDelConfirm(null)
     setReschedDate('')

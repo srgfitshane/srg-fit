@@ -450,7 +450,7 @@ export default function ProgramBuilder() {
   const addOpenSlot = async (blockId: string, constraint: string, role: string) => {
     const block = blocks.find(b => b.id === blockId)
     const exCount = (block?.block_exercises || []).length
-    const { data: newEx } = await supabase.from('block_exercises').insert({
+    const { data: newEx, error } = await supabase.from('block_exercises').insert({
       block_id: blockId,
       exercise_id: null,
       is_open_slot: true,
@@ -465,7 +465,14 @@ export default function ProgramBuilder() {
       rest_seconds: 90,
       order_index: exCount,
     }).select('*').single()
-    if (newEx) setBlocks(prev => prev.map(b => b.id === blockId
+    // Rule 14: only close the modal if the insert actually landed.
+    // Previously this closed the modal regardless, so a failed insert
+    // (RLS, network) looked exactly like a successful one.
+    if (error || !newEx) {
+      alert('Could not add open slot: ' + (error?.message || 'unknown error'))
+      return
+    }
+    setBlocks(prev => prev.map(b => b.id === blockId
       ? { ...b, block_exercises: [...(b.block_exercises||[]), { ...newEx, exercise: null }] }
       : b
     ))
