@@ -420,6 +420,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     })()
   ))
   const [activitySaving, setActivitySaving] = useState(false)
+  // PR share confirmation — Share pill on a PR row opens this modal
+  // (rather than auto-posting) so an accidental tap can be canceled
+  // and the message can be edited before it hits the community feed.
+  const [sharePR,        setSharePR]        = useState<PersonalRecordSummary | null>(null)
+  const [sharePRText,    setSharePRText]    = useState('')
+  const [sharePRSaving,  setSharePRSaving]  = useState(false)
   // Habit daily refresh tracking
   const [habitLoadDate, setHabitLoadDate] = useState('')
   // Morning Pulse check-in
@@ -927,26 +933,52 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     setSuggestGoalSaving(false)
   }
 
-  const sharePRToCommunity = async (pr: PersonalRecordSummary) => {
-    if (!clientRecord || pr.shared_to_community || !profile || !coachProfileId) return
+  // Build the default post text for a PR. Pulled out so the share
+  // modal can prefill the textarea AND tooltips/copy can reuse it.
+  const buildPRShareText = (pr: PersonalRecordSummary) => {
     const name = pr.exercise?.name || 'an exercise'
     const isRepPR = pr.pr_type === 'rep'
-    const body = isRepPR
+    return isRepPR
       ? `💪 Rep PR! Hit ${pr.rep_pr_weight} lbs x ${pr.rep_pr_reps} reps on ${name}!`
       : `🏆 New PR! Just lifted ${pr.weight_pr} lbs${pr.rep_count ? ` x ${pr.rep_count} reps` : ''} on ${name}!`
-    const { data: post } = await supabase.from('community_posts').insert({
+  }
+
+  // Open the share-PR modal with the default text prefilled. Adds an
+  // explicit confirmation step so a stray tap on the Share pill no
+  // longer fires a community post by accident — coach was getting
+  // surprise PR brags. The modal lets the client edit the message
+  // (add a "couldn't have done it without Shane" line, etc.) or back
+  // out entirely before the post lands.
+  const openSharePRModal = (pr: PersonalRecordSummary) => {
+    if (!clientRecord || pr.shared_to_community || !profile || !coachProfileId) return
+    setSharePR(pr)
+    setSharePRText(buildPRShareText(pr))
+  }
+
+  const confirmSharePR = async () => {
+    if (!sharePR || !clientRecord || !profile || !coachProfileId) return
+    const trimmed = sharePRText.trim()
+    if (!trimmed) return
+    setSharePRSaving(true)
+    const { data: post, error: postErr } = await supabase.from('community_posts').insert({
       author_id: profile.id,
       author_role: 'client',
       coach_id: coachProfileId,
-      body,
+      body: trimmed,
     }).select('id').single()
-    if (post?.id) {
-      await supabase.from('personal_records').update({
-        shared_to_community: true,
-        community_post_id: post.id,
-      }).eq('id', pr.id)
-      setRecentPRs(prev => prev.map(p => p.id === pr.id ? { ...p, shared_to_community: true } : p))
+    if (postErr || !post?.id) {
+      setSharePRSaving(false)
+      alert('Could not share PR: ' + (postErr?.message || 'unknown error'))
+      return
     }
+    await supabase.from('personal_records').update({
+      shared_to_community: true,
+      community_post_id: post.id,
+    }).eq('id', sharePR.id)
+    setRecentPRs(prev => prev.map(p => p.id === sharePR.id ? { ...p, shared_to_community: true } : p))
+    setSharePRSaving(false)
+    setSharePR(null)
+    setSharePRText('')
   }
 
   const dismissMilestone = async (id: string) => {
@@ -1302,7 +1334,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                     </div>
                     {pr.shared_to_community
                       ? <div style={{ fontSize:10, color:t.textMuted, fontWeight:600 }}>Shared ✓</div>
-                      : <button onClick={()=>sharePRToCommunity(pr)}
+                      : <button onClick={()=>openSharePRModal(pr)}
                           style={{ fontSize:10, fontWeight:700, color:t.teal, background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:6, padding:'3px 8px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
                           Share 🏆
                         </button>
@@ -1967,6 +1999,47 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 {isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 ? 'Add ✓' : 'Save ✓'}
               </button>
+            </div>
+          </>
+        )}
+
+        {/* Share PR Modal — confirmation + editable message before
+            anything lands in the community feed. */}
+        {sharePR && (
+          <>
+            <div onClick={()=>{ if (!sharePRSaving) { setSharePR(null); setSharePRText('') } }}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 36px'}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 18px'}}/>
+
+              <div style={{fontSize:17,fontWeight:800,color:t.text,marginBottom:6}}>Share this PR? 🏆</div>
+              <div style={{fontSize:13,color:t.textMuted,marginBottom:16,lineHeight:1.5}}>
+                Edit the post if you want, or post as-is. This will show up in the community feed for everyone to celebrate with you.
+              </div>
+
+              <textarea
+                value={sharePRText}
+                onChange={e => setSharePRText(e.target.value)}
+                disabled={sharePRSaving}
+                rows={4}
+                placeholder="Add a message..."
+                style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'11px 13px',color:t.text,fontSize:14,fontFamily:"'DM Sans',sans-serif",resize:'vertical',outline:'none',lineHeight:1.5,boxSizing:'border-box' as const,marginBottom:14}}
+              />
+
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+                <button
+                  onClick={()=>{ setSharePR(null); setSharePRText('') }}
+                  disabled={sharePRSaving}
+                  style={{background:'transparent',border:'1px solid '+t.border,borderRadius:10,padding:'10px 18px',fontSize:13,fontWeight:700,color:t.textDim,cursor:sharePRSaving?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmSharePR}
+                  disabled={sharePRSaving || !sharePRText.trim()}
+                  style={{background:sharePRSaving||!sharePRText.trim()?t.surfaceHigh:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80)+')',border:'none',borderRadius:10,padding:'10px 20px',fontSize:13,fontWeight:800,color:sharePRSaving||!sharePRText.trim()?t.textMuted:'#000',cursor:sharePRSaving||!sharePRText.trim()?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  {sharePRSaving ? 'Posting...' : 'Post to community 🏆'}
+                </button>
+              </div>
             </div>
           </>
         )}
