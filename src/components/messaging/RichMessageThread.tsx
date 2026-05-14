@@ -75,9 +75,17 @@ interface Props {
   recipientRole?: 'coach' | 'client'
 
   quickReplies?: Array<{ id: string; title: string; body: string }>
+
+  // Versioned seed-draft pushed by a parent (e.g. AI assistant in the
+  // coach messages sidebar). When the parent wants to drop suggested
+  // text into the input, it sets seedDraft to a new object with a
+  // monotonically-increasing id; this component overwrites its local
+  // draft state in response. The id is what makes repeated seeds of
+  // the same text trigger a fresh effect run.
+  seedDraft?: { id: number; text: string } | null
 }
 
-export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [], recipientRole = 'client' }: Props) {
+export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [], recipientRole = 'client', seedDraft }: Props) {
   const supabase = useMemo(() => createClient(), [])
 
   // Fire-and-forget push notification to the recipient
@@ -170,6 +178,22 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     }, 600)
     return () => window.clearTimeout(h)
   }, [draft, draftKey])
+
+  // Seed-draft from parent (AI assistant). Each new id replaces the
+  // local draft so the coach can edit before sending. We deliberately
+  // replace rather than append -- the AI gave a complete reply, not
+  // a fragment, and "edit then send" beats "append + delete the old
+  // text first".
+  useEffect(() => {
+    if (seedDraft && typeof seedDraft.text === 'string') {
+      setDraft(seedDraft.text)
+      // Focus + scroll the textarea so the coach lands on the cursor.
+      setTimeout(() => {
+        const el = inputRef.current
+        if (el) { el.focus(); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }
+      }, 50)
+    }
+  }, [seedDraft])
   const [mode,         setMode]         = useState<'text'|'audio'|'video'|'gif'|'exercise'|'resource'>('text')
 
   const [recording,    setRecording]    = useState(false)

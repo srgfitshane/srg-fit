@@ -59,6 +59,25 @@ function MessagesInner() {
   const [macroTitle, setMacroTitle] = useState('')
   const [macroBody, setMacroBody] = useState('')
   const [savingMacro, setSavingMacro] = useState(false)
+  const [showMacroEditor, setShowMacroEditor] = useState(false)
+  const [showContextDetails, setShowContextDetails] = useState(false)
+
+  // AI Assistant state. Replaces the static "Coach Context" sidebar with
+  // an on-demand reply-drafting flow. The panel itself collapses to a
+  // narrow strip so the thread can have the full width when not in use.
+  const [panelOpen, setPanelOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    try { return window.localStorage.getItem('coach_msg_panel_open') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('coach_msg_panel_open', panelOpen ? '1' : '0') } catch {}
+  }, [panelOpen])
+  const [aiDrafts, setAiDrafts] = useState<Array<{ label: string; body: string }> | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  // Versioned seed -- bumping the id is what triggers RichMessageThread
+  // to overwrite its local draft with the chosen suggestion.
+  const [seedDraft, setSeedDraft] = useState<{ id: number; text: string } | null>(null)
   const [filter, setFilter] = useState<'all'|'priority'|'unread'|'stale'>('all')
   const [showBroadcast, setShowBroadcast] = useState(false)
   const [broadcastText, setBroadcastText] = useState('')
@@ -225,9 +244,59 @@ function MessagesInner() {
     const profileId = client.profile?.id
     if (!profileId) return
 
+    // Reset AI draft state -- suggestions from the prior conversation
+    // shouldn't bleed into this one.
+    setAiDrafts(null)
+    setAiError(null)
     markRead(cid, profileId)
     setUnread(prev => { const n = { ...prev }; delete n[profileId]; return n })
     loadClientContext(cid, profileId)
+  }
+
+  // ── AI Assistant: suggest a reply ──────────────────────────────────────────
+  // Pulls last 10 messages in this thread + sends to the server route which
+  // injects deterministic client context (workouts, pulse, weight, goal).
+  // Returns 2-3 short draft replies for the coach to review and choose from.
+  const suggestReplies = async () => {
+    if (!coachId || !activeClient?.id || !activeClient.profile?.id) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const profileId = activeClient.profile.id
+      const { data: recent } = await supabase
+        .from('messages')
+        .select('body, sender_id, created_at, message_type')
+        .or(`and(sender_id.eq.${coachId},recipient_id.eq.${profileId}),and(sender_id.eq.${profileId},recipient_id.eq.${coachId})`)
+        .order('created_at', { ascending: false })
+        .limit(12)
+      const ordered = (recent || []).reverse().filter((m: any) => m.body && (!m.message_type || m.message_type === 'text'))
+      const recentMessages = ordered.map((m: any) => ({
+        from: m.sender_id === coachId ? 'coach' : 'client',
+        body: m.body,
+      }))
+      const res = await fetch('/api/ai-message-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: activeClient.id, recentMessages, coachName }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setAiError(json.error || 'Could not generate drafts')
+        setAiLoading(false)
+        return
+      }
+      setAiDrafts(json.drafts || [])
+    } catch (err: any) {
+      setAiError(err?.message || 'Network error')
+    }
+    setAiLoading(false)
+  }
+
+  const useDraft = (text: string) => {
+    setSeedDraft({ id: Date.now(), text })
+    // Keep the panel state, but clear the drafts after use so the
+    // coach has a clean slate next time -- they can hit Suggest again.
+    setAiDrafts(null)
   }
 
   const loadClientContext = async (currentCoachId: string, profileId: string) => {
@@ -507,7 +576,7 @@ function MessagesInner() {
               </button>
             </div>
 
-            <div className="msg-detail-grid">
+            <div className="msg-detail-grid" style={panelOpen ? undefined : { gridTemplateColumns: '1fr 44px' }}>
               <div style={{ minWidth:0, minHeight:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
                 {coachId && activeClient.profile?.id && (
                   <RichMessageThread
@@ -518,101 +587,195 @@ function MessagesInner() {
                     otherAvatar={activeClient.profile.avatar_url}
                     height="100%"
                     quickReplies={macros}
+                    seedDraft={seedDraft}
                   />
                 )}
               </div>
+              {!panelOpen ? (
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:14, gap:10, borderLeft:'1px solid '+t.border, background:t.surface }}>
+                  <button onClick={()=>setPanelOpen(true)} aria-label="Open AI assistant panel"
+                    title="Open AI assistant"
+                    style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:10, width:32, height:32, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:t.teal, fontSize:16 }}>
+                    ✨
+                  </button>
+                </div>
+              ) : (
               <div className="msg-context-panel">
-                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Coach Context</div>
-                {clientContext?.tags?.length > 0 && (
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:14 }}>
-                    {clientContext.tags.map((tag: string) => (
-                      <span key={tag} style={{ padding:'4px 8px', borderRadius:999, background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700 }}>
-                        {tag}
-                      </span>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>✨ AI Assistant</div>
+                  <button onClick={()=>setPanelOpen(false)} aria-label="Collapse panel" title="Collapse"
+                    style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:14, padding:'2px 6px', lineHeight:1 }}>×</button>
+                </div>
+
+                {/* AI Suggest replies -- primary action */}
+                <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 12px', marginBottom:14 }}>
+                  <button onClick={suggestReplies} disabled={aiLoading}
+                    style={{ width:'100%', background:aiLoading ? t.surfaceUp : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 12px', fontSize:13, fontWeight:800, color:aiLoading ? t.textMuted : '#000', cursor:aiLoading?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                    {aiLoading ? 'Thinking...' : '✨ Suggest a reply'}
+                  </button>
+                  <div style={{ fontSize:10, color:t.textMuted, marginTop:6, lineHeight:1.4 }}>
+                    Reads the last few messages + this client&apos;s recent training, pulse, and weight. You review every draft.
+                  </div>
+
+                  {aiError && (
+                    <div role="alert" style={{ marginTop:10, background:t.red+'1a', border:'1px solid '+t.red+'66', borderRadius:8, padding:'8px 10px', fontSize:11, color:t.red, lineHeight:1.5 }}>
+                      {aiError}
+                    </div>
+                  )}
+
+                  {aiDrafts && aiDrafts.length > 0 && (
+                    <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:8 }}>
+                      {aiDrafts.map((d, i) => (
+                        <div key={i} style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:10, padding:'10px 12px' }}>
+                          <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:5 }}>
+                            {d.label}
+                          </div>
+                          <div style={{ fontSize:12, color:t.text, lineHeight:1.5, marginBottom:8, whiteSpace:'pre-wrap' as const }}>
+                            {d.body}
+                          </div>
+                          <div style={{ display:'flex', gap:6 }}>
+                            <button onClick={()=>useDraft(d.body)}
+                              style={{ flex:1, background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:7, padding:'6px 10px', fontSize:11, fontWeight:800, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              Use this
+                            </button>
+                            <button onClick={()=>{ try { navigator.clipboard.writeText(d.body) } catch {} }}
+                              title="Copy to clipboard"
+                              style={{ background:'none', border:'1px solid '+t.border, borderRadius:7, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <button onClick={suggestReplies} disabled={aiLoading}
+                        style={{ background:'none', border:'1px dashed '+t.border, borderRadius:8, padding:'6px 10px', fontSize:11, fontWeight:700, color:t.textMuted, cursor:aiLoading?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {aiLoading ? 'Thinking...' : '↻ Regenerate'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Saved replies (compact) */}
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                    <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Saved replies</div>
+                    <button onClick={()=>setShowMacroEditor(v=>!v)}
+                      style={{ background:'none', border:'none', color:t.teal, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      {showMacroEditor ? '− Cancel' : '+ New'}
+                    </button>
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:showMacroEditor?10:0 }}>
+                    {macros.length === 0 && <span style={{ fontSize:11, color:t.textMuted }}>No saved replies yet.</span>}
+                    {macros.map((macro) => (
+                      <button key={macro.id} onClick={()=>useDraft(macro.body)}
+                        title={macro.body}
+                        style={{ padding:'4px 10px', borderRadius:999, background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700, border:'1px solid '+t.teal+'30', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {macro.title}
+                      </button>
                     ))}
                   </div>
-                )}
-                <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                  <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'10px 12px' }}>
-                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:8 }}>Saved replies</div>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
-                      {macros.map((macro) => (
-                        <span key={macro.id} style={{ padding:'4px 8px', borderRadius:999, background:t.tealDim, color:t.teal, fontSize:11, fontWeight:700 }}>
-                          {macro.title}
+                  {showMacroEditor && (
+                    <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'10px 10px' }}>
+                      <input
+                        value={macroTitle}
+                        onChange={e=>setMacroTitle(e.target.value)}
+                        placeholder="Macro title"
+                        aria-label="Macro title"
+                        style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', color:t.text, fontSize:12, fontFamily:"'DM Sans',sans-serif", marginBottom:7, boxSizing:'border-box' as const }}
+                      />
+                      <textarea
+                        value={macroBody}
+                        onChange={e=>setMacroBody(e.target.value)}
+                        placeholder="Saved reply text"
+                        aria-label="Macro body"
+                        rows={3}
+                        style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', color:t.text, fontSize:12, resize:'vertical', fontFamily:"'DM Sans',sans-serif", marginBottom:7, boxSizing:'border-box' as const }}
+                      />
+                      <button
+                        onClick={async ()=>{ await saveMacro(); setShowMacroEditor(false) }}
+                        disabled={savingMacro || !macroTitle.trim() || !macroBody.trim()}
+                        style={{ width:'100%', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'7px 10px', fontSize:12, fontWeight:700, color:t.teal, cursor:savingMacro?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:savingMacro ? 0.6 : 1 }}>
+                        {savingMacro ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Client context (collapsed by default -- AI uses this; the
+                    coach can peek if they want to second-guess) */}
+                <div>
+                  <button onClick={()=>setShowContextDetails(v=>!v)}
+                    style={{ width:'100%', background:'none', border:'none', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 0', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    <span style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Client context</span>
+                    <span style={{ fontSize:11, color:t.teal, fontWeight:700 }}>{showContextDetails ? '−' : '+'}</span>
+                  </button>
+                  {clientContext?.tags?.length > 0 && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
+                      {clientContext.tags.map((tag: string) => (
+                        <span key={tag} style={{ padding:'3px 8px', borderRadius:999, background:t.tealDim, color:t.teal, fontSize:10, fontWeight:700 }}>
+                          {tag}
                         </span>
                       ))}
                     </div>
-                    <input
-                      value={macroTitle}
-                      onChange={e=>setMacroTitle(e.target.value)}
-                      placeholder="Macro title"
-                      aria-label="Macro title"
-                      style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', color:t.text, fontSize:12, fontFamily:"'DM Sans',sans-serif", marginBottom:8 }}
-                    />
-                    <textarea
-                      value={macroBody}
-                      onChange={e=>setMacroBody(e.target.value)}
-                      placeholder="Saved reply text"
-                      aria-label="Macro body"
-                      rows={3}
-                      style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:8, padding:'8px 10px', color:t.text, fontSize:12, resize:'vertical', fontFamily:"'DM Sans',sans-serif", marginBottom:8 }}
-                    />
-                    <button
-                      onClick={saveMacro}
-                      disabled={savingMacro || !macroTitle.trim() || !macroBody.trim()}
-                      style={{ width:'100%', background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700, color:t.teal, cursor:savingMacro?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:savingMacro ? 0.6 : 1 }}
-                    >
-                      {savingMacro ? 'Saving...' : 'Save macro'}
-                    </button>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Latest message</div>
-                    <div style={{ fontSize:12, color:t.textDim, lineHeight:1.5 }}>
-                      {clientContext?.latestMessage || 'No recent message body available.'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Recent workouts</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      {(clientContext?.recentWorkouts || []).slice(0, 3).map((workout: any) => (
-                        <div key={`${workout.title}-${workout.completed_at || workout.review_due_at}`} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'8px 10px' }}>
-                          <div style={{ fontSize:12, fontWeight:700 }}>{workout.title}</div>
-                          <div style={{ fontSize:10, color:t.textMuted, marginTop:3 }}>
-                            {workout.completed_at ? `Completed ${new Date(workout.completed_at).toLocaleDateString()}` : workout.status}
-                            {workout.session_rpe ? ` · RPE ${workout.session_rpe}` : ''}
-                          </div>
+                  )}
+                  {showContextDetails && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:10 }}>
+                    {clientContext?.latestMessage && (
+                      <div>
+                        <div style={{ fontSize:10, color:t.textMuted, marginBottom:4, fontWeight:700, letterSpacing:'0.04em', textTransform:'uppercase' as const }}>Latest message</div>
+                        <div style={{ fontSize:11, color:t.textDim, lineHeight:1.5 }}>{clientContext.latestMessage}</div>
+                      </div>
+                    )}
+                    {(clientContext?.recentWorkouts || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize:10, color:t.textMuted, marginBottom:4, fontWeight:700, letterSpacing:'0.04em', textTransform:'uppercase' as const }}>Recent workouts</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                          {clientContext.recentWorkouts.slice(0, 3).map((workout: any) => (
+                            <div key={`${workout.title}-${workout.completed_at || workout.review_due_at}`} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 9px' }}>
+                              <div style={{ fontSize:11, fontWeight:700 }}>{workout.title}</div>
+                              <div style={{ fontSize:9, color:t.textMuted, marginTop:2 }}>
+                                {workout.completed_at ? `Completed ${new Date(workout.completed_at).toLocaleDateString()}` : workout.status}
+                                {workout.session_rpe ? ` · RPE ${workout.session_rpe}` : ''}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Daily pulse</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      {(clientContext?.recentPulse || []).slice(0, 3).map((pulse: any) => (
-                        <div key={pulse.checkin_date} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'8px 10px' }}>
-                          <div style={{ fontSize:12, fontWeight:700 }}>{pulse.checkin_date}</div>
-                          <div style={{ fontSize:10, color:t.textMuted, marginTop:3 }}>
-                            Sleep {pulse.sleep_quality ?? '—'}/5 · Energy {pulse.energy_score ?? '—'}/5 {pulse.mood_emoji ? `· ${pulse.mood_emoji}` : ''}
-                          </div>
+                      </div>
+                    )}
+                    {(clientContext?.recentPulse || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize:10, color:t.textMuted, marginBottom:4, fontWeight:700, letterSpacing:'0.04em', textTransform:'uppercase' as const }}>Daily pulse</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                          {clientContext.recentPulse.slice(0, 3).map((pulse: any) => (
+                            <div key={pulse.checkin_date} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 9px' }}>
+                              <div style={{ fontSize:11, fontWeight:700 }}>{pulse.checkin_date}</div>
+                              <div style={{ fontSize:9, color:t.textMuted, marginTop:2 }}>
+                                Sleep {pulse.sleep_quality ?? '—'}/5 · Energy {pulse.energy_score ?? '—'}/5 {pulse.mood_emoji ? `· ${pulse.mood_emoji}` : ''}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize:11, color:t.textMuted, marginBottom:6 }}>Recent check-ins</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      {(clientContext?.recentCheckins || []).slice(0, 2).map((checkin: any) => (
-                        <div key={checkin.submitted_at} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'8px 10px' }}>
-                          <div style={{ fontSize:10, color:t.textMuted, marginBottom:4 }}>{new Date(checkin.submitted_at).toLocaleDateString()}</div>
-                          <div style={{ fontSize:12, color:t.textDim, lineHeight:1.5 }}>
-                            {checkin.struggles || checkin.wins || 'No notes'}
-                          </div>
+                      </div>
+                    )}
+                    {(clientContext?.recentCheckins || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize:10, color:t.textMuted, marginBottom:4, fontWeight:700, letterSpacing:'0.04em', textTransform:'uppercase' as const }}>Recent check-ins</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                          {clientContext.recentCheckins.slice(0, 2).map((checkin: any) => (
+                            <div key={checkin.submitted_at} style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'6px 9px' }}>
+                              <div style={{ fontSize:9, color:t.textMuted, marginBottom:3 }}>{new Date(checkin.submitted_at).toLocaleDateString()}</div>
+                              <div style={{ fontSize:11, color:t.textDim, lineHeight:1.5 }}>
+                                {checkin.struggles || checkin.wins || 'No notes'}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
                   </div>
+                  )}
                 </div>
               </div>
+              )}
             </div>
           </div>
         ) : (
