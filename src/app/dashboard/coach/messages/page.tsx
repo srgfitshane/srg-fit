@@ -494,8 +494,15 @@ function MessagesInner() {
 
           {/* Sidebar header */}
           <div style={{ padding:'16px 18px', borderBottom:'1px solid '+t.border, display:'flex', alignItems:'center', gap:10, height:60 }}>
-            <button onClick={()=> activeId ? setActiveId(null) : router.push('/dashboard/coach')}
-              aria-label="Back"
+            {/* One-tap back to dashboard. Previously this deselected the
+                active thread first, requiring a second tap to leave Messages.
+                On desktop the sidebar is always visible so "deselect thread"
+                had no nav value -- the list was right there. On mobile this
+                button is hidden when a thread is open (sidebar collapses);
+                the thread-header back arrow handles that case and already
+                goes straight to dashboard. */}
+            <button onClick={()=>router.push('/dashboard/coach')}
+              aria-label="Back to dashboard"
               style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", padding:0 }}>←</button>
             <div style={{ fontSize:14, fontWeight:800 }}>Messages</div>
             {totalUnread > 0 && (
