@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useSearchParams } from 'next/navigation'
 import RichMessageThread from '@/components/messaging/RichMessageThread'
@@ -61,6 +61,15 @@ function MessagesInner() {
   const [savingMacro, setSavingMacro] = useState(false)
   const [showMacroEditor, setShowMacroEditor] = useState(false)
   const [showContextDetails, setShowContextDetails] = useState(false)
+  // AI Assistant card collapse -- independent of the whole-panel collapse.
+  // Persisted to localStorage so Shane's preference sticks across sessions.
+  const [aiCardOpen, setAiCardOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    try { return window.localStorage.getItem('coach_msg_ai_card_open') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('coach_msg_ai_card_open', aiCardOpen ? '1' : '0') } catch {}
+  }, [aiCardOpen])
 
   // AI Assistant state. Replaces the static "Coach Context" sidebar with
   // an on-demand reply-drafting flow. The panel itself collapses to a
@@ -85,7 +94,12 @@ function MessagesInner() {
   const [broadcastDone, setBroadcastDone] = useState(false)
   const router    = useRouter()
   const params    = useSearchParams()
-  const supabase  = createClient()
+  // Memoize the supabase client. Without this, every re-render spawns a
+  // fresh client + new WebSocket -- prior realtime subscriptions get
+  // orphaned on the old (now garbage) client, and the new one races to
+  // re-subscribe. Symptom: messages don't appear in the sidebar without
+  // a hard refresh, which is exactly what Shane reported.
+  const supabase  = useMemo(() => createClient(), [])
 
   const updateClientMetadata = (profileId: string, body?: string | null, createdAt?: string) => {
     const lowered = `${body || ''}`.toLowerCase()
@@ -607,8 +621,23 @@ function MessagesInner() {
                     style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:14, padding:'2px 6px', lineHeight:1 }}>×</button>
                 </div>
 
-                {/* AI Suggest replies -- primary action */}
-                <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 12px', marginBottom:14 }}>
+                {/* AI Suggest replies -- primary action. Card itself is
+                    collapsible (independent of the whole-panel collapse)
+                    so Shane can hide the AI section but keep saved
+                    replies + context visible. */}
+                <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:aiCardOpen ? '12px 12px' : '8px 12px', marginBottom:14, transition:'padding 0.15s ease' }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:aiCardOpen ? 8 : 0 }}>
+                    <div style={{ fontSize:11, fontWeight:800, color:aiCardOpen ? t.text : t.textDim, letterSpacing:'0.02em' }}>
+                      AI reply suggestions
+                    </div>
+                    <button onClick={()=>setAiCardOpen(v=>!v)}
+                      aria-label={aiCardOpen ? 'Collapse AI suggestions' : 'Expand AI suggestions'}
+                      style={{ background:'none', border:'1px solid '+t.border, borderRadius:6, padding:'2px 7px', fontSize:11, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", lineHeight:1.2 }}>
+                      {aiCardOpen ? '−' : '+'}
+                    </button>
+                  </div>
+
+                  {aiCardOpen && (<>
                   <button onClick={suggestReplies} disabled={aiLoading}
                     style={{ width:'100%', background:aiLoading ? t.surfaceUp : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'10px 12px', fontSize:13, fontWeight:800, color:aiLoading ? t.textMuted : '#000', cursor:aiLoading?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
                     {aiLoading ? 'Thinking...' : '✨ Suggest a reply'}
@@ -652,6 +681,7 @@ function MessagesInner() {
                       </button>
                     </div>
                   )}
+                  </>)}
                 </div>
 
                 {/* Saved replies (compact) */}
