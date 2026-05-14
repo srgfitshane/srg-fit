@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireCoachApi } from '@/lib/supabase-server'
 
 // Server-side proxy for AI exercise swap suggestions.
 // Keeps ANTHROPIC_API_KEY out of the client bundle entirely.
+// Coach-only — clients hitting this would burn Anthropic budget.
 //
 // F2c upgrade: callers can now include an optional `clientId` in the
 // body. When present we fetch that client's intake (injuries +
@@ -10,10 +11,9 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 // LLM weighs injury history when picking swaps. Backwards-compatible:
 // callers without clientId behave exactly as before.
 export async function POST(req: NextRequest) {
-  // Auth check — must be a logged-in user
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireCoachApi()
+  if ('error' in gate) return gate.error
+  const { supabase } = gate
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -24,9 +24,9 @@ export async function POST(req: NextRequest) {
   const { clientId, ...passThrough } = body || {}
 
   // ── Optional injury+equipment injection ─────────────────────────────
-  // Only fires when caller passes clientId. We trust the caller for now
-  // (auth gate above is enough for the swap path — same security
-  // posture as before, just richer context).
+  // Only fires when caller passes clientId. Coach gate above guarantees
+  // the caller is allowed to read client intake (further restricted by
+  // RLS to coach-owned clients).
   if (clientId && Array.isArray(passThrough.messages) && passThrough.messages.length > 0) {
     try {
       const { data: intake } = await supabase

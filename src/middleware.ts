@@ -37,6 +37,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Gate /dashboard/coach/* to coach role. RLS already blocks coach data
+  // for non-coach callers, but without this check the coach UI would
+  // render in a broken state for a client who guessed the URL.
+  if (user && request.nextUrl.pathname.startsWith('/dashboard/coach')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    if (profile?.role !== 'coach') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard/client'
+      return NextResponse.redirect(url)
+    }
+  }
+
   return supabaseResponse
 }
 

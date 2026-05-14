@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { NextResponse } from 'next/server'
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies()
@@ -72,4 +73,22 @@ export async function requireCoachProfile() {
   }
 
   return { supabase, user, profile }
+}
+
+// API-route variant of requireCoachProfile: returns a JSON error response
+// instead of an HTML redirect. Callers do:
+//   const gate = await requireCoachApi()
+//   if ('error' in gate) return gate.error
+//   const { supabase, user } = gate
+export async function requireCoachApi() {
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) } as const
+  }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'coach') {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) } as const
+  }
+  return { supabase, user } as const
 }

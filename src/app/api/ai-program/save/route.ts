@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireCoachApi } from '@/lib/supabase-server'
 
 // =================================================================
 // AI Program Save (F2a Phase 2) — coach-only.
@@ -79,9 +79,9 @@ const repsToText = (reps: ProposalExercise['reps']): string => {
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const gate = await requireCoachApi()
+  if ('error' in gate) return gate.error
+  const { supabase, user } = gate
 
   const body = await req.json()
   const { clientId, programName, proposal, meta, asTemplate } = (body || {}) as { clientId?: string, programName?: string, proposal?: Proposal, meta?: any, asTemplate?: boolean }
