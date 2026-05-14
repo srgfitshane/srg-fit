@@ -87,6 +87,11 @@ function MessagesInner() {
   // Versioned seed -- bumping the id is what triggers RichMessageThread
   // to overwrite its local draft with the chosen suggestion.
   const [seedDraft, setSeedDraft] = useState<{ id: number; text: string } | null>(null)
+  // Counter bumped when the page-level realtime listener detects a new
+  // message for the currently-active thread. Passed down to RichMessageThread
+  // as belt-and-suspenders so the bubble appears even if the thread's
+  // own subscription happens to be silent (e.g. just after a tab return).
+  const [threadRefreshKey, setThreadRefreshKey] = useState(0)
   const [filter, setFilter] = useState<'all'|'priority'|'unread'|'stale'>('all')
   const [showBroadcast, setShowBroadcast] = useState(false)
   const [broadcastText, setBroadcastText] = useState('')
@@ -244,6 +249,9 @@ function MessagesInner() {
         const active = clients.find(c => c.profile?.id === msg.sender_id)
         if (active && active.id === activeId) {
           markRead(coachId, active.profile.id)
+          // Force-refresh the open thread so the new bubble lands even
+          // if the thread-level subscription silently dropped this event.
+          setThreadRefreshKey(k => k + 1)
         } else {
           setUnread(prev => ({ ...prev, [msg.sender_id]: (prev[msg.sender_id] || 0) + 1 }))
         }
@@ -609,6 +617,7 @@ function MessagesInner() {
                     height="100%"
                     quickReplies={macros}
                     seedDraft={seedDraft}
+                    refreshKey={threadRefreshKey}
                   />
                 )}
               </div>

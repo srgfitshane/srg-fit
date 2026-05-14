@@ -83,9 +83,18 @@ interface Props {
   // draft state in response. The id is what makes repeated seeds of
   // the same text trigger a fresh effect run.
   seedDraft?: { id: number; text: string } | null
+
+  // Versioned refresh signal from the parent. When the parent (coach
+  // messages page) detects via its own realtime listener that a new
+  // message has arrived for the active thread, it bumps this counter
+  // and we force-reload the thread. Belt-and-suspenders for the case
+  // where the thread-level subscription is silent (channel hiccup,
+  // backgrounded tab, etc.) but the page-level one fired -- avoids
+  // the "sidebar shows new message but thread didn't update" state.
+  refreshKey?: number
 }
 
-export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [], recipientRole = 'client', seedDraft }: Props) {
+export default function RichMessageThread({ myId, otherId, otherName, myName, height = '100%', quickReplies = [], recipientRole = 'client', seedDraft, refreshKey = 0 }: Props) {
   const supabase = useMemo(() => createClient(), [])
 
   // Fire-and-forget push notification to the recipient
@@ -266,6 +275,31 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   useEffect(() => {
     const timeoutId = setTimeout(() => { void loadThread() }, 0)
     return () => clearTimeout(timeoutId)
+  }, [loadThread])
+
+  // Parent-driven refresh. Skip the very first render (refreshKey starts
+  // at 0; loadThread already fires above). Only bumps trigger a refetch.
+  const lastRefreshKeyRef = useRef(refreshKey)
+  useEffect(() => {
+    if (refreshKey === lastRefreshKeyRef.current) return
+    lastRefreshKeyRef.current = refreshKey
+    void loadThread()
+  }, [refreshKey, loadThread])
+
+  // Tab-visibility refetch -- when the user comes back to a backgrounded
+  // tab, realtime channels can be in a stale state. Pull once on return
+  // (15s throttle to avoid hammering on tab switches).
+  const lastVisRefetchRef = useRef(0)
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) return
+      const now = Date.now()
+      if (now - lastVisRefetchRef.current < 15000) return
+      lastVisRefetchRef.current = now
+      void loadThread()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [loadThread])
 
   // ── Scroll to bottom ──────────────────────────────────────────────────────
