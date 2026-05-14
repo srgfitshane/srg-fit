@@ -715,10 +715,15 @@ ${candidateList}`
   }, [expandedExId])
 
   function updateSet(exId: string, setIdx: number, field: keyof SetData, val: SetData[keyof SetData]) {
-    setSetData(prev => ({
-      ...prev,
-      [exId]: prev[exId].map((s,i) => i===setIdx ? {...s, [field]: val} : s)
-    }))
+    setSetData(prev => {
+      const wasWarmup = prev[exId][setIdx].is_warmup
+      const updated = prev[exId].map((s,i) => i===setIdx ? {...s, [field]: val} : s)
+      // When the user flips a set TO warmup, auto-append a working set so
+      // the prescribed working-set count stays intact. Warmups don't
+      // count toward sets_prescribed — see done-count math below.
+      const shouldExtend = field === 'is_warmup' && val === true && !wasWarmup
+      return { ...prev, [exId]: shouldExtend ? [...updated, defaultSet()] : updated }
+    })
   }
 
   function applySetTemplate(exId: string, setIdx: number, template?: { reps?: number | null; weight?: number | null; unit?: string | null }) {
@@ -808,10 +813,13 @@ ${candidateList}`
     const handleSuccessSideEffects = () => {
       updateSet(exId, setIdx, 'logged', true)
       loggingSet.current.delete(lockKey)
-      // Auto-start rest timer
+      // Auto-start rest timer. Warmups fall back to a 30s default when
+      // the exercise doesn't prescribe a rest, so the timer still fires
+      // between warmup sets instead of silently skipping.
       const exNow = exercises.find(e=>e.id===exId)
-      if (exNow?.rest_seconds) {
-        setRestTimer(exNow.rest_seconds)
+      const restSec = exNow?.rest_seconds || (s.is_warmup ? 30 : 0)
+      if (restSec) {
+        setRestTimer(restSec)
         setRestActive(true)
       }
       // Pre-fill next set with same values
@@ -1248,14 +1256,14 @@ ${candidateList}`
     setPhase('complete')
   }
 
-  // Sum weight_value x reps_completed across all logged non-warmup sets in
-  // this session. Warmup sets are excluded because they don't count as "moved."
+  // Sum weight_value x reps_completed across ALL logged sets in this
+  // session, including warmups. Warmups still represent weight moved by
+  // the body, even if they don't count toward prescribed working sets.
   async function computeTotalWeightMoved(): Promise<number> {
     const { data, error } = await supabase
       .from('exercise_sets')
       .select('weight_value, reps_completed')
       .eq('session_id', sessionId)
-      .eq('is_warmup', false)
       .not('weight_value', 'is', null)
     if (error || !data) return 0
     return data.reduce((sum, s) => {
@@ -1461,7 +1469,8 @@ ${candidateList}`
   const skippedExerciseCount = exercises.filter(ex => skipped[ex.id]).length
   const completedExerciseCount = exercises.filter(ex => {
     const total = ex.sets_prescribed || setData[ex.id]?.length || 0
-    const done = (setData[ex.id] || []).filter(setRow => setRow.logged).length
+    // Warmups don't count toward sets_prescribed — only working sets do.
+    const done = (setData[ex.id] || []).filter(setRow => setRow.logged && !setRow.is_warmup).length
     return skipped[ex.id] || (total > 0 && done >= total)
   }).length
   const allLogged = exercises.length > 0 && exercises.every(ex =>
@@ -1767,6 +1776,7 @@ ${candidateList}`
         .workout-set-helper-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
         .workout-skip-actions{display:flex;gap:8px;}
         .workout-set-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;}
+        .workout-set-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
         .workout-set-note-row{display:flex;gap:8px;}
         .workout-form-check-row{display:flex;gap:8px;}
         .workout-finish-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
@@ -1895,7 +1905,9 @@ ${candidateList}`
                     </div>
                   ) : null
                   const setsArr = setData[ex.id] || []
-                  const done = setsArr.filter(s=>s.logged).length
+                  // Warmups don't count toward the prescribed working-set total
+                  // shown in "X/Y sets done" — they're tallied separately.
+                  const done = setsArr.filter(s=>s.logged && !s.is_warmup).length
                   const total = ex.sets_prescribed || setsArr.length || 0
                   const complete = done >= total && total > 0
                   const isSkipped = skipped[ex.id]

@@ -411,6 +411,15 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [callNote, setCallNote] = useState('')
   const [callSubmitting, setCallSubmitting] = useState(false)
   const [callSubmitted, setCallSubmitted] = useState(false)
+  // Report Issue modal -- inbound bug/UX channel, separate from the
+  // coach DM thread so it doesn't pollute personal back-and-forth.
+  // Rows land in public.issue_reports and can later feed an agent triage flow.
+  const [showReportIssue,    setShowReportIssue]    = useState(false)
+  const [issueCategory,      setIssueCategory]      = useState<'messaging'|'logging'|'bug'|'other'>('bug')
+  const [issueBody,          setIssueBody]          = useState('')
+  const [issueSubmitting,    setIssueSubmitting]    = useState(false)
+  const [issueSubmitted,     setIssueSubmitted]     = useState(false)
+  const [issueError,         setIssueError]         = useState<string | null>(null)
   const [recentActivities, setRecentActivities] = useState<ClientActivityRecord[]>([])
   const [showActivityLog, setShowActivityLog] = useState(false)
   const [activityDraft, setActivityDraft] = useState<ActivityDraft>(() => createActivityDraft(
@@ -1678,6 +1687,28 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 </div>
               </button>
 
+              {/* Report Issue -- inbound bug / UX channel. Lives on the Connect
+                  hub so users have an obvious one-tap path when something
+                  feels broken. Routes to issue_reports, not the DM thread. */}
+              <button onClick={()=>{ setShowReportIssue(true); setIssueSubmitted(false); setIssueError(null) }}
+                style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block', marginTop:14 }}>
+                <div style={{ height:3, background:'linear-gradient(90deg,'+t.red+','+t.orange+')' }}/>
+                <div style={{ padding:'18px 18px', display:'flex', alignItems:'center', gap:14 }}>
+                  <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,'+alpha(t.red, 19) + ','+alpha(t.orange, 9) + ')', border:'1px solid '+alpha(t.red, 19), display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={t.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:t.text, marginBottom:3 }}>Report an Issue</div>
+                    <div style={{ fontSize:12, color:t.textMuted, lineHeight:1.5 }}>Messaging, logging, or anything weird — tell Shane so he can fix it</div>
+                  </div>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </div>
+              </button>
+
               {/* Request a Call */}
               <button onClick={()=>setShowCallRequest(true)}
                 style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:20, overflow:'hidden', cursor:'pointer', textAlign:'left' as const, fontFamily:"'DM Sans',sans-serif", display:'block', marginTop:14 }}>
@@ -2252,6 +2283,113 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                       }}
                       style={{flex:2,padding:'12px',borderRadius:11,border:'none',background:callSlots.some(s=>s.date&&s.time)?`linear-gradient(135deg,${t.orange},${alpha(t.orange, 80)})`:'#1d1d2e',color:callSlots.some(s=>s.date&&s.time)?'#000':t.textMuted,fontSize:13,fontWeight:800,cursor:callSlots.some(s=>s.date&&s.time)?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif"}}>
                       {callSubmitting?'Sending...':'Send Request'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Report Issue Modal -- bottom-sheet, mirrors Call Request shape.
+            Category radio + body textarea + Cancel/Send. On success, flips
+            to a confirmation panel rather than auto-closing so the user
+            sees their report registered. */}
+        {showReportIssue && (
+          <>
+            <div onClick={()=>{ if (!issueSubmitting) setShowReportIssue(false) }}
+              style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
+            <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:t.surface,borderTop:'1px solid '+t.border,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 48px',maxHeight:'90vh',overflowY:'auto' as const}}>
+              <div style={{width:36,height:4,borderRadius:2,background:t.border,margin:'0 auto 20px'}}/>
+
+              {issueSubmitted ? (
+                <div style={{textAlign:'center',padding:'16px 0'}}>
+                  <div style={{fontSize:40,marginBottom:12}}>✓</div>
+                  <div style={{fontSize:17,fontWeight:800,marginBottom:8,color:t.text}}>Issue reported</div>
+                  <div style={{fontSize:13,color:t.textMuted,lineHeight:1.7,marginBottom:24}}>
+                    Thanks for flagging it. Shane will take a look. If it&apos;s urgent or you want to chat about it, drop a message in the coach thread too.
+                  </div>
+                  <button onClick={()=>{ setShowReportIssue(false); setIssueSubmitted(false); setIssueBody(''); setIssueCategory('bug') }}
+                    style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{fontSize:17,fontWeight:800,marginBottom:4,color:t.text}}>Report an Issue 🐛</div>
+                  <div style={{fontSize:13,color:t.textMuted,marginBottom:20,lineHeight:1.6}}>
+                    Something not working? Pick the area and describe what happened. Screenshots can go in a regular message.
+                  </div>
+
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Category</div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                      {(['messaging','logging','bug','other'] as const).map(cat => {
+                        const labels: Record<typeof cat, string> = { messaging:'Messaging', logging:'Logging a Workout', bug:'Bug', other:'Something else' }
+                        const selected = issueCategory === cat
+                        return (
+                          <button key={cat} onClick={()=>setIssueCategory(cat)}
+                            style={{padding:'10px 12px',borderRadius:10,border:'1px solid '+(selected?t.teal:t.border),background:selected?t.tealDim:t.surfaceUp,color:selected?t.teal:t.textDim,fontSize:13,fontWeight:selected?800:600,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
+                            {labels[cat]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:11,fontWeight:700,color:t.textMuted,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>What happened?</div>
+                    <textarea value={issueBody} onChange={e=>setIssueBody(e.target.value)} rows={5}
+                      placeholder="What did you try, what did you expect, what actually happened?"
+                      style={{width:'100%',background:t.surfaceUp,border:'1px solid '+t.border,borderRadius:10,padding:'10px 13px',fontSize:13,color:t.text,fontFamily:"'DM Sans',sans-serif",resize:'none' as const,outline:'none',lineHeight:1.6,boxSizing:'border-box' as const,colorScheme:'dark' as const}}/>
+                  </div>
+
+                  {issueError && (
+                    <div style={{marginBottom:12,padding:'10px 12px',background:alpha(t.red, 12),border:'1px solid '+alpha(t.red, 38),borderRadius:10,fontSize:12,color:t.red,lineHeight:1.5}}>
+                      {issueError}
+                    </div>
+                  )}
+
+                  <div style={{display:'flex',gap:10}}>
+                    <button onClick={()=>setShowReportIssue(false)}
+                      style={{flex:1,padding:'12px',borderRadius:11,border:'1px solid '+t.border,background:'transparent',color:t.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                      Cancel
+                    </button>
+                    <button disabled={issueSubmitting || !issueBody.trim() || !clientRecord}
+                      onClick={async()=>{
+                        if (!clientRecord || !issueBody.trim()) return
+                        setIssueSubmitting(true)
+                        setIssueError(null)
+                        // Rule 14: check error and bail visibly. No "vanished"
+                        // submission feel -- the user sees either success or
+                        // the specific failure reason.
+                        const { error } = await supabase.from('issue_reports').insert({
+                          client_id: clientRecord.id,
+                          coach_id:  clientRecord.coach_id,
+                          category:  issueCategory,
+                          body:      issueBody.trim(),
+                        })
+                        if (error) {
+                          setIssueSubmitting(false)
+                          setIssueError('Could not send your report: ' + error.message)
+                          return
+                        }
+                        // Fire-and-forget push to coach so Shane sees it the
+                        // moment a client submits. Rule 8 -- never await.
+                        supabase.functions.invoke('send-notification', {
+                          body: {
+                            user_id: clientRecord.coach_id,
+                            notification_type: 'issue_report',
+                            title: `🐛 Issue reported: ${issueCategory}`,
+                            body: issueBody.trim().length > 80 ? issueBody.trim().slice(0,80)+'…' : issueBody.trim(),
+                            link_url: '/dashboard/coach',
+                          }
+                        }).catch(() => {})
+                        setIssueSubmitting(false)
+                        setIssueSubmitted(true)
+                      }}
+                      style={{flex:2,padding:'12px',borderRadius:11,border:'none',background:issueBody.trim()?`linear-gradient(135deg,${t.red},${alpha(t.orange, 80)})`:'#1d1d2e',color:issueBody.trim()?'#fff':t.textMuted,fontSize:13,fontWeight:800,cursor:issueBody.trim()?'pointer':'not-allowed',fontFamily:"'DM Sans',sans-serif"}}>
+                      {issueSubmitting?'Sending...':'Send Report'}
                     </button>
                   </div>
                 </>

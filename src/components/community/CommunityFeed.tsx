@@ -209,7 +209,19 @@ type CommunityReply = {
   author_role: 'coach' | 'client'
   body: string
   created_at: string
+  // ONE attachment per reply -- intentionally simpler than posts (no
+  // multi-image grid). 'image'/'video' -> media_url is a storage path
+  // in the community-media bucket and gets signed in loadPosts.
+  // 'gif' -> media_url is a full giphy.com URL, no signing needed.
+  media_url: string | null
+  media_type: 'image' | 'video' | 'gif' | null
 }
+
+// Local-only staging shape for a reply that hasn't been posted yet.
+type ReplyMediaDraft =
+  | { kind: 'image'; file: File; previewUrl: string }
+  | { kind: 'video'; file: File; previewUrl: string }
+  | { kind: 'gif';   url: string }
 
 export default function CommunityFeed({ role, backPath, showBottomNav = false }: Props) {
   const supabase = useMemo(() => createClient(), [])
@@ -233,6 +245,15 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [replyOpen,    setReplyOpen]    = useState<string|null>(null)
   const [replyPosting, setReplyPosting] = useState<string|null>(null)
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
+  // Reply media is keyed by postId. Only one reply box is open at a time
+  // so we don't bother with a per-textarea ref. Picker state for GIF
+  // search is also keyed by postId so the same picker UI can pop under
+  // whichever reply is being composed.
+  const [replyMedia,     setReplyMedia]     = useState<Record<string, ReplyMediaDraft | null>>({})
+  const [replyGifOpenFor,setReplyGifOpenFor]= useState<string | null>(null)
+  const [replyGifQuery,  setReplyGifQuery]  = useState('')
+  const [replyGifs,      setReplyGifs]      = useState<any[]>([])
+  const [replyGifLoading,setReplyGifLoading]= useState(false)
   // Compose media — images and video are mutually exclusive. A post can
   // have up to 4 images OR one video OR one GIF. Each imageFiles[i] has
   // a matching imagePreviews[i] (object URL for <Image src>); revoke the
@@ -346,7 +367,18 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           })
         }
       }
-      ;((replyData || []) as CommunityReply[]).forEach((reply) => {
+      // Resolve image/video paths to signed URLs (community-media bucket is
+      // public today but we sign anyway to mirror the post code path, which
+      // makes the bucket easier to flip private later without retouching
+      // this surface). GIFs (full URLs) pass through untouched.
+      const resolvedReplies = await Promise.all(((replyData || []) as CommunityReply[]).map(async (r) => {
+        if (!r.media_url || !r.media_type) return r
+        if (r.media_type === 'gif') return r
+        if (r.media_url.startsWith('http')) return r
+        const { data } = await supabase.storage.from('community-media').createSignedUrl(r.media_url, 60 * 60)
+        return { ...r, media_url: data?.signedUrl || r.media_url }
+      }))
+      resolvedReplies.forEach((reply) => {
         if (!grouped[reply.post_id]) grouped[reply.post_id] = []
         grouped[reply.post_id].push(reply)
       })
@@ -654,12 +686,85 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     await loadPosts()
   }
 
+  // Pick an image or video from the device for a reply. Stages locally;
+  // upload happens on submitReply so a user backing out doesn't orphan
+  // a file in storage.
+  const pickReplyFile = (postId: string, kind: 'image' | 'video') => {
+    const inp = document.createElement('input')
+    inp.type = 'file'
+    inp.accept = kind === 'image' ? 'image/*' : 'video/*'
+    inp.onchange = () => {
+      const file = inp.files?.[0]
+      if (!file) return
+      const previewUrl = URL.createObjectURL(file)
+      setReplyMedia(prev => ({ ...prev, [postId]: { kind, file, previewUrl } }))
+      // If a GIF picker was open for this reply, close it -- only one
+      // attachment per reply.
+      if (replyGifOpenFor === postId) setReplyGifOpenFor(null)
+    }
+    inp.click()
+  }
+
+  // Reuse the same Giphy fetch helper that the post composer uses.
+  const searchReplyGifs = async (q: string) => {
+    setReplyGifLoading(true)
+    try {
+      const result = q.trim() ? await gf.search(q, { limit: 18 }) : await gf.trending({ limit: 18 })
+      const data = (result.data ?? []) as any[]
+      setReplyGifs(data)
+    } catch { setReplyGifs([]) }
+    setReplyGifLoading(false)
+  }
+
+  const pickReplyGif = (postId: string, gif: any) => {
+    const url = gif.images?.fixed_height?.url || gif.images?.original?.url || ''
+    if (!url) return
+    setReplyMedia(prev => ({ ...prev, [postId]: { kind: 'gif', url } }))
+    setReplyGifOpenFor(null)
+    setReplyGifQuery('')
+    setReplyGifs([])
+  }
+
+  const clearReplyMedia = (postId: string) => {
+    const m = replyMedia[postId]
+    if (m && (m.kind === 'image' || m.kind === 'video')) URL.revokeObjectURL(m.previewUrl)
+    setReplyMedia(prev => ({ ...prev, [postId]: null }))
+  }
+
   const submitReply = async (postId: string) => {
-    const body = replyDrafts[postId]?.trim()
-    if (!body || !me || !coachId) return
+    const body = replyDrafts[postId]?.trim() || ''
+    const media = replyMedia[postId] || null
+    // Allow reply with media-only (no text) -- mirrors fb/reddit behavior
+    // where you can post just a reaction GIF.
+    if (!body && !media) return
+    if (!me || !coachId) return
     setReplyPosting(postId)
+
+    // Upload staged image/video to community-media if needed.
+    let mediaUrl: string | null = null
+    let mediaType: 'image' | 'video' | 'gif' | null = null
+    if (media) {
+      if (media.kind === 'gif') {
+        mediaUrl = media.url
+        mediaType = 'gif'
+      } else {
+        const ext = media.file.name.split('.').pop() || (media.kind === 'image' ? 'jpg' : 'mp4')
+        const path = `${me.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('community-media').upload(path, media.file, { upsert: false })
+        if (upErr) {
+          setReplyPosting(null)
+          toastError('Could not upload attachment: ' + upErr.message)
+          return
+        }
+        mediaUrl = path
+        mediaType = media.kind
+      }
+    }
+
     const { error } = await supabase.from('community_replies').insert({
-      post_id: postId, coach_id: coachId, author_id: me.id, author_role: role, body
+      post_id: postId, coach_id: coachId, author_id: me.id, author_role: role,
+      body, media_url: mediaUrl, media_type: mediaType,
     })
     setReplyPosting(null)
     if (error) {
@@ -700,6 +805,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     }
 
     setReplyDrafts(p => ({ ...p, [postId]: '' }))
+    clearReplyMedia(postId)
     setReplyOpen(null); await loadPosts()
   }
 
@@ -1138,7 +1244,20 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                               {r.author_role==='coach' && <span style={{ fontSize:8, fontWeight:800, color:t.teal, background:t.tealDim, padding:'1px 4px', borderRadius:20 }}>COACH</span>}
                               <span style={{ fontSize:10, color:t.textMuted }}>{fmt(r.created_at)}</span>
                             </div>
-                            <div style={{ fontSize:12, color:t.textDim, lineHeight:1.55 }}>{r.body}</div>
+                            {r.media_url && r.media_type && (
+                              <div style={{ marginTop:6, marginBottom:r.body?6:0, borderRadius:8, overflow:'hidden', border:'1px solid '+alpha(t.border, 50), maxWidth:280 }}>
+                                {r.media_type === 'video' ? (
+                                  <video src={r.media_url} controls playsInline preload="metadata"
+                                    style={{ width:'100%', maxHeight:260, display:'block', background:'#000' }}/>
+                                ) : (
+                                  // Both 'image' and 'gif' render as <img>. GIF URLs animate
+                                  // natively; static images come from a signed URL.
+                                  <img src={r.media_url} alt={r.media_type === 'gif' ? 'GIF' : 'Image'}
+                                    style={{ width:'100%', maxHeight:260, objectFit:'cover', display:'block', background:'#000' }}/>
+                                )}
+                              </div>
+                            )}
+                            {r.body && <div style={{ fontSize:12, color:t.textDim, lineHeight:1.55 }}>{r.body}</div>}
                           </div>
                         </div>
                       )
@@ -1150,17 +1269,80 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                           <Avatar name={me?.full_name||'You'} role={role} color={me?.id ? clientColors[me.id] : undefined} size={22}/>
                         </div>
                         <div style={{ flex:1 }}>
+                          {/* Staged media preview -- one attachment per reply.
+                              Tapping × clears so the user can swap. */}
+                          {replyMedia[p.id] && (
+                            <div style={{ position:'relative', marginBottom:6, borderRadius:8, overflow:'hidden', border:'1px solid '+t.border, maxWidth:240 }}>
+                              {replyMedia[p.id]!.kind === 'video' ? (
+                                <video src={(replyMedia[p.id] as { previewUrl: string }).previewUrl} controls playsInline
+                                  style={{ width:'100%', maxHeight:200, display:'block', background:'#000' }}/>
+                              ) : replyMedia[p.id]!.kind === 'image' ? (
+                                <img src={(replyMedia[p.id] as { previewUrl: string }).previewUrl} alt="Image preview"
+                                  style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }}/>
+                              ) : (
+                                <img src={(replyMedia[p.id] as { url: string }).url} alt="GIF"
+                                  style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }}/>
+                              )}
+                              <button onClick={()=>clearReplyMedia(p.id)}
+                                style={{ position:'absolute', top:5, right:5, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:22, height:22, cursor:'pointer', color:'#fff', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
+                            </div>
+                          )}
+
                           <textarea ref={replyInputRef} className="reply-input"
                             value={replyDrafts[p.id]||''} onChange={e=>setReplyDrafts(prev=>({...prev,[p.id]:e.target.value}))}
                             placeholder="Write a reply..." rows={2}
                             style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 10px', fontSize:12, color:t.text, fontFamily:"'DM Sans',sans-serif", lineHeight:1.5 }}
                             onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitReply(p.id)} }}
                           />
-                          <div style={{ display:'flex', justifyContent:'flex-end', gap:6, marginTop:4 }}>
-                            <button onClick={()=>{ setReplyOpen(null); setReplyDrafts(prev=>({...prev,[p.id]:''})) }}
+
+                          {/* Inline GIF picker (reply-scoped). Only one open at a time
+                              across the whole feed, keyed by replyGifOpenFor. */}
+                          {replyGifOpenFor === p.id && (
+                            <div style={{ marginTop:6, padding:8, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8 }}>
+                              <div style={{ display:'flex', gap:6, marginBottom:6 }}>
+                                <input type="text"
+                                  value={replyGifQuery} onChange={e=>setReplyGifQuery(e.target.value)}
+                                  onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); searchReplyGifs(replyGifQuery) } }}
+                                  placeholder="Search GIFs..." autoFocus
+                                  style={{ flex:1, background:t.surface, border:'1px solid '+t.border, borderRadius:6, padding:'5px 8px', fontSize:11, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none' }}/>
+                                <button onClick={()=>searchReplyGifs(replyGifQuery)}
+                                  style={{ background:t.teal, border:'none', borderRadius:6, padding:'5px 10px', fontSize:10, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Go</button>
+                              </div>
+                              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:5, maxHeight:200, overflowY:'auto' }}>
+                                {replyGifLoading && <div style={{ gridColumn:'1/-1', textAlign:'center', padding:12, color:t.textMuted, fontSize:11 }}>Loading...</div>}
+                                {!replyGifLoading && replyGifs.map((gif:any) => (
+                                  <button key={gif.id} onClick={()=>pickReplyGif(p.id, gif)}
+                                    style={{ background:'none', border:'none', padding:0, cursor:'pointer', borderRadius:6, overflow:'hidden' }}>
+                                    <img src={gif.images?.fixed_height?.url || gif.images?.original?.url} alt={gif.title}
+                                      style={{ width:'100%', display:'block' }}/>
+                                  </button>
+                                ))}
+                                {!replyGifLoading && replyGifs.length === 0 && (
+                                  <div style={{ gridColumn:'1/-1', textAlign:'center', padding:12, color:t.textMuted, fontSize:11 }}>No results -- try a different search</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+                            {/* Media attach buttons -- only show when no attachment yet,
+                                since we cap one per reply. */}
+                            {!replyMedia[p.id] && (
+                              <>
+                                <button onClick={()=>pickReplyFile(p.id, 'image')} title="Attach image"
+                                  style={{ background:'none', border:'1px solid '+t.border, borderRadius:7, padding:'3px 7px', fontSize:11, cursor:'pointer', color:t.textMuted, lineHeight:1, fontFamily:"'DM Sans',sans-serif" }}>📷</button>
+                                <button onClick={()=>pickReplyFile(p.id, 'video')} title="Attach video"
+                                  style={{ background:'none', border:'1px solid '+t.border, borderRadius:7, padding:'3px 7px', fontSize:11, cursor:'pointer', color:t.textMuted, lineHeight:1, fontFamily:"'DM Sans',sans-serif" }}>🎬</button>
+                                <button onClick={()=>{ const next = replyGifOpenFor === p.id ? null : p.id; setReplyGifOpenFor(next); if (next && replyGifs.length === 0) searchReplyGifs('') }}
+                                  title="Add GIF"
+                                  style={{ background:replyGifOpenFor===p.id?t.tealDim:'none', border:'1px solid '+(replyGifOpenFor===p.id?t.teal:t.border), borderRadius:7, padding:'3px 7px', fontSize:9, fontWeight:800, cursor:'pointer', color:replyGifOpenFor===p.id?t.teal:t.textMuted, lineHeight:1, fontFamily:"'DM Sans',sans-serif" }}>GIF</button>
+                              </>
+                            )}
+                            <div style={{ flex:1 }}/>
+                            <button onClick={()=>{ setReplyOpen(null); setReplyDrafts(prev=>({...prev,[p.id]:''})); clearReplyMedia(p.id); setReplyGifOpenFor(null) }}
                               style={{ background:'none', border:'1px solid '+t.border, borderRadius:7, padding:'3px 9px', fontSize:10, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>Cancel</button>
-                            <button onClick={()=>submitReply(p.id)} disabled={!replyDrafts[p.id]?.trim()||replyPosting===p.id}
-                              style={{ background:replyDrafts[p.id]?.trim()?t.teal:'transparent', border:'1px solid '+(replyDrafts[p.id]?.trim()?'transparent':t.border), borderRadius:7, padding:'3px 10px', fontSize:10, fontWeight:800, color:replyDrafts[p.id]?.trim()?'#000':t.textMuted, cursor:replyDrafts[p.id]?.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
+                            <button onClick={()=>submitReply(p.id)} disabled={(!replyDrafts[p.id]?.trim() && !replyMedia[p.id])||replyPosting===p.id}
+                              style={{ background:(replyDrafts[p.id]?.trim()||replyMedia[p.id])?t.teal:'transparent', border:'1px solid '+((replyDrafts[p.id]?.trim()||replyMedia[p.id])?'transparent':t.border), borderRadius:7, padding:'3px 10px', fontSize:10, fontWeight:800, color:(replyDrafts[p.id]?.trim()||replyMedia[p.id])?'#000':t.textMuted, cursor:(replyDrafts[p.id]?.trim()||replyMedia[p.id])?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif" }}>
                               {replyPosting===p.id?'...':'Reply'}
                             </button>
                           </div>
