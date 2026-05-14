@@ -290,25 +290,37 @@ export default function ProgressPhotosViewer({
             <div style={{ fontSize: 14, fontWeight: 800, color: t.text, textAlign: 'center', marginBottom: 14 }}>
               Photo Comparison
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {/* Locked 1fr 1fr -- side-by-side on every viewport so the
+                user can actually compare. The previous auto-fit + 240px
+                min collapsed to a single column on phones, stacking the
+                photos vertically and forcing scroll to see both.
+                Aspect-ratio lock on the photo box equalizes sizes across
+                differing original orientations (landscape vs portrait). */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {compareView.map((p, i) => {
                 const labelColor = i === 0 ? t.teal : t.purple
                 const labelBg = i === 0 ? (t.tealDim || t.teal + '15') : (t.purpleDim || t.purple + '15')
+                const dateShort = new Date(p.photo_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                 return (
-                  <div key={p.id} style={{ background: t.surface, borderRadius: 14, overflow: 'hidden', border: '2px solid ' + labelColor }}>
-                    <div style={{ background: labelBg, color: labelColor, padding: '8px 14px', fontSize: 11, fontWeight: 800, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{i === 0 ? 'Before' : 'After'}</span>
-                      <span style={{ color: t.textMuted }}>
-                        {p.weight_at_time ? `${p.weight_at_time} lbs · ` : ''}{fmtFull(p.photo_date)}
+                  <div key={p.id} style={{ background: t.surface, borderRadius: 12, overflow: 'hidden', border: '2px solid ' + labelColor, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <div style={{ background: labelBg, color: labelColor, padding: '7px 10px', fontSize: 10, fontWeight: 800, display: 'flex', flexDirection: 'column', gap: 2, lineHeight: 1.2 }}>
+                      <span style={{ fontSize: 11, letterSpacing: '0.04em' }}>{i === 0 ? 'BEFORE' : 'AFTER'}</span>
+                      <span style={{ color: t.textMuted, fontSize: 10, fontWeight: 700 }}>
+                        {p.weight_at_time ? `${p.weight_at_time} lbs · ` : ''}{dateShort}
                       </span>
                     </div>
-                    {p.signedUrl && (
-                      <img src={p.signedUrl}
-                        alt={(i === 0 ? 'Earlier' : 'Later') + ' photo from ' + fmtFull(p.photo_date)}
-                        style={{ width: '100%', height: 'auto', maxHeight: '60vh', objectFit: 'contain', display: 'block' }} />
-                    )}
+                    {/* Aspect-ratio container -- portrait 3:4 matches typical
+                        phone selfie. objectFit:contain preserves whole body
+                        framing (cover would crop). Same box size both sides. */}
+                    <div style={{ width: '100%', aspectRatio: '3 / 4', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {p.signedUrl && (
+                        <img src={p.signedUrl}
+                          alt={(i === 0 ? 'Earlier' : 'Later') + ' photo from ' + fmtFull(p.photo_date)}
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                      )}
+                    </div>
                     {p.caption && (
-                      <div style={{ padding: '8px 14px', background: t.surfaceHigh, fontSize: 12, color: t.textDim || t.textMuted }}>
+                      <div style={{ padding: '6px 10px', background: t.surfaceHigh, fontSize: 11, color: t.textDim || t.textMuted, lineHeight: 1.4 }}>
                         {p.caption}
                       </div>
                     )}

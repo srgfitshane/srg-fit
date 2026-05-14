@@ -91,6 +91,7 @@ export default function ClientProgressPage() {
   const [photoForm, setPhotoForm] = useState({ angle:'front', caption:'', weight_at_time:'' })
   const [photoFile, setPhotoFile] = useState<File|null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>([])
   const [habitLogs,    setHabitLogs]    = useState<Record<string, Record<string,number>>>({}) // date → {sleep,steps,water}
   const [pulseTimeframe, setPulseTimeframe] = useState(30)
@@ -251,11 +252,31 @@ export default function ClientProgressPage() {
   async function saveMetric() {
     if (!clientRecord) return
     setSaving(true)
+    setSaveError(null)
     const payload: Record<string, number | string> = { client_id: clientRecord.id, logged_date: logForm.date||localDateStr() }
     ;['weight','waist','hips','chest','left_arm','right_arm','neck','shoulders','calves']
-      .forEach(f => { if (logForm[f]) payload[f]=parseFloat(logForm[f]) })
+      .forEach(f => {
+        const raw = logForm[f]
+        if (!raw) return
+        const n = parseFloat(raw)
+        // Skip NaN -- a stray "abc" would tank the whole upsert with
+        // "invalid input syntax for type numeric: NaN".
+        if (!Number.isFinite(n)) return
+        payload[f] = n
+      })
     if (logForm.notes) payload.notes = logForm.notes
-    await supabase.from('metrics').insert(payload)
+    // Upsert (not insert) -- the metrics table has a unique key on
+    // (client_id, logged_date). Logging a second metric on the same
+    // day (e.g. weight in the morning, measurements in the evening)
+    // was silently 409'ing on the constraint, modal closed regardless,
+    // and the user thought their data saved when it didn't. Rule 14:
+    // check error, surface failure, keep modal open so they can retry.
+    const { error } = await supabase.from('metrics').upsert(payload, { onConflict: 'client_id,logged_date' })
+    if (error) {
+      setSaving(false)
+      setSaveError('Could not save: ' + error.message)
+      return
+    }
     setLogOpen('none'); setLogForm({}); setSaving(false); loadData()
   }
 
@@ -581,6 +602,11 @@ export default function ClientProgressPage() {
                 </div>
               ))}
             </div>
+            {saveError && (
+              <div style={{ marginTop:14, background:alpha(t.red, 12), border:'1px solid '+alpha(t.red, 38), borderRadius:10, padding:'9px 12px', fontSize:12, color:t.red, lineHeight:1.5 }}>
+                {saveError}
+              </div>
+            )}
             <button onClick={saveMetric} disabled={saving}
               style={{ marginTop:16, width:'100%', background:t.teal, color:'#000', border:'none',
                 borderRadius:10, padding:'12px', fontWeight:800, cursor:'pointer', fontSize:14 }}>
@@ -618,6 +644,11 @@ export default function ClientProgressPage() {
                 </div>
               ))}
             </div>
+            {saveError && (
+              <div style={{ marginTop:14, background:alpha(t.red, 12), border:'1px solid '+alpha(t.red, 38), borderRadius:10, padding:'9px 12px', fontSize:12, color:t.red, lineHeight:1.5 }}>
+                {saveError}
+              </div>
+            )}
             <button onClick={saveMetric} disabled={saving}
               style={{ marginTop:16, width:'100%', background:t.teal, color:'#000', border:'none',
                 borderRadius:10, padding:'12px', fontWeight:800, cursor:'pointer', fontSize:14 }}>
