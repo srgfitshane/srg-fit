@@ -140,6 +140,36 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   const [thread,       setThread]       = useState<Message[]>([])
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
+  // Surface for send failures. Inline banner (sticky, not auto-dismiss)
+  // so the message never disappears with no feedback -- the symptom
+  // Anubha reported and the same shape as the April 28 check-in loss.
+  const [sendError,    setSendError]    = useState<string | null>(null)
+
+  // Per-conversation draft key. Mirrors the localStorage pattern locked
+  // into CLAUDE.md Rule 14 after the April 28 incident -- text-heavy
+  // input deserves a survival floor across session expiry, network
+  // blips, and browser crashes. Keyed by both participants so multiple
+  // open conversations don't clobber each other.
+  const draftKey = useMemo(() => `msg-draft:${myId}:${otherId}`, [myId, otherId])
+
+  // Restore draft on mount / when switching conversations.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(draftKey)
+      if (saved) setDraft(saved)
+    } catch { /* private-mode / quota -- non-fatal */ }
+  }, [draftKey])
+
+  // Autosave on every keystroke, debounced. Clears on successful send.
+  useEffect(() => {
+    const h = window.setTimeout(() => {
+      try {
+        if (draft) window.localStorage.setItem(draftKey, draft)
+        else window.localStorage.removeItem(draftKey)
+      } catch { /* quota exceeded -- non-fatal */ }
+    }, 600)
+    return () => window.clearTimeout(h)
+  }, [draft, draftKey])
   const [mode,         setMode]         = useState<'text'|'audio'|'video'|'gif'|'exercise'|'resource'>('text')
 
   const [recording,    setRecording]    = useState(false)
@@ -319,20 +349,39 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   }
 
   // ── Send text ─────────────────────────────────────────────────────────────
+  // Rule 14: check error, surface failure visibly, NEVER wipe the draft
+  // unless the insert confirmed success. The previous version cleared
+  // `draft` unconditionally even when the insert silently failed (RLS,
+  // session expiry, network), making the typed message disappear --
+  // exactly what Anubha reported. localStorage backup above means the
+  // draft survives even a hard refresh on top of an error.
   const sendText = async () => {
-    if (!draft.trim()) return
+    const body = draft.trim()
+    if (!body) return
     setSending(true)
-    const { data } = await supabase.from('messages').insert({
+    setSendError(null)
+    const { data, error } = await supabase.from('messages').insert({
       sender_id: myId, recipient_id: otherId,
-      body: draft.trim(), message_type: 'text', read: false,
+      body, message_type: 'text', read: false,
     }).select().single()
-    if (data) {
-      setThread(prev => [...prev, { ...data, reactions: [] }])
-      setTimeout(() => scrollToBottom(true), 0)
+    if (error || !data) {
+      setSending(false)
+      // Most common cause when this fires: Supabase access token expired
+      // because the tab was open for >1hr. Telling the user to refresh
+      // beats a cryptic Postgres error message they can't act on.
+      const msg = error?.message || 'Send failed -- please refresh and try again.'
+      setSendError(/jwt|session|auth|expired/i.test(msg)
+        ? 'Your session expired -- please refresh the page and try sending again. Your message is saved.'
+        : 'Could not send: ' + msg)
+      return
     }
+    setThread(prev => [...prev, { ...data, reactions: [] }])
+    setTimeout(() => scrollToBottom(true), 0)
+    // Confirmed success -- safe to wipe local + persisted draft.
     setDraft('')
+    try { window.localStorage.removeItem(draftKey) } catch {}
     setSending(false)
-    notifyRecipient(draft.trim())
+    notifyRecipient(body)
     userScrolledUp.current = false
     inputRef.current?.focus()
   }
@@ -999,9 +1048,21 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                 </div>
               )}
 
+              {/* Inline send-error banner. Sticky -- doesn't auto-dismiss
+                  so users on slow connections (or 77yo Anubha) have time
+                  to read and act. Clears on next keystroke. */}
+              {sendError && (
+                <div role="alert" style={{ background:alpha(c.red, 12), border:'1px solid '+alpha(c.red, 38), borderRadius:10, padding:'8px 12px', fontSize:12, color:c.red, lineHeight:1.5, marginBottom:8, display:'flex', gap:8, alignItems:'flex-start' }}>
+                  <span aria-hidden="true" style={{ fontSize:13, lineHeight:1, marginTop:1 }}>⚠</span>
+                  <span style={{ flex:1 }}>{sendError}</span>
+                  <button onClick={()=>setSendError(null)} aria-label="Dismiss"
+                    style={{ background:'none', border:'none', color:c.red, fontSize:14, cursor:'pointer', padding:0, lineHeight:1 }}>×</button>
+                </div>
+              )}
+
               {/* Input + send row — full width */}
               <div className="rmt-input-row">
-                <textarea ref={inputRef} value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={handleKey}
+                <textarea ref={inputRef} value={draft} onChange={e=>{ setDraft(e.target.value); if (sendError) setSendError(null) }} onKeyDown={handleKey}
                   aria-label={`Message ${otherName}`}
                   placeholder={`Message ${otherName.split(' ')[0]}...`} rows={1}
                   style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:12, padding:'10px 14px', fontSize:14, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto' }}
