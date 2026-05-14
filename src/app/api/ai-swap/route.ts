@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCoachApi } from '@/lib/supabase-server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 // Server-side proxy for AI exercise swap suggestions.
 // Keeps ANTHROPIC_API_KEY out of the client bundle entirely.
-// Coach-only — clients hitting this would burn Anthropic budget.
 //
-// F2c upgrade: callers can now include an optional `clientId` in the
-// body. When present we fetch that client's intake (injuries +
-// equipment access) and APPEND it to the last user message so the
-// LLM weighs injury history when picking swaps. Backwards-compatible:
-// callers without clientId behave exactly as before.
+// Auth model: authenticated callers ONLY, and caller must own the
+// referenced clientId -- either the coach (clients.coach_id = user.id)
+// or the client themselves (clients.profile_id = user.id). This is
+// distinct from the rest of the AI routes (coach-only) because the
+// in-workout swap UI is invoked BY the client mid-session, not by the
+// coach. Ownership check drops the "any logged-in user drains the
+// Anthropic budget" exposure while preserving the gym-floor swap flow.
+//
+// F2c upgrade: server fetches the client's intake (injuries +
+// equipment access) and APPENDS it to the last user message so the
+// LLM weighs injury history when picking swaps.
 export async function POST(req: NextRequest) {
-  const gate = await requireCoachApi()
-  if ('error' in gate) return gate.error
-  const { supabase } = gate
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -23,11 +28,26 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { clientId, ...passThrough } = body || {}
 
-  // ── Optional injury+equipment injection ─────────────────────────────
-  // Only fires when caller passes clientId. Coach gate above guarantees
-  // the caller is allowed to read client intake (further restricted by
-  // RLS to coach-owned clients).
-  if (clientId && Array.isArray(passThrough.messages) && passThrough.messages.length > 0) {
+  // ── Ownership gate ──────────────────────────────────────────────────
+  // clientId is required so we have something to bind ownership to.
+  // Without it, any authenticated user could burn Claude tokens.
+  if (!clientId || typeof clientId !== 'string') {
+    return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+  }
+  const { data: clientRow } = await supabase
+    .from('clients')
+    .select('id, profile_id, coach_id')
+    .eq('id', clientId)
+    .maybeSingle()
+  if (!clientRow || (clientRow.profile_id !== user.id && clientRow.coach_id !== user.id)) {
+    // Don't leak whether the row exists -- same response either way.
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // ── Injury+equipment injection ──────────────────────────────────────
+  // Ownership gate above guarantees the caller can legitimately read
+  // this intake. RLS still enforces it at the DB layer as defense-in-depth.
+  if (Array.isArray(passThrough.messages) && passThrough.messages.length > 0) {
     try {
       const { data: intake } = await supabase
         .from('client_intake_profiles')
