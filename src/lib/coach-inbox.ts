@@ -24,6 +24,7 @@ export type QueueItemType =
   | 'checkin'
   | 'friction'
   | 'silent_client'
+  | 'issue_report'
 
 export type SemanticColor = 'red' | 'orange' | 'yellow' | 'green' | 'purple' | 'teal'
 
@@ -121,6 +122,15 @@ type InboxMessageRow = {
   created_at: string
 }
 
+type IssueReportRow = {
+  id: string
+  client_id: string
+  category: 'messaging' | 'logging' | 'bug' | 'other'
+  body: string
+  status: 'open' | 'in_progress' | 'resolved' | 'closed'
+  created_at: string
+}
+
 type RecentSessionRow = {
   id: string
   client_id: string
@@ -200,7 +210,7 @@ export async function buildCoachInbox(
   const reviewWindowStart = new Date()
   reviewWindowStart.setDate(reviewWindowStart.getDate() - 14)
 
-  const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes] = await Promise.all([
+  const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes, openIssueRes] = await Promise.all([
     supabase
       .from('workout_sessions')
       .select('id, title, review_due_at, completed_at, client:clients!workout_sessions_client_id_fkey(id, profile:profiles!clients_profile_id_fkey(full_name))')
@@ -233,6 +243,16 @@ export async function buildCoachInbox(
       .gte('completed_at', reviewWindowStart.toISOString())
       .order('completed_at', { ascending: false })
       .limit(12),
+    // Open issue reports -- show in queue until coach marks them resolved
+    // or closed. open + in_progress both surface here so they don't fall
+    // off the radar while triage is mid-flight.
+    supabase
+      .from('issue_reports')
+      .select('id, client_id, category, body, status, created_at')
+      .eq('coach_id', coachUserId)
+      .in('status', ['open', 'in_progress'])
+      .order('created_at', { ascending: false })
+      .limit(10),
   ])
 
   const clientNameByProfileId = new Map(
@@ -381,6 +401,28 @@ export async function buildCoachInbox(
         action: 'Open review',
         color: urgency === 'red' ? 'red' : urgency === 'yellow' ? 'yellow' : 'green',
         href: '/dashboard/coach/reviews',
+      }
+    }),
+    // Issue reports always priority 96 (above yellow reviews / insights but
+    // just under red reviews) -- a client flagging a bug deserves quick eyes
+    // but shouldn't outrank an SLA-overdue workout review.
+    ...((openIssueRes.data || []) as IssueReportRow[]).map((issue): QueueItem => {
+      const clientName = clients.find((c) => c.id === issue.client_id)?.profile?.full_name || 'Client'
+      const categoryLabel = ({
+        messaging: 'Messaging',
+        logging: 'Workout logging',
+        bug: 'Bug',
+        other: 'Issue',
+      } as const)[issue.category]
+      return {
+        id: `issue-${issue.id}`,
+        type: 'issue_report',
+        priority: 96,
+        title: `${clientName} reported ${issue.status === 'in_progress' ? 'an in-progress ' : 'an '}issue 🐛`,
+        detail: `${categoryLabel} · ${truncate(issue.body, 60)}`,
+        action: 'Review issue',
+        color: 'red',
+        href: '/dashboard/coach/issues',
       }
     }),
     ...((unreadInsightsRes.data || []) as InsightQueueRow[]).map((insight): QueueItem => ({

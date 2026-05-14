@@ -96,6 +96,7 @@ const queueTypeLabel: Record<QueueItem['type'], string> = {
   checkin: 'Check-in',
   friction: 'Friction',
   silent_client: 'Quiet',
+  issue_report: 'Issue',
 }
 
 const queueTypeColor = (type: QueueItem['type']) => {
@@ -106,6 +107,7 @@ const queueTypeColor = (type: QueueItem['type']) => {
     case 'checkin': return { color: t.yellow, bg: `${t.yellow}15` }
     case 'friction': return { color: t.orange, bg: t.orangeDim }
     case 'silent_client': return { color: t.orange, bg: t.orangeDim }
+    case 'issue_report': return { color: t.red, bg: t.redDim }
   }
 }
 
