@@ -381,8 +381,22 @@ export default function ClientFormPage() {
               </div>
             )}
             {restoredDraft && (
-              <div style={{ marginTop:12, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 27), borderRadius:10, padding:'10px 14px', fontSize:13, color:t.orange, lineHeight:1.5 }}>
-                💾 We restored your in-progress answers from your last visit.
+              <div style={{ marginTop:12, background:t.orangeDim, border:'1px solid '+alpha(t.orange, 27), borderRadius:10, padding:'10px 14px', fontSize:13, color:t.orange, lineHeight:1.5, display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' as const }}>
+                <span style={{ flex:1, minWidth:200 }}>💾 We restored your in-progress answers from your last visit.</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Wipe local + server drafts and reset answers so the
+                    // client gets a true fresh slate. Banner hides since
+                    // there's no longer a restored draft on screen.
+                    try { window.localStorage.removeItem(`form-draft:${formAssignmentId}`) } catch { /* */ }
+                    if (profileId) void clearServerDraft(profileId, `forms:${formAssignmentId}`)
+                    setAnswers({})
+                    setRestoredDraft(false)
+                  }}
+                  style={{ background:'transparent', border:'1px solid '+alpha(t.orange, 60), borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  Start over
+                </button>
               </div>
             )}
           </div>

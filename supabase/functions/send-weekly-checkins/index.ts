@@ -53,6 +53,20 @@ serve(async (req: Request) => {
           continue
         }
 
+        // 0. Clear out any prior pending check-in for this same schedule.
+        // If the client never filled out last week's check-in by the time
+        // this week's fires, the old one is stale -- replace it rather
+        // than letting unfilled assignments accumulate on the dashboard.
+        // Completed assignments are untouched (they're the history coach
+        // needs). Orphaned form_drafts are harmless (their form_key
+        // references the now-deleted assignment id and will never resolve).
+        const { error: cleanupErr } = await supabase.from('client_form_assignments')
+          .delete()
+          .eq('client_id', sched.client_id)
+          .eq('checkin_schedule_id', sched.id)
+          .eq('status', 'pending')
+        if (cleanupErr) console.error(`[send-weekly-checkins] cleanup failed (sched=${sched.id})`, cleanupErr.message)
+
         // 1. Assign the form to the client
         const { error: insertErr } = await supabase.from('client_form_assignments').insert({
           coach_id: sched.coach_id,
