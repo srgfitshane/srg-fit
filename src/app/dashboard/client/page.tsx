@@ -725,7 +725,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const [{ data: prof }, { data: clientData }] = await Promise.all([
+      const [{ data: prof, error: profErr }, { data: clientData, error: clientErr }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase
           .from('clients')
@@ -734,9 +734,26 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           .eq('active', true)
           .single(),
       ])
-      setProfile(prof as DashboardProfile | null)
-      setClientRecord((clientData as DashboardClientRecord | null) || null)
-      setCoachProfileId(clientData?.coach_id || null)
+      // Defensive setState: only OVERWRITE existing state when the refetch
+      // actually returned data. Anubha was seeing the messages screen flash
+      // to a loading state mid-typing because a transient network blip /
+      // brief auth race during a visibilitychange-triggered refetch was
+      // returning null, and the unconditional setState was clobbering the
+      // valid profile + coachProfileId we already had. The render
+      // conditional `{profile && coachProfileId ? <RichMessageThread/> :
+      // <div>Loading messages...</div>}` then unmounted the thread, the
+      // dynamic-import loader fired its placeholder, and on the next
+      // successful refetch the thread remounted -- the white-flash-then-
+      // loading-flash-then-back pattern she described.
+      if (prof) setProfile(prof as DashboardProfile)
+      else if (profErr) console.warn('[client/page] profile refetch null:', profErr.message)
+
+      if (clientData) {
+        setClientRecord(clientData as DashboardClientRecord)
+        setCoachProfileId((clientData as DashboardClientRecord).coach_id || null)
+      } else if (clientErr) {
+        console.warn('[client/page] client refetch null:', clientErr.message)
+      }
 
       // Coach landed on client dashboard with no client record — redirect them home
       if (!clientData && (prof as any)?.role === 'coach') {
