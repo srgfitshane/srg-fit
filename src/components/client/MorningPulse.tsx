@@ -322,22 +322,38 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
                 <span>{saveError}</span>
               </div>
             )}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <button onClick={()=>setIsPrivate(p=>!p)}
-                style={{ ...btnBase, display:'flex', alignItems:'center', gap:6, background:isPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(isPrivate?t.border:alpha(t.teal, 25)), borderRadius:20, padding:'5px 12px', transition:'all 0.2s' }}>
-                <span style={{ fontSize:12 }}>{isPrivate?'🔒':'👁️'}</span>
-                <span style={{ fontSize:11, fontWeight:700, color:isPrivate?t.textMuted:t.teal }}>{isPrivate?'Private':'Share with Coach'}</span>
-              </button>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={()=>save('', isPrivate)} disabled={saving}
-                  style={{ ...btnBase, border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.textMuted }}>
-                  Skip
+            {/* Segmented Private / For Coach toggle. Both choices visible
+                at once so users don't have to tap to discover the
+                alternative state. Explicit subtitle removes ambiguity
+                about who reads what. */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ display:'flex', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:20, padding:2, width:'fit-content', gap:0 }}>
+                <button onClick={()=>setIsPrivate(true)}
+                  aria-pressed={isPrivate}
+                  style={{ ...btnBase, display:'flex', alignItems:'center', gap:5, background:isPrivate?t.surfaceHigh:'transparent', border:'none', borderRadius:18, padding:'5px 12px', color:isPrivate?t.text:t.textMuted, fontSize:11, fontWeight:700, transition:'all 0.15s' }}>
+                  🔒 Private
                 </button>
-                <button onClick={()=>save(journal, isPrivate)} disabled={saving}
-                  style={{ ...btnBase, backgroundColor:t.teal, background:t.teal, borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1, boxShadow:'inset 0 -2px 0 rgba(0,0,0,0.15)' }}>
-                  {saving?'Saving...':'Done ✓'}
+                <button onClick={()=>setIsPrivate(false)}
+                  aria-pressed={!isPrivate}
+                  style={{ ...btnBase, display:'flex', alignItems:'center', gap:5, background:!isPrivate?t.tealDim:'transparent', border:'none', borderRadius:18, padding:'5px 12px', color:!isPrivate?t.teal:t.textMuted, fontSize:11, fontWeight:700, transition:'all 0.15s' }}>
+                  👁️ For Coach
                 </button>
               </div>
+              <div style={{ fontSize:10, color:t.textMuted, marginTop:6, lineHeight:1.4 }}>
+                {isPrivate
+                  ? 'Tap "For Coach" if you want Shane to read this entry.'
+                  : 'Shane will see this entry. Tap "Private" to keep it to yourself.'}
+              </div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:8 }}>
+              <button onClick={()=>save('', isPrivate)} disabled={saving}
+                style={{ ...btnBase, border:'1px solid '+t.border, borderRadius:10, padding:'9px 14px', fontSize:12, fontWeight:700, color:t.textMuted }}>
+                Skip
+              </button>
+              <button onClick={()=>save(journal, isPrivate)} disabled={saving}
+                style={{ ...btnBase, backgroundColor:t.teal, background:t.teal, borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', opacity:saving?0.6:1, boxShadow:'inset 0 -2px 0 rgba(0,0,0,0.15)' }}>
+                {saving?'Saving...':'Done ✓'}
+              </button>
             </div>
           </div>
         )}

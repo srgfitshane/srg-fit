@@ -1587,18 +1587,31 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 rows={4}
                 style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' }}
               />
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10 }}>
-                <button onClick={()=>setJournalPrivate(p=>!p)}
-                  style={{ display:'flex', alignItems:'center', gap:7, background:journalPrivate?t.surfaceHigh:t.tealDim, border:'1px solid '+(journalPrivate?t.border:alpha(t.teal, 25)), borderRadius:20, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={journalPrivate?t.textMuted:t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    {journalPrivate
-                      ? <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>
-                      : <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/> }
-                  </svg>
-                  <span style={{ fontSize:11, fontWeight:700, color:journalPrivate?t.textMuted:t.teal }}>
-                    {journalPrivate ? 'Private' : 'Visible to Coach'}
-                  </span>
-                </button>
+              {/* Segmented Private / For Coach toggle. Replaces the prior
+                  single-state button so both choices are visible at once --
+                  the affordance is now obvious without having to tap to
+                  discover. Anubha-tier UX: explicit subtitle below removes
+                  any remaining ambiguity about who sees what. */}
+              <div style={{ marginTop:10 }}>
+                <div style={{ display:'flex', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:20, padding:2, width:'fit-content', gap:0 }}>
+                  <button onClick={()=>setJournalPrivate(true)}
+                    aria-pressed={journalPrivate}
+                    style={{ display:'flex', alignItems:'center', gap:5, background:journalPrivate?t.surfaceHigh:'transparent', border:'none', borderRadius:18, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", color:journalPrivate?t.text:t.textMuted, fontSize:11, fontWeight:700, transition:'all 0.15s' }}>
+                    🔒 Private
+                  </button>
+                  <button onClick={()=>setJournalPrivate(false)}
+                    aria-pressed={!journalPrivate}
+                    style={{ display:'flex', alignItems:'center', gap:5, background:!journalPrivate?t.tealDim:'transparent', border:'none', borderRadius:18, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", color:!journalPrivate?t.teal:t.textMuted, fontSize:11, fontWeight:700, transition:'all 0.15s' }}>
+                    👁️ For Coach
+                  </button>
+                </div>
+                <div style={{ fontSize:10, color:t.textMuted, marginTop:6, lineHeight:1.4 }}>
+                  {journalPrivate
+                    ? 'Tap "For Coach" if you want Shane to read this entry.'
+                    : 'Shane will see this entry. Tap "Private" to keep it to yourself.'}
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', marginTop:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   {journalDate === today && !journalSaved && (
                     <span style={{ fontSize:11, color:t.teal, fontWeight:600 }}>✓ Saved today</span>
