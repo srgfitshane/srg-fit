@@ -60,7 +60,15 @@ export const themeDark: ThemeTokens = {
   blue: '#60a5fa',
   accent: '#c8f545',    accentDim: '#c8f54515',
   text: '#eeeef8',
-  textMuted: '#5a5a78',
+  // textMuted previously '#5a5a78' -- pure cool gray. On the very dark
+  // bg (#080810) that read at ~3.5:1 contrast, which fails AA for normal
+  // text and was hard to read at small sizes ("Target: 64oz", "Tap to
+  // log", form hints, etc.). Shifting to a desaturated muted teal lifts
+  // contrast to ~6.5:1 (AA pass) AND tints subtitle text with the
+  // brand color, which makes habit-card targets / hints / metadata
+  // feel cohesive instead of dead-gray. Light mode is untouched -- its
+  // gray works on white bg.
+  textMuted: '#7aa39d',
   textDim: '#8888a8',
 }
 
