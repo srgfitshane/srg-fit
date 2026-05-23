@@ -565,34 +565,57 @@ ${candidateList}`
 
       if (completedSessions && completedSessions.length > 0) {
         const completedIds = completedSessions.map((s:{ id: string }) => s.id)
+        // completedIds is already sorted most-recent-first (the parent query
+        // ordered by completed_at DESC). Use that to pick the MOST RECENT
+        // matching prior session_exercise rather than an arbitrary one.
+        const recencyRank = new Map(completedIds.map((id, i) => [id, i]))
+        const pickMostRecent = (rows: { id: string; session_id: string }[] | null) => {
+          if (!rows || rows.length === 0) return null
+          // Smallest rank index = most recent session.
+          return rows
+            .slice()
+            .sort((a, b) => (recencyRank.get(a.session_id) ?? 999) - (recencyRank.get(b.session_id) ?? 999))[0]
+        }
+
         for (const ex of exs as SessionExercise[]) {
           // Match by exercise_id first (survives renamed/swapped exercises with
           // the same canonical id), fallback to exercise_name.
-          let priorExs: { id: string }[] | null = null
+          // BUGFIX (Lindsey's report May 22): previously this used .limit(1)
+          // without any ordering, so PostgREST returned an arbitrary row
+          // across the last 20 sessions -- could be a deload from weeks ago
+          // showing as "last time", consistently lower than her actual most
+          // recent working sets. Now we fetch all matching rows in the
+          // window and pick the one from the most recent completed session.
+          let priorEx: { id: string; session_id: string } | null = null
           if (ex.exercise_id) {
             const { data } = await supabase
               .from('session_exercises')
-              .select('id')
+              .select('id, session_id')
               .eq('exercise_id', ex.exercise_id)
               .in('session_id', completedIds)
-              .limit(1)
-            priorExs = data
+            priorEx = pickMostRecent(data as { id: string; session_id: string }[] | null)
           }
-          if ((!priorExs || priorExs.length === 0) && ex.exercise_name) {
+          if (!priorEx && ex.exercise_name) {
             const { data } = await supabase
               .from('session_exercises')
-              .select('id')
+              .select('id, session_id')
               .eq('exercise_name', ex.exercise_name)
               .in('session_id', completedIds)
-              .limit(1)
-            priorExs = data
+            priorEx = pickMostRecent(data as { id: string; session_id: string }[] | null)
           }
 
-          if (priorExs && priorExs.length > 0) {
+          if (priorEx) {
+            // BUGFIX (Lindsey's report May 22): exclude warmup sets from the
+            // "Last:" prefill. With warmups included, the positional match
+            // (set N this week pulled from set N last week) could line up
+            // current set 1 with a prior warmup weight -- making "last time"
+            // read as the warmup load, not the working set. Filtering on
+            // is_warmup=false keeps positions aligned to working sets only.
             const { data: priorSets } = await supabase
               .from('exercise_sets')
               .select('set_number, reps_completed, weight_value, weight_unit')
-              .eq('session_exercise_id', priorExs[0].id)
+              .eq('session_exercise_id', priorEx.id)
+              .eq('is_warmup', false)
               .order('set_number')
               .limit(6)
 
