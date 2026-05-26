@@ -1123,8 +1123,27 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                 <textarea ref={inputRef} value={draft} onChange={e=>{ setDraft(e.target.value); if (sendError) setSendError(null) }} onKeyDown={handleKey}
                   aria-label={`Message ${otherName}`}
                   placeholder={`Message ${otherName.split(' ')[0]}...`} rows={1}
-                  style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:12, padding:'10px 14px', fontSize:14, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto' }}
-                  onInput={e=>{ const el=e.currentTarget; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px' }}
+                  // fieldSizing:'content' lets the textarea auto-grow via CSS
+                  // (Chrome 123+ / March 2024, Safari 17.4+). The old pattern
+                  // -- el.style.height='auto'; el.style.height=scrollHeight --
+                  // briefly collapsed the textarea on every onInput. On
+                  // Android with the soft keyboard up that collapse-then-
+                  // restore was interpreted as a layout change and the page
+                  // re-anchored each keystroke (the "screen jumps with each
+                  // input" Shane reported May 26).
+                  style={{ flex:1, background:c.surfaceUp, border:'1px solid '+c.border, borderRadius:12, padding:'10px 14px', fontSize:14, color:c.text, outline:'none', fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto', fieldSizing:'content' as unknown as undefined }}
+                  // JS fallback for browsers without field-sizing. Idempotent
+                  // -- only writes style.height when the measured target
+                  // differs from current clientHeight by >1px, so steady-
+                  // state typing (within one row) does zero style writes.
+                  onInput={e=>{
+                    const el = e.currentTarget
+                    if (typeof CSS !== 'undefined' && CSS.supports && CSS.supports('field-sizing', 'content')) return
+                    const desired = Math.min(el.scrollHeight, 120)
+                    if (Math.abs(el.clientHeight - desired) <= 1) return
+                    el.style.height = '0px'
+                    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+                  }}
                 />
                 <button onClick={sendText} aria-label="Send message" disabled={!draft.trim()||sending}
                   style={{ background:c.teal, border:'none', borderRadius:10, width:44, height:44, display:'flex', alignItems:'center', justifyContent:'center', cursor:!draft.trim()||sending?'not-allowed':'pointer', opacity:!draft.trim()||sending?.4:1, flexShrink:0 }}>
