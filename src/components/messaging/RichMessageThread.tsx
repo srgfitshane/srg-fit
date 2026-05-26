@@ -326,6 +326,28 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     return () => el.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Re-anchor scroll to bottom whenever the textarea (or any preview bar
+  // above it) changes height. Yesterday's fix (May 26) killed per-keystroke
+  // jitter from the JS auto-resize, but the natural reflow when the
+  // textarea grows from 1 line to 2 still slid the last visible message
+  // up out of view -- the "window still jumping past a single line" Shane
+  // saw on Android. ResizeObserver fires after layout, so a single
+  // scrollTop write here keeps the bottom of the messages pinned to the
+  // top of the (now-taller) input bar. Guarded by userScrolledUp so it
+  // doesn't yank someone reading older messages back down.
+  useEffect(() => {
+    const inputEl = inputRef.current
+    const scrollEl = scrollRef.current
+    if (!inputEl || !scrollEl) return
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      if (userScrolledUp.current) return
+      scrollEl.scrollTop = scrollEl.scrollHeight
+    })
+    ro.observe(inputEl)
+    return () => ro.disconnect()
+  }, [])
+
   // Auto-scroll: force bottom on load, keep forcing until stable for 500ms
   useEffect(() => {
     const el = scrollRef.current
