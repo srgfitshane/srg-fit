@@ -290,6 +290,40 @@ form. The benefit is users never lose their writing.
   contamination.
 - RLS policies for service role: use `TO service_role`, never
   `auth.role() = 'service_role'` in `USING`/`WITH CHECK`.
+- **Never build a `.select()` column list from a TS type.** (May 28
+  regression): the coach dashboard switched `select('*')` → an explicit
+  list copied from the `CoachClient` type, which included
+  `last_workout_at` — a type field that is NOT a real column. PostgREST
+  **400s the entire query on one unknown column** and the JS client
+  returned null → the dashboard rendered "No clients yet" while every
+  other query showed real data. Reinforces Rule 4: verify every column
+  against `information_schema` before naming it. Types lie; the DB
+  doesn't.
+- **Signed URLs rotate per call** (`?token=` differs every time), so the
+  browser treats each as a new resource and re-downloads. For PUBLIC
+  buckets use `getPublicUrl` (stable, CDN-cacheable). For private buckets
+  cache the signed URL (e.g. module-level Map keyed by `bucket:path`,
+  refresh near the 60-min TTL) instead of re-signing on every render /
+  refetch. Re-signing in a hot path was a chunk of the May 27 egress
+  spike.
+
+## React / rendering gotchas
+
+- **Never define a component INSIDE another component if it renders media
+  (or anything expensive).** (May 25–28 egress disaster): `BubbleContent`
+  was declared inside `RichMessageThread` and used as
+  `<BubbleContent msg={msg} />`. Every parent re-render created a new
+  function identity, so React saw a new component *type* and unmounted +
+  remounted the whole subtree — including the `<video>`, which re-fetches
+  its `src` on every remount. iOS Safari re-bursts range requests on each
+  remount. One client parked on a thread with two video messages
+  re-downloaded the same `.mp4`s hundreds of times/sec → ~12 GB/day of
+  storage egress. **Fix:** render inline content via a plain function call
+  (`{renderBubbleContent(msg)}`) — no component boundary, so React
+  reconciles the element by position and reuses the DOM node. Also set
+  `preload="metadata"` on `<video>`/`<audio>` so idle media doesn't fetch
+  its body. If you must keep it a component, hoist it to module scope (or
+  `useCallback`/memo) so its identity is stable.
 
 ## Next.js / Stripe gotchas
 
@@ -521,9 +555,7 @@ on them without asking, but keep them in mind:
 - **FatSecret IP whitelist**: outbound IP `44.199.250.80` needs to
   be allowlisted at platform.fatsecret.com → API Keys → IP Restrictions.
   Recurring item.
-- **USDA API key rotation**: `NEXT_PUBLIC_USDA_API_KEY` was exposed
-  in an early commit. Should be rotated at https://fdc.nal.usda.gov/api-key-signup.html,
-  new value added to Vercel.
+- **USDA API key rotation**: DONE (Shane rotated it, May 2026).
 - **Resend domain verification**: once verified, switch SMTP sender
   to `noreply@srgfit.training`.
 - **Stripe webhook live verification**: confirm
@@ -531,6 +563,12 @@ on them without asking, but keep them in mind:
 - **TodayTab extraction**: `src/app/dashboard/client/page.tsx` has
   ~260 lines of TodayTab still inline. Pattern to follow: see how
   NutritionTab, TrainingTab, BillingTab are already extracted.
+- **Circuits / supersets in the workout logger** (back burner, Shane's
+  next-up idea, May 28): the logger's set grid is straight-sets only.
+  Supporting circuits/supersets needs grouped exercises + round-based
+  logging (log A1→B1→C1, rest, repeat). `group_type` is already
+  referenced in the logger UI, so the data model may be partway there —
+  check before planning. Deserves its own session + plan.
 
 ## Handy reference: active Edge Functions
 
