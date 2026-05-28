@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 
 // Server-side proxy for AI exercise swap suggestions.
 // Keeps ANTHROPIC_API_KEY out of the client bundle entirely.
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest) {
     // Don't leak whether the row exists -- same response either way.
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+
+  // Cost guardrail: this is the only AI route a (untrusted) client can hit,
+  // so cap it before we forward to Anthropic.
+  const limited = await enforceAiRateLimit(user.id, 'ai-swap')
+  if (limited) return limited
 
   // ── Injury+equipment injection ──────────────────────────────────────
   // Ownership gate above guarantees the caller can legitimately read

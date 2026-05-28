@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCoachApi } from '@/lib/supabase-server'
 import { parseClaudeJsonResponse } from '@/lib/ai-utils'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 
 // =================================================================
 // Weekly Brief — proactive Monday-morning summary per client (F3).
@@ -56,6 +57,9 @@ export async function POST(req: NextRequest) {
   if (!client || client.coach_id !== user.id) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
   }
+
+  const limited = await enforceAiRateLimit(user.id, 'ai-weekly-brief')
+  if (limited) return limited
   const clientName = (client as any).profile?.full_name || (client as any).display_name || 'Client'
 
   // Two windows: last 7 days (current) and the 7 days before that (prior)

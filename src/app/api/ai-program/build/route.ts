@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { parseClaudeJsonResponse } from '@/lib/ai-utils'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 
 // =================================================================
 // AI Program Builder (F2a, Phase 1) — coach-only.
@@ -69,6 +70,11 @@ export async function POST(req: NextRequest) {
   if (!client || client.coach_id !== user.id) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
   }
+
+  // Most expensive AI route (6-12k tokens). Hard cap before we build.
+  const limited = await enforceAiRateLimit(user.id, 'ai-program-build')
+  if (limited) return limited
+
   const clientName = (client as any).profile?.full_name || (client as any).display_name || 'the client'
 
   // Intake — primary context source

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCoachApi } from '@/lib/supabase-server'
 import { parseClaudeJsonResponse } from '@/lib/ai-utils'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 
 // =================================================================
 // Coach note structurer (F4.1) — coach-only.
@@ -46,6 +47,9 @@ export async function POST(req: NextRequest) {
   if (!client || client.coach_id !== user.id) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
   }
+
+  const limited = await enforceAiRateLimit(user.id, 'ai-coach-note')
+  if (limited) return limited
 
   const prompt = `You are a coaching assistant. The coach pasted a raw stream-of-consciousness
 note about a client. Return a structured version the coach can scan in

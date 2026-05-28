@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCoachApi } from '@/lib/supabase-server'
 import { parseClaudeJsonResponse } from '@/lib/ai-utils'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 
 // =================================================================
 // 7-day meal plan + grocery list (F1b). Coach-only.
@@ -31,6 +32,9 @@ export async function POST(req: NextRequest) {
   if (!client || client.coach_id !== user.id) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
   }
+
+  const limited = await enforceAiRateLimit(user.id, 'ai-nutrition-weekly-meal-plan')
+  if (limited) return limited
 
   const { data: intake } = await supabase
     .from('client_intake_profiles')

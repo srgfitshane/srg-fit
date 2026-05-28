@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCoachApi } from '@/lib/supabase-server'
 import { parseClaudeJsonResponse } from '@/lib/ai-utils'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 
 // =================================================================
 // AI message-draft (F4.2) -- coach-only.
@@ -41,6 +42,10 @@ export async function POST(req: NextRequest) {
   if (!client || (client as any).coach_id !== user.id) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
   }
+
+  const limited = await enforceAiRateLimit(user.id, 'ai-message-draft')
+  if (limited) return limited
+
   const clientName = (client as any).profile?.full_name?.split(' ')[0] || 'them'
 
   // ── Pull deterministic context (last 14 days) in parallel ─────────

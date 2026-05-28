@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { enforceAiRateLimit } from '@/lib/ai-rate-limit'
 import { parseClaudeJsonResponse } from '@/lib/ai-utils'
 import * as XLSX from 'xlsx'
 
@@ -98,6 +99,9 @@ export async function POST(req: NextRequest) {
   if (prof?.role !== 'coach') {
     return NextResponse.json({ error: 'Coach access only' }, { status: 403 })
   }
+
+  const limited = await enforceAiRateLimit(user.id, 'ai-program-import')
+  if (limited) return limited
 
   // Parse multipart upload
   let formData: FormData
