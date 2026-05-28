@@ -2179,6 +2179,37 @@ ${candidateList}`
                                 const cell = {width:'100%',background:s.logged?'transparent':t.surfaceHigh,border:`1px solid ${s.logged?'transparent':t.border}`,borderRadius:8,padding:'9px 4px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center' as const,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}
                                 return (
                                   <div key={idx} style={{borderRadius:10,background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:'transparent',border:`1px solid ${s.logged?alpha(t.green,31):'transparent'}`,padding:'3px 2px',marginBottom:4,opacity:s.skipped?0.5:1}}>
+                                    {/* Per-set controls ABOVE the working set so it reads as a
+                                        header for THIS set (warmup toggle, last-time ref +
+                                        fill helpers, skip). Only on an unlogged, un-skipped
+                                        row -- logged rows collapse to the single input line. */}
+                                    {!s.logged && !s.skipped && (
+                                      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const,padding:'2px 4px 5px',fontSize:11}}>
+                                        <label style={{display:'flex',alignItems:'center',gap:4,color:t.textMuted,cursor:'pointer'}}>
+                                          <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
+                                          Warmup
+                                        </label>
+                                        {prior&&(
+                                          <span style={{color:t.textMuted}}>↩ Last: <b style={{color:t.textDim}}>{prior.reps?`${prior.reps}`:'—'}{prior.weight&&prior.unit!=='bw'?`×${prior.weight}${prior.unit}`:prior.unit==='bw'?' BW':''}</b></span>
+                                        )}
+                                        {prior&&(
+                                          <button onClick={()=>applySetTemplate(ex.id,idx,{reps:prior.reps,weight:prior.weight,unit:prior.unit})}
+                                            style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
+                                            use last
+                                          </button>
+                                        )}
+                                        {idx>0&&(
+                                          <button onClick={()=>copyPreviousLoggedSet(ex.id,idx)}
+                                            style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
+                                            copy prev
+                                          </button>
+                                        )}
+                                        <button onClick={()=>skipSet(ex.id,idx)}
+                                          style={{marginLeft:'auto',background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          ⏭ skip
+                                        </button>
+                                      </div>
+                                    )}
                                     <div style={{display:'grid',gridTemplateColumns:cols,gap:8,alignItems:'center'}}>
                                       <span style={{fontSize:13,fontWeight:800,color:s.logged?t.green:t.textMuted,textDecoration:s.skipped?'line-through':'none',paddingLeft:4}}>
                                         {s.is_warmup?'W':idx+1}
@@ -2208,34 +2239,6 @@ ${candidateList}`
                                         </button>
                                       )}
                                     </div>
-                                    {/* thin secondary line — only on an unlogged, un-skipped row */}
-                                    {!s.logged && !s.skipped && (
-                                      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const,padding:'5px 4px 2px',fontSize:11}}>
-                                        <label style={{display:'flex',alignItems:'center',gap:4,color:t.textMuted,cursor:'pointer'}}>
-                                          <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
-                                          Warmup
-                                        </label>
-                                        {prior&&(
-                                          <span style={{color:t.textMuted}}>↩ Last: <b style={{color:t.textDim}}>{prior.reps?`${prior.reps}`:'—'}{prior.weight&&prior.unit!=='bw'?`×${prior.weight}${prior.unit}`:prior.unit==='bw'?' BW':''}</b></span>
-                                        )}
-                                        {prior&&(
-                                          <button onClick={()=>applySetTemplate(ex.id,idx,{reps:prior.reps,weight:prior.weight,unit:prior.unit})}
-                                            style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
-                                            use last
-                                          </button>
-                                        )}
-                                        {idx>0&&(
-                                          <button onClick={()=>copyPreviousLoggedSet(ex.id,idx)}
-                                            style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
-                                            copy prev
-                                          </button>
-                                        )}
-                                        <button onClick={()=>skipSet(ex.id,idx)}
-                                          style={{marginLeft:'auto',background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                                          ⏭ skip
-                                        </button>
-                                      </div>
-                                    )}
                                   </div>
                                 )
                               })}
