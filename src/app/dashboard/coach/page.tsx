@@ -172,9 +172,16 @@ export default function CoachDashboard() {
         }
       } catch { /* ignore corrupt state */ }
       setDismissedQueueIds(dismissed)
+      // Explicit columns instead of '*'. The clients table accumulates
+      // settings / preferences / JSONB blobs the dashboard doesn't read,
+      // and load() fires on every visibilitychange -- multiplied across
+      // a coach's day each unused column is wasted egress. The list here
+      // matches every field consumed by CoachClient + the queue mappers
+      // (id, paused, profile.full_name for the inbox; the contact +
+      // training fields for the lifecycle drawer + filters).
       const { data: clientList } = await supabase
         .from('clients')
-        .select(`*, display_name, client_type, training_type, contact_email, contact_phone, profile:profiles!profile_id(full_name, email, avatar_url)`)
+        .select(`id, display_name, client_type, training_type, contact_email, contact_phone, profile_id, paused, flagged, start_date, last_checkin_at, last_workout_at, last_active_at, profile:profiles!profile_id(full_name, email, avatar_url)`)
         .eq('coach_id', user.id)
         .neq('archived', true)
       const safeClientList = (clientList || []) as CoachClient[]
@@ -273,8 +280,20 @@ export default function CoachDashboard() {
 
   // Visibility refetch — coach pops back from Messages or another app, list
   // reflects fresh check-ins, reviews, etc. without a manual reload.
+  // Throttled to once per 15s: the original unthrottled version ran a full
+  // dashboard payload (clients, insights, inbox aggregation, birthdays)
+  // on every tab focus, which on Alt-Tab-heavy days meant the same payload
+  // pulled dozens of times an hour. 15s matches the same throttle pattern
+  // already in coach/messages and coach/checkins.
   useEffect(() => {
-    const onVis = () => { if (!document.hidden) void load() }
+    let lastRefreshAt = 0
+    const onVis = () => {
+      if (document.hidden) return
+      const now = Date.now()
+      if (now - lastRefreshAt < 15_000) return
+      lastRefreshAt = now
+      void load()
+    }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [load])

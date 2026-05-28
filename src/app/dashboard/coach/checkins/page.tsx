@@ -85,9 +85,16 @@ export default function CoachCheckins() {
     const clientIds = (clientList || []).map((c:any) => c.id)
     if (!clientIds.length) { setLoading(false); return }
 
+    // Explicit columns instead of '*' -- client_form_assignments
+    // accumulates timestamp + audit columns the UI never reads, and
+    // this query fires on every visibility return. The list still
+    // pulls `response` (the long JSONB blob) because the card
+    // preview renders snippets from it; a future pass can move the
+    // preview to a derived `response_summary` column and defer the
+    // full blob until detail-view click.
     const { data } = await supabase
       .from('client_form_assignments')
-      .select('*, form:onboarding_forms(title, form_type, is_checkin_type)')
+      .select('id, client_id, form_id, completed_at, coach_response, response, form:onboarding_forms(title, form_type, is_checkin_type)')
       .in('client_id', clientIds)
       .eq('status', 'completed')
       .not('response', 'is', null)

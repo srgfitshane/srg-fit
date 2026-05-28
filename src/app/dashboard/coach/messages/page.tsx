@@ -157,10 +157,18 @@ function MessagesInner() {
       for (const m of msgs || []) counts[m.sender_id] = (counts[m.sender_id] || 0) + 1
       setUnread(counts)
 
+      // Time-windowed: the messages list only needs the most-recent
+      // message per client + the "stale 72h" check. Pulling all
+      // historical messages (months of conversations × ~11 active
+      // clients) was multi-MB per visibility refetch and contributed
+      // to the May 27 storage/db spike. 60 days covers preview + the
+      // stale-followup detection window with plenty of margin.
+      const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
       const { data: allMsgs } = await supabase
         .from('messages')
         .select('sender_id, recipient_id, body, created_at, read')
         .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+        .gte('created_at', sixtyDaysAgo)
         .order('created_at', { ascending: false })
 
       const enrichedClients = normalizedClients.map((client: any) => {
