@@ -2144,115 +2144,104 @@ ${candidateList}`
                             )
                           })()}
 
-                          {/* Set logging grid */}
-                          {!isSkipped && (
-                            <div style={{display:'grid',gap:8,marginBottom:10}}>
+                          {/* Set logging grid — compact table. One header row, then one
+                              tight line per set (Set | Reps | Weight | Done). The "Done"
+                              check logs that set + starts the rest timer; tap it again to
+                              edit. Unit lives once in the header, not per row. Warmup /
+                              last-time / copy-prev sit on a thin secondary line that only
+                              shows on an unlogged row, so logged rows collapse to one line. */}
+                          {!isSkipped && (() => {
+                            const isTime = ex.tracking_type==='time'
+                            const headerUnit = setsArr[0]?.weight_unit || 'lbs'
+                            const cols = isTime ? '32px 1fr 56px' : '32px 1fr 1fr 56px'
+                            return (
+                            <div style={{marginBottom:10}}>
+                              {/* Column headers */}
+                              <div style={{display:'grid',gridTemplateColumns:cols,gap:8,alignItems:'center',padding:'0 2px 6px',fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>
+                                <span>Set</span>
+                                <span style={{textAlign:'center'}}>{isTime?'Time (s)':'Reps'}</span>
+                                {!isTime && (
+                                  <span style={{textAlign:'center'}}>
+                                    Weight
+                                    <select value={headerUnit}
+                                      onChange={e=>{ const u=e.target.value as SetData['weight_unit']; setSetData(prev=>({...prev,[ex.id]:(prev[ex.id]||[]).map((st):SetData=>st.logged?st:{...st,weight_unit:u})})) }}
+                                      style={{background:'none',border:'none',color:t.teal,fontSize:10,fontWeight:800,marginLeft:3,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textTransform:'uppercase' as const}}>
+                                      <option value="lbs">lbs</option>
+                                      <option value="kg">kg</option>
+                                      <option value="bw">BW</option>
+                                    </select>
+                                  </span>
+                                )}
+                                <span style={{textAlign:'center'}}>Done</span>
+                              </div>
                               {setsArr.map((s,idx)=>{
                                 const prior = prevSets[ex.id]?.[idx]
+                                const cell = {width:'100%',background:s.logged?'transparent':t.surfaceHigh,border:`1px solid ${s.logged?'transparent':t.border}`,borderRadius:8,padding:'9px 4px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center' as const,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}
                                 return (
-                                  <div key={idx} style={{background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:t.surfaceHigh,border:`1px solid ${s.skipped?t.border:s.logged?t.green:t.border}`,borderRadius:12,padding:'12px 14px',transition:'all 0.2s',opacity:s.skipped?0.5:1}}>
-                                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:prior?6:8}}>
-                                      {/* Tap-to-log circle: marks this set done + starts the
-                                          rest timer (replaces the old per-set "Log ✓" button).
-                                          When logged it's a green check; tap again to edit. */}
-                                      {!s.skipped && (
+                                  <div key={idx} style={{borderRadius:10,background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:'transparent',border:`1px solid ${s.logged?alpha(t.green,31):'transparent'}`,padding:'3px 2px',marginBottom:4,opacity:s.skipped?0.5:1}}>
+                                    <div style={{display:'grid',gridTemplateColumns:cols,gap:8,alignItems:'center'}}>
+                                      <span style={{fontSize:13,fontWeight:800,color:s.logged?t.green:t.textMuted,textDecoration:s.skipped?'line-through':'none',paddingLeft:4}}>
+                                        {s.is_warmup?'W':idx+1}
+                                      </span>
+                                      {isTime?(
+                                        <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
+                                          placeholder={String(ex.duration_seconds||'—')} inputMode="numeric" enterKeyHint="done"
+                                          onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
+                                          style={cell}/>
+                                      ):(<>
+                                        <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
+                                          placeholder={ex.reps_prescribed||'—'} inputMode="numeric" enterKeyHint="done"
+                                          onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
+                                          style={cell}/>
+                                        <input type="number" value={s.weight_value} onChange={e=>updateSet(ex.id,idx,'weight_value',e.target.value)}
+                                          placeholder={s.weight_unit==='bw'?'BW':(ex.weight_prescribed||'—')} inputMode="decimal" enterKeyHint="done"
+                                          onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged||s.weight_unit==='bw'}
+                                          style={{...cell,opacity:(s.logged||s.weight_unit==='bw')?0.5:1}}/>
+                                      </>)}
+                                      {s.skipped?(
+                                        <span style={{fontSize:10,fontWeight:700,color:t.textMuted,textAlign:'center' as const}}>Skipped</span>
+                                      ):(
                                         <button onClick={()=>{ if(s.logged){ updateSet(ex.id,idx,'logged',false) } else { logSet(ex.id,idx) } }}
                                           aria-label={s.logged?'Edit this set':'Mark set done and start rest'}
-                                          style={{width:28,height:28,flexShrink:0,borderRadius:'50%',border:`2px solid ${s.logged?t.green:t.textMuted}`,background:s.logged?t.green:'transparent',color:s.logged?'#0f0f0f':'transparent',fontSize:15,fontWeight:800,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          style={{justifySelf:'center',width:38,height:38,borderRadius:10,border:`2px solid ${s.logged?t.green:t.border}`,background:s.logged?t.green:t.surfaceHigh,color:s.logged?'#0f0f0f':t.textMuted,fontSize:17,fontWeight:800,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                           ✓
                                         </button>
                                       )}
-                                      <span style={{fontSize:13,fontWeight:800,color:s.skipped?t.textMuted:s.logged?t.green:t.textMuted,minWidth:44,textDecoration:s.skipped?'line-through':'none'}}>
-                                        {s.is_warmup?'Warm-up':`Set ${idx+1}`}
-                                      </span>
-                                      {!s.logged && !s.skipped && (
-                                        <label style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:t.textMuted,cursor:'pointer'}}>
+                                    </div>
+                                    {/* thin secondary line — only on an unlogged, un-skipped row */}
+                                    {!s.logged && !s.skipped && (
+                                      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const,padding:'5px 4px 2px',fontSize:11}}>
+                                        <label style={{display:'flex',alignItems:'center',gap:4,color:t.textMuted,cursor:'pointer'}}>
                                           <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
                                           Warmup
                                         </label>
-                                      )}
-                                      {s.skipped && <span style={{fontSize:11,color:t.textMuted,fontWeight:700}}>⏭ Skipped</span>}
-                                      {!s.logged && !s.skipped && (
-                                        <button onClick={()=>skipSet(ex.id,idx)}
-                                          style={{marginLeft:'auto',background:'transparent',border:`1px solid ${t.border}`,borderRadius:6,padding:'3px 8px',fontSize:10,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                                          ⏭ Skip
-                                        </button>
-                                      )}
-                                      {s.logged && !s.skipped && (
-                                        <span style={{marginLeft:'auto',fontSize:11,color:t.green,fontWeight:700}}>Logged · tap ✓ to edit</span>
-                                      )}
-                                    </div>
-                                    {!s.skipped && (<>
-                                    {prior&&(
-                                      <div style={{fontSize:11,color:t.textMuted,marginBottom:8,display:'flex',alignItems:'center',gap:4}}>
-                                        <span style={{color:t.teal,opacity:0.7}}>↩</span>
-                                        <span>Last: </span>
-                                        <span style={{color:t.textDim,fontWeight:700}}>
-                                          {prior.reps?`${prior.reps} reps`:'—'}
-                                          {prior.weight&&prior.unit!=='bw'?` @ ${prior.weight}${prior.unit}`:prior.unit==='bw'?' bodyweight':''}
-                                        </span>
-                                      </div>
-                                    )}
-                                    {!s.logged&&(
-                                      <div className="workout-set-helper-row">
+                                        {prior&&(
+                                          <span style={{color:t.textMuted}}>↩ Last: <b style={{color:t.textDim}}>{prior.reps?`${prior.reps}`:'—'}{prior.weight&&prior.unit!=='bw'?`×${prior.weight}${prior.unit}`:prior.unit==='bw'?' BW':''}</b></span>
+                                        )}
                                         {prior&&(
                                           <button onClick={()=>applySetTemplate(ex.id,idx,{reps:prior.reps,weight:prior.weight,unit:prior.unit})}
-                                            style={{background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                                            Use last time
+                                            style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
+                                            use last
                                           </button>
                                         )}
                                         {idx>0&&(
                                           <button onClick={()=>copyPreviousLoggedSet(ex.id,idx)}
-                                            style={{background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                                            Copy prev
+                                            style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
+                                            copy prev
                                           </button>
                                         )}
+                                        <button onClick={()=>skipSet(ex.id,idx)}
+                                          style={{marginLeft:'auto',background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          ⏭ skip
+                                        </button>
                                       </div>
                                     )}
-                                    {ex.tracking_type==='time'?(
-                                      <div style={{marginBottom:8}}>
-                                        <label style={{fontSize:11,color:t.textMuted,display:'block',marginBottom:3}}>Duration (seconds)</label>
-                                        <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
-                                          placeholder={String(ex.duration_seconds||'')} inputMode="numeric" enterKeyHint="done"
-                                          onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
-                                          style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                                      </div>
-                                    ):(
-                                      <div className="workout-set-inputs" style={{marginBottom:8}}>
-                                        <div>
-                                          <label style={{fontSize:11,color:t.textMuted,display:'block',marginBottom:3}}>Reps</label>
-                                          <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
-                                            placeholder={ex.reps_prescribed||'—'} inputMode="numeric" enterKeyHint="done"
-                                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
-                                            style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
-                                        </div>
-                                        <div>
-                                          <label style={{fontSize:11,color:t.textMuted,display:'block',marginBottom:3}}>
-                                            Weight
-                                            <select value={s.weight_unit} onChange={e=>updateSet(ex.id,idx,'weight_unit',e.target.value)} disabled={s.logged}
-                                              style={{background:'none',border:'none',color:t.teal,fontSize:11,marginLeft:4,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                                              <option value="lbs">lbs</option>
-                                              <option value="kg">kg</option>
-                                              <option value="bw">BW</option>
-                                            </select>
-                                          </label>
-                                          <input type="number" value={s.weight_value} onChange={e=>updateSet(ex.id,idx,'weight_value',e.target.value)}
-                                            placeholder={ex.weight_prescribed||'—'} inputMode="decimal" enterKeyHint="done"
-                                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged||s.weight_unit==='bw'}
-                                            style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:(s.logged||s.weight_unit==='bw')?0.5:1}}/>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {/* The per-set "Log ✓" button is gone -- the tap-circle in
-                                        the row header now logs the set + starts rest. Filled
-                                        rows that weren't individually tapped get committed by
-                                        the single "Save all sets" button below the form check. */}
-                                    </>)}
                                   </div>
                                 )
                               })}
                             </div>
-                          )}
+                            )
+                          })()}
 
                           {/* Per-exercise note — overall how-it-felt for the whole movement.
                               Coexists with set-level notes above. Saves to
