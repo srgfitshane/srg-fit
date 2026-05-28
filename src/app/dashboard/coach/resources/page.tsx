@@ -64,11 +64,16 @@ export default function CoachResourcesPage() {
       supabase.from('content_groups').select('*').eq('coach_id', user.id).order('order_index'),
       supabase.from('content_items').select('*').eq('coach_id', user.id).order('created_at'),
     ])
-    const resolved = await Promise.all((is||[]).map(async (item:any) => {
+    // resources is a PUBLIC bucket -- use stable getPublicUrl, not a
+    // per-call signed URL. Signing forced a fresh ?token= each load
+    // (re-download every time) AND required a broad storage SELECT
+    // policy that let any signed-in user enumerate every coach's files.
+    // The client resources page already uses getPublicUrl; this matches.
+    const resolved = (is||[]).map((item:any) => {
       if (!item.file_url) return item
-      const { data } = await supabase.storage.from('resources').createSignedUrl(item.file_url, 60 * 60)
-      return { ...item, file_path: item.file_url, file_url: data?.signedUrl || item.file_url }
-    }))
+      const { data } = supabase.storage.from('resources').getPublicUrl(item.file_url)
+      return { ...item, file_path: item.file_url, file_url: data?.publicUrl || item.file_url }
+    })
     setGroups(gs||[])
     setItems(resolved)
     setLoading(false)

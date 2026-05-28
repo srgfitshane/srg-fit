@@ -813,9 +813,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             <div style={{ fontSize:12, fontWeight:800, color: isMe ? '#00000088' : c.teal, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>{icon} Resource</div>
             <div style={{ fontSize:15, fontWeight:700, marginBottom:6 }}>{res.title}</div>
             {res.fileUrl && (
-              <button onClick={async () => {
-                const { data } = await supabase.storage.from('resources').createSignedUrl(res.fileUrl, 3600)
-                if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+              <button onClick={() => {
+                // resources is a PUBLIC bucket -- stable public URL, no signing.
+                const { data } = supabase.storage.from('resources').getPublicUrl(res.fileUrl)
+                if (data?.publicUrl) window.open(data.publicUrl, '_blank')
               }} style={{ background: isMe ? 'rgba(0,0,0,0.15)' : c.tealDim, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, color: isMe ? '#000' : c.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 Open {res.contentType === 'pdf' ? 'PDF' : 'Resource'} ↗
               </button>
