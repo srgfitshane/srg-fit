@@ -301,11 +301,22 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .order('created_at', { ascending: false })
       .limit(50)
     const resolvedPosts = await Promise.all(((postData || []) as CommunityPost[]).map(async (post) => {
-      const resolveUrl = async (url: string | null) => {
+      // community-media is a PUBLIC bucket. The original code used
+      // createSignedUrl "to mirror the post code path" so the bucket
+      // could be flipped private later -- but that decision cost us:
+      // signed URLs include a unique ?token=... per call, so the browser
+      // re-downloads every image on every loadPosts() (and loadPosts
+      // fires on mount + every realtime UPDATE + every refresh). With
+      // up to 250 fresh URLs per load (50 posts × 5 image slots) this
+      // was a noticeable chunk of the May 27 storage egress spike.
+      // getPublicUrl returns a stable URL that the CDN caches across
+      // tabs, sessions, and devices. If we ever flip community-media
+      // private we'll add signing back here, intentionally.
+      const resolveUrl = (url: string | null): string | null => {
         if (!url) return null
         if (url.startsWith('http')) return url // already a full URL (GIF etc.)
-        const { data } = await supabase.storage.from('community-media').createSignedUrl(url, 60 * 60)
-        return data?.signedUrl || null
+        const { data } = supabase.storage.from('community-media').getPublicUrl(url)
+        return data?.publicUrl || null
       }
       // Sign all four image slots in parallel. Each is independent —
       // one missing image shouldn't block the others. Same TTL as
@@ -367,17 +378,19 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           })
         }
       }
-      // Resolve image/video paths to signed URLs (community-media bucket is
-      // public today but we sign anyway to mirror the post code path, which
-      // makes the bucket easier to flip private later without retouching
-      // this surface). GIFs (full URLs) pass through untouched.
-      const resolvedReplies = await Promise.all(((replyData || []) as CommunityReply[]).map(async (r) => {
+      // Resolve image/video paths to public URLs (community-media is a
+      // public bucket). Previously used createSignedUrl which gave each
+      // call a unique ?token=... and forced the browser to re-download
+      // every reply media on every loadPosts() refetch -- contributor to
+      // the May 27 egress spike. getPublicUrl returns a stable URL the
+      // CDN caches across sessions. GIFs (full URLs) pass through.
+      const resolvedReplies = ((replyData || []) as CommunityReply[]).map((r) => {
         if (!r.media_url || !r.media_type) return r
         if (r.media_type === 'gif') return r
         if (r.media_url.startsWith('http')) return r
-        const { data } = await supabase.storage.from('community-media').createSignedUrl(r.media_url, 60 * 60)
-        return { ...r, media_url: data?.signedUrl || r.media_url }
-      }))
+        const { data } = supabase.storage.from('community-media').getPublicUrl(r.media_url)
+        return { ...r, media_url: data?.publicUrl || r.media_url }
+      })
       resolvedReplies.forEach((reply) => {
         if (!grouped[reply.post_id]) grouped[reply.post_id] = []
         grouped[reply.post_id].push(reply)

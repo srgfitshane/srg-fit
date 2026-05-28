@@ -58,6 +58,33 @@ interface Reaction {
   emoji: string
 }
 
+/**
+ * Module-level cache of signed media URLs keyed by `${bucket}:${path}`.
+ *
+ * Why: signed URLs are unique per call (the JWT-style ?token=... query
+ * differs every time), so the browser treats each one as a brand-new
+ * resource and re-downloads from origin. loadThread() in this component
+ * fires on mount, on every realtime INSERT, on every `refreshKey` bump
+ * from the parent, on visibilitychange (throttled 15s), and after every
+ * send -- which meant a 30-photo thread re-downloaded all 30 photos on
+ * every entry. With a coach triaging ~11 clients across a day, that was
+ * thousands of avoidable storage requests (the May 27 spike Shane spotted
+ * in Supabase Usage was 7,862 storage hits in 24 hours with one workout
+ * submitted).
+ *
+ * Caching by (bucket, path) instead of message.id is intentional: the
+ * path is the stable identity of the file in storage; if the same media
+ * is somehow referenced twice we only sign it once. Module-level so the
+ * cache survives unmount/remount when the coach switches between
+ * conversations.
+ *
+ * TTL: signed URLs are valid for 60 minutes per `resolveSignedMediaUrl`.
+ * We re-sign at 50 minutes to leave a 10-minute safety margin against
+ * clock skew or long-lived views.
+ */
+const signedUrlCache = new Map<string, { url: string; signedAt: number }>()
+const SIGNED_URL_TTL_MS = 50 * 60 * 1000
+
 interface Props {
   myId: string
   otherId: string
@@ -249,11 +276,27 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     // message-media bucket went private during the security audit, so
     // getPublicUrl returns 403s. Sign each media URL individually — still
     // one query per media message but only a signer call, not a fetch.
+    // Cached via signedUrlCache (module-level): re-using an existing URL
+    // keeps the browser cache effective across refetches. See cache
+    // comment near the Map declaration.
     const withReactions = await Promise.all(msgs.map(async (m) => {
       const bucket = MEDIA_BUCKETS[m.message_type]
       let mediaUrl = m.media_url
       if (bucket && m.media_url && !m.media_url.startsWith('http')) {
-        mediaUrl = await resolveSignedMediaUrl(supabase, bucket, m.media_url)
+        const cacheKey = `${bucket}:${m.media_url}`
+        const cached = signedUrlCache.get(cacheKey)
+        const now = Date.now()
+        if (cached && now - cached.signedAt < SIGNED_URL_TTL_MS) {
+          mediaUrl = cached.url
+        } else {
+          const signed = await resolveSignedMediaUrl(supabase, bucket, m.media_url)
+          if (signed) {
+            signedUrlCache.set(cacheKey, { url: signed, signedAt: now })
+            mediaUrl = signed
+          } else {
+            mediaUrl = signed
+          }
+        }
       }
       return {
         ...m,
@@ -395,8 +438,13 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
               // Private bucket — needs a signed URL, not a public one.
               // Realtime payload hits us before loadThread would run, so
               // we sign right here. Async inside the callback is fine;
-              // we just setThread once the URL resolves.
-              mediaUrl = await resolveSignedMediaUrl(supabase, bucket, msg.media_url)
+              // we just setThread once the URL resolves. Populate the
+              // module-level cache so subsequent loadThread calls reuse
+              // this URL instead of re-signing (otherwise the next
+              // visibility refetch re-downloads this same media).
+              const signed = await resolveSignedMediaUrl(supabase, bucket, msg.media_url)
+              if (signed) signedUrlCache.set(`${bucket}:${msg.media_url}`, { url: signed, signedAt: Date.now() })
+              mediaUrl = signed
             }
           }
           setThread(prev => [...prev, { ...msg, media_url: mediaUrl, reactions: [] }])
@@ -481,7 +529,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     // Sign the URL so the bubble can play it back immediately (bucket is
     // private, so getPublicUrl would 403). Null fallback just means the
     // bubble won't have a playable src until the thread reloads and signs.
+    // Cache the result so the next loadThread reuses it instead of
+    // re-signing (which would force the browser to re-download).
     const signedUrl = await resolveSignedMediaUrl(supabase, 'message-media', path)
+    if (signedUrl) signedUrlCache.set(`message-media:${path}`, { url: signedUrl, signedAt: Date.now() })
     const { data } = await supabase.from('messages').insert({
       sender_id: myId, recipient_id: otherId,
       body: null, message_type: msgType,
