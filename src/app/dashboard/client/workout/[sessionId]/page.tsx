@@ -405,6 +405,25 @@ ${candidateList}`
     return () => clearInterval(timerRef.current ?? undefined)
   }, [session?.started_at, session?.status])
 
+  // Intercept the browser / Android back button while a workout is in
+  // progress. Clients (Anubha) were hitting BACK instead of the in-app Exit,
+  // which left the session in_progress with the clock running until they
+  // popped back in. Now back pops the same Exit sheet (Save & Exit pauses the
+  // clock; Clear wipes) so leaving is always a conscious, clean choice.
+  // pushState + popstate pattern, same as the messenger (per CLAUDE.md).
+  useEffect(() => {
+    if (session?.status !== 'in_progress') return
+    window.history.pushState({ workoutGuard: true }, '')
+    const onPop = () => {
+      // Re-push so a subsequent back press is still caught until they choose
+      // an option in the sheet.
+      window.history.pushState({ workoutGuard: true }, '')
+      setShowCancelSheet(true)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [session?.status])
+
   // Rest countdown
   useEffect(() => {
     if (!restActive || restTimer === null || restTimer <= 0) return () => clearTimeout(restRef.current ?? undefined)
