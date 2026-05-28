@@ -786,7 +786,12 @@ ${candidateList}`
   // Guard against double-tap / React re-render double-fire
   const loggingSet = useRef<Set<string>>(new Set())
 
-  async function logSet(exId: string, setIdx: number) {
+  // opts.silent: used by saveAllSets() for the single "Save all sets" button.
+  // A bulk save persists every filled row but must NOT fire a rest timer per
+  // set or churn the next-set prefill -- those only make sense for the
+  // tap-a-row-as-you-go flow. The persistence + offline-queue path is
+  // identical either way.
+  async function logSet(exId: string, setIdx: number, opts?: { silent?: boolean }) {
     const s = setData[exId][setIdx]
     if (s.logged) return // Already logged
     const lockKey = `${exId}-${setIdx}`
@@ -836,21 +841,23 @@ ${candidateList}`
     const handleSuccessSideEffects = () => {
       updateSet(exId, setIdx, 'logged', true)
       loggingSet.current.delete(lockKey)
-      // Auto-start rest timer. Warmups fall back to a 30s default when
-      // the exercise doesn't prescribe a rest, so the timer still fires
-      // between warmup sets instead of silently skipping.
-      const exNow = exercises.find(e=>e.id===exId)
-      const restSec = exNow?.rest_seconds || (s.is_warmup ? 30 : 0)
-      if (restSec) {
-        setRestTimer(restSec)
-        setRestActive(true)
-      }
-      // Pre-fill next set with same values
-      if (setIdx < setData[exId].length - 1) {
-        setSetData(prev => ({
-          ...prev,
-          [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
-        }))
+      if (!opts?.silent) {
+        // Auto-start rest timer. Warmups fall back to a 30s default when
+        // the exercise doesn't prescribe a rest, so the timer still fires
+        // between warmup sets instead of silently skipping.
+        const exNow = exercises.find(e=>e.id===exId)
+        const restSec = exNow?.rest_seconds || (s.is_warmup ? 30 : 0)
+        if (restSec) {
+          setRestTimer(restSec)
+          setRestActive(true)
+        }
+        // Pre-fill next set with same values
+        if (setIdx < setData[exId].length - 1) {
+          setSetData(prev => ({
+            ...prev,
+            [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
+          }))
+        }
       }
     }
 
@@ -876,6 +883,25 @@ ${candidateList}`
 
   function addSet(exId: string) {
     setSetData(prev => ({ ...prev, [exId]: [...prev[exId], defaultSet()] }))
+  }
+
+  // Single "Save all sets" button: commits every filled-but-untapped row in
+  // one go. Reuses logSet's persistence (upsert + offline queue) per row with
+  // silent=true so no rest timers fire and the prefill doesn't churn. The DB
+  // upsert is idempotent on (session_exercise_id, set_number), so re-saving a
+  // row the lifter already tapped is harmless. Lets a client fill all rows and
+  // commit with one tap, while tap-as-you-go still works for rest timers.
+  async function saveAllSets(exId: string) {
+    const ex = exercises.find(e => e.id === exId)
+    const isTime = ex?.tracking_type === 'time'
+    const sets = setData[exId] || []
+    for (let i = 0; i < sets.length; i++) {
+      const s = sets[i]
+      if (s.logged || s.skipped) continue
+      const hasVal = isTime ? s.duration_completed : (s.reps_completed || s.weight_value)
+      if (!hasVal) continue
+      await logSet(exId, i, { silent: true })
+    }
   }
 
   async function skipSet(exId: string, setIdx: number) {
@@ -2126,7 +2152,17 @@ ${candidateList}`
                                 return (
                                   <div key={idx} style={{background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:t.surfaceHigh,border:`1px solid ${s.skipped?t.border:s.logged?t.green:t.border}`,borderRadius:12,padding:'12px 14px',transition:'all 0.2s',opacity:s.skipped?0.5:1}}>
                                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:prior?6:8}}>
-                                      <span style={{fontSize:12,fontWeight:800,color:s.skipped?t.textMuted:s.logged?t.green:t.textDim,minWidth:40,textDecoration:s.skipped?'line-through':'none'}}>
+                                      {/* Tap-to-log circle: marks this set done + starts the
+                                          rest timer (replaces the old per-set "Log ✓" button).
+                                          When logged it's a green check; tap again to edit. */}
+                                      {!s.skipped && (
+                                        <button onClick={()=>{ if(s.logged){ updateSet(ex.id,idx,'logged',false) } else { logSet(ex.id,idx) } }}
+                                          aria-label={s.logged?'Edit this set':'Mark set done and start rest'}
+                                          style={{width:28,height:28,flexShrink:0,borderRadius:'50%',border:`2px solid ${s.logged?t.green:t.textMuted}`,background:s.logged?t.green:'transparent',color:s.logged?'#0f0f0f':'transparent',fontSize:15,fontWeight:800,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          ✓
+                                        </button>
+                                      )}
+                                      <span style={{fontSize:13,fontWeight:800,color:s.skipped?t.textMuted:s.logged?t.green:t.textMuted,minWidth:44,textDecoration:s.skipped?'line-through':'none'}}>
                                         {s.is_warmup?'Warm-up':`Set ${idx+1}`}
                                       </span>
                                       {!s.logged && !s.skipped && (
@@ -2142,12 +2178,8 @@ ${candidateList}`
                                           ⏭ Skip
                                         </button>
                                       )}
-                                      {s.logged && !s.skipped && <span style={{fontSize:12,color:t.green,fontWeight:700,marginLeft:'auto'}}>✓</span>}
-                                      {s.logged&&(
-                                        <button onClick={()=>updateSet(ex.id,idx,'logged',false)}
-                                          style={{marginLeft:'auto',background:'none',border:`1px solid ${t.border}`,borderRadius:7,padding:'2px 8px',fontSize:10,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                                          edit
-                                        </button>
+                                      {s.logged && !s.skipped && (
+                                        <span style={{marginLeft:'auto',fontSize:11,color:t.green,fontWeight:700}}>Logged · tap ✓ to edit</span>
                                       )}
                                     </div>
                                     {!s.skipped && (<>
@@ -2171,7 +2203,7 @@ ${candidateList}`
                                         )}
                                         {idx>0&&(
                                           <button onClick={()=>copyPreviousLoggedSet(ex.id,idx)}
-                                            style={{background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:700,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                            style={{background:t.surface,border:'1px solid '+t.border,borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                             Copy prev
                                           </button>
                                         )}
@@ -2179,7 +2211,7 @@ ${candidateList}`
                                     )}
                                     {ex.tracking_type==='time'?(
                                       <div style={{marginBottom:8}}>
-                                        <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Duration (seconds)</label>
+                                        <label style={{fontSize:11,color:t.textMuted,display:'block',marginBottom:3}}>Duration (seconds)</label>
                                         <input type="number" value={s.duration_completed} onChange={e=>updateSet(ex.id,idx,'duration_completed',e.target.value)}
                                           placeholder={String(ex.duration_seconds||'')} inputMode="numeric" enterKeyHint="done"
                                           onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
@@ -2188,14 +2220,14 @@ ${candidateList}`
                                     ):(
                                       <div className="workout-set-inputs" style={{marginBottom:8}}>
                                         <div>
-                                          <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>Reps</label>
+                                          <label style={{fontSize:11,color:t.textMuted,display:'block',marginBottom:3}}>Reps</label>
                                           <input type="number" value={s.reps_completed} onChange={e=>updateSet(ex.id,idx,'reps_completed',e.target.value)}
                                             placeholder={ex.reps_prescribed||'—'} inputMode="numeric" enterKeyHint="done"
                                             onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); (e.target as HTMLInputElement).blur() } }} disabled={s.logged}
                                             style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:8,padding:'9px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center',fontFamily:"'DM Sans',sans-serif",opacity:s.logged?0.5:1}}/>
                                         </div>
                                         <div>
-                                          <label style={{fontSize:11,color:t.textDim,display:'block',marginBottom:3}}>
+                                          <label style={{fontSize:11,color:t.textMuted,display:'block',marginBottom:3}}>
                                             Weight
                                             <select value={s.weight_unit} onChange={e=>updateSet(ex.id,idx,'weight_unit',e.target.value)} disabled={s.logged}
                                               style={{background:'none',border:'none',color:t.teal,fontSize:11,marginLeft:4,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
@@ -2211,18 +2243,10 @@ ${candidateList}`
                                         </div>
                                       </div>
                                     )}
-                                    {/* Set notes consolidated to per-exercise — see textarea
-                                        below the sets grid. The Log ✓ button stays here so the
-                                        gym-floor flow (type → log → rest timer) keeps the same
-                                        gestures. */}
-                                    {!s.logged && (
-                                      <div style={{display:'flex',justifyContent:'flex-end'}}>
-                                        <button onClick={()=>logSet(ex.id,idx)}
-                                          style={{background:t.accent,border:'none',borderRadius:8,padding:'7px 18px',fontSize:13,fontWeight:700,color:'#0f0f0f',cursor:'pointer',whiteSpace:'nowrap'}}>
-                                          Log ✓
-                                        </button>
-                                      </div>
-                                    )}
+                                    {/* The per-set "Log ✓" button is gone -- the tap-circle in
+                                        the row header now logs the set + starts rest. Filled
+                                        rows that weren't individually tapped get committed by
+                                        the single "Save all sets" button below the form check. */}
                                     </>)}
                                   </div>
                                 )
@@ -2293,6 +2317,20 @@ ${candidateList}`
                               </div>
                             )}
                           </> )}
+
+                          {/* Single "Save all sets" — commits any filled rows the lifter
+                              didn't tap-to-log individually (idempotent upsert, so re-saving
+                              an already-tapped row is harmless). Disabled when nothing is
+                              pending. Tap-as-you-go still works for per-set rest timers. */}
+                          {!isSkipped && (() => {
+                            const pending = (setData[ex.id] || []).some(s => !s.logged && !s.skipped && (ex.tracking_type==='time' ? !!s.duration_completed : !!(s.reps_completed || s.weight_value)))
+                            return (
+                              <button onClick={()=>saveAllSets(ex.id)} disabled={!pending}
+                                style={{width:'100%',background:pending?t.accent:t.surfaceHigh,border:`1px solid ${pending?t.accent:t.border}`,borderRadius:10,padding:'12px',fontSize:14,fontWeight:800,color:pending?'#0f0f0f':t.textMuted,cursor:pending?'pointer':'default',marginBottom:10}}>
+                                ✓ Save all sets
+                              </button>
+                            )
+                          })()}
 
                           {/* Add Exercise (last exercise only) */}
                           {exercises.indexOf(ex)===exercises.length-1 && (
