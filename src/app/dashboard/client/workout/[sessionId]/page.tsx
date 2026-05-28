@@ -858,6 +858,13 @@ ${candidateList}`
             [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
           }))
         }
+        // If this tap completed the LAST remaining set, auto-collapse and
+        // advance to the next exercise (Shane: "complete when all sets are
+        // checked"). Computed off the closure snapshot, counting the set we
+        // just logged as done. Short delay lets the green check + rest timer
+        // register before the view moves.
+        const allDone = (setData[exId] || []).every((st, i) => i === setIdx ? true : (st.logged || st.skipped))
+        if (allDone) setTimeout(() => advanceToNext(exId), 600)
       }
     }
 
@@ -902,6 +909,32 @@ ${candidateList}`
       if (!hasVal) continue
       await logSet(exId, i, { silent: true })
     }
+  }
+
+  // Collapse the just-finished exercise and open the next non-skipped one
+  // (scroll handled by the expandedExId effect). If it's the last exercise,
+  // collapse to null so the finalize button comes into view.
+  function advanceToNext(exId: string) {
+    const curIdx = exercises.findIndex(e => e.id === exId)
+    if (curIdx === -1) return
+    let next: typeof exercises[number] | null = null
+    for (let i = curIdx + 1; i < exercises.length; i++) {
+      if (!skipped[exercises[i].id]) { next = exercises[i]; break }
+    }
+    if (next) {
+      setActiveExIdx(exercises.findIndex(e => e.id === next!.id))
+      setExpandedExId(next.id)
+    } else {
+      setExpandedExId(null)
+    }
+  }
+
+  // "Complete exercise": commit any filled rows, then collapse + advance.
+  // Fired by the Complete button. (Tapping the last set's Done auto-fires
+  // advanceToNext directly from logSet's success path.)
+  async function completeExercise(exId: string) {
+    await saveAllSets(exId)
+    advanceToNext(exId)
   }
 
   async function skipSet(exId: string, setIdx: number) {
@@ -2310,19 +2343,18 @@ ${candidateList}`
                             )}
                           </> )}
 
-                          {/* Single "Save all sets" — commits any filled rows the lifter
-                              didn't tap-to-log individually (idempotent upsert, so re-saving
-                              an already-tapped row is harmless). Disabled when nothing is
-                              pending. Tap-as-you-go still works for per-set rest timers. */}
-                          {!isSkipped && (() => {
-                            const pending = (setData[ex.id] || []).some(s => !s.logged && !s.skipped && (ex.tracking_type==='time' ? !!s.duration_completed : !!(s.reps_completed || s.weight_value)))
-                            return (
-                              <button onClick={()=>saveAllSets(ex.id)} disabled={!pending}
-                                style={{width:'100%',background:pending?t.accent:t.surfaceHigh,border:`1px solid ${pending?t.accent:t.border}`,borderRadius:10,padding:'12px',fontSize:14,fontWeight:800,color:pending?'#0f0f0f':t.textMuted,cursor:pending?'pointer':'default',marginBottom:10}}>
-                                ✓ Save all sets
-                              </button>
-                            )
-                          })()}
+                          {/* "Complete exercise" — commits any filled-but-untapped rows
+                              (idempotent upsert) then collapses + advances to the next
+                              exercise. The other path to the same outcome is checking the
+                              last set's Done, which auto-advances from logSet. Always
+                              enabled so it doubles as "I'm done here, move on" even if a
+                              set or two was left blank. */}
+                          {!isSkipped && (
+                            <button onClick={()=>completeExercise(ex.id)}
+                              style={{width:'100%',background:t.accent,border:`1px solid ${t.accent}`,borderRadius:10,padding:'12px',fontSize:14,fontWeight:800,color:'#0f0f0f',cursor:'pointer',marginBottom:10}}>
+                              ✓ Complete exercise
+                            </button>
+                          )}
 
                           {/* Add Exercise (last exercise only) */}
                           {exercises.indexOf(ex)===exercises.length-1 && (
