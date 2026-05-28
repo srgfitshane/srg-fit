@@ -554,12 +554,24 @@ ${candidateList}`
     // Filter by clients.id (workout_sessions.client_id FK), NOT auth.uid().
     const prev: Record<string, {reps:number|null, weight:number|null, unit:string}[]> = {}
     if (exs && exs.length > 0 && safeSession?.client_id) {
+      // "Last" must reference a PRIOR DAY, not another session from today.
+      // BUGFIX (Shane, May 28): he swapped Bench into today's session and
+      // logged 5x155; "last" showed 5x155 because an earlier *completed*
+      // session from today (his testing / a repeat) out-ranked last week's
+      // 4x185. Excluding sessions completed on or after local midnight today
+      // makes "last" skip same-day occurrences and surface the true prior
+      // performance. This also survives a missed week (unlike hard-coding
+      // "7 days ago") -- it's still "most recent completed session before
+      // today". Local midnight (not toISOString of now) per Rule 7.
+      const nowLocal = new Date()
+      const startOfTodayIso = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate()).toISOString()
       const { data: completedSessions } = await supabase
         .from('workout_sessions')
         .select('id')
         .eq('client_id', safeSession.client_id)
         .eq('status', 'completed')
         .neq('id', sessionId)
+        .lt('completed_at', startOfTodayIso)
         .order('completed_at', { ascending: false })
         .limit(20)
 
