@@ -381,13 +381,22 @@ ${candidateList}`
       .catch(err => console.warn('[workout:bg-load] failed', err))
   }, [session?.coach_review_video_url])
   useEffect(() => {
-    // Don't run timer if session is completed or not started
-    if (!session || session.status !== 'in_progress' || !session.started_at) {
-      // If completed, set elapsed to the stored duration
-      if (session?.status === 'completed' && session.duration_seconds) {
-        setElapsedSeconds(session.duration_seconds)
-      }
+    // Not actively running (completed, assigned): show the stored duration,
+    // don't tick.
+    if (!session || session.status !== 'in_progress') {
+      if (session?.duration_seconds) setElapsedSeconds(session.duration_seconds)
       return
+    }
+    // Paused via Save & Exit (in_progress but started_at was nulled): re-anchor
+    // started_at from the saved duration so the clock RESUMES from where they
+    // left off instead of ticking from a stale start. This is the fix for the
+    // "endless clock" -- time only accrues while the page is actually open.
+    if (!session.started_at) {
+      const resumeFrom = session.duration_seconds || 0
+      const anchored = new Date(Date.now() - resumeFrom * 1000).toISOString()
+      setSession(prev => prev ? { ...prev, started_at: anchored } : prev)
+      void supabase.from('workout_sessions').update({ started_at: anchored }).eq('id', sessionId)
+      return // effect re-runs with started_at set, which starts the interval
     }
     const startedAt = new Date(session.started_at).getTime()
     timerRef.current = setInterval(() => {
@@ -1244,7 +1253,18 @@ ${candidateList}`
   }
 
   async function saveAndExit() {
-    // Keep whatever they logged, just leave in_progress and exit
+    // Keep whatever they logged, then PAUSE the clock and exit. Snapshotting
+    // elapsedSeconds into duration_seconds and nulling started_at stops the
+    // "endless clock": a backed-out in_progress session used to keep started_at
+    // fixed, so reopening hours/days later showed (now - started_at) = a huge
+    // time (and finishing would save that inflated duration). Returning
+    // re-anchors started_at from the saved duration (see the timer effect) so
+    // the clock resumes from where they left off. Logged sets are already
+    // persisted per-set, so nothing is lost.
+    await supabase.from('workout_sessions').update({
+      duration_seconds: elapsedSeconds,
+      started_at: null,
+    }).eq('id', sessionId)
     router.push(returnUrl)
   }
 
@@ -1891,17 +1911,20 @@ ${candidateList}`
         {/* Top bar */}
         <div style={{background:t.surface,borderBottom:`1px solid ${t.border}`,padding:'12px 16px',display:'flex',alignItems:'center',gap:12,position:'sticky',top:0,zIndex:50}}>
           <button onClick={()=>setShowCancelSheet(true)}
-            aria-label="Cancel workout and return to dashboard"
+            aria-label="Exit workout and return to dashboard"
             style={{background:'none',border:'none',color:t.textDim,cursor:'pointer',fontSize:20,lineHeight:1}}>←</button>
           <div style={{flex:1}}>
             <div style={{fontWeight:800,fontSize:15}}>{session?.title}</div>
             {session?.day_label && <div style={{fontSize:11,color:t.textDim}}>{session.day_label}</div>}
           </div>
           <div style={{fontSize:16,fontWeight:800,color:t.teal,fontVariantNumeric:'tabular-nums'}}>⏱ {fmtTime(elapsedSeconds)}</div>
+          {/* "Exit" (not "Cancel") + neutral styling: leaving keeps your
+              progress (the sheet defaults to Save & Exit), so it shouldn't
+              read as a destructive abort. */}
           <button onClick={()=>setShowCancelSheet(true)}
-            aria-label="Cancel workout"
-            style={{background:t.redDim,border:'1px solid '+alpha(t.red, 25),borderRadius:8,padding:'5px 11px',fontSize:11,fontWeight:700,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-            Cancel
+            aria-label="Exit workout"
+            style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:8,padding:'5px 11px',fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+            Exit
           </button>
         </div>
 
