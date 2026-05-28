@@ -179,11 +179,23 @@ export default function CoachDashboard() {
       // matches every field consumed by CoachClient + the queue mappers
       // (id, paused, profile.full_name for the inbox; the contact +
       // training fields for the lifecycle drawer + filters).
-      const { data: clientList } = await supabase
+      // NOTE: every column here must EXIST on public.clients. PostgREST 400s
+      // the WHOLE query on a single unknown column, which silently returns
+      // null -> "No clients yet" (the May 28 regression: last_workout_at was
+      // in the CoachClient type but is NOT a real column). Verified against
+      // information_schema before listing.
+      const { data: clientList, error: clientErr } = await supabase
         .from('clients')
-        .select(`id, display_name, client_type, training_type, contact_email, contact_phone, profile_id, paused, flagged, start_date, last_checkin_at, last_workout_at, last_active_at, profile:profiles!profile_id(full_name, email, avatar_url)`)
+        .select(`id, display_name, client_type, training_type, contact_email, contact_phone, profile_id, paused, flagged, start_date, last_checkin_at, last_active_at, profile:profiles!profile_id(full_name, email, avatar_url)`)
         .eq('coach_id', user.id)
         .neq('archived', true)
+      // Defensive: a failed/transient client fetch must not blank an
+      // already-populated list (this load() also runs on visibilitychange).
+      if (clientErr) {
+        console.error('[coach dashboard] client load failed:', clientErr.message)
+        setLoading(false) // don't strand the spinner; load() has no finally
+        return
+      }
       const safeClientList = (clientList || []) as CoachClient[]
       setClients(safeClientList)
       const insights = await getUnreadInsights(user.id)
