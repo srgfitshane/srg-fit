@@ -2040,6 +2040,16 @@ ${candidateList}`
                           </div>
                           <div style={{fontSize:11,color:t.textMuted,marginTop:1}}>
                             {ex.sets_prescribed} sets · {ex.tracking_type==='time'?`${ex.duration_seconds||'—'}s`:ex.reps_prescribed+' reps'}{ex.weight_prescribed?` · ${ex.weight_prescribed}`:''}
+                            {(() => {
+                              // One per-exercise "last" reference in the header instead of
+                              // repeating "Last: NxW" on every set row (mobile declutter).
+                              // Uses the first working set's prior from the most recent
+                              // completed session that contained this exercise.
+                              const lp = prevSets[ex.id]?.[0]
+                              if (!lp || (!lp.reps && !lp.weight)) return null
+                              const w = lp.weight && lp.unit !== 'bw' ? `×${lp.weight}${lp.unit}` : lp.unit === 'bw' ? ' BW' : ''
+                              return <span style={{color:t.teal}}> · ↩ last {lp.reps || '—'}{w}</span>
+                            })()}
                           </div>
                         </div>
                         {/* Progress + chevron */}
@@ -2217,14 +2227,11 @@ ${candidateList}`
                                         fill helpers, skip). Only on an unlogged, un-skipped
                                         row -- logged rows collapse to the single input line. */}
                                     {!s.logged && !s.skipped && (
-                                      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const,padding:'2px 4px 5px',fontSize:11}}>
+                                      <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap' as const,padding:'2px 4px 5px',fontSize:11}}>
                                         <label style={{display:'flex',alignItems:'center',gap:4,color:t.textMuted,cursor:'pointer'}}>
                                           <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
                                           Warmup
                                         </label>
-                                        {prior&&(
-                                          <span style={{color:t.textMuted}}>↩ Last: <b style={{color:t.textDim}}>{prior.reps?`${prior.reps}`:'—'}{prior.weight&&prior.unit!=='bw'?`×${prior.weight}${prior.unit}`:prior.unit==='bw'?' BW':''}</b></span>
-                                        )}
                                         {prior&&(
                                           <button onClick={()=>applySetTemplate(ex.id,idx,{reps:prior.reps,weight:prior.weight,unit:prior.unit})}
                                             style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textDecoration:'underline'}}>
@@ -2238,7 +2245,7 @@ ${candidateList}`
                                           </button>
                                         )}
                                         <button onClick={()=>skipSet(ex.id,idx)}
-                                          style={{marginLeft:'auto',background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                           ⏭ skip
                                         </button>
                                       </div>
