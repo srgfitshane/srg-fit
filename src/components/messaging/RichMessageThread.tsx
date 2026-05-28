@@ -712,7 +712,27 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   }
 
   // ── Render bubble content ─────────────────────────────────────────────────
-  const BubbleContent = ({ msg }: { msg: Message }) => {
+  // IMPORTANT: this is a plain render FUNCTION, not a component, and the call
+  // site uses {renderBubbleContent(msg)} -- NOT <RenderBubbleContent ... />.
+  //
+  // Why this matters (the May 25-28 egress disaster): when this was a nested
+  // component `<BubbleContent msg={msg} />`, every parent re-render created a
+  // brand-new function reference, so React saw a new component *type* and
+  // unmounted + remounted the entire bubble subtree -- including any <video>
+  // element. Each remount makes the browser re-fetch the video src from
+  // storage. iOS Safari compounds this: it fires a burst of range requests
+  // to buffer a video, and if the element remounts mid-buffer it abandons
+  // and restarts. A single iPhone left on a thread with two video messages
+  // generated *hundreds of storage requests per second* and ~12 GB/day of
+  // egress (confirmed in the storage logs: the same two .mp4 paths hammered
+  // over and over from one device).
+  //
+  // Calling it as a function inlines the returned JSX directly into the
+  // parent tree with no component boundary, so React reconciles the <video>
+  // by position and reuses the same DOM node across renders -- src unchanged,
+  // no re-fetch. It uses no hooks, so calling it as a function is safe.
+  // DO NOT convert this back to <BubbleContent /> JSX.
+  const renderBubbleContent = (msg: Message) => {
     const isMe = msg.sender_id === myId
 
     if (msg.message_type === 'image' && msg.media_url) {
@@ -733,13 +753,18 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       return (
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0' }}>
           <span style={{ fontSize:18 }}>🎙️</span>
-          <audio controls src={msg.media_url} style={{ height:36, flex:1, minWidth:0, maxWidth:'100%' }} />
+          {/* preload="metadata": fetch only the header until the user hits
+              play, never the whole clip on render. */}
+          <audio controls preload="metadata" src={msg.media_url} style={{ height:36, flex:1, minWidth:0, maxWidth:'100%' }} />
         </div>
       )
     }
     if (msg.message_type === 'video' && msg.media_url) {
       return (
-        <video src={msg.media_url} controls
+        // preload="metadata": don't download the clip body until the user
+        // taps play. Combined with the function-not-component fix above,
+        // this stops idle video bubbles from pulling storage egress.
+        <video src={msg.media_url} controls preload="metadata"
           style={{ maxWidth:'100%', width:'100%', borderRadius:10, display:'block', maxHeight:280 }} />
       )
     }
@@ -945,7 +970,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                       overflow:'hidden',
                       WebkitTouchCallout:'none',
                     }}>
-                    <BubbleContent msg={msg} />
+                    {renderBubbleContent(msg)}
                     <div style={{ fontSize:10, marginTop: isMedia?4:3, opacity:0.55, textAlign: isMe?'right':'left', padding: isMedia?'0 6px 4px':0 }}>
                       {fmtMsgTime(msg.created_at)}
                       {isMe && (
