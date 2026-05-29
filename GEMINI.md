@@ -561,6 +561,29 @@ on them without asking, but keep them in mind:
   referenced in the logger UI, so the data model may be partway there —
   check before planning. Deserves its own session + plan.
 
+## Check-in coach responses (May 29 2026)
+
+Check-in replies now mirror the workout-review flow — coach can respond
+with **text and/or a video link** (paste-only: Cap/Loom/Drive; no upload),
+and the response reaches the client (previously it was coach-only memory —
+stored but never shown to the client).
+
+- Columns on `client_form_assignments`: `coach_response` (text, existing),
+  `coach_response_video_url` (text), `coach_response_seen_at` (timestamptz).
+- Coach surfaces (both write the same columns + notify the client via
+  `notifications` + `send-notification`, type `review_ready`, deep-link
+  `/dashboard/client`): `coach/checkins/page.tsx` (main review page) and
+  the inline responder in `coach/clients/[id]/page.tsx`. Saving resets
+  `coach_response_seen_at` to null so a re-reply re-surfaces as unseen.
+- Client surface: a "Coach replied to your check-in" card on the dashboard
+  (`client/page.tsx`), mirroring the workout-review unseen card. Query:
+  completed assignments where `coach_response_seen_at` is null and
+  (`coach_response` or `coach_response_video_url`) is non-null. Marks seen
+  via direct UPDATE (client's `client_submit_assignments` RLS policy allows
+  it — no RPC needed, unlike workout reviews which use `mark_review_seen`
+  because of the review-lock policy). Video renders via the existing
+  module-scope `CoachReviewVideo` component (external-link preview branch).
+
 ## Handy reference: active Edge Functions
 
 - `generate-ai-insight` (v3) — coach-only, `verify_jwt: true`

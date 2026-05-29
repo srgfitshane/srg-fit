@@ -257,6 +257,15 @@ type PendingCheckinRecord = {
   } | null
 }
 
+type PendingCheckinResponseRecord = {
+  id: string
+  coach_response?: string | null
+  coach_response_video_url?: string | null
+  coach_responded_at?: string | null
+  form?: { title?: string | null } | null
+  _seen?: boolean
+}
+
 type DailyCheckinRecord = {
   id?: string
   body?: string | null
@@ -387,6 +396,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [pendingReviews, setPendingReviews] = useState<PendingReviewRecord[]>([])
   const [expandedReview, setExpandedReview] = useState<string|null>(null)
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckinRecord[]>([])
+  const [pendingCheckinResponses, setPendingCheckinResponses] = useState<PendingCheckinResponseRecord[]>([])
+  const [expandedCheckinResponse, setExpandedCheckinResponse] = useState<string|null>(null)
   const [loading,      setLoading]      = useState(true)
   const [activeNav,    setActiveNav]    = useState<DashboardTab>(() => {
     if (typeof window !== 'undefined') {
@@ -542,6 +553,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: latestMetric },
           { data: allPRData },
           { data: taskData },
+          { data: checkinResponseData },
         ] = await Promise.all([
           supabase.from('habits').select('*').eq('client_id', cid).eq('active', true),
           // Pull last 30 days so we can surface "Repeat last" prefills
@@ -578,6 +590,14 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           supabase.from('metrics').select('weight').eq('client_id', clientData.id).not('weight', 'is', null).order('logged_date', { ascending: false }).limit(1).single(),
           supabase.from('personal_records').select('exercise_id, weight_pr').eq('client_id', cid),
           supabase.from('client_tasks').select('*').eq('client_id', cid).order('created_at'),
+          // Unseen coach replies to completed check-ins (text and/or video).
+          // Mirrors the workout-review unseen-card pattern below.
+          supabase.from('client_form_assignments')
+            .select('id, coach_response, coach_response_video_url, coach_responded_at, form:onboarding_forms(title)')
+            .eq('client_id', cid).eq('status', 'completed')
+            .is('coach_response_seen_at', null)
+            .or('coach_response.not.is.null,coach_response_video_url.not.is.null')
+            .order('coach_responded_at', { ascending: false }).limit(5),
         ])
 
         setHabits((habitData || []) as HabitRecord[])
@@ -611,6 +631,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         console.log('[dashboard] pendingCI raw:', JSON.stringify(pendingCI))
         // Skip filter entirely — if the assignment exists and is pending, show it
         setPendingCheckins((pendingCI || []) as PendingCheckinRecord[])
+        setPendingCheckinResponses((checkinResponseData || []) as PendingCheckinResponseRecord[])
 
         setPulseData((todayCheckin as DailyCheckinRecord | null) || null)
 
@@ -1311,6 +1332,78 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                           }}
                           style={{ width:'100%', marginTop:12, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                           ✓ Got it — find this in your Training history
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ── CHECK-IN COACH REPLIES ── */}
+          {pendingCheckinResponses.length > 0 && (
+            <div className="fade" style={{ marginBottom:14 }} id="checkin-response-card">
+              {pendingCheckinResponses.map(ci => {
+                const isOpen = expandedCheckinResponse === ci.id
+                // Client has a direct UPDATE policy on their own assignments
+                // (client_submit_assignments), so we mark seen without an RPC.
+                const markSeen = async () => {
+                  const { error } = await supabase.from('client_form_assignments')
+                    .update({ coach_response_seen_at: new Date().toISOString() })
+                    .eq('id', ci.id)
+                  if (error) { console.warn('[checkin-resp:mark-seen]', error.message); return false }
+                  return true
+                }
+                return (
+                  <div key={ci.id} style={{ background:`linear-gradient(135deg,${alpha(t.teal, 9)},${alpha(t.teal, 3)})`, border:`2px solid ${alpha(t.teal, 31)}`, borderRadius:16, marginBottom:8, overflow:'hidden' }}>
+                    {/* Header row — always visible, tap to expand */}
+                    <div onClick={async () => {
+                        if (!isOpen) {
+                          const ok = await markSeen()
+                          if (ok) setPendingCheckinResponses(prev => prev.map(x => x.id === ci.id ? { ...x, _seen: true } : x))
+                        }
+                        setExpandedCheckinResponse(isOpen ? null : ci.id)
+                      }}
+                      style={{ padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
+                      {!ci._seen && !isOpen && (
+                        <div style={{ width:8, height:8, borderRadius:'50%', background:t.teal, boxShadow:`0 0 0 3px ${alpha(t.teal, 19)}`, flexShrink:0 }}/>
+                      )}
+                      <div style={{ width:38, height:38, borderRadius:11, background:t.tealDim, border:`1px solid ${alpha(t.teal, 25)}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                        💬
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>Coach replied to your check-in</div>
+                        <div style={{ fontSize:12, color:t.text, fontWeight:700 }}>{ci.form?.title || 'Check-in'}</div>
+                        <div style={{ fontSize:11, color:t.textMuted }}>
+                          {ci.coach_response_video_url && ci.coach_response ? 'Video + written notes' : ci.coach_response_video_url ? 'Video reply' : 'Written feedback'}
+                          {' · '}{isOpen ? 'tap to close' : 'tap to view'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize:16, color:t.textMuted, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s' }}>▾</div>
+                    </div>
+
+                    {/* Expanded content */}
+                    {isOpen && (
+                      <div style={{ borderTop:`1px solid ${alpha(t.teal, 19)}`, padding:'14px 16px' }}>
+                        {ci.coach_response && (
+                          <div style={{ background:'#0a1a1a', border:`1px solid ${alpha(t.teal, 19)}`, borderRadius:10, padding:'10px 14px', marginBottom: ci.coach_response_video_url ? 12 : 0 }}>
+                            <div style={{ fontSize:10, fontWeight:800, color:t.teal, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Written notes</div>
+                            <div style={{ fontSize:13, color:t.text, lineHeight:1.6 }}>{ci.coach_response}</div>
+                          </div>
+                        )}
+                        {ci.coach_response_video_url && (
+                          <CoachReviewVideo url={ci.coach_response_video_url} />
+                        )}
+                        <button
+                          onClick={async () => {
+                            const ok = await markSeen()
+                            if (!ok) { toastError('Could not mark as seen'); return }
+                            setPendingCheckinResponses(prev => prev.filter(x => x.id !== ci.id))
+                            setExpandedCheckinResponse(null)
+                          }}
+                          style={{ width:'100%', marginTop:12, background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'9px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                          ✓ Got it
                         </button>
                       </div>
                     )}

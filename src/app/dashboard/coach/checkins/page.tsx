@@ -49,6 +49,7 @@ export default function CoachCheckins() {
   const [filter,   setFilter]   = useState<'all'|'unreviewed'>('unreviewed')
   const [selected, setSelected] = useState<any|null>(null)
   const [feedback, setFeedback] = useState('')
+  const [feedbackVideo, setFeedbackVideo] = useState('')
   const [saving,   setSaving]   = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [questions, setQuestions] = useState<Record<string, any[]>>({}) // formId -> questions
@@ -78,7 +79,7 @@ export default function CoachCheckins() {
 
     const { data: clientList } = await supabase
       .from('clients')
-      .select('id, profile:profiles!clients_profile_id_fkey(full_name)')
+      .select('id, profile_id, profile:profiles!clients_profile_id_fkey(full_name)')
       .eq('coach_id', user.id)
     setClients(clientList || [])
 
@@ -94,7 +95,7 @@ export default function CoachCheckins() {
     // full blob until detail-view click.
     const { data } = await supabase
       .from('client_form_assignments')
-      .select('id, client_id, form_id, completed_at, coach_response, response, form:onboarding_forms(title, form_type, is_checkin_type)')
+      .select('id, client_id, form_id, completed_at, coach_response, coach_response_video_url, response, form:onboarding_forms(title, form_type, is_checkin_type)')
       .in('client_id', clientIds)
       .eq('status', 'completed')
       .not('response', 'is', null)
@@ -195,10 +196,18 @@ export default function CoachCheckins() {
 
   const handleReview = async () => {
     if (!selected) return
+    const text = feedback.trim()
+    const video = feedbackVideo.trim()
+    if (!text && !video) { alert('Add a written response or a video link before sending.'); return }
     setSaving(true)
+    const respondedAt = new Date().toISOString()
+    // Reset seen_at to null so this (re)response surfaces to the client as
+    // a fresh, unseen reply on their dashboard.
     const { error } = await supabase.from('client_form_assignments').update({
-      coach_response: feedback.trim() || null,
-      coach_responded_at: new Date().toISOString(),
+      coach_response: text || null,
+      coach_response_video_url: video || null,
+      coach_responded_at: respondedAt,
+      coach_response_seen_at: null,
     }).eq('id', selected.id)
     setSaving(false)
     if (error) {
@@ -206,8 +215,36 @@ export default function CoachCheckins() {
       return
     }
     setCheckins(prev => prev.map(c => c.id === selected.id
-      ? { ...c, coach_response: feedback.trim() || null, coach_responded_at: new Date().toISOString() }
+      ? { ...c, coach_response: text || null, coach_response_video_url: video || null, coach_responded_at: respondedAt }
       : c))
+
+    // Notify the client — fire-and-forget (Rule 8). Deep-link to the
+    // dashboard where the new check-in reply card appears.
+    const profileId = clients.find(c => c.id === selected.client_id)?.profile_id
+    if (profileId) {
+      const link = '/dashboard/client'
+      const title = '💬 Coach replied to your check-in'
+      const body = text ? text.slice(0, 100) : 'Tap to see your feedback'
+      Promise.resolve(supabase.from('notifications').insert({
+        user_id: profileId,
+        notification_type: 'review_ready',
+        title,
+        body,
+        link_url: link,
+      })).catch(err => console.warn('[notify:checkin-1]', err))
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.access_token) return
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ user_id: profileId, notification_type: 'review_ready', title, body, link_url: link }),
+        }).catch(err => console.warn('[notify:checkin-2]', err))
+      }).catch(() => {})
+    }
   }
 
   const visible = filter === 'unreviewed'
@@ -264,7 +301,7 @@ export default function CoachCheckins() {
             ) : visible.map((ci:any) => {
               const r = ci.response || {}
               return (
-                <div key={ci.id} onClick={()=>{ setSelected(ci); setFeedback(ci.coach_response||'') }}
+                <div key={ci.id} onClick={()=>{ setSelected(ci); setFeedback(ci.coach_response||''); setFeedbackVideo(ci.coach_response_video_url||'') }}
                   style={{ background:t.surface, border:'1px solid '+(selected?.id===ci.id?t.teal+'60':t.border),
                     borderRadius:14, padding:16, cursor:'pointer', transition:'border 0.15s' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
@@ -459,9 +496,15 @@ export default function CoachCheckins() {
                   })()}
 
                   {/* Previous coach response if exists */}
-                  {selected.coach_response && (
+                  {(selected.coach_response || selected.coach_response_video_url) && (
                     <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:12 }}>
-                      <strong>Your previous response:</strong> {selected.coach_response}
+                      {selected.coach_response && <div><strong>Your previous response:</strong> {selected.coach_response}</div>}
+                      {selected.coach_response_video_url && (
+                        <a href={selected.coach_response_video_url} target="_blank" rel="noreferrer"
+                          style={{ display:'inline-block', marginTop: selected.coach_response ? 6 : 0, color:t.teal, fontWeight:700, textDecoration:'underline' }}>
+                          📹 View video reply ↗
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -475,12 +518,23 @@ export default function CoachCheckins() {
                         padding:'10px 13px', fontSize:13, color:t.text, outline:'none',
                         fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark',
                         boxSizing:'border-box' as any, lineHeight:1.5 }} />
-                    <button onClick={handleReview} disabled={saving}
-                      style={{ marginTop:10, width:'100%', background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)',
+                    {/* Video link — Cap / Loom / Drive. Optional; pairs with or
+                        replaces the written note (parity with workout reviews). */}
+                    <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:8, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:10, padding:'0 13px' }}>
+                      <span style={{ fontSize:15, flexShrink:0 }}>🔗</span>
+                      <input value={feedbackVideo} onChange={e=>setFeedbackVideo(e.target.value)}
+                        placeholder="Paste a video link (Cap, Loom, Drive...)"
+                        style={{ flex:1, background:'transparent', border:'none', padding:'11px 0', fontSize:13, color:t.text, outline:'none',
+                          fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
+                    </div>
+                    <button onClick={handleReview} disabled={saving || (!feedback.trim() && !feedbackVideo.trim())}
+                      style={{ marginTop:10, width:'100%',
+                        background:(!feedback.trim() && !feedbackVideo.trim()) ? t.surfaceHigh : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)',
                         border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800,
-                        color:'#000', cursor:saving?'not-allowed':'pointer',
+                        color:(!feedback.trim() && !feedbackVideo.trim()) ? t.textMuted : '#000',
+                        cursor:(saving || (!feedback.trim() && !feedbackVideo.trim()))?'not-allowed':'pointer',
                         fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
-                      {saving ? 'Saving...' : selected.coach_response ? '✓ Update Response' : '✓ Save Response'}
+                      {saving ? 'Saving...' : (selected.coach_response || selected.coach_response_video_url) ? '✓ Update Response' : '✓ Send Response'}
                     </button>
                   </div>
                 </>

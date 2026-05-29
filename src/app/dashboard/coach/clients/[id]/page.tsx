@@ -100,6 +100,7 @@ export default function ClientDetail() {
   const [expandedCheckin,     setExpandedCheckin]     = useState<string|null>(null)
   const [respondingTo,        setRespondingTo]        = useState<string|null>(null)
   const [responseText,        setResponseText]        = useState('')
+  const [responseVideo,       setResponseVideo]       = useState('')
   const [savingResponse,      setSavingResponse]      = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [intake,        setIntake]        = useState<any>(null)
@@ -236,7 +237,7 @@ export default function ClientDetail() {
         { data: nutritionLogsData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
-        supabase.from('client_form_assignments').select('id, completed_at, response, coach_response').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
+        supabase.from('client_form_assignments').select('id, completed_at, response, coach_response, coach_response_video_url').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
         supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(60),
         supabase.from('workout_sessions').select('*').eq('client_id', clientId).not('program_id','is',null).order('scheduled_date', { ascending: false }).limit(100),
         supabase.from('nutrition_plans').select('*').eq('client_id', clientId).eq('is_active', true).single(),
@@ -1413,10 +1414,16 @@ export default function ClientDetail() {
                         )}
 
                         {/* Coach response */}
-                        {a.coach_response ? (
+                        {(a.coach_response || a.coach_response_video_url) && respondingTo !== a.id ? (
                           <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
-                            <strong>Your response:</strong> {a.coach_response}
-                            <button onClick={() => { setRespondingTo(a.id); setResponseText(a.coach_response) }}
+                            {a.coach_response && <span><strong>Your response:</strong> {a.coach_response}</span>}
+                            {a.coach_response_video_url && (
+                              <a href={a.coach_response_video_url} target="_blank" rel="noreferrer"
+                                style={{ display:'inline-block', marginLeft: a.coach_response ? 10 : 0, color:t.teal, fontWeight:700, textDecoration:'underline' }}>
+                                📹 Video reply ↗
+                              </a>
+                            )}
+                            <button onClick={() => { setRespondingTo(a.id); setResponseText(a.coach_response || ''); setResponseVideo(a.coach_response_video_url || '') }}
                               style={{ marginLeft:10, background:'none', border:'none', color:t.teal, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif", textDecoration:'underline' }}>
                               Edit
                             </button>
@@ -1426,29 +1433,58 @@ export default function ClientDetail() {
                             <textarea value={responseText} onChange={e => setResponseText(e.target.value)} rows={3}
                               placeholder="Write your response to this check-in..."
                               style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', colorScheme:'dark', boxSizing:'border-box' as any, lineHeight:1.6 }} />
+                            <div style={{ display:'flex', alignItems:'center', gap:8, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'0 12px' }}>
+                              <span style={{ fontSize:14, flexShrink:0 }}>🔗</span>
+                              <input value={responseVideo} onChange={e => setResponseVideo(e.target.value)}
+                                placeholder="Paste a video link (Cap, Loom, Drive...)"
+                                style={{ flex:1, background:'transparent', border:'none', padding:'10px 0', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
+                            </div>
                             <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-                              <button onClick={() => { setRespondingTo(null); setResponseText('') }}
+                              <button onClick={() => { setRespondingTo(null); setResponseText(''); setResponseVideo('') }}
                                 style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                 Cancel
                               </button>
-                              <button disabled={savingResponse || !responseText.trim()}
+                              <button disabled={savingResponse || (!responseText.trim() && !responseVideo.trim())}
                                 onClick={async () => {
+                                  const text = responseText.trim()
+                                  const video = responseVideo.trim()
                                   setSavingResponse(true)
+                                  const respondedAt = new Date().toISOString()
                                   const { error } = await supabase.from('client_form_assignments').update({
-                                    coach_response: responseText,
-                                    coach_responded_at: new Date().toISOString(),
+                                    coach_response: text || null,
+                                    coach_response_video_url: video || null,
+                                    coach_responded_at: respondedAt,
+                                    coach_response_seen_at: null,
                                   }).eq('id', a.id)
                                   if (error) { setSavingResponse(false); alert('Could not send response: ' + error.message); return }
-                                  setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: responseText } : x))
-                                  setRespondingTo(null); setResponseText(''); setSavingResponse(false)
+                                  setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: text || null, coach_response_video_url: video || null } : x))
+                                  // Notify the client — fire-and-forget (Rule 8).
+                                  const clientProfile = client?.profile_id
+                                  if (clientProfile) {
+                                    const link = '/dashboard/client'
+                                    const title = '💬 Coach replied to your check-in'
+                                    const body = text ? text.slice(0, 100) : 'Tap to see your feedback'
+                                    Promise.resolve(supabase.from('notifications').insert({
+                                      user_id: clientProfile, notification_type: 'review_ready', title, body, link_url: link,
+                                    })).catch(err => console.warn('[notify:checkin-resp-1]', err))
+                                    supabase.auth.getSession().then(({ data: { session } }) => {
+                                      if (!session?.access_token) return
+                                      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+                                        body: JSON.stringify({ user_id: clientProfile, notification_type: 'review_ready', title, body, link_url: link }),
+                                      }).catch(err => console.warn('[notify:checkin-resp-2]', err))
+                                    }).catch(() => {})
+                                  }
+                                  setRespondingTo(null); setResponseText(''); setResponseVideo(''); setSavingResponse(false)
                                 }}
-                                style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:savingResponse||!responseText.trim()?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:savingResponse||(!responseText.trim()&&!responseVideo.trim())?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                 {savingResponse ? 'Saving...' : '✓ Send Response'}
                               </button>
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => { setRespondingTo(a.id); setResponseText('') }}
+                          <button onClick={() => { setRespondingTo(a.id); setResponseText(''); setResponseVideo('') }}
                             style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                             💬 Respond to Check-in
                           </button>
