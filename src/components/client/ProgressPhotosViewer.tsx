@@ -228,7 +228,7 @@ export default function ProgressPhotosViewer({
             </div>
 
             {!isCollapsed && (
-              <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+              <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, alignItems: 'start' }}>
                 {group.photos.map(p => {
                   const selected = isComparing && compareSel.find(s => s.id === p.id)
                   const selIdx = compareSel.findIndex(s => s.id === p.id)
@@ -249,12 +249,16 @@ export default function ProgressPhotosViewer({
                         {fmtShort(p.photo_date)}
                       </div>
                       {(p.thumbUrl || p.signedUrl) && (
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4', background: '#000' }}>
+                        <div style={{ position: 'relative', width: '100%' }}>
+                          {/* No fixed aspect box — let the photo keep its own shape
+                              (these are tall portrait shots; a 3/4 box + contain
+                              squeezed them into a thin strip with black side bars).
+                              The cell grows to the image's natural height. */}
                           <img
                             src={p.thumbUrl || p.signedUrl}
                             loading="lazy"
                             alt={(ANGLE_LABELS[group.angle] || 'Progress') + ' photo from ' + fmtFull(p.photo_date)}
-                            style={{ objectFit: 'contain', display: 'block', width: '100%', height: '100%' }}
+                            style={{ display: 'block', width: '100%', height: 'auto' }}
                           />
                         </div>
                       )}
