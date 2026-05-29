@@ -2208,8 +2208,13 @@ ${candidateList}`
                             return (
                               <div style={{marginBottom:12}}>
                                 {demoUrl ? (
-                                  <video src={demoUrl} controls playsInline preload="metadata"
-                                    onLoadedMetadata={e=>{(e.target as HTMLVideoElement).currentTime=0.1}}
+                                  // preload="none": don't fetch any video bytes until the client
+                                  // taps play -- the Demo panel opens instantly instead of eagerly
+                                  // pulling metadata for every expanded exercise (large clips, no
+                                  // poster images). Also cuts egress on demos opened but not
+                                  // watched. Raw playback speed is gated by file size; the real fix
+                                  // there is re-encoding the library to web-optimized MP4.
+                                  <video src={demoUrl} controls playsInline preload="none"
                                     style={{width:'100%',borderRadius:12,maxHeight:200,background:'#000',display:'block',objectFit:'contain',marginBottom:8}}/>
                                 ) : imageUrl ? (
                                   <img src={imageUrl} alt={ex.exercise?.name||'Exercise demo'}
