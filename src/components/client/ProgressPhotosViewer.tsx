@@ -12,6 +12,7 @@ type ProgressPhoto = {
   caption?: string | null
   weight_at_time?: number | null
   signedUrl?: string
+  thumbUrl?: string
 }
 
 type ThemeTokens = {
@@ -95,10 +96,21 @@ export default function ProgressPhotosViewer({
         return
       }
       const withUrls = await Promise.all(rows.map(async (p) => {
-        const { data: url } = await supabase.storage
-          .from('progress-photos')
-          .createSignedUrl(p.storage_path, 3600)
-        return { ...p, signedUrl: url?.signedUrl }
+        // Two signed URLs per photo: a small TRANSFORMED thumbnail for the
+        // grid, and the full-res URL for the lightbox / compare view. These
+        // are 2-5 MB iPhone JPEGs shown at ~150px in the grid — serving the
+        // full file as a thumbnail was a big chunk of progress-photo egress.
+        // Supabase generates the thumb once (then CDN-caches it); the full
+        // image is only fetched when a photo is opened. If image transforms
+        // aren't available, thumbUrl is null and the grid falls back to the
+        // full URL — no regression.
+        const [thumb, full] = await Promise.all([
+          supabase.storage.from('progress-photos')
+            .createSignedUrl(p.storage_path, 3600, { transform: { width: 400, quality: 60 } }),
+          supabase.storage.from('progress-photos')
+            .createSignedUrl(p.storage_path, 3600),
+        ])
+        return { ...p, thumbUrl: thumb.data?.signedUrl, signedUrl: full.data?.signedUrl }
       }))
       if (cancelled) return
       setPhotos(withUrls)
@@ -236,10 +248,11 @@ export default function ProgressPhotosViewer({
                       <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 3, background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", letterSpacing: '0.02em' }}>
                         {fmtShort(p.photo_date)}
                       </div>
-                      {p.signedUrl && (
+                      {(p.thumbUrl || p.signedUrl) && (
                         <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
                           <img
-                            src={p.signedUrl}
+                            src={p.thumbUrl || p.signedUrl}
+                            loading="lazy"
                             alt={(ANGLE_LABELS[group.angle] || 'Progress') + ' photo from ' + fmtFull(p.photo_date)}
                             style={{ objectFit: 'cover', display: 'block', width: '100%', height: '100%' }}
                           />
