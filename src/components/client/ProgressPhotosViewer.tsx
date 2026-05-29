@@ -12,7 +12,6 @@ type ProgressPhoto = {
   caption?: string | null
   weight_at_time?: number | null
   signedUrl?: string
-  thumbUrl?: string
 }
 
 type ThemeTokens = {
@@ -96,21 +95,10 @@ export default function ProgressPhotosViewer({
         return
       }
       const withUrls = await Promise.all(rows.map(async (p) => {
-        // Two signed URLs per photo: a small TRANSFORMED thumbnail for the
-        // grid, and the full-res URL for the lightbox / compare view. These
-        // are 2-5 MB iPhone JPEGs shown at ~150px in the grid — serving the
-        // full file as a thumbnail was a big chunk of progress-photo egress.
-        // Supabase generates the thumb once (then CDN-caches it); the full
-        // image is only fetched when a photo is opened. If image transforms
-        // aren't available, thumbUrl is null and the grid falls back to the
-        // full URL — no regression.
-        const [thumb, full] = await Promise.all([
-          supabase.storage.from('progress-photos')
-            .createSignedUrl(p.storage_path, 3600, { transform: { width: 400, quality: 60 } }),
-          supabase.storage.from('progress-photos')
-            .createSignedUrl(p.storage_path, 3600),
-        ])
-        return { ...p, thumbUrl: thumb.data?.signedUrl, signedUrl: full.data?.signedUrl }
+        const { data: url } = await supabase.storage
+          .from('progress-photos')
+          .createSignedUrl(p.storage_path, 3600)
+        return { ...p, signedUrl: url?.signedUrl }
       }))
       if (cancelled) return
       setPhotos(withUrls)
@@ -248,21 +236,12 @@ export default function ProgressPhotosViewer({
                       <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 3, background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 700, fontFamily: "'DM Sans', sans-serif", letterSpacing: '0.02em' }}>
                         {fmtShort(p.photo_date)}
                       </div>
-                      {(p.thumbUrl || p.signedUrl) && (
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4', overflow: 'hidden', background: '#000' }}>
-                          {/* Uniform 3/4 cell. These are very tall full-length shots:
-                              cover crops the body, a plain letterbox leaves big black
-                              bars, and natural height makes each cell absurdly long. So
-                              show the WHOLE photo via contain over a blurred copy of
-                              itself (IG/Spotify-style fill) — no crop, no dead bars,
-                              uniform size. Same thumb URL, so it's one cached fetch. */}
-                          <img aria-hidden src={p.thumbUrl || p.signedUrl}
-                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(16px)', transform: 'scale(1.1)', opacity: 0.45 }} />
+                      {p.signedUrl && (
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
                           <img
-                            src={p.thumbUrl || p.signedUrl}
-                            loading="lazy"
+                            src={p.signedUrl}
                             alt={(ANGLE_LABELS[group.angle] || 'Progress') + ' photo from ' + fmtFull(p.photo_date)}
-                            style={{ position: 'relative', display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                            style={{ objectFit: 'cover', display: 'block', width: '100%', height: '100%' }}
                           />
                         </div>
                       )}
