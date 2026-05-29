@@ -249,12 +249,12 @@ export default function ProgressPhotosViewer({
                         {fmtShort(p.photo_date)}
                       </div>
                       {(p.thumbUrl || p.signedUrl) && (
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4', background: '#000' }}>
                           <img
                             src={p.thumbUrl || p.signedUrl}
                             loading="lazy"
                             alt={(ANGLE_LABELS[group.angle] || 'Progress') + ' photo from ' + fmtFull(p.photo_date)}
-                            style={{ objectFit: 'cover', display: 'block', width: '100%', height: '100%' }}
+                            style={{ objectFit: 'contain', display: 'block', width: '100%', height: '100%' }}
                           />
                         </div>
                       )}
