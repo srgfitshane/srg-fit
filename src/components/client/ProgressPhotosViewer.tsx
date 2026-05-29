@@ -228,7 +228,7 @@ export default function ProgressPhotosViewer({
             </div>
 
             {!isCollapsed && (
-              <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, alignItems: 'start' }}>
+              <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
                 {group.photos.map(p => {
                   const selected = isComparing && compareSel.find(s => s.id === p.id)
                   const selIdx = compareSel.findIndex(s => s.id === p.id)
@@ -249,16 +249,20 @@ export default function ProgressPhotosViewer({
                         {fmtShort(p.photo_date)}
                       </div>
                       {(p.thumbUrl || p.signedUrl) && (
-                        <div style={{ position: 'relative', width: '100%' }}>
-                          {/* No fixed aspect box — let the photo keep its own shape
-                              (these are tall portrait shots; a 3/4 box + contain
-                              squeezed them into a thin strip with black side bars).
-                              The cell grows to the image's natural height. */}
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4', overflow: 'hidden', background: '#000' }}>
+                          {/* Uniform 3/4 cell. These are very tall full-length shots:
+                              cover crops the body, a plain letterbox leaves big black
+                              bars, and natural height makes each cell absurdly long. So
+                              show the WHOLE photo via contain over a blurred copy of
+                              itself (IG/Spotify-style fill) — no crop, no dead bars,
+                              uniform size. Same thumb URL, so it's one cached fetch. */}
+                          <img aria-hidden src={p.thumbUrl || p.signedUrl}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(16px)', transform: 'scale(1.1)', opacity: 0.45 }} />
                           <img
                             src={p.thumbUrl || p.signedUrl}
                             loading="lazy"
                             alt={(ANGLE_LABELS[group.angle] || 'Progress') + ' photo from ' + fmtFull(p.photo_date)}
-                            style={{ display: 'block', width: '100%', height: 'auto' }}
+                            style={{ position: 'relative', display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
                           />
                         </div>
                       )}
