@@ -25,6 +25,7 @@ export type QueueItemType =
   | 'friction'
   | 'silent_client'
   | 'issue_report'
+  | 'program_ending'
 
 export type SemanticColor = 'red' | 'orange' | 'yellow' | 'green' | 'purple' | 'teal'
 
@@ -131,6 +132,17 @@ type IssueReportRow = {
   created_at: string
 }
 
+type EndingProgramRow = {
+  program_id: string
+  program_name: string
+  client_id: string
+  client_name: string
+  last_session: string  // YYYY-MM-DD
+  total_sessions: number
+  days_until_last: number
+  ending_notified_at?: string | null
+}
+
 type RecentSessionRow = {
   id: string
   client_id: string
@@ -210,7 +222,7 @@ export async function buildCoachInbox(
   const reviewWindowStart = new Date()
   reviewWindowStart.setDate(reviewWindowStart.getDate() - 14)
 
-  const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes, openIssueRes] = await Promise.all([
+  const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes, openIssueRes, endingProgramsRes] = await Promise.all([
     supabase
       .from('workout_sessions')
       .select('id, title, review_due_at, completed_at, client:clients!workout_sessions_client_id_fkey(id, profile:profiles!clients_profile_id_fkey(full_name))')
@@ -253,6 +265,11 @@ export async function buildCoachInbox(
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: false })
       .limit(10),
+    // Programs in their last week (or just ended). SECURITY DEFINER RPC
+    // already filters to auth.uid() so this is safe for the live coach
+    // session. No 14-day dedupe filter here -- card persists until the
+    // program is extended or archived, even after the push has fired.
+    supabase.rpc('get_my_ending_programs'),
   ])
 
   const clientNameByProfileId = new Map(
@@ -423,6 +440,29 @@ export async function buildCoachInbox(
         action: 'Review issue',
         color: 'red',
         href: '/dashboard/coach/issues',
+      }
+    }),
+    // Programs ending / just ended. Negative days_until_last = already over
+    // (more urgent -- client may be in limbo). Positive = "last week" warning.
+    ...((endingProgramsRes.data || []) as EndingProgramRow[]).map((p): QueueItem => {
+      const d = p.days_until_last
+      const isOver = d < 0
+      const wording = d > 1 ? `ends in ${d} days`
+        : d === 1 ? 'ends tomorrow'
+        : d === 0 ? 'ends today'
+        : d === -1 ? 'ended yesterday'
+        : `ended ${Math.abs(d)} days ago`
+      return {
+        id: `program-ending-${p.program_id}`,
+        type: 'program_ending',
+        priority: isOver ? 88 : 78,
+        title: isOver
+          ? `${p.client_name}'s program ended ⏰`
+          : `${p.client_name}'s program winding down`,
+        detail: `${p.program_name} · ${wording} · ${p.total_sessions} sessions`,
+        action: isOver ? 'Plan next phase' : 'Review & extend',
+        color: isOver ? 'red' : 'orange',
+        href: `/dashboard/coach/clients/${p.client_id}`,
       }
     }),
     ...((unreadInsightsRes.data || []) as InsightQueueRow[]).map((insight): QueueItem => ({

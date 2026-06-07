@@ -593,13 +593,50 @@ stored but never shown to the client).
   because of the review-lock policy). Video renders via the existing
   module-scope `CoachReviewVideo` component (external-link preview branch).
 
+## Program-ending coach notifications (Jun 7 2026)
+
+Daily cron checks for client programs in their last week (or that just
+ended) and notifies the coach. Catches the "what's next?" moment without
+manual tracking, and surfaces zombie programs (status=active but already
+finished — common because nothing auto-flips status to 'completed').
+
+- Column on `programs`: `ending_notified_at timestamptz` for dedupe.
+- Eligibility (via SECURITY DEFINER RPCs):
+  - `status='active'`, `is_template=false`
+  - `>=4` total sessions on the program (skips ad-hoc "My Workouts" containers)
+  - `max(workout_sessions.scheduled_date)` between today-7 and today+7
+  - `ending_notified_at IS NULL` or older than 14 days (cron-side only)
+- RPCs:
+  - `get_all_ending_programs_for_cron()` — service_role only, includes the
+    14-day dedupe filter.
+  - `get_my_ending_programs()` — authenticated, filtered to `auth.uid()`,
+    no 14-day filter (card persists on the dashboard until the program is
+    actually extended/archived).
+- Edge Function `check-program-endings` (verify_jwt:false): pg_cron hits
+  daily at 12:05 UTC (~7:05am ET, `5 12 * * *`, jobname `check-program-endings`).
+  For each eligible program: stamp `ending_notified_at`, then call
+  `send-notification`. **Do NOT also `.from('notifications').insert()`** —
+  send-notification already does the bell row insert. Doing both = double bell row.
+- Coach surface: `coach_inbox.ts` adds a `program_ending` queue type
+  (priority 88 if already ended, 78 if winding down). Rendered by the
+  existing unified inbox on the coach dashboard. New tag color = orange.
+- `notifications.notification_type` check constraint extended to include
+  `program_ending`. Reminder: this table has a hard CHECK constraint on
+  the type column — any new notification type needs the constraint updated
+  before the first insert lands.
+
 ## Handy reference: active Edge Functions
 
 - `generate-ai-insight` (v3) — coach-only, `verify_jwt: true`
 - `send-invite-email` (v6) — `verify_jwt: false`, CORS fixed
-- `send-notification` (v1) — push (always fire-and-forget)
+- `send-notification` (v25+) — **inserts the bell row AND fires push.**
+  Callers MUST NOT also insert into `notifications` directly or rows double up.
 - `nutrition-search` — FatSecret proxy, outbound IP `44.199.250.80`
 - `send-weekly-digest` — Claude summary per client, pg_cron Monday 12 UTC
+- `send-weekly-checkins` — assigns the next week's check-in to each client,
+  pg_cron daily 12 UTC (job runs every day; advance logic inside the function)
+- `check-program-endings` (v3) — coach "program winding down" notifications,
+  pg_cron daily 12:05 UTC. Reads `get_all_ending_programs_for_cron` RPC.
 - `stripe-checkout` (v2), `stripe-webhook` (v3), `stripe-portal` (v2)
 
 ## Questions to ask when stuck
