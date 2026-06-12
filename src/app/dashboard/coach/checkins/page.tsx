@@ -240,6 +240,11 @@ export default function CoachCheckins() {
         }).catch(err => console.warn('[notify:checkin-2]', err))
       }).catch(() => {})
     }
+
+    // Mirror the workout-review flow: submitting returns you to the queue.
+    setSelected(null)
+    setFeedback('')
+    setFeedbackVideo('')
   }
 
   // A check-in counts as reviewed if the coach replied with text OR a video
@@ -262,14 +267,14 @@ export default function CoachCheckins() {
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 28px', display:'flex', alignItems:'center', height:60, gap:12 }}>
-          <button onClick={()=>router.push('/dashboard/coach')}
+          <button onClick={()=> selected ? setSelected(null) : router.push('/dashboard/coach')}
             style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>
             ← Back
           </button>
           <div style={{ width:1, height:28, background:t.border }} />
           <div style={{ fontSize:14, fontWeight:700 }}>✅ Check-in Reviews</div>
           <div style={{ flex:1 }} />
-          <div style={{ display:'flex', gap:6 }}>
+          {!selected && <div style={{ display:'flex', gap:6 }}>
             {(['unreviewed','all'] as const).map(f => (
               <button key={f} onClick={()=>setFilter(f)}
                 style={{ padding:'5px 14px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
@@ -279,13 +284,16 @@ export default function CoachCheckins() {
                 {f === 'unreviewed' ? `Needs Review (${checkins.filter(c=>!isReviewed(c)).length})` : 'All'}
               </button>
             ))}
-          </div>
+          </div>}
         </div>
 
-        <div style={{ maxWidth:1100, margin:'0 auto', padding:28, display:'grid', gridTemplateColumns:'1fr 440px', gap:20, alignItems:'start' }}>
+        {/* Single centered column — list OR full-window detail, mirroring the
+            workout reviews flow (and finally phone-usable: the old 1fr/440px
+            two-column grid was desktop-only). */}
+        <div style={{ maxWidth:680, margin:'0 auto', padding:'20px 16px 80px' }}>
 
-          {/* Left: list */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {/* List — hidden while a check-in is open full-window */}
+          {!selected && <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {visible.length === 0 ? (
               <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'56px', textAlign:'center' }}>
                 <div style={{ fontSize:32, marginBottom:12 }}>✅</div>
@@ -299,7 +307,7 @@ export default function CoachCheckins() {
             ) : visible.map((ci:any) => {
               const r = ci.response || {}
               return (
-                <div key={ci.id} onClick={()=>{ setSelected(ci); setFeedback(ci.coach_response||''); setFeedbackVideo(ci.coach_response_video_url||'') }}
+                <div key={ci.id} onClick={()=>{ setSelected(ci); setFeedback(ci.coach_response||''); setFeedbackVideo(ci.coach_response_video_url||''); window.scrollTo({ top: 0 }) }}
                   style={{ background:t.surface, border:'1px solid '+(selected?.id===ci.id?t.teal+'60':t.border),
                     borderRadius:14, padding:16, cursor:'pointer', transition:'border 0.15s' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
@@ -350,16 +358,11 @@ export default function CoachCheckins() {
                 </div>
               )
             })}
-          </div>
+          </div>}
 
-          {/* Right: detail + review panel */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:22, position:'sticky', top:20 }}>
-            {!selected ? (
-              <div style={{ textAlign:'center', padding:'40px 20px', color:t.textMuted }}>
-                <div style={{ fontSize:28, marginBottom:10 }}>👈</div>
-                <div style={{ fontSize:13 }}>Select a check-in to review</div>
-              </div>
-            ) : (() => {
+          {/* Detail — full window, opens on tap, submit returns to the queue */}
+          {selected && <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:22 }}>
+            {(() => {
               const r = selected.response || {}
               return (
                 <>
@@ -538,7 +541,7 @@ export default function CoachCheckins() {
                 </>
               )
             })()}
-          </div>
+          </div>}
 
         </div>
       </div>
