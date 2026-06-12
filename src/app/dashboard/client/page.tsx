@@ -386,7 +386,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   // Most recent prior-day value per habit, used by the popup's
   // "Repeat last" shortcut for stable habits like sleep/weight.
   const [lastValueByHabit, setLastValueByHabit] = useState<Record<string,number>>({})
-  const [clientTasks,  setClientTasks]  = useState<{id:string,title:string,repeat:string,due_date:string|null,last_completed_date:string|null,icon:string|null}[]>([])
+  const [clientTasks,  setClientTasks]  = useState<{id:string,title:string,repeat:string,due_date:string|null,last_completed_date:string|null,icon:string|null,task_type?:string|null,target?:number|null,unit?:string|null,progress_value?:number|null,progress_date?:string|null}[]>([])
+  const [taskLogOpen,  setTaskLogOpen]  = useState<string|null>(null)
+  const [taskLogDraft, setTaskLogDraft] = useState('')
   const [milestones,   setMilestones]   = useState<MilestoneRecord[]>([])
   const [recentPRs,    setRecentPRs]    = useState<PersonalRecordSummary[]>([])
   const [workoutStreak, setWorkoutStreak] = useState<number>(0)
@@ -939,6 +941,33 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const uncompleteTask = async (taskId: string) => {
     await supabase.from('client_tasks').update({ last_completed_date: null }).eq('id', taskId)
     setClientTasks(prev => prev.map(t => t.id === taskId ? { ...t, last_completed_date: null } : t))
+  }
+
+  // Number tasks: progress only counts inside the current repeat window
+  // (daily resets at midnight, weekly after 7 days, once accumulates).
+  const taskProgressValue = (task: { repeat: string, progress_value?: number|null, progress_date?: string|null }) => {
+    const v = Number(task.progress_value) || 0
+    if (!task.progress_date) return 0
+    if (task.repeat === 'daily') return task.progress_date === today ? v : 0
+    if (task.repeat === 'weekly') {
+      const diff = Math.floor((new Date(today + 'T00:00:00').getTime() - new Date(task.progress_date + 'T00:00:00').getTime()) / 86400000)
+      return diff < 7 ? v : 0
+    }
+    return v
+  }
+
+  const logTaskValue = async (task: typeof clientTasks[number], value: number) => {
+    const hitTarget = task.target != null && value >= Number(task.target)
+    const patch = {
+      progress_value: value,
+      progress_date: today,
+      // Hitting the target completes the task; lowering today's number back
+      // under it un-completes it. Older completions are left alone.
+      last_completed_date: hitTarget ? today : (task.last_completed_date === today ? null : task.last_completed_date),
+    }
+    const { error } = await supabase.from('client_tasks').update(patch).eq('id', task.id)
+    if (error) { toastError('Could not log progress: ' + error.message); return }
+    setClientTasks(prev => prev.map(x => x.id === task.id ? { ...x, ...patch } : x))
   }
 
   const isTaskDoneToday = (task: { repeat: string, last_completed_date: string | null }) => {
@@ -1592,6 +1621,48 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                 {/* Client tasks */}
                 {todayTasks.map(task => {
                   const done = isTaskDoneToday(task)
+
+                  // Number-based task (e.g. "Walk 8000 steps") — progress bar
+                  // + tap-to-log, mirroring the number-habit cards below.
+                  if (task.task_type === 'number' && task.target) {
+                    const val = taskProgressValue(task)
+                    const target = Number(task.target)
+                    const pct = Math.min(100, Math.round((val / target) * 100))
+                    const isOpen = taskLogOpen === task.id
+                    return (
+                      <div key={task.id}
+                        onClick={()=>{ setTaskLogOpen(isOpen ? null : task.id); setTaskLogDraft(val ? String(val) : '') }}
+                        style={{ background:done?alpha(t.green, 6):t.surface, border:'1px solid '+(done?alpha(t.green, 25):alpha(t.teal, 19)), borderRadius:13, padding:'12px 14px', cursor:'pointer', transition:'all 0.15s ease' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                          <div style={{ width:32, height:32, borderRadius:9, background:done?'linear-gradient(135deg,'+t.green+','+alpha(t.green, 67) + ')':t.surfaceHigh, border:'1px solid '+(done?alpha(t.green, 38):t.border), display:'flex', alignItems:'center', justifyContent:'center', fontSize:done?13:18, flexShrink:0, transition:'all 0.2s ease' }}>
+                            {done ? '✓' : (task.icon || '📊')}
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:700, color:done?t.textMuted:t.text }}>{task.title}</div>
+                            <div style={{ fontSize:11, color:done?t.green:t.textMuted, marginTop:1 }}>
+                              {val} / {target}{task.unit ? ' ' + task.unit : ''}{done ? ' · Done! 🎉' : ' · tap to log'}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ height:5, borderRadius:3, background:t.surfaceHigh, marginTop:9, overflow:'hidden' }}>
+                          <div style={{ height:'100%', width:pct+'%', borderRadius:3, background:done?t.green:t.teal, transition:'width 0.25s ease' }}/>
+                        </div>
+                        {isOpen && (
+                          <div onClick={e=>e.stopPropagation()} style={{ display:'flex', gap:8, marginTop:10 }}>
+                            <input autoFocus value={taskLogDraft} onChange={e=>setTaskLogDraft(e.target.value)} inputMode="decimal"
+                              placeholder={`Today's total${task.unit ? ' ('+task.unit+')' : ''}`}
+                              onKeyDown={e=>{ if(e.key==='Enter'){ void logTaskValue(task, parseFloat(taskLogDraft)||0); setTaskLogOpen(null) } }}
+                              style={{ flex:1, background:t.surfaceHigh, border:'1px solid '+alpha(t.teal, 38), borderRadius:10, padding:'10px 12px', fontSize:16, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark', boxSizing:'border-box' as const, minWidth:0 }}/>
+                            <button onClick={()=>{ void logTaskValue(task, parseFloat(taskLogDraft)||0); setTaskLogOpen(null) }}
+                              style={{ background:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80)+')', border:'none', borderRadius:10, padding:'10px 18px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                              Save
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
+
                   return (
                     <div key={task.id}
                       onClick={()=> done ? uncompleteTask(task.id) : completeTask(task.id)}

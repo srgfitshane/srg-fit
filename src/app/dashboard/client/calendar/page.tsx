@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
 import { localDateStr } from '@/lib/date'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -40,6 +41,11 @@ type ClientTask = {
   due_date: string | null
   last_completed_date: string | null
   icon: string | null
+  task_type?: 'check' | 'number' | null
+  target?: number | null
+  unit?: string | null
+  progress_value?: number | null
+  progress_date?: string | null
 }
 
 type JournalEntrySummary = { entry_date: string }
@@ -87,6 +93,9 @@ export default function ClientCalendarPage() {
   })
   const [taskTitle,    setTaskTitle]    = useState('')
   const [taskRepeat,   setTaskRepeat]   = useState<'once'|'daily'|'weekly'>('once')
+  const [taskType,     setTaskType]     = useState<'check'|'number'>('check')
+  const [taskTarget,   setTaskTarget]   = useState('')
+  const [taskUnit,     setTaskUnit]     = useState('')
   const [taskDate,     setTaskDate]     = useState(todayStr)
   const [taskSaving,   setTaskSaving]   = useState(false)
 
@@ -223,16 +232,26 @@ export default function ClientCalendarPage() {
 
   const saveTask = async () => {
     if (!taskTitle.trim() || !clientId) return
+    if (taskType === 'number' && !(parseFloat(taskTarget) > 0)) return
     setTaskSaving(true)
-    const { data } = await supabase.from('client_tasks').insert({
+    const { data, error } = await supabase.from('client_tasks').insert({
       client_id: clientId,
       title: taskTitle.trim(),
       repeat: taskRepeat,
       due_date: taskRepeat === 'once' ? taskDate : null,
       icon: taskIcon,
+      task_type: taskType,
+      target: taskType === 'number' ? parseFloat(taskTarget) : null,
+      unit: taskType === 'number' ? (taskUnit.trim() || null) : null,
     }).select().single()
-    if (data) setTasks(prev => [...prev, data as ClientTask])
+    if (error || !data) {
+      setTaskSaving(false)
+      toastError('Could not save task: ' + (error?.message || 'unknown error'))
+      return
+    }
+    setTasks(prev => [...prev, data as ClientTask])
     setTaskTitle(''); setTaskRepeat('once'); setTaskDate(todayStr)
+    setTaskType('check'); setTaskTarget(''); setTaskUnit('')
     setShowAddTask(false); setTaskSaving(false); setTaskIcon('✅')
   }
 
@@ -437,7 +456,10 @@ export default function ClientCalendarPage() {
                       </button>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:13, fontWeight:700, textDecoration: done ? 'line-through' : 'none', color: done ? t.textMuted : t.text }}>{task.title}</div>
-                        <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>{REPEAT_LABEL[task.repeat]}</div>
+                        <div style={{ fontSize:11, color:t.textMuted, marginTop:2 }}>
+                          {REPEAT_LABEL[task.repeat]}
+                          {task.task_type === 'number' && task.target ? ` · target ${task.target}${task.unit ? ' ' + task.unit : ''}` : ''}
+                        </div>
                       </div>
                       <button onClick={()=>deleteTask(task.id)}
                         style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16, lineHeight:1, padding:4 }}>✕</button>
@@ -557,6 +579,33 @@ export default function ClientCalendarPage() {
             </div>
 
             <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Type</div>
+              <div style={{ display:'flex', gap:8 }}>
+                {([['check','✓ Checklist'],['number','📊 Number goal']] as const).map(([v, label]) => (
+                  <button key={v} onClick={()=>setTaskType(v)}
+                    style={{ flex:1, padding:'9px', borderRadius:10, border:'1px solid '+(taskType===v?alpha(t.teal, 38):t.border), background:taskType===v?t.tealDim:'transparent', fontSize:13, fontWeight:700, color:taskType===v?t.teal:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {taskType === 'number' && (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Target</div>
+                  <input value={taskTarget} onChange={e=>setTaskTarget(e.target.value)} inputMode="decimal" placeholder="e.g. 8000"
+                    style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:16, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark', boxSizing:'border-box' as const }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Unit</div>
+                  <input value={taskUnit} onChange={e=>setTaskUnit(e.target.value)} placeholder="steps, mi, min..."
+                    style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:16, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark', boxSizing:'border-box' as const }}/>
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Repeat</div>
               <div style={{ display:'flex', gap:8 }}>
                 {(['once','daily','weekly'] as const).map(r => (
@@ -588,7 +637,7 @@ export default function ClientCalendarPage() {
                 ))}
               </div>
             </div>
-            <button onClick={saveTask} disabled={!taskTitle.trim() || taskSaving}
+            <button onClick={saveTask} disabled={!taskTitle.trim() || taskSaving || (taskType==='number' && !(parseFloat(taskTarget) > 0))}
               style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: taskTitle.trim() ? `linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})` : t.surfaceHigh, color: taskTitle.trim() ? '#000' : t.textMuted, fontSize:15, fontWeight:800, cursor: taskTitle.trim() ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
               {taskSaving ? 'Saving...' : 'Save Task'}
             </button>

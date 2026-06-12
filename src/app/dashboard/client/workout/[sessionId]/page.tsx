@@ -473,7 +473,7 @@ ${candidateList}`
       })
       const { data: exs } = await supabase
         .from('session_exercises')
-        .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)')
+        .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url)')
         .eq('session_id', sessionId).order('order_index')
       const [{ data: exLib1 }, { data: exLib2 }] = await Promise.all([
       supabase.from('exercises')
@@ -529,7 +529,7 @@ ${candidateList}`
     // Join exercise detail for preview
     const { data: exs } = await supabase
       .from('session_exercises')
-      .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)')
+      .select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url)')
       .eq('session_id', sessionId)
       .order('order_index')
 
@@ -1030,7 +1030,7 @@ ${candidateList}`
       sets_prescribed: 3,
       reps_prescribed: 10,
       added_by_client: true,
-    }).select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, video_url, video_url_female, image_url, thumbnail_url)').single()
+    }).select('*, exercise:exercises!session_exercises_exercise_id_fkey(id, name, description, cues, muscles, secondary_muscles, equipment, movement_pattern, video_url, video_url_female, image_url, thumbnail_url)').single()
     if (error || !newRow) {
       if (error) toastError('Could not add exercise: ' + error.message)
       return
@@ -1657,12 +1657,17 @@ ${candidateList}`
   // Lets the client peek at what's coming before the timer starts.
   if (session?.status === 'assigned' && !isReopened) {
     const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets_prescribed || 0), 0)
-    // Rough estimate: each set ~45s of work + the prescribed rest, +30s per
-    // exercise for setup. Floors at 10 min so we never tell someone "1 min".
+    // Per-set time defaults (Shane, Jun 2026): compound movements run 3-5
+    // min/set once warmup plates + real rest are counted, everything else
+    // 2-3. Midpoints (4 / 2.5 min) track actual sessions far better than
+    // the old 45s+rest formula, which estimated 23min on a true 50min
+    // heavy push day. Floors at 10 min so we never tell someone "1 min".
+    const COMPOUND_PATTERNS = ['push', 'pull', 'squat', 'hinge', 'carry']
     const estSeconds = exercises.reduce((sum, ex) => {
       const sets = ex.sets_prescribed || 3
-      const rest = ex.rest_seconds || 60
-      return sum + sets * 45 + Math.max(sets - 1, 0) * rest + 30
+      const pattern = (ex.exercise?.movement_pattern || '').toLowerCase()
+      const perSet = COMPOUND_PATTERNS.includes(pattern) ? 240 : 150
+      return sum + sets * perSet
     }, 0)
     const estMin = Math.max(10, Math.round(estSeconds / 60))
 
