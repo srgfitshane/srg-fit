@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -86,7 +87,12 @@ export default function HabitAssignment() {
     const { data: { user } } = await supabase.auth.getUser()
     // Deactivate all existing first
     if (existing.length > 0) {
-      await supabase.from('habits').update({ active: false }).eq('client_id', clientId)
+      const { error: deactErr } = await supabase.from('habits').update({ active: false }).eq('client_id', clientId)
+      if (deactErr) {
+        setSaving(false)
+        toastError('Could not save habits: ' + deactErr.message)
+        return
+      }
     }
 
     // Build list of habits to upsert
@@ -99,12 +105,21 @@ export default function HabitAssignment() {
       ...existing.filter((h:any) => !DEFAULT_HABITS.find(d=>d.label===h.label) && selected.has(h.label)),
     ]
 
+    const failures: string[] = []
     for (const h of habitsToSave) {
       const existingMatch = existing.find((e:any) => e.label === h.label)
+      // Strip local-only / DB-managed fields before writing. New custom
+      // habits are staged in `existing` with a fake placeholder id
+      // ('new-<timestamp>') -- spreading that into the insert made Postgres
+      // reject the row as an invalid uuid while the UI still said "Saved!".
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: _id, created_at: _createdAt, ...payload } = h as any
       if (existingMatch && !existingMatch.id.toString().startsWith('new-')) {
-        await supabase.from('habits').update({ ...h, active: true, client_id: clientId, coach_id: user?.id }).eq('id', existingMatch.id)
+        const { error } = await supabase.from('habits').update({ ...payload, active: true, client_id: clientId, coach_id: user?.id }).eq('id', existingMatch.id)
+        if (error) failures.push(`${h.label}: ${error.message}`)
       } else {
-        await supabase.from('habits').insert({ ...h, active: true, client_id: clientId, coach_id: user?.id })
+        const { error } = await supabase.from('habits').insert({ ...payload, active: true, client_id: clientId, coach_id: user?.id })
+        if (error) failures.push(`${h.label}: ${error.message}`)
       }
     }
 
@@ -112,6 +127,10 @@ export default function HabitAssignment() {
     const { data: refreshed } = await supabase.from('habits').select('*').eq('client_id', clientId)
     setExisting(refreshed || [])
     setSaving(false)
+    if (failures.length > 0) {
+      toastError('Some habits did not save — ' + failures.join(' · '))
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
