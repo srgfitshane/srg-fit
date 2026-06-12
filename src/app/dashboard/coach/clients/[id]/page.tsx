@@ -1459,14 +1459,13 @@ export default function ClientDetail() {
                                   if (error) { setSavingResponse(false); alert('Could not send response: ' + error.message); return }
                                   setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: text || null, coach_response_video_url: video || null } : x))
                                   // Notify the client — fire-and-forget (Rule 8).
+                                  // send-notification inserts the bell row AND fires
+                                  // push — do NOT also insert into notifications here.
                                   const clientProfile = client?.profile_id
                                   if (clientProfile) {
                                     const link = '/dashboard/client'
                                     const title = '💬 Coach replied to your check-in'
                                     const body = text ? text.slice(0, 100) : 'Tap to see your feedback'
-                                    Promise.resolve(supabase.from('notifications').insert({
-                                      user_id: clientProfile, notification_type: 'review_ready', title, body, link_url: link,
-                                    })).catch(err => console.warn('[notify:checkin-resp-1]', err))
                                     supabase.auth.getSession().then(({ data: { session } }) => {
                                       if (!session?.access_token) return
                                       fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {

@@ -397,14 +397,9 @@ export default function ReviewsPage() {
         if (!profileId) continue
         // Deep-link to the actual workout the coach just reviewed instead
         // of dropping the client at the dashboard. Same pattern in markReviewed.
+        // send-notification inserts the bell row AND fires push — do NOT also
+        // insert into notifications here (double bell rows).
         const workoutLink = `/dashboard/client/workout/${r.id}`
-        Promise.resolve(supabase.from('notifications').insert({
-          user_id: profileId,
-          notification_type: 'review_ready',
-          title: '✅ Coach reviewed your workout',
-          body: 'Looks clean -- keep going!',
-          link_url: workoutLink,
-        })).catch(err => console.warn('[notify:bulk-review-1]', err))
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: {
@@ -441,16 +436,8 @@ export default function ReviewsPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.access_token) {
         const workoutLink = `/dashboard/client/workout/${sessionId}`
-        // Insert in-app notification (shows in bell)
-        Promise.resolve(supabase.from('notifications').insert({
-          user_id: profileId,
-          notification_type: 'review_ready',
-          title: '💬 Coach reviewed your workout',
-          body: reviewNote ? reviewNote.slice(0, 100) : 'Tap to see your feedback',
-          link_url: workoutLink,
-        })).catch(err => console.warn('[notify:reviews-1] failed', err))
-
-        // Push notification
+        // send-notification inserts the bell row AND fires push — do NOT also
+        // insert into notifications here (double bell rows).
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST', headers: {
             'Content-Type': 'application/json',

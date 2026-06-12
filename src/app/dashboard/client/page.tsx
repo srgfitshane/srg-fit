@@ -628,7 +628,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setNextSessions(sessions)
 
         setPendingReviews((reviewData || []) as PendingReviewRecord[])
-        console.log('[dashboard] pendingCI raw:', JSON.stringify(pendingCI))
         // Skip filter entirely — if the assignment exists and is pending, show it
         setPendingCheckins((pendingCI || []) as PendingCheckinRecord[])
         setPendingCheckinResponses((checkinResponseData || []) as PendingCheckinResponseRecord[])

@@ -220,18 +220,13 @@ export default function CoachCheckins() {
 
     // Notify the client — fire-and-forget (Rule 8). Deep-link to the
     // dashboard where the new check-in reply card appears.
+    // send-notification inserts the bell row AND fires push — do NOT also
+    // insert into notifications here (double bell rows).
     const profileId = clients.find(c => c.id === selected.client_id)?.profile_id
     if (profileId) {
       const link = '/dashboard/client'
       const title = '💬 Coach replied to your check-in'
       const body = text ? text.slice(0, 100) : 'Tap to see your feedback'
-      Promise.resolve(supabase.from('notifications').insert({
-        user_id: profileId,
-        notification_type: 'review_ready',
-        title,
-        body,
-        link_url: link,
-      })).catch(err => console.warn('[notify:checkin-1]', err))
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session?.access_token) return
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
@@ -247,8 +242,11 @@ export default function CoachCheckins() {
     }
   }
 
+  // A check-in counts as reviewed if the coach replied with text OR a video
+  // link -- video-only replies leave coach_response null.
+  const isReviewed = (c: any) => !!(c.coach_response || c.coach_response_video_url)
   const visible = filter === 'unreviewed'
-    ? checkins.filter(c => !c.coach_response)
+    ? checkins.filter(c => !isReviewed(c))
     : checkins
 
   if (loading) return (
@@ -278,7 +276,7 @@ export default function CoachCheckins() {
                   border:'1px solid '+(filter===f?t.teal+'60':t.border),
                   background:filter===f?t.tealDim:'transparent',
                   color:filter===f?t.teal:t.textDim }}>
-                {f === 'unreviewed' ? `Needs Review (${checkins.filter(c=>!c.coach_response).length})` : 'All'}
+                {f === 'unreviewed' ? `Needs Review (${checkins.filter(c=>!isReviewed(c)).length})` : 'All'}
               </button>
             ))}
           </div>
@@ -312,7 +310,7 @@ export default function CoachCheckins() {
                         {ci.form?.title && <span> · {ci.form.title}</span>}
                       </div>
                     </div>
-                    {ci.coach_response
+                    {isReviewed(ci)
                       ? <span style={{ fontSize:10, fontWeight:800, color:t.green, background:t.greenDim, borderRadius:6, padding:'3px 9px' }}>✓ Reviewed</span>
                       : <span style={{ fontSize:10, fontWeight:800, color:t.orange, background:t.orangeDim, borderRadius:6, padding:'3px 9px' }}>Needs Review</span>
                     }
