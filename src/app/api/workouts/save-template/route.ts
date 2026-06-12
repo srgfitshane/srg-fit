@@ -27,11 +27,19 @@ export async function POST(req: Request) {
   let tmplId = template_id
 
   if (tmplId) {
-    // Update existing template
-    await adminDb.from('workout_templates').update({
+    // Update existing template. Both steps must be checked: a silent update
+    // failure loses the coach's metadata edits, and a silent delete failure
+    // would make the re-insert below duplicate every exercise.
+    const { error: updErr } = await adminDb.from('workout_templates').update({
       ...template, coach_id: user.id, updated_at: new Date().toISOString(),
     }).eq('id', tmplId)
-    await adminDb.from('workout_template_exercises').delete().eq('template_id', tmplId)
+    if (updErr) {
+      return NextResponse.json({ error: updErr.message || 'Template update failed' }, { status: 500 })
+    }
+    const { error: delErr } = await adminDb.from('workout_template_exercises').delete().eq('template_id', tmplId)
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message || 'Template exercise reset failed' }, { status: 500 })
+    }
   } else {
     // Create new template
     const { data: tmpl, error: tmplErr } = await adminDb

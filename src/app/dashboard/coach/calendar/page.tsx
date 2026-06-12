@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -338,10 +339,14 @@ export default function CoachCalendar() {
   }
 
   const handleEventSave = async (payload: any) => {
-    if (eventModal?.event?.id) {
-      await supabase.from('calendar_events').update(payload).eq('id', eventModal.event.id)
-    } else {
-      await supabase.from('calendar_events').insert({ ...payload, coach_id: coachId })
+    // Rule 14: keep the modal open and surface the failure -- closing it on
+    // a failed write looks like a successful save.
+    const { error } = eventModal?.event?.id
+      ? await supabase.from('calendar_events').update(payload).eq('id', eventModal.event.id)
+      : await supabase.from('calendar_events').insert({ ...payload, coach_id: coachId })
+    if (error) {
+      toastError('Could not save event: ' + error.message)
+      return
     }
     await reloadEvents(); setEventModal(null); setSelected(null)
   }

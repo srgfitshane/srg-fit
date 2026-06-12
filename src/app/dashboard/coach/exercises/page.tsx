@@ -139,7 +139,14 @@ export default function ExerciseLibrary() {
       video_url: newEx.video_url || null,
       image_url: newEx.image_url || null,
     }
-    const { data: saved } = await supabase.from('exercises').insert(payload).select().single()
+    const { data: saved, error: insErr } = await supabase.from('exercises').insert(payload).select().single()
+    if (insErr || !saved) {
+      // Rule 14: bail with the form still open -- resetting it on a failed
+      // insert silently threw away everything the coach typed.
+      setSaving(false)
+      toastError('Could not save exercise: ' + (insErr?.message || 'unknown error'))
+      return
+    }
     if (saved && newEx._videoFile) {
       const url = await uploadVideo(saved.id, newEx._videoFile)
       if (url) { await supabase.from('exercises').update({ video_url: url }).eq('id', saved.id); saved.video_url = url }

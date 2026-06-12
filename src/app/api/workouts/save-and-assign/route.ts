@@ -101,7 +101,7 @@ export async function POST(req: Request) {
   }
 
   // 5. Create session exercises (propagate slot fields)
-  await adminDb.from('session_exercises').insert(
+  const { error: sessExErr } = await adminDb.from('session_exercises').insert(
     [...exercises]
       .sort((a: any, b: any) => a.order_index - b.order_index)
       .map((e: any, i: number) => ({
@@ -129,6 +129,13 @@ export async function POST(req: Request) {
         slot_constraint: e.is_open_slot ? (e.slot_constraint || null) : null,
       }))
   )
+
+  if (sessExErr) {
+    // Roll back the session -- an assigned workout with zero exercises is
+    // worse than a visible failure the coach can retry.
+    await adminDb.from('workout_sessions').delete().eq('id', session.id)
+    return NextResponse.json({ error: sessExErr.message || 'Session exercise save failed' }, { status: 500 })
+  }
 
   return NextResponse.json({ session_id: session.id, template_id: tmpl.id, scheduled_date })
 }

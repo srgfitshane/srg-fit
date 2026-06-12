@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import { toastError } from '@/components/ui/Toast'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
@@ -91,10 +92,14 @@ export default function CoachResourcesPage() {
     if (!gForm.name.trim()) return
     setSaving(true)
     const payload = { name:gForm.name, icon:gForm.icon, color:gForm.color, parent_id: gForm.parent_id||null }
-    if (groupModal?.id) {
-      await supabase.from('content_groups').update(payload).eq('id', groupModal.id)
-    } else {
-      await supabase.from('content_groups').insert({ ...payload, coach_id:coachId, order_index: groups.length+1 })
+    // Rule 14: keep the modal open on failure instead of faking a save.
+    const { error } = groupModal?.id
+      ? await supabase.from('content_groups').update(payload).eq('id', groupModal.id)
+      : await supabase.from('content_groups').insert({ ...payload, coach_id:coachId, order_index: groups.length+1 })
+    if (error) {
+      setSaving(false)
+      toastError('Could not save folder: ' + error.message)
+      return
     }
     await load(); setGroupModal(null); setSaving(false)
   }
@@ -131,8 +136,15 @@ export default function CoachResourcesPage() {
         prescription: line.includes('-') ? line.split('-').slice(1).join('-').trim() : ''
       }))
     }
-    if (itemModal?.id) await supabase.from('content_items').update(payload).eq('id', itemModal.id)
-    else await supabase.from('content_items').insert(payload)
+    // Rule 14: keep the modal open on failure instead of faking a save.
+    const { error } = itemModal?.id
+      ? await supabase.from('content_items').update(payload).eq('id', itemModal.id)
+      : await supabase.from('content_items').insert(payload)
+    if (error) {
+      setSaving(false)
+      toastError('Could not save item: ' + error.message)
+      return
+    }
     await load(); setItemModal(null); setSaving(false)
   }
 

@@ -92,7 +92,13 @@ export async function POST(req: Request) {
         notes_coach: (!match && ex.prescription) ? ex.prescription : null,
       }
     })
-    await adminDb.from('session_exercises').insert(rows)
+    const { error: exInsErr } = await adminDb.from('session_exercises').insert(rows)
+    if (exInsErr) {
+      // Roll back the session -- an assigned workout with zero exercises is
+      // worse than a visible failure the client can retry.
+      await adminDb.from('workout_sessions').delete().eq('id', session.id)
+      return NextResponse.json({ error: exInsErr.message || 'Session exercise save failed' }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ session_id: session.id, scheduled_date })
