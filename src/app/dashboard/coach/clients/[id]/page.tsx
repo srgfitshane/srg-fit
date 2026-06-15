@@ -19,6 +19,7 @@ import {
 } from 'recharts'
 import { alpha } from '@/lib/theme'
 import { toastError } from '@/components/ui/Toast'
+import GifPicker from '@/components/coach/GifPicker'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -101,6 +102,7 @@ export default function ClientDetail() {
   const [respondingTo,        setRespondingTo]        = useState<string|null>(null)
   const [responseText,        setResponseText]        = useState('')
   const [responseVideo,       setResponseVideo]       = useState('')
+  const [responseGif,         setResponseGif]         = useState('')
   const [savingResponse,      setSavingResponse]      = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [intake,        setIntake]        = useState<any>(null)
@@ -237,7 +239,7 @@ export default function ClientDetail() {
         { data: nutritionLogsData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
-        supabase.from('client_form_assignments').select('id, completed_at, response, coach_response, coach_response_video_url').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
+        supabase.from('client_form_assignments').select('id, completed_at, response, coach_response, coach_response_video_url, coach_response_gif_url').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
         supabase.from('metrics').select('*').eq('client_id', clientId).order('logged_date', { ascending: false }).limit(60),
         supabase.from('workout_sessions').select('*').eq('client_id', clientId).not('program_id','is',null).order('scheduled_date', { ascending: false }).limit(100),
         supabase.from('nutrition_plans').select('*').eq('client_id', clientId).eq('is_active', true).single(),
@@ -1414,7 +1416,7 @@ export default function ClientDetail() {
                         )}
 
                         {/* Coach response */}
-                        {(a.coach_response || a.coach_response_video_url) && respondingTo !== a.id ? (
+                        {(a.coach_response || a.coach_response_video_url || a.coach_response_gif_url) && respondingTo !== a.id ? (
                           <div style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 19), borderRadius:10, padding:'12px 16px', fontSize:13, color:t.teal, lineHeight:1.6 }}>
                             {a.coach_response && <span><strong>Your response:</strong> {a.coach_response}</span>}
                             {a.coach_response_video_url && (
@@ -1423,10 +1425,13 @@ export default function ClientDetail() {
                                 📹 Video reply ↗
                               </a>
                             )}
-                            <button onClick={() => { setRespondingTo(a.id); setResponseText(a.coach_response || ''); setResponseVideo(a.coach_response_video_url || '') }}
+                            <button onClick={() => { setRespondingTo(a.id); setResponseText(a.coach_response || ''); setResponseVideo(a.coach_response_video_url || ''); setResponseGif(a.coach_response_gif_url || '') }}
                               style={{ marginLeft:10, background:'none', border:'none', color:t.teal, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:"'DM Sans',sans-serif", textDecoration:'underline' }}>
                               Edit
                             </button>
+                            {a.coach_response_gif_url && (
+                              <img src={a.coach_response_gif_url} alt="GIF reply" style={{ display:'block', marginTop:8, maxWidth:160, borderRadius:8 }} />
+                            )}
                           </div>
                         ) : respondingTo === a.id ? (
                           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -1439,25 +1444,28 @@ export default function ClientDetail() {
                                 placeholder="Paste a video link (Cap, Loom, Drive...)"
                                 style={{ flex:1, background:'transparent', border:'none', padding:'10px 0', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
                             </div>
+                            <GifPicker value={responseGif} onPick={setResponseGif} onClear={()=>setResponseGif('')} />
                             <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-                              <button onClick={() => { setRespondingTo(null); setResponseText(''); setResponseVideo('') }}
+                              <button onClick={() => { setRespondingTo(null); setResponseText(''); setResponseVideo(''); setResponseGif('') }}
                                 style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                 Cancel
                               </button>
-                              <button disabled={savingResponse || (!responseText.trim() && !responseVideo.trim())}
+                              <button disabled={savingResponse || (!responseText.trim() && !responseVideo.trim() && !responseGif.trim())}
                                 onClick={async () => {
                                   const text = responseText.trim()
                                   const video = responseVideo.trim()
+                                  const gif = responseGif.trim()
                                   setSavingResponse(true)
                                   const respondedAt = new Date().toISOString()
                                   const { error } = await supabase.from('client_form_assignments').update({
                                     coach_response: text || null,
                                     coach_response_video_url: video || null,
+                                    coach_response_gif_url: gif || null,
                                     coach_responded_at: respondedAt,
                                     coach_response_seen_at: null,
                                   }).eq('id', a.id)
                                   if (error) { setSavingResponse(false); alert('Could not send response: ' + error.message); return }
-                                  setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: text || null, coach_response_video_url: video || null } : x))
+                                  setCheckinAssignments(p => p.map(x => x.id === a.id ? { ...x, coach_response: text || null, coach_response_video_url: video || null, coach_response_gif_url: gif || null } : x))
                                   // Notify the client — fire-and-forget (Rule 8).
                                   // send-notification inserts the bell row AND fires
                                   // push — do NOT also insert into notifications here.
@@ -1475,15 +1483,15 @@ export default function ClientDetail() {
                                       }).catch(err => console.warn('[notify:checkin-resp-2]', err))
                                     }).catch(() => {})
                                   }
-                                  setRespondingTo(null); setResponseText(''); setResponseVideo(''); setSavingResponse(false)
+                                  setRespondingTo(null); setResponseText(''); setResponseVideo(''); setResponseGif(''); setSavingResponse(false)
                                 }}
-                                style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:savingResponse||(!responseText.trim()&&!responseVideo.trim())?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                                style={{ background:'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:8, padding:'7px 16px', fontSize:12, fontWeight:700, color:'#000', cursor:savingResponse||(!responseText.trim()&&!responseVideo.trim()&&!responseGif.trim())?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                 {savingResponse ? 'Saving...' : '✓ Send Response'}
                               </button>
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => { setRespondingTo(a.id); setResponseText(''); setResponseVideo('') }}
+                          <button onClick={() => { setRespondingTo(a.id); setResponseText(''); setResponseVideo(''); setResponseGif('') }}
                             style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                             💬 Respond to Check-in
                           </button>

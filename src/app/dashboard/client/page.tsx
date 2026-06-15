@@ -199,6 +199,7 @@ type WorkoutSessionRecord = {
   notes_coach?: string | null
   coach_review_notes?: string | null
   coach_review_video_url?: string | null
+  coach_review_gif_url?: string | null
   coach_reviewed_at?: string | null
 }
 
@@ -243,7 +244,7 @@ type NextSessionRecord = Pick<WorkoutSessionRecord, 'id' | 'title' | 'scheduled_
   isToday: boolean
 }
 
-type PendingReviewRecord = Pick<WorkoutSessionRecord, 'id' | 'title' | 'coach_review_notes' | 'coach_review_video_url' | 'coach_reviewed_at'> & {
+type PendingReviewRecord = Pick<WorkoutSessionRecord, 'id' | 'title' | 'coach_review_notes' | 'coach_review_video_url' | 'coach_review_gif_url' | 'coach_reviewed_at'> & {
   _seen?: boolean
 }
 
@@ -261,6 +262,7 @@ type PendingCheckinResponseRecord = {
   id: string
   coach_response?: string | null
   coach_response_video_url?: string | null
+  coach_response_gif_url?: string | null
   coach_responded_at?: string | null
   form?: { title?: string | null } | null
   _seen?: boolean
@@ -575,7 +577,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .order('scheduled_date', { ascending: true })
             .limit(5),
           supabase.from('workout_sessions')
-            .select('id, title, coach_review_notes, coach_review_video_url, coach_reviewed_at')
+            .select('id, title, coach_review_notes, coach_review_video_url, coach_review_gif_url, coach_reviewed_at')
             .eq('client_id', cid).eq('status', 'completed')
             .not('coach_reviewed_at', 'is', null)
             .is('coach_review_seen_at', null)
@@ -595,10 +597,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           // Unseen coach replies to completed check-ins (text and/or video).
           // Mirrors the workout-review unseen-card pattern below.
           supabase.from('client_form_assignments')
-            .select('id, coach_response, coach_response_video_url, coach_responded_at, form:onboarding_forms(title)')
+            .select('id, coach_response, coach_response_video_url, coach_response_gif_url, coach_responded_at, form:onboarding_forms(title)')
             .eq('client_id', cid).eq('status', 'completed')
             .is('coach_response_seen_at', null)
-            .or('coach_response.not.is.null,coach_response_video_url.not.is.null')
+            .or('coach_response.not.is.null,coach_response_video_url.not.is.null,coach_response_gif_url.not.is.null')
             .order('coach_responded_at', { ascending: false }).limit(5),
         ])
 
@@ -1348,6 +1350,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         {r.coach_review_video_url && (
                           <CoachReviewVideo url={r.coach_review_video_url} />
                         )}
+                        {r.coach_review_gif_url && (
+                          <img src={r.coach_review_gif_url} alt="Coach GIF" style={{ display:'block', marginTop:12, maxWidth:'100%', borderRadius:10 }} />
+                        )}
                         <button
                           onClick={async () => {
                             const { error } = await supabase.rpc('mark_review_seen', { p_session_id: r.id })
@@ -1404,7 +1409,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         <div style={{ fontSize:13, fontWeight:800, color:t.teal }}>Coach replied to your check-in</div>
                         <div style={{ fontSize:12, color:t.text, fontWeight:700 }}>{ci.form?.title || 'Check-in'}</div>
                         <div style={{ fontSize:11, color:t.textMuted }}>
-                          {ci.coach_response_video_url && ci.coach_response ? 'Video + written notes' : ci.coach_response_video_url ? 'Video reply' : 'Written feedback'}
+                          {ci.coach_response_video_url ? (ci.coach_response ? 'Video + written notes' : 'Video reply') : ci.coach_response_gif_url ? (ci.coach_response ? 'GIF + written notes' : 'GIF reply') : 'Written feedback'}
                           {' · '}{isOpen ? 'tap to close' : 'tap to view'}
                         </div>
                       </div>
@@ -1422,6 +1427,9 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         )}
                         {ci.coach_response_video_url && (
                           <CoachReviewVideo url={ci.coach_response_video_url} />
+                        )}
+                        {ci.coach_response_gif_url && (
+                          <img src={ci.coach_response_gif_url} alt="Coach GIF" style={{ display:'block', marginTop:12, maxWidth:'100%', borderRadius:10 }} />
                         )}
                         <button
                           onClick={async () => {
@@ -2917,7 +2925,7 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
             .eq('client_id', clientRecord.id).eq('is_template', false)
             .order('created_at', { ascending: false }).limit(1).single<TrainingProgramRecord>(),
           supabase.from('workout_sessions')
-            .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach, coach_review_notes, coach_review_video_url, coach_reviewed_at')
+            .select('id, title, status, scheduled_date, day_label, session_rpe, mood, completed_at, duration_seconds, notes_coach, coach_review_notes, coach_review_video_url, coach_review_gif_url, coach_reviewed_at')
             .eq('client_id', clientRecord.id)
             .order('scheduled_date', { ascending: true })
             .limit(50),
@@ -2998,7 +3006,7 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
                   </div>
                 </div>
                 {/* Coach review section */}
-                {(s.coach_review_notes || s.coach_review_video_url) && (
+                {(s.coach_review_notes || s.coach_review_video_url || s.coach_review_gif_url) && (
                   <div style={{ border:`1px solid ${alpha(t.teal, 25)}`, borderRadius:10, overflow:'hidden', marginTop:4 }}>
                     <div style={{ background:t.tealDim, padding:'7px 12px', display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:14 }}>💬</span>
@@ -3012,6 +3020,9 @@ function TrainingTab({ clientRecord, supabase, router, t, overrideClientId }: { 
                       )}
                       {s.coach_review_video_url && (
                         <CoachReviewVideo url={s.coach_review_video_url} />
+                      )}
+                      {s.coach_review_gif_url && (
+                        <img src={s.coach_review_gif_url} alt="Coach GIF" style={{ display:'block', marginTop:10, maxWidth:'100%', borderRadius:10 }} />
                       )}
                     </div>
                   </div>

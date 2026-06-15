@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { localDateStr } from '@/lib/date'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import GifPicker from '@/components/coach/GifPicker'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -50,6 +51,7 @@ export default function CoachCheckins() {
   const [selected, setSelected] = useState<any|null>(null)
   const [feedback, setFeedback] = useState('')
   const [feedbackVideo, setFeedbackVideo] = useState('')
+  const [feedbackGif, setFeedbackGif] = useState('')
   const [saving,   setSaving]   = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [questions, setQuestions] = useState<Record<string, any[]>>({}) // formId -> questions
@@ -95,7 +97,7 @@ export default function CoachCheckins() {
     // full blob until detail-view click.
     const { data } = await supabase
       .from('client_form_assignments')
-      .select('id, client_id, form_id, completed_at, coach_response, coach_response_video_url, response, form:onboarding_forms(title, form_type, is_checkin_type)')
+      .select('id, client_id, form_id, completed_at, coach_response, coach_response_video_url, coach_response_gif_url, response, form:onboarding_forms(title, form_type, is_checkin_type)')
       .in('client_id', clientIds)
       .eq('status', 'completed')
       .not('response', 'is', null)
@@ -198,7 +200,8 @@ export default function CoachCheckins() {
     if (!selected) return
     const text = feedback.trim()
     const video = feedbackVideo.trim()
-    if (!text && !video) { alert('Add a written response or a video link before sending.'); return }
+    const gif = feedbackGif.trim()
+    if (!text && !video && !gif) { alert('Add a written response, a video link, or a GIF before sending.'); return }
     setSaving(true)
     const respondedAt = new Date().toISOString()
     // Reset seen_at to null so this (re)response surfaces to the client as
@@ -206,6 +209,7 @@ export default function CoachCheckins() {
     const { error } = await supabase.from('client_form_assignments').update({
       coach_response: text || null,
       coach_response_video_url: video || null,
+      coach_response_gif_url: gif || null,
       coach_responded_at: respondedAt,
       coach_response_seen_at: null,
     }).eq('id', selected.id)
@@ -215,7 +219,7 @@ export default function CoachCheckins() {
       return
     }
     setCheckins(prev => prev.map(c => c.id === selected.id
-      ? { ...c, coach_response: text || null, coach_response_video_url: video || null, coach_responded_at: respondedAt }
+      ? { ...c, coach_response: text || null, coach_response_video_url: video || null, coach_response_gif_url: gif || null, coach_responded_at: respondedAt }
       : c))
 
     // Notify the client — fire-and-forget (Rule 8). Deep-link to the
@@ -245,11 +249,12 @@ export default function CoachCheckins() {
     setSelected(null)
     setFeedback('')
     setFeedbackVideo('')
+    setFeedbackGif('')
   }
 
-  // A check-in counts as reviewed if the coach replied with text OR a video
-  // link -- video-only replies leave coach_response null.
-  const isReviewed = (c: any) => !!(c.coach_response || c.coach_response_video_url)
+  // A check-in counts as reviewed if the coach replied with text, a video
+  // link, OR a GIF -- any of the three leaves the others null.
+  const isReviewed = (c: any) => !!(c.coach_response || c.coach_response_video_url || c.coach_response_gif_url)
   const visible = filter === 'unreviewed'
     ? checkins.filter(c => !isReviewed(c))
     : checkins
@@ -307,7 +312,7 @@ export default function CoachCheckins() {
             ) : visible.map((ci:any) => {
               const r = ci.response || {}
               return (
-                <div key={ci.id} onClick={()=>{ setSelected(ci); setFeedback(ci.coach_response||''); setFeedbackVideo(ci.coach_response_video_url||''); window.scrollTo({ top: 0 }) }}
+                <div key={ci.id} onClick={()=>{ setSelected(ci); setFeedback(ci.coach_response||''); setFeedbackVideo(ci.coach_response_video_url||''); setFeedbackGif(ci.coach_response_gif_url||''); window.scrollTo({ top: 0 }) }}
                   style={{ background:t.surface, border:'1px solid '+(selected?.id===ci.id?t.teal+'60':t.border),
                     borderRadius:14, padding:16, cursor:'pointer', transition:'border 0.15s' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
@@ -497,7 +502,7 @@ export default function CoachCheckins() {
                   })()}
 
                   {/* Previous coach response if exists */}
-                  {(selected.coach_response || selected.coach_response_video_url) && (
+                  {(selected.coach_response || selected.coach_response_video_url || selected.coach_response_gif_url) && (
                     <div style={{ background:t.greenDim, border:'1px solid '+t.green+'30', borderRadius:10, padding:'10px 12px', fontSize:12, color:t.green, marginBottom:12 }}>
                       {selected.coach_response && <div><strong>Your previous response:</strong> {selected.coach_response}</div>}
                       {selected.coach_response_video_url && (
@@ -505,6 +510,9 @@ export default function CoachCheckins() {
                           style={{ display:'inline-block', marginTop: selected.coach_response ? 6 : 0, color:t.teal, fontWeight:700, textDecoration:'underline' }}>
                           📹 View video reply ↗
                         </a>
+                      )}
+                      {selected.coach_response_gif_url && (
+                        <img src={selected.coach_response_gif_url} alt="GIF reply" style={{ display:'block', marginTop:8, maxWidth:160, borderRadius:8 }} />
                       )}
                     </div>
                   )}
@@ -528,15 +536,25 @@ export default function CoachCheckins() {
                         style={{ flex:1, background:'transparent', border:'none', padding:'11px 0', fontSize:13, color:t.text, outline:'none',
                           fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' }} />
                     </div>
-                    <button onClick={handleReview} disabled={saving || (!feedback.trim() && !feedbackVideo.trim())}
-                      style={{ marginTop:10, width:'100%',
-                        background:(!feedback.trim() && !feedbackVideo.trim()) ? t.surfaceHigh : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)',
-                        border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800,
-                        color:(!feedback.trim() && !feedbackVideo.trim()) ? t.textMuted : '#000',
-                        cursor:(saving || (!feedback.trim() && !feedbackVideo.trim()))?'not-allowed':'pointer',
-                        fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
-                      {saving ? 'Saving...' : (selected.coach_response || selected.coach_response_video_url) ? '✓ Update Response' : '✓ Send Response'}
-                    </button>
+                    {/* GIF reaction — same GIPHY picker as the messenger */}
+                    <div style={{ marginTop:10 }}>
+                      <GifPicker value={feedbackGif} onPick={setFeedbackGif} onClear={()=>setFeedbackGif('')} />
+                    </div>
+                    {(() => {
+                      const canSend = !!(feedback.trim() || feedbackVideo.trim() || feedbackGif.trim())
+                      const hadResponse = selected.coach_response || selected.coach_response_video_url || selected.coach_response_gif_url
+                      return (
+                        <button onClick={handleReview} disabled={saving || !canSend}
+                          style={{ marginTop:10, width:'100%',
+                            background:!canSend ? t.surfaceHigh : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)',
+                            border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800,
+                            color:!canSend ? t.textMuted : '#000',
+                            cursor:(saving || !canSend)?'not-allowed':'pointer',
+                            fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
+                          {saving ? 'Saving...' : hadResponse ? '✓ Update Response' : '✓ Send Response'}
+                        </button>
+                      )
+                    })()}
                   </div>
                 </>
               )

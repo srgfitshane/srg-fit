@@ -80,6 +80,7 @@ interface WorkoutSession {
   coach_reviewed_at?: string | null
   coach_review_notes?: string | null
   coach_review_video_url?: string | null
+  coach_review_gif_url?: string | null
   completed_at?: string | null
   duration_seconds?: number | null
   notes_client?: string | null
@@ -1857,7 +1858,10 @@ ${candidateList}`
                 )
                 return <video src={reviewVideoUrl} controls playsInline muted style={{width:'100%',borderRadius:10,background:'#000',display:'block'}}/>
               })()}
-              {!session?.coach_review_notes && !reviewVideoUrl && (
+              {session?.coach_review_gif_url && (
+                <img src={session.coach_review_gif_url} alt="Coach GIF" style={{display:'block',marginTop:session?.coach_review_notes||reviewVideoUrl?14:0,maxWidth:'100%',borderRadius:10}}/>
+              )}
+              {!session?.coach_review_notes && !reviewVideoUrl && !session?.coach_review_gif_url && (
                 <div style={{fontSize:13,color:t.textMuted,fontStyle:'italic'}}>No written notes left.</div>
               )}
             </div>

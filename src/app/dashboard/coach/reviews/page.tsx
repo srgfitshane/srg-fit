@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import GifPicker from '@/components/coach/GifPicker'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -274,6 +275,7 @@ export default function ReviewsPage() {
   const [saving, setSaving] = useState(false)
   const [reviewVideoUrl, setReviewVideoUrl] = useState('')
   const [reviewVideoPath, setReviewVideoPath] = useState('')
+  const [reviewGifUrl, setReviewGifUrl] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [, setTick] = useState(0)
 
@@ -427,6 +429,7 @@ export default function ReviewsPage() {
       coach_reviewed_at: new Date().toISOString(),
       coach_review_notes: reviewNote || null,
       coach_review_video_url: reviewVideoPath || null,
+      coach_review_gif_url: reviewGifUrl || null,
     }).eq('id', sessionId)
 
     // Notify client — fire-and-forget. Deep-link to the workout itself so
@@ -456,7 +459,7 @@ export default function ReviewsPage() {
     }
 
     setReviews(prev => prev.filter(r => r.id !== sessionId))
-    setSelected(null); setReviewNote(''); setReviewVideoUrl(''); setReviewVideoPath('')
+    setSelected(null); setReviewNote(''); setReviewVideoUrl(''); setReviewVideoPath(''); setReviewGifUrl('')
     setSaving(false)
   }
 
@@ -642,6 +645,12 @@ export default function ReviewsPage() {
               />
             </div>
 
+            {/* GIF reaction — pull from GIPHY, same picker as the messenger */}
+            <div style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:12, fontWeight:800, color:t.textDim, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>🎬 GIF</div>
+              <GifPicker value={reviewGifUrl} onPick={setReviewGifUrl} onClear={()=>setReviewGifUrl('')} />
+            </div>
+
             {/* Written notes */}
             <textarea
               value={reviewNote}
@@ -653,13 +662,20 @@ export default function ReviewsPage() {
               style={{ ...inp, marginBottom:12 }}
             />
 
-            <button onClick={()=>markReviewed(selected.id)} disabled={saving||(!reviewNote.trim()&&!reviewVideoUrl)}
-              style={{ width:'100%', background:(!reviewNote.trim()&&!reviewVideoUrl)?t.surfaceHigh:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:11, padding:'13px', fontSize:14, fontWeight:800, color:(!reviewNote.trim()&&!reviewVideoUrl)?t.textMuted:'#0f0f0f', cursor:(saving||(!reviewNote.trim()&&!reviewVideoUrl))?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-              {saving ? 'Saving...' : '✅ Send Review to Client'}
-            </button>
-            {!reviewNote.trim() && !reviewVideoUrl && (
-              <div style={{ fontSize:11, color:t.textMuted, textAlign:'center', marginTop:6 }}>Add a video or written notes to send your review</div>
-            )}
+            {(() => {
+              const canSend = !!(reviewNote.trim() || reviewVideoUrl || reviewGifUrl)
+              return (
+                <>
+                  <button onClick={()=>markReviewed(selected.id)} disabled={saving||!canSend}
+                    style={{ width:'100%', background:!canSend?t.surfaceHigh:`linear-gradient(135deg,${t.teal},#00a896)`, border:'none', borderRadius:11, padding:'13px', fontSize:14, fontWeight:800, color:!canSend?t.textMuted:'#0f0f0f', cursor:(saving||!canSend)?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {saving ? 'Saving...' : '✅ Send Review to Client'}
+                  </button>
+                  {!canSend && (
+                    <div style={{ fontSize:11, color:t.textMuted, textAlign:'center', marginTop:6 }}>Add a video, GIF, or written notes to send your review</div>
+                  )}
+                </>
+              )
+            })()}
           </div>
 
         </div>
@@ -715,7 +731,7 @@ export default function ReviewsPage() {
               const hasVideo = r.exercises.some(ex => ex.client_video_url)
               const intelligence = getReviewIntelligence(r)
               return (
-                <button key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('')}}
+                <button key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('');setReviewGifUrl('')}}
                   className="review-card"
                   style={{ background:t.surface, border:`1px solid ${u==='overdue'||u==='red'?t.red+'50':t.border}`, borderRadius:16, padding:'16px', textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", width:'100%' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>

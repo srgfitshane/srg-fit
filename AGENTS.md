@@ -584,6 +584,30 @@ stored but never shown to the client).
   because of the review-lock policy). Video renders via the existing
   module-scope `CoachReviewVideo` component (external-link preview branch).
 
+## Review GIF reactions (Jun 15 2026)
+
+Coach can drop a GIPHY reaction GIF into workout-review and check-in
+responses, alongside (or instead of) text and a video link.
+
+- **Reuses the messenger's exact setup** — `@giphy/js-fetch-api` +
+  client-side `NEXT_PUBLIC_GIPHY_API_KEY` (GIPHY SDK keys are public by
+  design, so no server proxy). Don't build a Giphy server route; mirror
+  `RichMessageThread.tsx`.
+- Shared component `src/components/coach/GifPicker.tsx` (props
+  `value`/`onPick`/`onClear`). Stores `gif.images.fixed_height.url`.
+  Coach-only / dark-only, palette baked in.
+- Columns: `workout_sessions.coach_review_gif_url`,
+  `client_form_assignments.coach_response_gif_url` (both text, external
+  GIPHY URLs — no signing, render as a plain `<img>`).
+- Coach write surfaces: `coach/reviews/page.tsx`, `coach/checkins/page.tsx`,
+  inline responder in `coach/clients/[id]/page.tsx`. Send guard +
+  `isReviewed` count a GIF-only reply as a real response.
+- Client render surfaces (anywhere the matching `*_video_url` already
+  rendered): dashboard review card, check-in reply card, Training history
+  (`client/page.tsx`), workout detail (`client/workout/[sessionId]`). The
+  check-in dashboard query's `.or(...)` includes `coach_response_gif_url`
+  so a GIF-only reply still surfaces the unseen card.
+
 ## Program-ending coach notifications (Jun 7 2026)
 
 Daily cron checks for client programs in their last week (or that just
