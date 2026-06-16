@@ -166,9 +166,17 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
   const [pendingFood,     setPendingFood]     = useState<Partial<FoodEntry> | null>(null)
   const [pendingServings, setPendingServings] = useState(1)
+  // Free-text draft for the servings field so clients can type any small
+  // amount (0.1, 0.25, 0.3...). The numeric state above stays the source of
+  // truth for macro math; these strings just hold what's being typed and
+  // resync from the number (effects below) whenever +/− or a reset changes it.
+  const [pendingServingsStr, setPendingServingsStr] = useState('1')
   const [saving,          setSaving]          = useState(false)
   const [editingEntry,    setEditingEntry]    = useState<string|null>(null)
   const [editServings,    setEditServings]    = useState(1)
+  const [editServingsStr, setEditServingsStr] = useState('1')
+  useEffect(() => { setPendingServingsStr(String(pendingServings)) }, [pendingServings])
+  useEffect(() => { setEditServingsStr(String(editServings)) }, [editServings])
   const [savedFoods,      setSavedFoods]      = useState<SavedFood[]>([])
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
@@ -280,7 +288,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       const { data: saved, error } = await supabase.from('food_entries').insert({
         daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
         food_name:    pendingFood.food_name || '',
-        serving_size: isPhoto ? '1 photo' : `${s > 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
+        serving_size: isPhoto ? '1 photo' : `${s !== 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
         serving_qty:  isPhoto ? null : s,
         source:       pendingFood.source || null,
         photo_url:    pendingFood.photo_url || null,
@@ -334,13 +342,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     const scale  = newServings / oldQty
     const updated = {
       serving_qty:  newServings,
-      serving_size: `${newServings > 1 ? newServings+'x ' : ''}${(entry.serving_size || '').replace(/^\d+x\s*/,'')}`,
+      serving_size: `${newServings !== 1 ? newServings+'x ' : ''}${(entry.serving_size || '').replace(/^\d+(\.\d+)?x\s*/,'')}`,
       calories:  entry.calories  != null ? Math.round(entry.calories  * scale * 10) / 10 : null,
       protein_g: entry.protein_g != null ? Math.round(entry.protein_g * scale * 10) / 10 : null,
       carbs_g:   entry.carbs_g   != null ? Math.round(entry.carbs_g   * scale * 10) / 10 : null,
       fat_g:     entry.fat_g     != null ? Math.round(entry.fat_g     * scale * 10) / 10 : null,
     }
-    await supabase.from('food_entries').update(updated).eq('id', entry.id)
+    const { error } = await supabase.from('food_entries').update(updated).eq('id', entry.id)
+    if (error) { alert('Could not update servings: ' + error.message); return }
     setEditingEntry(null)
     if (log) {
       const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', log.id)
@@ -1039,10 +1048,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                   <div style={{ fontSize:11, color:t.textMuted }}>{pendingServings}x {pendingFood.serving_size}</div>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', background:t.surface, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
-                  <button onClick={()=>setPendingServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                  <button onClick={()=>setPendingServings(s=>Math.max(0.25, Math.round((s-0.25)*100)/100))}
                     style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>−</button>
-                  <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:40, textAlign:'center' as const }}>{pendingServings}</div>
-                  <button onClick={()=>setPendingServings(s=>Math.round((s+0.5)*10)/10)}
+                  <input value={pendingServingsStr} inputMode="decimal" aria-label="Servings"
+                    onChange={e=>{ const raw=e.target.value; setPendingServingsStr(raw); const v=parseFloat(raw); if(Number.isFinite(v)&&v>0) setPendingServings(Math.round(v*100)/100) }}
+                    onBlur={()=>{ const v=parseFloat(pendingServingsStr); if(!Number.isFinite(v)||v<=0) setPendingServingsStr(String(pendingServings)) }}
+                    style={{ width:52, background:'none', border:'none', outline:'none', fontSize:14, fontWeight:800, color:t.teal, textAlign:'center' as const, fontFamily:'inherit', padding:0 }} />
+                  <button onClick={()=>setPendingServings(s=>Math.round((s+0.25)*100)/100)}
                     style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'8px 14px', lineHeight:1 }}>+</button>
                 </div>
               </div>
@@ -1122,10 +1134,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                             <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
                               <div style={{ fontSize:11, color:t.textMuted, flex:1 }}>Adjust servings:</div>
                               <div style={{ display:'flex', alignItems:'center', background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, overflow:'hidden' }}>
-                                <button onClick={()=>setEditServings(s=>Math.max(0.5, Math.round((s-0.5)*10)/10))}
+                                <button onClick={()=>setEditServings(s=>Math.max(0.25, Math.round((s-0.25)*100)/100))}
                                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>−</button>
-                                <div style={{ fontSize:14, fontWeight:800, color:t.teal, minWidth:28, textAlign:'center' }}>{editServings}</div>
-                                <button onClick={()=>setEditServings(s=>Math.round((s+0.5)*10)/10)}
+                                <input value={editServingsStr} inputMode="decimal" aria-label="Servings"
+                                  onChange={ev=>{ const raw=ev.target.value; setEditServingsStr(raw); const v=parseFloat(raw); if(Number.isFinite(v)&&v>0) setEditServings(Math.round(v*100)/100) }}
+                                  onBlur={()=>{ const v=parseFloat(editServingsStr); if(!Number.isFinite(v)||v<=0) setEditServingsStr(String(editServings)) }}
+                                  style={{ width:44, background:'none', border:'none', outline:'none', fontSize:14, fontWeight:800, color:t.teal, textAlign:'center' as const, fontFamily:'inherit', padding:0 }} />
+                                <button onClick={()=>setEditServings(s=>Math.round((s+0.25)*100)/100)}
                                   style={{ background:'none', border:'none', color:t.text, cursor:'pointer', fontSize:18, fontWeight:700, padding:'6px 12px', lineHeight:1 }}>+</button>
                               </div>
                               <button onClick={()=>updateEntryServings(e, editServings)}
