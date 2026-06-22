@@ -13,7 +13,7 @@
  */
 
 import Image from 'next/image'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
@@ -24,6 +24,36 @@ const c = {
   teal:"var(--teal)", tealDim:"var(--teal-dim)", orange:"var(--orange)",
   red:"var(--red)", green:"var(--green)",
   text:"var(--text)", textMuted:"var(--text-muted)", textDim:"var(--text-dim)",
+}
+
+// Turn bare http(s) URLs in a text message into clickable links so coaches
+// can drop a Cap/Loom/Drive link and the client can just tap it. Splits the
+// body on URL matches; trailing sentence punctuation is kept out of the href
+// (so "...watch https://cap.so/x." doesn't swallow the period). External
+// only, new tab, rel=noopener.
+const URL_RE = /(https?:\/\/[^\s<]+)/g
+function renderTextWithLinks(text: string, linkColor: string): ReactNode {
+  const out: ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  URL_RE.lastIndex = 0
+  while ((m = URL_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index))
+    let url = m[0]
+    let trailing = ''
+    const trail = url.match(/[.,!?;:)\]}'"]+$/)
+    if (trail) { trailing = trail[0]; url = url.slice(0, url.length - trailing.length) }
+    out.push(
+      <a key={m.index} href={url} target="_blank" rel="noopener noreferrer"
+        style={{ color: linkColor, textDecoration:'underline', wordBreak:'break-all' }}>
+        {url}
+      </a>
+    )
+    if (trailing) out.push(trailing)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push(text.slice(last))
+  return out.length ? out : text
 }
 
 const QUICK_REACTIONS = ['👍','❤️','😂','🔥','💪','👏','😮','😢']
@@ -825,7 +855,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         )
       } catch { return <span style={{ fontSize:14 }}>{msg.body}</span> }
     }
-    return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word', whiteSpace:'pre-wrap' }}>{msg.body}</span>
+    return <span style={{ fontSize:14, lineHeight:1.55, wordBreak:'break-word', whiteSpace:'pre-wrap' }}>{renderTextWithLinks(msg.body || '', isMe ? '#0a0a0a' : c.teal)}</span>
   }
   const groupReactions = (reactions: Reaction[] = []) => {
     const map: Record<string, { count: number, mine: boolean }> = {}
