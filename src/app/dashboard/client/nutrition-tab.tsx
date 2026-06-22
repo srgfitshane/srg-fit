@@ -827,7 +827,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               {([{f:'calories',p:'kcal',l:'Calories'},{f:'protein_g',p:'g',l:'Protein'},{f:'carbs_g',p:'g',l:'Carbs'},{f:'fat_g',p:'g',l:'Fat'}] as const).map(field=>(
                 <div key={field.f}>
                   <div style={{ fontSize:10, color:t.textMuted, marginBottom:3 }}>{field.l}</div>
-                  <input type="number" placeholder={field.p} value={quick[field.f]} onChange={e=>setQuick(p=>({...p,[field.f]:e.target.value}))} style={{ ...inp, padding:'8px', textAlign:'center', fontSize:14 }}/>
+                  <input type="number" inputMode="decimal" enterKeyHint="done" placeholder={field.p} value={quick[field.f]} onChange={e=>setQuick(p=>({...p,[field.f]:e.target.value}))} style={{ ...inp, padding:'8px', textAlign:'center', fontSize:14 }}/>
                 </div>
               ))}
             </div>

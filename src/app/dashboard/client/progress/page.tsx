@@ -686,7 +686,7 @@ export default function ClientProgressPage() {
               </div>
               <div>
                 <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Weight at time (lbs)</label>
-                <input type="number" step="0.1" value={photoForm.weight_at_time}
+                <input type="number" step="0.1" inputMode="decimal" enterKeyHint="done" value={photoForm.weight_at_time}
                   onChange={e=>setPhotoForm(p=>({...p,weight_at_time:e.target.value}))}
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
                     borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' }} />

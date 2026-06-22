@@ -427,7 +427,7 @@ export default function ClientFormPage() {
 
                 {/* Number */}
                 {q.question_type === 'number' && (
-                  <input type="number" value={answers[q.id]||''} onChange={e=>setAnswer(q.id,e.target.value)}
+                  <input type="number" inputMode="decimal" enterKeyHint="done" value={answers[q.id]||''} onChange={e=>setAnswer(q.id,e.target.value)}
                     placeholder={q.placeholder||''} style={inp} />
                 )}
 

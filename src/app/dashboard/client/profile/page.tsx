@@ -97,7 +97,7 @@ const Label = ({children}:{children:ReactNode}) => { const {t}=_uc(_Ctx); return
 const Input = ({field,placeholder,type='text',...rest}: BaseFieldProps & { type?: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'placeholder'>) => {
   const {intake,set,t}=_uc(_Ctx)
   const value = typeof intake[field] === 'boolean' ? '' : String(intake[field] ?? '')
-  return <input value={value} onChange={e=>set(field,e.target.value)} placeholder={placeholder} type={type} {...rest} style={{...sharedInputStyle, color:t.text}} />
+  return <input value={value} onChange={e=>set(field,e.target.value)} placeholder={placeholder} type={type} inputMode={type==='number'?'decimal':undefined} {...rest} style={{...sharedInputStyle, color:t.text}} />
 }
 const TextArea = ({field,placeholder,rows=3}: BaseFieldProps & { rows?: number }) => {
   const {intake,set,t}=_uc(_Ctx)

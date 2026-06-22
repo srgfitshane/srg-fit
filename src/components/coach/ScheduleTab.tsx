@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { toastError } from '@/components/ui/Toast'
@@ -192,6 +192,7 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
   const [addModal,   setAddModal]   = useState<string|null>(null) // date string or null
   const [delConfirm, setDelConfirm] = useState<any>(null) // item to delete
   const [reschedDate, setReschedDate] = useState('')      // new date when rescheduling
+  const reschedRef = useRef<HTMLInputElement>(null)       // for one-tap showPicker()
   const [clipboard, setClipboard] = useState<{ sessionId: string; title: string; sourceDate: string } | null>(null)
   const [pasting, setPasting] = useState(false)
 
@@ -266,14 +267,17 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
     setCalEvents(p => p.filter(e => e.id !== id))
     setDelConfirm(null)
   }
-  const rescheduleSession = async () => {
-    if (!reschedDate || !delConfirm?.id) return
-    const { error } = await supabase.from('workout_sessions').update({ scheduled_date: reschedDate }).eq('id', delConfirm.id)
+  // Accepts the new date directly so the date-input onChange can apply
+  // immediately (state setters are async; reading reschedDate here would lag).
+  const rescheduleSession = async (dateOverride?: string) => {
+    const newDate = dateOverride || reschedDate
+    if (!newDate || !delConfirm?.id) return
+    const { error } = await supabase.from('workout_sessions').update({ scheduled_date: newDate }).eq('id', delConfirm.id)
     if (error) {
       toastError('Could not reschedule: ' + error.message)
       return
     }
-    setSessions(p => p.map(s => s.id === delConfirm.id ? { ...s, scheduled_date: reschedDate } : s))
+    setSessions(p => p.map(s => s.id === delConfirm.id ? { ...s, scheduled_date: newDate } : s))
     setDelConfirm(null)
     setReschedDate('')
   }
@@ -483,18 +487,32 @@ export default function ScheduleTab({ clientId, coachId, clientName, supabase, t
                 </div>
               )
             })()}
-            {/* Reschedule — sessions only */}
+            {/* Reschedule — sessions only. One tap: the button opens the native
+                date picker (showPicker), and picking a date applies the move
+                immediately — no second tap on the field, no separate confirm.
+                The date input is kept (offscreen) as the picker anchor and as a
+                fallback for browsers without showPicker(). */}
             {delConfirm._type==='session' && (
-              <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Reschedule to</div>
-                <input type="date" value={reschedDate} onChange={e=>setReschedDate(e.target.value)}
-                  style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:9, padding:'9px 12px', fontSize:13, color:t.text, colorScheme:'dark', boxSizing:'border-box' as const, fontFamily:"'DM Sans',sans-serif" }}/>
-                {reschedDate && (
-                  <button onClick={rescheduleSession}
-                    style={{ marginTop:8, width:'100%', background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                    📅 Move to {reschedDate}
-                  </button>
-                )}
+              <div style={{ marginBottom:16, position:'relative' }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Reschedule</div>
+                <button
+                  onClick={()=>{
+                    const el = reschedRef.current
+                    if (!el) return
+                    // showPicker() opens the native calendar on one tap; focus()
+                    // is the fallback where it isn't supported / throws.
+                    if (typeof el.showPicker === 'function') { try { el.showPicker() } catch { el.focus() } }
+                    else el.focus()
+                  }}
+                  style={{ width:'100%', background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`, border:'none', borderRadius:10, padding:'10px', fontSize:13, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  📅 Pick a new date
+                </button>
+                {/* Offscreen anchor for the native picker. Positioned at the
+                    button's bottom-left so the desktop calendar dropdown lands
+                    in the right spot; on mobile the picker is a full sheet. */}
+                <input ref={reschedRef} type="date" value={reschedDate}
+                  onChange={e=>{ const d=e.target.value; setReschedDate(d); if(d) rescheduleSession(d) }}
+                  style={{ position:'absolute', left:0, bottom:0, width:1, height:1, opacity:0, pointerEvents:'none' }} tabIndex={-1} aria-hidden="true" />
               </div>
             )}
             {/* Copy to another day — sessions only */}
