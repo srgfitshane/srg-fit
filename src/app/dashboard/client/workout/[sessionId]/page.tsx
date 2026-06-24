@@ -199,6 +199,7 @@ export default function ActiveWorkoutPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [phase, setPhase] = useState<'warmup'|'workout'|'complete'>('workout')
   const [finishForm, setFinishForm] = useState({ session_rpe:'', energy_level:'3', mood:'good', notes_client:'' })
+  const [showFinishEarly, setShowFinishEarly] = useState(false)
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -2478,7 +2479,7 @@ ${candidateList}`
         </div>
 
         {/* Finish banner */}
-        {allLogged && phase === 'workout' && (
+        {(allLogged || showFinishEarly) && phase === 'workout' && (
           <div style={{padding:'16px',borderTop:`1px solid ${t.border}`,background:t.surface,flexShrink:0}}>
             <div style={{marginBottom:12}}>
               <p style={{fontSize:12,fontWeight:700,color:t.textDim,marginBottom:10,textTransform:'uppercase',letterSpacing:'0.06em'}}>How&apos;d it go?</p>
@@ -2526,12 +2527,22 @@ ${candidateList}`
               <div style={{fontSize:11,color:t.textMuted,marginTop:8,lineHeight:1.5}}>
                 You logged {totalLoggedSets} set{totalLoggedSets !== 1 ? 's' : ''} across {completedExerciseCount} exercise{completedExerciseCount !== 1 ? 's' : ''}.
                 {skippedExerciseCount > 0 ? ` ${skippedExerciseCount} skipped exercise${skippedExerciseCount !== 1 ? 's were' : ' was'} noted for your coach.` : ''}
+                {!allLogged ? ` ${exercises.filter(ex => !skipped[ex.id] && !(setData[ex.id]||[]).some(s=>s.logged)).length} not yet logged — saved as incomplete for your coach.` : ''}
               </div>
             </div>
             <button onClick={finishWorkout} disabled={saving}
               aria-label="Complete workout"
               style={{width:'100%',background:`linear-gradient(135deg,${t.teal},#00a896)`,border:'none',borderRadius:12,padding:'15px',fontSize:16,fontWeight:800,color:'#0f0f0f',cursor:saving?'default':'pointer',opacity:saving?0.7:1,fontFamily:"'DM Sans',sans-serif"}}>
               {saving ? 'Finishing...' : '🎉 Complete Workout!'}
+            </button>
+          </div>
+        )}
+        {!allLogged && !showFinishEarly && phase === 'workout' && (
+          <div style={{padding:'12px 16px',borderTop:`1px solid ${t.border}`,background:t.surface,flexShrink:0}}>
+            <button onClick={()=>setShowFinishEarly(true)}
+              aria-label="Finish workout early without logging everything"
+              style={{width:'100%',background:'transparent',border:`1px solid ${t.border}`,borderRadius:12,padding:'13px',fontSize:14,fontWeight:700,color:t.textDim,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+              Finish workout early
             </button>
           </div>
         )}
