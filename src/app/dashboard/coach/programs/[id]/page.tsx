@@ -56,6 +56,8 @@ export default function ProgramBuilder() {
   const [activeWeek, setActiveWeek] = useState(1)
   const [editingEx,  setEditingEx]  = useState<string|null>(null)
   const [groupingEx, setGroupingEx] = useState<string|null>(null)
+  const [draggingEx,  setDraggingEx]  = useState<string|null>(null)
+  const [dragOverEx,  setDragOverEx]  = useState<string|null>(null)
   const [openSlotModal, setOpenSlotModal] = useState<{blockId:string}|null>(null)
   const [slotConstraint,   setSlotConstraint]   = useState('')
   const [slotRole,         setSlotRole]         = useState('main')
@@ -510,6 +512,26 @@ export default function ProgramBuilder() {
     }))
   }
 
+  // Drag-to-reorder within a day. Rewrites order_index across the whole
+  // block so the dropped exercise lands at the target's slot; group labels
+  // ride along (groups re-sort by their first member's order_index).
+  const reorderExercise = async (blockId: string, draggedId: string|null, targetId: string) => {
+    if (!draggedId || draggedId === targetId) return
+    const block = blocks.find(b => b.id === blockId)
+    if (!block) return
+    const exes = [...(block.block_exercises||[])].sort((a:any,b:any)=>a.order_index-b.order_index)
+    const from = exes.findIndex((e:any)=>e.id===draggedId)
+    const to   = exes.findIndex((e:any)=>e.id===targetId)
+    if (from<0 || to<0) return
+    const [moved] = exes.splice(from,1)
+    exes.splice(to,0,moved)
+    const reindexed = exes.map((e:any,i:number)=>({ ...e, order_index:i }))
+    setBlocks(prev => prev.map(b => b.id===blockId ? { ...b, block_exercises:reindexed } : b))
+    for (const e of reindexed) {
+      void supabase.from('block_exercises').update({ order_index: e.order_index }).eq('id', e.id)
+    }
+  }
+  
   const openAddEx = async (blockId: string, role = 'main') => {
     setPendingRole(role)
     setShowAddEx(blockId)
@@ -1083,7 +1105,14 @@ export default function ProgramBuilder() {
                               {groupExes.map((ex:any) => {
                                 const roleMeta = ROLE_COLORS[ex.exercise_role] || t.teal
                                 return (
-                                  <div key={ex.id} style={{ marginBottom: 10 }}>
+                                  <div key={ex.id}
+                                    draggable={editingEx !== ex.id}
+                                    onDragStart={(e)=>{ setDraggingEx(ex.id); e.dataTransfer.effectAllowed='move' }}
+                                    onDragEnd={()=>{ setDraggingEx(null); setDragOverEx(null) }}
+                                    onDragOver={(e)=>{ if(draggingEx && draggingEx!==ex.id){ e.preventDefault(); setDragOverEx(ex.id) } }}
+                                    onDragLeave={()=>{ if(dragOverEx===ex.id) setDragOverEx(null) }}
+                                    onDrop={(e)=>{ e.preventDefault(); reorderExercise(block.id, draggingEx, ex.id); setDraggingEx(null); setDragOverEx(null) }}
+                                    style={{ marginBottom: 10, opacity: draggingEx===ex.id?0.4:1, borderTop: dragOverEx===ex.id?`2px solid ${t.teal}`:'2px solid transparent', transition:'opacity 0.12s ease' }}>
                                     {ex.is_open_slot ? (
                                       // Open slot card
                                       <div style={{ background:t.yellow+'10', border:`1px dashed ${t.yellow}50`, borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
@@ -1093,12 +1122,7 @@ export default function ProgramBuilder() {
                                           <div style={{ fontSize:11, color:t.textMuted }}>{ex.slot_constraint || "Client's choice"} · {ex.sets}×{ex.reps}</div>
                                         </div>
                                         <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                                          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                                            <button onClick={()=>moveExercise(block.id, ex.id, -1)}
-                                              style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▲</button>
-                                            <button onClick={()=>moveExercise(block.id, ex.id, 1)}
-                                              style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▼</button>
-                                          </div>
+                                          <div title="Drag to reorder" style={{ display:'flex', alignItems:'center', color:t.textMuted, cursor:'grab', fontSize:14, padding:'0 2px', userSelect:'none' }}>⠿</div>
                                           <button onClick={()=>deleteExercise(block.id, ex.id)}
                                             style={{ background:'none', border:'none', color:t.red+'60', cursor:'pointer', fontSize:12 }}>✕</button>
                                         </div>
@@ -1171,12 +1195,7 @@ export default function ProgramBuilder() {
                                             {ex.notes && <div style={{ fontSize:10, color:t.textMuted, fontStyle:'italic', marginTop:2 }}>📝 {ex.notes}</div>}
                                           </div>
                                           <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                                            <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                                              <button onClick={()=>moveExercise(block.id, ex.id, -1)}
-                                                style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▲</button>
-                                              <button onClick={()=>moveExercise(block.id, ex.id, 1)}
-                                                style={{ background:t.tealDim, border:`1px solid ${t.teal}40`, borderRadius:5, padding:'2px 6px', fontSize:12, color:t.teal, cursor:'pointer', lineHeight:1 }}>▼</button>
-                                            </div>
+                                            <div title="Drag to reorder" style={{ display:'flex', alignItems:'center', color:t.textMuted, cursor:'grab', fontSize:14, padding:'0 2px', userSelect:'none' }}>⠿</div>
                                             <button onClick={()=>setEditingEx(editingEx===ex.id?null:ex.id)}
                                               style={{ background:t.surfaceHigh, border:'none', borderRadius:6, padding:'4px 8px', fontSize:10, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                                               {editingEx===ex.id?'done':'edit'}
