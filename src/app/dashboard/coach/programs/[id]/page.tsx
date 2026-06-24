@@ -1114,20 +1114,51 @@ export default function ProgramBuilder() {
                                           </div>
                                           <div style={{ flex:1, minWidth:0 }}>
                                             <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>{ex.exercise?.name || 'Exercise'}</div>
-                                            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                                            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4, position:'relative' }}>
                                               <button onClick={()=>setGroupingEx(groupingEx===ex.id?null:ex.id)}
                                                 style={{ background: ex.superset_group ? groupColorMap[ex.superset_group]+'22' : t.surfaceHigh, border:'1px solid '+(ex.superset_group ? groupColorMap[ex.superset_group]+'60' : t.border), borderRadius:5, padding:'2px 8px', fontSize:10, fontWeight:800, color: ex.superset_group ? (groupColorMap[ex.superset_group]||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em' }}>
                                                 {ex.superset_group ? `Group ${ex.superset_group}` : '+ Group'}
                                               </button>
-                                              {groupingEx === ex.id && (
-                                                <input autoFocus
-                                                  defaultValue={ex.superset_group || ''}
-                                                  placeholder="A, B, C..."
-                                                  onBlur={e => { updateExercise(ex.id, 'superset_group', e.target.value.trim()); setGroupingEx(null) }}
-                                                  onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') { updateExercise(ex.id,'superset_group',(e.target as HTMLInputElement).value.trim()); setGroupingEx(null) }}}
-                                                  style={{ width:60, background:t.surface, border:'1px solid '+t.teal+'60', borderRadius:5, padding:'2px 7px', fontSize:11, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }}
-                                                />
-                                              )}
+                                              {groupingEx === ex.id && (() => {
+                                                const usedLetters = namedGroups.map(([k]) => k)
+                                                const nextLetter = ['A','B','C','D','E','F','G','H'].find(l => !usedLetters.includes(l)) || 'A'
+                                                const chip = { padding:'3px 9px', borderRadius:6, fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", letterSpacing:'0.04em' } as const
+                                                return (
+                                                  <>
+                                                    <div onClick={()=>setGroupingEx(null)} style={{ position:'fixed', inset:0, zIndex:60 }} />
+                                                    <div style={{ position:'absolute', zIndex:61, top:'calc(100% + 4px)', left:0, minWidth:210, background:t.surface, border:'1px solid '+t.border, borderRadius:10, boxShadow:'0 12px 32px rgba(0,0,0,0.5)', padding:9 }}>
+                                                      <div style={{ fontSize:9, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>Group with</div>
+                                                      <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom: ex.superset_group ? 10 : 0 }}>
+                                                        {usedLetters.map(letter => (
+                                                          <button key={letter} onClick={()=>updateExercise(ex.id,'superset_group',letter)}
+                                                            style={{ ...chip, background: ex.superset_group===letter ? (groupColorMap[letter]||t.teal)+'30' : t.surfaceHigh, border:'1px solid '+(ex.superset_group===letter ? (groupColorMap[letter]||t.teal) : t.border), color: groupColorMap[letter]||t.text }}>
+                                                            {letter}
+                                                          </button>
+                                                        ))}
+                                                        <button onClick={()=>updateExercise(ex.id,'superset_group',nextLetter)}
+                                                          style={{ ...chip, background:t.tealDim, border:'1px dashed '+t.teal+'60', color:t.teal }}>
+                                                          + New ({nextLetter})
+                                                        </button>
+                                                        {ex.superset_group && (
+                                                          <button onClick={()=>{ updateExercise(ex.id,'superset_group',''); setGroupingEx(null) }}
+                                                            style={{ ...chip, background:'transparent', border:'1px solid '+t.border, color:t.textMuted }}>
+                                                            Ungroup
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                      {ex.superset_group && (
+                                                        <>
+                                                          <div style={{ fontSize:9, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>Type</div>
+                                                          <select value={groupTypes[ex.superset_group]||'straight'} onChange={e=>updateGroupType(block.id, ex.superset_group, e.target.value)}
+                                                            style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:11, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+                                                            {GROUP_TYPES.map(gt => <option key={gt.value} value={gt.value}>{gt.icon} {gt.label}</option>)}
+                                                          </select>
+                                                        </>
+                                                      )}
+                                                    </div>
+                                                  </>
+                                                )
+                                              })()}
                                             </div>
                                             <div style={{ fontSize:11, color:t.textMuted, lineHeight:1.6 }}>
                                               {ex.sets}×{ex.reps}
@@ -1199,9 +1230,9 @@ export default function ProgramBuilder() {
                                                 </select>
                                               </div>
                                               <div>
-                                                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Group (A1, B2...)</div>
+                                                <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, marginBottom:4 }}>Group (A, B, C)</div>
                                                 <input type="text" defaultValue={ex.superset_group||''} onBlur={e=>updateExercise(ex.id,'superset_group',e.target.value)}
-                                                  placeholder="e.g. A1, B2"
+                                                  placeholder="e.g. A, B"
                                                   style={{ width:'100%', background:t.surface, border:'1px solid '+t.border, borderRadius:7, padding:'6px 8px', fontSize:12, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
                                               </div>
                                             </div>
