@@ -70,6 +70,8 @@ export default function ProgramBuilder() {
   const [showAddEx,  setShowAddEx]  = useState<string|null>(null) // blockId
   const [swapExId,   setSwapExId]   = useState<string|null>(null) // block_exercise id being swapped
   const [pendingRole, setPendingRole] = useState<string>('main')
+  const [pendingGroup, setPendingGroup] = useState<string>('')
+  const [pendingGroupType, setPendingGroupType] = useState<string>('straight')
   const [addExTab,   setAddExTab]   = useState<'exercise'|'template'|'create'>('exercise')
   // Quick-create form state for the Create New tab. Pre-fills name from
   // the current search box so 'searched but missing' becomes 'create it'
@@ -427,9 +429,17 @@ export default function ProgramBuilder() {
       block_id: blockId, exercise_id: exerciseId,
       sets: 3, reps: '8-10', target_weight: '', rest_seconds: 90,
       rpe: '', tut: '', exercise_role: pendingRole,
+      superset_group: pendingGroup || null,
       order_index: exCount,
     }).select(`*, exercise:exercises(name, muscles)`).single()
     if (newEx) setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, block_exercises: [...(b.block_exercises||[]), newEx] } : b))
+    // If the coach grouped this add into a (possibly new) group, persist that
+    // group's format on the block so it isn't silently left as a straight set.
+    if (pendingGroup && (block?.group_types || {})[pendingGroup] !== pendingGroupType) {
+      const updated = { ...(block?.group_types || {}), [pendingGroup]: pendingGroupType }
+      await supabase.from('workout_blocks').update({ group_types: updated }).eq('id', blockId)
+      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, group_types: updated } : b))
+    }
     setShowAddEx(null); setExSearch(''); setEditingEx(newEx?.id || null)
   }
 
@@ -534,6 +544,8 @@ export default function ProgramBuilder() {
   
   const openAddEx = async (blockId: string, role = 'main') => {
     setPendingRole(role)
+    setPendingGroup('')
+    setPendingGroupType('straight')
     setShowAddEx(blockId)
     setExSearch('')
     setExGroup('all')
@@ -1336,6 +1348,39 @@ export default function ProgramBuilder() {
                 </div>
                 <span onClick={()=>{ setShowAddEx(null); setSwapExId(null) }} style={{ cursor:'pointer', color:t.textMuted, fontSize:22 }}>×</span>
               </div>
+
+              {!swapExId && (() => {
+                const addBlock = blocks.find(b => b.id === showAddEx)
+                const addUsed = [...new Set((addBlock?.block_exercises||[]).map((e:any)=>e.superset_group).filter(Boolean))].sort() as string[]
+                const addNext = ['A','B','C','D','E','F','G','H'].find(l=>!addUsed.includes(l)) || 'A'
+                return (
+                  <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' as const }}>
+                    <div style={{ flex:1, minWidth:110 }}>
+                      <div style={{ fontSize:9, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:4 }}>Role</div>
+                      <select value={pendingRole} onChange={e=>setPendingRole(e.target.value)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 8px', fontSize:12, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+                        {ROLE_OPTIONS.map(r=><option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ flex:1, minWidth:110 }}>
+                      <div style={{ fontSize:9, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:4 }}>Group</div>
+                      <select value={pendingGroup} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 8px', fontSize:12, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}
+                        onChange={e=>{ const v=e.target.value; if(v==='__new__'){ setPendingGroup(addNext); setPendingGroupType('straight') } else { setPendingGroup(v); if(v) setPendingGroupType((addBlock?.group_types||{})[v]||'straight') } }}>
+                        <option value="">None (straight)</option>
+                        {addUsed.map(l=><option key={l} value={l}>Group {l}</option>)}
+                        <option value="__new__">+ New group ({addNext})</option>
+                      </select>
+                    </div>
+                    {pendingGroup && (
+                      <div style={{ flex:1, minWidth:110 }}>
+                        <div style={{ fontSize:9, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:4 }}>Type</div>
+                        <select value={pendingGroupType} onChange={e=>setPendingGroupType(e.target.value)} style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:8, padding:'7px 8px', fontSize:12, fontWeight:700, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", cursor:'pointer' }}>
+                          {GROUP_TYPES.map(gt=><option key={gt.value} value={gt.value}>{gt.icon} {gt.label}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Tab switcher */}
               <div style={{ display:'flex', background:t.surfaceHigh, borderRadius:10, padding:3, gap:2, marginBottom:16 }}>
