@@ -727,6 +727,18 @@ export default function ProgramBuilder() {
             slot_constraint: ex.slot_constraint || null,
             slot_filter_type: ex.slot_filter_type || null,
             slot_filter_value: ex.slot_filter_value || null,
+            // Carry workout formatting onto the assigned session. The template
+            // stores group type as a block-level JSON map keyed by group letter
+            // (block.group_types[letter]); session_exercises wants it per-row, so
+            // resolve it here. Without this every assigned exercise renders as
+            // "Straight Sets" regardless of how the coach grouped it.
+            superset_group: ex.superset_group || null,
+            group_type: ex.superset_group
+              ? (block?.group_types?.[ex.superset_group] || 'straight')
+              : 'straight',
+            rpe: ex.rpe || null,
+            tut: ex.tut || null,
+            progression_note: ex.progression_note || null,
           }))
         )
         if (seError) { setSendError('Could not populate exercises for ' + (block?.day_label || block?.name || 'a session') + ': ' + seError.message); setSendingSessions(false); return }
