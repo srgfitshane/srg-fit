@@ -37,6 +37,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Self-hosted DM Sans (see globals.css). Preload the latin file so
+            text renders in the right face on first paint instead of after a
+            layout-shifting swap. */}
+        <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* Inject theme CSS vars globally so every route (coach +
             client + auth) renders with defined theme tokens. The
             :root block defaults to dark; [data-theme="light"] is
