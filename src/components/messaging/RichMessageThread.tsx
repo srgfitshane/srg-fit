@@ -335,8 +335,9 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       }
     }))
     setThread(withReactions)
-    // Force scroll on initial load
-    setTimeout(() => scrollToBottom(true), 0)
+    // Pin on initial load; respects userScrolledUp so a reaction/visibility
+    // refetch doesn't yank the user down while they're reading history.
+    setTimeout(() => scrollToBottom(), 0)
 
     // Mark incoming as read. Stamp read_at so the sender can see when (Wave 5
     // read receipts -- the sender's outgoing-bubble checkmark resolves from this).
@@ -421,8 +422,18 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     return () => ro.disconnect()
   }, [])
 
-  // Auto-scroll: force bottom on load, keep forcing until stable for 500ms
+  // Auto-scroll: force bottom ONCE per thread open, until height is stable
+  // for 500ms (lets GIFs/images in history expand). Guarded by initialPinDone
+  // — re-arming on every thread update (sends, incoming, read receipts) made
+  // the composer jump while typing on mobile: the keyboard resize kept
+  // scrollHeight unstable so the loop ran its full 5s fighting the user.
+  // Appended messages pin via explicit scrollToBottom calls instead.
+  const initialPinDone = useRef(false)
+  useEffect(() => { initialPinDone.current = false }, [otherId])
   useEffect(() => {
+    if (initialPinDone.current) return
+    if (thread.length === 0) return // wait for first load to land
+    initialPinDone.current = true
     const el = scrollRef.current
     if (!el) return
     justLoaded.current = true
@@ -432,7 +443,11 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     let stableCount = 0
     const interval = setInterval(() => {
       if (!el) return
-      el.scrollTop = el.scrollHeight
+      // Don't fight the user once they're composing — the keyboard opening
+      // changes scrollHeight, which would force-scroll mid-typing.
+      if (document.activeElement?.tagName !== 'TEXTAREA') {
+        el.scrollTop = el.scrollHeight
+      }
       if (el.scrollHeight === lastHeight) {
         stableCount++
         if (stableCount >= 5) { // stable for 5 ticks (500ms) — done
@@ -478,6 +493,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             }
           }
           setThread(prev => [...prev, { ...msg, media_url: mediaUrl, reactions: [] }])
+          // Pin for the incoming message unless the user scrolled up to read
+          // history. Second pass re-pins after media (GIF/image) paints.
+          setTimeout(() => scrollToBottom(), 0)
+          setTimeout(() => scrollToBottom(), 250)
           supabase.from('messages').update({ read: true, read_at: new Date().toISOString() }).eq('id', msg.id)
         }
       })
@@ -823,9 +842,10 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             <div style={{ fontSize:15, fontWeight:700, marginBottom:2 }}>{ex.name}</div>
             {ex.muscles && <div style={{ fontSize:11, opacity:0.7, marginBottom:6 }}>{ex.muscles}</div>}
             {ex.videoUrl && (
-              <button onClick={async () => {
-                const { data } = await supabase.storage.from('exercise-videos').createSignedUrl(ex.videoUrl, 3600)
-                if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+              <button onClick={() => {
+                // exercises.video_url stores the full public URL (exercise-videos
+                // is a public bucket) — open it directly.
+                if (ex.videoUrl) window.open(ex.videoUrl, '_blank')
               }} style={{ background: isMe ? 'rgba(0,0,0,0.15)' : c.tealDim, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, color: isMe ? '#000' : c.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 ▶ Watch Demo
               </button>
