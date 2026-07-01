@@ -110,6 +110,24 @@ function countdown(dueAt: string) {
 const fmtDuration = (s:number|null) => s ? `${Math.floor(s/60)}m` : '—'
 const moodEmoji = (m:string|null) => (m ? MOOD_EMOJI[m] : undefined) || '—'
 
+// Rotating praise notes for one-tap quick reviews on clean sessions.
+// Written into coach_review_notes so the client sees a real coach reply
+// (same render path as a typed review). Rotated so repeat clients don't
+// get the identical canned line every week.
+const PRAISE_VARIATIONS = [
+  'Keep up the good work 💪',
+  'Solid session — every rep counted. Keep it rolling!',
+  'Textbook work. Keep stacking weeks like this 🔥',
+  'Clean session top to bottom. Love to see it!',
+  'Great execution today — nothing to fix, just keep showing up 💪',
+  'Strong work! Consistency like this is what gets results.',
+  'Nailed it. Same energy next session 👊',
+  'All boxes checked — this is how progress gets built.',
+  'Really solid effort across the board. Keep it up!',
+  'Another one in the books — great work today 💪',
+]
+const pickPraise = () => PRAISE_VARIATIONS[Math.floor(Math.random() * PRAISE_VARIATIONS.length)]
+
 function getReviewIntelligence(review: Review): ReviewIntelligence {
   const skippedCount = review.exercises.filter(ex => ex.skipped).length
   const swapCount = review.exercises.filter(ex => !!ex.original_exercise_name).length
@@ -377,31 +395,36 @@ export default function ReviewsPage() {
       alert('No clean sessions to clear. The remaining reviews have at least one friction signal (skip, swap, form check, high RPE, or completion drop).')
       return
     }
-    if (!window.confirm(`Mark ${cleanReviews.length} clean session${cleanReviews.length === 1 ? '' : 's'} as reviewed?\n\nThis sends each client a generic "reviewed" notification with no note or video. Sessions with friction signals are NOT included.`)) {
+    if (!window.confirm(`Mark ${cleanReviews.length} clean session${cleanReviews.length === 1 ? '' : 's'} as reviewed?\n\nEach client gets a short praise note as your review. Sessions with friction signals are NOT included.`)) {
       return
     }
     setSaving(true)
-    const ids = cleanReviews.map(r => r.id)
     const reviewedAt = new Date().toISOString()
-    const { error } = await supabase.from('workout_sessions')
-      .update({ coach_reviewed_at: reviewedAt })
-      .in('id', ids)
-    if (error) {
-      setSaving(false)
-      alert('Bulk mark failed: ' + error.message)
-      return
+    // Per-session updates (not bulk .in()) so each client gets their own
+    // rotated praise note instead of a shared generic line.
+    const results = await Promise.all(cleanReviews.map(async (r) => {
+      const note = pickPraise()
+      const { error } = await supabase.from('workout_sessions')
+        .update({ coach_reviewed_at: reviewedAt, coach_review_notes: note })
+        .eq('id', r.id)
+      return { review: r, note, error }
+    }))
+    const failed = results.filter(res => res.error)
+    if (failed.length > 0) {
+      alert(`${failed.length} of ${results.length} session${results.length === 1 ? '' : 's'} failed to update: ${failed[0].error!.message}`)
     }
+    const succeeded = results.filter(res => !res.error)
     // Fire-and-forget push per client (rule 8). Failures are cosmetic.
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.access_token) {
-      for (const r of cleanReviews) {
-        const profileId = r.client?.profile_id
+      for (const res of succeeded) {
+        const profileId = res.review.client?.profile_id
         if (!profileId) continue
         // Deep-link to the actual workout the coach just reviewed instead
         // of dropping the client at the dashboard. Same pattern in markReviewed.
         // send-notification inserts the bell row AND fires push — do NOT also
         // insert into notifications here (double bell rows).
-        const workoutLink = `/dashboard/client/workout/${r.id}`
+        const workoutLink = `/dashboard/client/workout/${res.review.id}`
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: {
@@ -412,25 +435,76 @@ export default function ReviewsPage() {
           body: JSON.stringify({
             user_id: profileId,
             notification_type: 'review_ready',
-            title: '✅ Coach reviewed your workout',
-            body: 'Looks clean -- keep going!',
+            title: '💬 Coach reviewed your workout',
+            body: res.note,
             link_url: workoutLink,
           })
         }).catch(err => console.warn('[notify:bulk-review-2]', err))
       }
     }
-    setReviews(prev => prev.filter(r => !ids.includes(r.id)))
+    const clearedIds = new Set(succeeded.map(res => res.review.id))
+    setReviews(prev => prev.filter(r => !clearedIds.has(r.id)))
+    setSaving(false)
+  }
+
+  // One-tap quick review from an inbox card. Same write + notify path as
+  // markReviewed, with a rotated praise note as the review body. Only
+  // rendered on zero-friction sessions — anything with a skip, swap, note,
+  // or recovery flag deserves a real look in the detail view.
+  async function quickPraise(review: Review) {
+    setSaving(true)
+    const note = pickPraise()
+    const { error } = await supabase.from('workout_sessions').update({
+      coach_reviewed_at: new Date().toISOString(),
+      coach_review_notes: note,
+    }).eq('id', review.id)
+    if (error) {
+      setSaving(false)
+      alert('Could not send quick review: ' + error.message)
+      return
+    }
+    const profileId = review.client?.profile_id
+    if (profileId) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        // send-notification inserts the bell row AND fires push — do NOT also
+        // insert into notifications here (double bell rows).
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST', headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            user_id: profileId,
+            notification_type: 'review_ready',
+            title: '💬 Coach reviewed your workout',
+            body: note,
+            link_url: `/dashboard/client/workout/${review.id}`,
+          })
+        }).catch(err => console.warn('[notify:quick-praise]', err))
+      }
+    }
+    setReviews(prev => prev.filter(r => r.id !== review.id))
     setSaving(false)
   }
 
   async function markReviewed(sessionId: string) {
     setSaving(true)
-    await supabase.from('workout_sessions').update({
+    // Rule 14: check the error and bail visibly. Without this, a silent
+    // failure removed the review from the queue while the client never
+    // received it.
+    const { error } = await supabase.from('workout_sessions').update({
       coach_reviewed_at: new Date().toISOString(),
       coach_review_notes: reviewNote || null,
       coach_review_video_url: reviewVideoPath || null,
       coach_review_gif_url: reviewGifUrl || null,
     }).eq('id', sessionId)
+    if (error) {
+      setSaving(false)
+      alert('Could not save review: ' + error.message)
+      return
+    }
 
     // Notify client — fire-and-forget. Deep-link to the workout itself so
     // the client lands on the review video / coach note, not the dashboard.
@@ -730,8 +804,10 @@ export default function ReviewsPage() {
               const u=urgency(r.review_due_at); const uc=urgencyColor(u); const ub=urgencyBg(u)
               const hasVideo = r.exercises.some(ex => ex.client_video_url)
               const intelligence = getReviewIntelligence(r)
+              // Card is a div, not a button: the quick-praise action nests
+              // inside and buttons can't legally contain buttons.
               return (
-                <button key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('');setReviewGifUrl('')}}
+                <div key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('');setReviewGifUrl('')}}
                   className="review-card"
                   style={{ background:t.surface, border:`1px solid ${u==='overdue'||u==='red'?t.red+'50':t.border}`, borderRadius:16, padding:'16px', textAlign:'left', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", width:'100%' }}>
                   <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
@@ -771,10 +847,16 @@ export default function ReviewsPage() {
                           </div>
                         )}
                       </div>
+                      {intelligence.frictionScore === 0 && (
+                        <button onClick={e => { e.stopPropagation(); void quickPraise(r) }} disabled={saving}
+                          style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:6, background:t.greenDim, border:`1px solid ${t.green}40`, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color:t.green, cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
+                          💪 Quick praise
+                        </button>
+                      )}
                     </div>
                     <div style={{ fontSize:20, color:t.textMuted, flexShrink:0 }}>›</div>
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
