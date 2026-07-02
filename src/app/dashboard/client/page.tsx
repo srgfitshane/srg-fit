@@ -379,8 +379,18 @@ export function ClientDashboardPreview({ overrideClientId }: { overrideClientId:
 
 function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string } = {}) {
   const [profile,      setProfile]      = useState<DashboardProfile | null>(null)
-  // Register for push notifications once profile is loaded
-  usePushNotifications(profile?.id ?? null)
+  // Register for push notifications once profile is loaded. The hook only
+  // auto-refreshes an already-granted subscription; first-time enablement
+  // needs a user gesture (iOS requirement), via the nudge card on Today.
+  const { needsPrompt: pushNeedsPrompt, enable: enablePush } = usePushNotifications(profile?.id ?? null)
+  const [pushNudgeSnoozed, setPushNudgeSnoozed] = useState(true)
+  useEffect(() => {
+    try {
+      const ts = window.localStorage.getItem('push-nudge-snooze')
+      // Dismissal snoozes the card for 14 days, then it returns.
+      setPushNudgeSnoozed(!!ts && Date.now() - Number(ts) < 14 * 24 * 60 * 60 * 1000)
+    } catch { setPushNudgeSnoozed(false) }
+  }, [])
   const [clientRecord, setClientRecord] = useState<DashboardClientRecord | null>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])
@@ -1248,6 +1258,26 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:6 }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
             <div style={{ fontSize:12, color:t.textDim, fontStyle:'italic' }}>{getDailyPhrase()}</div>
           </div>
+
+          {/* ── PUSH ENABLE NUDGE ── */}
+          {pushNeedsPrompt && !pushNudgeSnoozed && (
+            <div className="fade" style={{ marginBottom:14, background:t.surfaceUp, border:'1px solid '+alpha(t.teal, 25), borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:20 }}>🔔</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:800 }}>Turn on notifications</div>
+                <div style={{ fontSize:11, color:t.textMuted }}>Get coach replies and workout reviews the moment they land</div>
+              </div>
+              <button onClick={async()=>{ const ok = await enablePush(); if (ok) toastSuccess('Notifications on 🔔'); else toastError('Notifications were not enabled') }}
+                style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 40), borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:800, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                Enable
+              </button>
+              <button onClick={()=>{ try { window.localStorage.setItem('push-nudge-snooze', String(Date.now())) } catch { /* private mode */ } setPushNudgeSnoozed(true) }}
+                aria-label="Dismiss notifications prompt"
+                style={{ background:'none', border:'none', color:t.textMuted, fontSize:14, cursor:'pointer', padding:4, flexShrink:0 }}>
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* ── STREAK ── */}
           {workoutStreak > 0 && (

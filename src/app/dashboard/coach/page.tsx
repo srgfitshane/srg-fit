@@ -116,7 +116,7 @@ const queueTypeColor = (type: QueueItem['type']) => {
 
 export default function CoachDashboard() {
   const [profile,  setProfile]  = useState<CoachProfile | null>(null)
-  usePushNotifications(profile?.id ?? null)
+  const { needsPrompt: pushNeedsPrompt, enable: enablePush } = usePushNotifications(profile?.id ?? null)
   const [clients,  setClients]  = useState<CoachClient[]>([])
   const [loading,  setLoading]  = useState(true)
   const [aiInsights, setAiInsights] = useState<DashboardInsight[]>([])
@@ -528,6 +528,20 @@ export default function CoachDashboard() {
             <div style={{ fontSize:26, fontWeight:900, marginBottom:4 }}>{getGreeting()}, {profile?.full_name?.split(' ')[0]} 👋</div>
             <div style={{ fontSize:13, color:t.textMuted }}>{new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' })}</div>
           </div>
+
+          {/* Push enable nudge — permission not yet granted on this device.
+              requestPermission must come from a tap (iOS rule; the hook no
+              longer auto-prompts anywhere). Disappears once enabled. */}
+          {pushNeedsPrompt && (
+            <div style={{ marginBottom:16, background:t.surface, border:'1px solid '+t.teal+'40', borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:18 }}>🔔</span>
+              <div style={{ flex:1, fontSize:13, color:t.textDim }}>Push notifications are off on this device — you&apos;ll miss review and message alerts.</div>
+              <button onClick={()=>{ void enablePush() }}
+                style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:800, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                Enable
+              </button>
+            </div>
+          )}
 
           {/* Desktop quick nav — full-width icon strip under greeting, hidden on mobile */}
           <div className="coach-quicknav">
