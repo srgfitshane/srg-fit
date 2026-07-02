@@ -149,6 +149,10 @@ type SessionPR = {
   pr_type: 'weight' | 'rep'
   weight: number
   reps: number
+  // Needed to flag the personal_records row as shared (unique on
+  // client_id + exercise_id) when the client posts it from the
+  // finish screen.
+  exercise_id: string | null
 }
 
 type SessionSummary = {
@@ -1483,7 +1487,7 @@ ${candidateList}`
             logged_date: today,
           }, { onConflict: 'client_id,exercise_id' })
 
-          sessionPRs.push({ exercise_name: exerciseName, pr_type: 'weight', weight: bestWeight, reps: bestReps })
+          sessionPRs.push({ exercise_name: exerciseName, pr_type: 'weight', weight: bestWeight, reps: bestReps, exercise_id: se.exercise_id ?? null })
           newMilestones.push(`🏆 New PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
 
           // Sync any weight_lifted goals tied to THIS exercise. Bumps
@@ -1527,7 +1531,7 @@ ${candidateList}`
             logged_date: today,
           }, { onConflict: 'client_id,exercise_id' })
 
-          sessionPRs.push({ exercise_name: exerciseName, pr_type: 'rep', weight: bestWeight, reps: bestReps })
+          sessionPRs.push({ exercise_name: exerciseName, pr_type: 'rep', weight: bestWeight, reps: bestReps, exercise_id: se.exercise_id ?? null })
           newMilestones.push(`💪 Rep PR — ${exerciseName}: ${bestWeight} lbs x ${bestReps}!`)
         }
       }
@@ -2666,6 +2670,54 @@ ${candidateList}`
 }
 
 function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, returnUrl, summary }: WorkoutCompleteProps) {
+  // Share-a-PR straight from the finish screen — the emotional peak.
+  // Mirrors the dashboard flow: explicit confirm with editable text so a
+  // stray tap never fires a surprise community post.
+  const [sharePrIdx,  setSharePrIdx]  = useState<number | null>(null)
+  const [shareText,   setShareText]   = useState('')
+  const [shareSaving, setShareSaving] = useState(false)
+  const [sharedIdxs,  setSharedIdxs]  = useState<Record<number, boolean>>({})
+
+  const openShare = (idx: number, pr: SessionPR) => {
+    setSharePrIdx(idx)
+    setShareText(pr.pr_type === 'rep'
+      ? `💪 Rep PR! Hit ${pr.weight} lbs x ${pr.reps} reps on ${pr.exercise_name}!`
+      : `🏆 New PR! Just lifted ${pr.weight} lbs x ${pr.reps} reps on ${pr.exercise_name}!`)
+  }
+
+  const confirmShare = async (pr: SessionPR, idx: number) => {
+    const trimmed = shareText.trim()
+    if (!trimmed || !session) return
+    setShareSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setShareSaving(false); alert('Session expired — please refresh and share from your dashboard.'); return }
+    const { data: clientRow } = await supabase.from('clients').select('coach_id').eq('id', session.client_id).single()
+    if (!clientRow?.coach_id) { setShareSaving(false); alert('Could not share: coach not found'); return }
+    const { data: post, error: postErr } = await supabase.from('community_posts').insert({
+      author_id: user.id,
+      author_role: 'client',
+      coach_id: clientRow.coach_id,
+      body: trimmed,
+    }).select('id').single()
+    if (postErr || !post?.id) {
+      setShareSaving(false)
+      alert('Could not share PR: ' + (postErr?.message || 'unknown error'))
+      return
+    }
+    // Flag the PR row so the dashboard's Share pill doesn't offer a
+    // second post for the same record. Cosmetic — no bail on error.
+    if (pr.exercise_id) {
+      await supabase.from('personal_records').update({
+        shared_to_community: true,
+        community_post_id: post.id,
+      }).eq('client_id', session.client_id).eq('exercise_id', pr.exercise_id)
+    }
+    setSharedIdxs(prev => ({ ...prev, [idx]: true }))
+    setShareSaving(false)
+    setSharePrIdx(null)
+    setShareText('')
+  }
+
   const fmtTime = (s: number) => {
     const m = Math.floor(s / 60)
     const sec = s % 60
@@ -2729,6 +2781,29 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, ret
                   </div>
                   <div style={{fontSize:14,fontWeight:700,color:t.text,marginBottom:2}}>{pr.exercise_name}</div>
                   <div style={{fontSize:12,color:t.textDim}}>{pr.weight} lbs x {pr.reps} reps</div>
+                  {sharedIdxs[idx] ? (
+                    <div style={{fontSize:11,fontWeight:700,color:t.teal,marginTop:8}}>Shared to community ✓</div>
+                  ) : sharePrIdx === idx ? (
+                    <div style={{marginTop:10}}>
+                      <textarea value={shareText} onChange={e=>setShareText(e.target.value)} rows={2}
+                        style={{width:'100%',background:t.surfaceHigh,border:'1px solid '+alpha(t.teal, 25),borderRadius:9,padding:'8px 10px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:'none',resize:'none' as const,boxSizing:'border-box' as const}}/>
+                      <div style={{display:'flex',gap:8,marginTop:8}}>
+                        <button onClick={()=>confirmShare(pr, idx)} disabled={shareSaving||!shareText.trim()}
+                          style={{flex:1,background:t.tealDim,border:'1px solid '+alpha(t.teal, 40),borderRadius:9,padding:'9px',fontSize:12,fontWeight:800,color:t.teal,cursor:shareSaving?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                          {shareSaving ? 'Posting...' : 'Post to community 🎉'}
+                        </button>
+                        <button onClick={()=>{setSharePrIdx(null);setShareText('')}}
+                          style={{background:'none',border:'1px solid '+t.border,borderRadius:9,padding:'9px 12px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={()=>openShare(idx, pr)}
+                      style={{marginTop:8,background:t.tealDim,border:'1px solid '+alpha(t.teal, 25),borderRadius:7,padding:'5px 12px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                      Share to community 🏆
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
