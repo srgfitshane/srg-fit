@@ -73,6 +73,14 @@ type PulseEntry = {
   mood_emoji?: string | null
 }
 
+type StrengthExercise = {
+  name: string
+  count: number
+  exerciseIds: string[]
+  dateByExerciseId: Record<string, string>
+}
+type StrengthSeries = { points: { date: string; weight: number }[]; unit: string }
+
 export default function ClientProgressPage() {
   const supabase = useMemo(() => createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -98,6 +106,10 @@ export default function ClientProgressPage() {
   const [journalEntries, setJournalEntries] = useState<{id:string,entry_date:string,content:string,is_private:boolean}[]>([])
   const [expandedEntry, setExpandedEntry] = useState<string|null>(null)
   const [activeGoals, setActiveGoals] = useState<{id:string,title:string,description:string|null,type:string,status:string,current_value:number|null,target_value:number|null,unit:string|null,deadline:string|null}[]>([])
+  const [strengthExercises, setStrengthExercises] = useState<StrengthExercise[]>([])
+  const [strengthSelected,  setStrengthSelected]  = useState('')
+  const [strengthData,      setStrengthData]      = useState<Record<string, StrengthSeries>>({})
+  const [strengthLoading,   setStrengthLoading]   = useState(false)
   const [suggestGoalOpen,   setSuggestGoalOpen]   = useState(false)
   const [suggestGoalText,   setSuggestGoalText]   = useState('')
   const [suggestGoalSaving, setSuggestGoalSaving] = useState(false)
@@ -182,6 +194,74 @@ export default function ClientProgressPage() {
     const timeoutId = setTimeout(() => { void loadData() }, 0)
     return () => clearTimeout(timeoutId)
   }, [loadData])
+
+  // Strength section: build the exercise pill list from the last 60
+  // completed sessions (2 queries). Set data is fetched lazily per
+  // selected exercise so the page never pulls thousands of set rows.
+  useEffect(() => {
+    if (!clientRecord) return
+    void (async () => {
+      const { data: sessions } = await supabase
+        .from('workout_sessions')
+        .select('id, completed_at')
+        .eq('client_id', clientRecord.id)
+        .eq('status', 'completed')
+        .not('program_id', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(60)
+      const sessionRows = (sessions || []) as { id: string; completed_at: string }[]
+      if (sessionRows.length === 0) return
+      const dateBySession: Record<string, string> = {}
+      for (const s of sessionRows) dateBySession[s.id] = s.completed_at
+      const { data: exs } = await supabase
+        .from('session_exercises')
+        .select('id, session_id, exercise_name, skipped')
+        .in('session_id', sessionRows.map(s => s.id))
+      const byName = new Map<string, StrengthExercise>()
+      for (const ex of (exs || []) as { id: string; session_id: string; exercise_name: string | null; skipped: boolean | null }[]) {
+        if (!ex.exercise_name || ex.skipped) continue
+        const entry = byName.get(ex.exercise_name) || { name: ex.exercise_name, count: 0, exerciseIds: [], dateByExerciseId: {} }
+        entry.count += 1
+        entry.exerciseIds.push(ex.id)
+        entry.dateByExerciseId[ex.id] = dateBySession[ex.session_id]
+        byName.set(ex.exercise_name, entry)
+      }
+      // Only exercises logged in 2+ sessions chart a meaningful trend.
+      const list = [...byName.values()].filter(e => e.count >= 2).sort((a, b) => b.count - a.count).slice(0, 12)
+      setStrengthExercises(list)
+      if (list.length > 0) setStrengthSelected(list[0].name)
+    })()
+  }, [clientRecord, supabase])
+
+  useEffect(() => {
+    if (!strengthSelected || strengthData[strengthSelected]) return
+    const entry = strengthExercises.find(e => e.name === strengthSelected)
+    if (!entry) return
+    setStrengthLoading(true)
+    void (async () => {
+      const { data: sets } = await supabase
+        .from('exercise_sets')
+        .select('session_exercise_id, weight_value, weight_unit')
+        .in('session_exercise_id', entry.exerciseIds)
+      // Top weighted set per session day (local date — rule 7).
+      const topByDay = new Map<string, number>()
+      let unit = 'lbs'
+      for (const s of (sets || []) as { session_exercise_id: string; weight_value: number | null; weight_unit: string | null }[]) {
+        if (s.weight_value == null || Number(s.weight_value) <= 0 || s.weight_unit === 'bw') continue
+        const iso = entry.dateByExerciseId[s.session_exercise_id]
+        if (!iso) continue
+        const day = localDateStr(new Date(iso))
+        const w = Number(s.weight_value)
+        if (w > (topByDay.get(day) ?? 0)) topByDay.set(day, w)
+        if (s.weight_unit) unit = s.weight_unit
+      }
+      const points = [...topByDay.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([day, weight]) => ({ date: fmt(day), weight }))
+      setStrengthData(prev => ({ ...prev, [strengthSelected]: { points, unit } }))
+      setStrengthLoading(false)
+    })()
+  }, [strengthSelected, strengthExercises, strengthData, supabase])
 
   const first = metrics[0], last = metrics[metrics.length-1]
   // Current Weight + Change need the most-recent / oldest entries that
@@ -488,6 +568,73 @@ export default function ClientProgressPage() {
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* ── STRENGTH PROGRESS — top working set per session, per exercise ── */}
+      {strengthExercises.length > 0 && (
+        <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:20, marginBottom:20 }}>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:16, fontWeight:800 }}>🏋️ Strength</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginTop:2 }}>Top working set per session</div>
+          </div>
+          <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', marginBottom:14, marginLeft:-20, marginRight:-20, paddingLeft:20, paddingRight:20 }}>
+            <div style={{ display:'flex', gap:6, width:'max-content' }}>
+              {strengthExercises.map(exercise => (
+                <button key={exercise.name} onClick={()=>setStrengthSelected(exercise.name)}
+                  style={{ padding:'6px 12px', borderRadius:20, border:'1px solid', whiteSpace:'nowrap',
+                    borderColor: strengthSelected===exercise.name?t.orange:t.border,
+                    background: strengthSelected===exercise.name?alpha(t.orange, 13):'transparent',
+                    color: strengthSelected===exercise.name?t.orange:t.textMuted,
+                    cursor:'pointer', fontSize:12, fontWeight:600, flexShrink:0 }}>
+                  {exercise.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(() => {
+            const series = strengthData[strengthSelected]
+            if (!series) return (
+              <div style={{ textAlign:'center', color:t.textMuted, padding:40, fontSize:13 }}>
+                {strengthLoading ? 'Loading...' : ''}
+              </div>
+            )
+            if (series.points.length === 0) return (
+              <div style={{ textAlign:'center', color:t.textMuted, padding:40, fontSize:13 }}>
+                No weighted sets logged for this exercise yet.
+              </div>
+            )
+            const points = series.points
+            const delta = points.length >= 2
+              ? Math.round((points[points.length-1].weight - points[0].weight) * 10) / 10
+              : null
+            return (
+              <>
+                {delta !== null && delta !== 0 && (
+                  <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:14, padding:'10px 14px', background:alpha(t.orange, 7), border:`1px solid ${alpha(t.orange, 19)}`, borderRadius:12 }}>
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.07em' }}>Since {points[0].date}</div>
+                      <div style={{ fontSize:22, fontWeight:900, color: delta > 0 ? t.green : t.orange }}>
+                        {delta > 0 ? '+' : ''}{delta} <span style={{ fontSize:13, fontWeight:600 }}>{series.unit}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:12, color:t.textMuted }}>{points.length} sessions</div>
+                  </div>
+                )}
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={points} margin={{ top:5, right:20, left:0, bottom:5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
+                    <XAxis dataKey="date" tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill:t.textMuted, fontSize:11 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
+                    <Tooltip contentStyle={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, color:t.text }}
+                      formatter={(value)=>[`${value} ${series.unit}`, 'Top set']} />
+                    <Line type="monotone" dataKey="weight" stroke={t.orange} strokeWidth={2.5} dot={{ r:4 }} activeDot={{ r:6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </>
+            )
+          })()}
+        </div>
+      )}
+
       {pulseHistory.length > 0 && (
         <div style={{ marginBottom:28 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
