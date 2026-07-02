@@ -1,9 +1,14 @@
 'use client'
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase-browser'
 
+// Theme vars, not hex: this nav renders on every client sub-page, which
+// can be in light mode. It was the last piece of client chrome still
+// hardcoded dark.
 const t = {
-  surface: '#0f0f1a', border: '#252538',
-  teal: '#00c9b1', textMuted: '#5a5a78',
+  surface: 'var(--surface)', border: 'var(--border)',
+  teal: 'var(--teal)', textMuted: 'var(--text-muted)',
 }
 
 const NAV = [
@@ -62,6 +67,31 @@ export default function ClientBottomNav() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const active   = getActive(pathname, searchParams.get('tab'))
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Unread badge on Messages, mirroring the dashboard's inline nav. Without
+  // this, a client parked on Progress/Resources/Calendar never sees that the
+  // coach messaged them. Realtime INSERT keeps it live while they browse.
+  useEffect(() => {
+    const supabase = createClient()
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user || cancelled) return
+      supabase.from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('read', false)
+        .then(({ count }) => { if (!cancelled) setUnreadCount(count || 0) })
+      channel = supabase.channel(`nav-msg-badge-${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `recipient_id=eq.${user.id}`,
+        }, () => setUnreadCount(c => c + 1))
+        .subscribe()
+    })
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel) }
+  }, [])
 
   const handleClick = (n: typeof NAV[0]) => {
     if (n.tab) {
@@ -105,6 +135,11 @@ export default function ClientBottomNav() {
               }} />
             )}
             <NavIcon id={n.id} active={active === n.id} />
+            {n.id === 'messages' && unreadCount > 0 && (
+              <div style={{ position: 'absolute', top: 4, left: '50%', marginLeft: 4, width: 16, height: 16, borderRadius: 8, background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 9, fontWeight: 900, color: '#fff', lineHeight: 1 }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+              </div>
+            )}
             <span style={{
               fontSize: 10, fontWeight: active === n.id ? 700 : 500,
               color: active === n.id ? t.teal : t.textMuted,
