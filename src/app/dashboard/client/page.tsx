@@ -807,23 +807,31 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           setUnreadMsgCount(count || 0)
         }
 
-        await loadClientData(clientData as DashboardClientRecord, today, user.id)
+        // Community new posts — compare against last visit stored in
+        // localStorage. No ordering constraint (unlike the unread count
+        // above), so it runs alongside loadClientData instead of after it —
+        // one less sequential round trip on every app open.
+        const communityCountPromise = (async () => {
+          try {
+            const lastVisit = localStorage.getItem('srg_community_last_visit')
+            // If no lastVisit, use 48hrs ago as baseline and stamp now so future visits work
+            const since = lastVisit || (() => {
+              const d = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+              localStorage.setItem('srg_community_last_visit', new Date().toISOString())
+              return d
+            })()
+            const { count: newPosts } = await supabase
+              .from('community_posts')
+              .select('id', { count: 'exact', head: true })
+              .gt('created_at', since)
+            setUnreadCommunityCount(newPosts || 0)
+          } catch { /* localStorage unavailable */ }
+        })()
 
-        // Community new posts — compare against last visit stored in localStorage
-        try {
-          const lastVisit = localStorage.getItem('srg_community_last_visit')
-          // If no lastVisit, use 48hrs ago as baseline and stamp now so future visits work
-          const since = lastVisit || (() => {
-            const d = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-            localStorage.setItem('srg_community_last_visit', new Date().toISOString())
-            return d
-          })()
-          const { count: newPosts } = await supabase
-            .from('community_posts')
-            .select('id', { count: 'exact', head: true })
-            .gt('created_at', since)
-          setUnreadCommunityCount(newPosts || 0)
-        } catch { /* localStorage unavailable */ }
+        await Promise.all([
+          loadClientData(clientData as DashboardClientRecord, today, user.id),
+          communityCountPromise,
+        ])
       }
 
       setLoading(false)
