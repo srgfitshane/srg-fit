@@ -318,48 +318,79 @@ export default function ReviewsPage() {
       .order('review_due_at', { ascending: true })
     if (!sessions) { setLoading(false); return }
     const sessionRows = (sessions || []) as WorkoutSessionRow[]
-    const enriched: Review[] = await Promise.all(sessionRows.map(async (s) => {
-      const { data: exs } = await supabase
-        .from('session_exercises')
-        .select('id, exercise_name, sets_completed, sets_prescribed, reps_prescribed, notes_client, notes_coach, client_video_url, original_exercise_name, swap_reason, swap_note, skipped, skip_reason, skip_note, exercise:exercises!session_exercises_exercise_id_fkey(name)')
-        .eq('session_id', s.id).order('order_index')
-      const exerciseRows = (exs || []) as SessionExerciseRow[]
-      const exercises: Exercise[] = await Promise.all(exerciseRows.map(async (ex) => {
-        const { data: sets } = await supabase
+    if (sessionRows.length === 0) { setReviews([]); setLoading(false); return }
+
+    // Batched enrichment: one .in() query for all exercises, one for all
+    // sets, one signed-URL batch for form-check videos. The previous
+    // per-session + per-exercise fan-out fired ~70 requests to open a
+    // full queue (10 sessions x 6 exercises); this is 3.
+    const sessionIds = sessionRows.map(s => s.id)
+    const { data: exs } = await supabase
+      .from('session_exercises')
+      .select('id, session_id, exercise_name, sets_completed, sets_prescribed, reps_prescribed, notes_client, notes_coach, client_video_url, original_exercise_name, swap_reason, swap_note, skipped, skip_reason, skip_note, exercise:exercises!session_exercises_exercise_id_fkey(name)')
+      .in('session_id', sessionIds).order('order_index')
+    const exerciseRows = (exs || []) as (SessionExerciseRow & { session_id: string })[]
+
+    const exerciseIds = exerciseRows.map(ex => ex.id)
+    const { data: allSets } = exerciseIds.length === 0
+      ? { data: [] }
+      : await supabase
           .from('exercise_sets')
-          .select('set_number, reps_completed, weight_value, weight_unit, rpe, notes')
-          .eq('session_exercise_id', ex.id).order('set_number')
-        // Derive sets_completed from the actual exercise_sets rows rather
-        // than trusting session_exercises.sets_completed — that field is
-        // updated fire-and-forget from the logger and drifts after re-opens,
-        // edit-then-relog, and offline-queue replays. Showed up as "0/3 sets"
-        // on reviews where all 3 sets were clearly logged. A set counts as
-        // completed if it has reps or weight or a duration — anything that
-        // proves the client actually performed it. RPE is optional and
-        // doesn't gate completion.
-        const setsList = sets || []
-        const actualCompleted = setsList.filter((s: any) =>
-          (s.reps_completed != null && s.reps_completed > 0)
-          || (s.weight_value != null && s.weight_value > 0)
-          || (s.weight_unit === 'bw' && s.reps_completed != null)
-        ).length
-        return {
-          ...ex,
-          sets_completed: actualCompleted,
-          exercise_name: ex.exercise_name || (ex as any).exercise?.name || '',
-          client_video_url: ex.client_video_url
-            ? (await supabase.storage.from('form-checks').createSignedUrl(ex.client_video_url, 60 * 60)).data?.signedUrl || null
-            : null,
-          sets: setsList,
-        }
-      }))
-      return {
-        ...s,
-        coach_review_video_url: await resolveSignedMediaUrl(supabase, 'workout-reviews', s.coach_review_video_url),
-        client: s.client ? { id:s.client.id, full_name:s.client.profile?.full_name??null, profile_id:s.client.profile?.id??null } : null,
-        exercises,
+          .select('session_exercise_id, set_number, reps_completed, weight_value, weight_unit, rpe, notes')
+          .in('session_exercise_id', exerciseIds).order('set_number')
+
+    const videoPaths = exerciseRows
+      .map(ex => ex.client_video_url)
+      .filter((p): p is string => !!p)
+    const signedByPath = new Map<string, string>()
+    if (videoPaths.length > 0) {
+      const { data: signed } = await supabase.storage.from('form-checks').createSignedUrls(videoPaths, 60 * 60)
+      for (const item of signed || []) {
+        if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl)
       }
-    }))
+    }
+
+    const setsByExercise = new Map<string, (ExSet & { session_exercise_id: string })[]>()
+    for (const row of (allSets || []) as (ExSet & { session_exercise_id: string })[]) {
+      const list = setsByExercise.get(row.session_exercise_id) || []
+      list.push(row)
+      setsByExercise.set(row.session_exercise_id, list)
+    }
+
+    const exercisesBySession = new Map<string, Exercise[]>()
+    for (const ex of exerciseRows) {
+      // Derive sets_completed from the actual exercise_sets rows rather
+      // than trusting session_exercises.sets_completed — that field is
+      // updated fire-and-forget from the logger and drifts after re-opens,
+      // edit-then-relog, and offline-queue replays. Showed up as "0/3 sets"
+      // on reviews where all 3 sets were clearly logged. A set counts as
+      // completed if it has reps or weight or a duration — anything that
+      // proves the client actually performed it. RPE is optional and
+      // doesn't gate completion.
+      const setsList = setsByExercise.get(ex.id) || []
+      const actualCompleted = setsList.filter((s: any) =>
+        (s.reps_completed != null && s.reps_completed > 0)
+        || (s.weight_value != null && s.weight_value > 0)
+        || (s.weight_unit === 'bw' && s.reps_completed != null)
+      ).length
+      const built: Exercise = {
+        ...ex,
+        sets_completed: actualCompleted,
+        exercise_name: ex.exercise_name || (ex as any).exercise?.name || '',
+        client_video_url: ex.client_video_url ? (signedByPath.get(ex.client_video_url) || null) : null,
+        sets: setsList,
+      }
+      const list = exercisesBySession.get(ex.session_id) || []
+      list.push(built)
+      exercisesBySession.set(ex.session_id, list)
+    }
+
+    const enriched: Review[] = await Promise.all(sessionRows.map(async (s) => ({
+      ...s,
+      coach_review_video_url: await resolveSignedMediaUrl(supabase, 'workout-reviews', s.coach_review_video_url),
+      client: s.client ? { id:s.client.id, full_name:s.client.profile?.full_name??null, profile_id:s.client.profile?.id??null } : null,
+      exercises: exercisesBySession.get(s.id) || [],
+    })))
     setReviews(enriched)
     setLoading(false)
   }, [supabase])
