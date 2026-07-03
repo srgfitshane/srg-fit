@@ -661,6 +661,13 @@ finished — common because nothing auto-flips status to 'completed').
   pg_cron daily 12 UTC (job runs every day; advance logic inside the function)
 - `check-program-endings` (v3) — coach "program winding down" notifications,
   pg_cron daily 12:05 UTC. Reads `get_all_ending_programs_for_cron` RPC.
+- `send-workout-reminders` (v1) — client "workout day" push, pg_cron daily
+  12:15 UTC (~8:15am ET, jobname `send-workout-reminders`). Today-in-ET +
+  `status='assigned'` + `program_id` non-null; skips paused / archived /
+  inactive / in_person clients. One push per client, type `workout_due`
+  (already in the notifications check constraint). Dedupes against
+  same-day `workout_due` bell rows so re-runs can't double-push. Source:
+  `supabase/functions/send-workout-reminders/index.ts`.
 - `stripe-checkout` (v2), `stripe-webhook` (v3), `stripe-portal` (v2)
 
 ## Questions to ask when stuck
