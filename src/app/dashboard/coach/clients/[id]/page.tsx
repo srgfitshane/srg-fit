@@ -30,18 +30,23 @@ const t = {
   text:"#eeeef8", textMuted:"#5a5a78", textDim:"#8888a8",
 }
 
+// 7 tabs, down from 10: Goals + Metrics + Pulse & Journal merged into
+// Progress (they're all "how is this client trending" views); Intake
+// folded into Overview behind a disclosure (one-time reference).
 const TABS = [
   { id:'overview',  label:'Overview',  icon:'👤', inPersonOnly: false },
   { id:'program',   label:'Program',   icon:'📋', inPersonOnly: false },
   { id:'calendar',  label:'Calendar',  icon:'📅', inPersonOnly: false },
   { id:'nutrition', label:'Nutrition', icon:'🥦', inPersonOnly: false },
   { id:'checkins',  label:'Check-ins', icon:'✓',  inPersonOnly: true  },
-  { id:'goals',     label:'Goals',     icon:'🎯', inPersonOnly: false },
-  { id:'metrics',   label:'Metrics',   icon:'📈', inPersonOnly: false },
-  { id:'pulse',     label:'Pulse & Journal', icon:'❤', inPersonOnly: true },
+  { id:'progress',  label:'Progress',  icon:'📈', inPersonOnly: false },
   { id:'messages',  label:'Messages',  icon:'💬', inPersonOnly: true  },
-  { id:'intake',    label:'Intake',    icon:'📊', inPersonOnly: true  },
 ]
+
+// Old deep links / bookmarks used the pre-merge tab ids.
+const LEGACY_TAB_MAP: Record<string, string> = {
+  goals: 'progress', metrics: 'progress', pulse: 'progress', intake: 'overview',
+}
 
 
 export default function ClientDetail() {
@@ -133,6 +138,8 @@ export default function ClientDetail() {
   const [exerciseResults, setExerciseResults] = useState<{id:string,name:string}[]>([])
   const [exerciseSearching, setExerciseSearching] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+  // Intake profile disclosure on Overview (was its own tab).
+  const [intakeOpen, setIntakeOpen] = useState(false)
   const [flagNote, setFlagNote] = useState('')
   const [showFlag, setShowFlag] = useState(false)
   const [coachNotes, setCoachNotes] = useState('')
@@ -162,7 +169,8 @@ export default function ClientDetail() {
   // and shareable URLs all land on the right tab. Skips hydration concerns
   // by syncing in an effect rather than initializing state from window.
   useEffect(() => {
-    const queryTab = searchParams?.get('tab')
+    const raw = searchParams?.get('tab')
+    const queryTab = raw ? (LEGACY_TAB_MAP[raw] || raw) : null
     if (queryTab && TABS.some(tt => tt.id === queryTab) && queryTab !== activeTab) {
       setActiveTab(queryTab)
     }
@@ -1513,8 +1521,8 @@ export default function ClientDetail() {
             </div>
           )}
 
-          {/* METRICS TAB */}
-          {activeTab === 'metrics' && (
+          {/* PROGRESS TAB — section 1: body metrics (was the Metrics tab) */}
+          {activeTab === 'progress' && (
             <CoachMetricsTab
               metrics={metrics}
               t={t}
@@ -2598,15 +2606,26 @@ export default function ClientDetail() {
 
 
 
-          {/* INTAKE TAB */}
-          {activeTab === 'intake' && (
-            <div style={{ paddingBottom:32 }}>
-              <div style={{ fontSize:20, fontWeight:900, marginBottom:4 }}>Intake Profile</div>
-              <div style={{ fontSize:13, color:'#5a5a78', marginBottom:24 }}>
-                {intake?.intake_completed_at
-                  ? `Completed ${new Date(intake.intake_completed_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`
-                  : 'Not yet completed'}
-              </div>
+          {/* INTAKE — folded into Overview behind a disclosure (was its own
+              tab; it's one-time reference material, not a daily surface). */}
+          {activeTab === 'overview' && (
+            <div style={{ marginTop:20 }}>
+              <button onClick={()=>setIntakeOpen(o=>!o)} aria-expanded={intakeOpen}
+                style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'#161624', border:'1px solid #252538', borderRadius:12, padding:'12px 16px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <span style={{ fontSize:13, fontWeight:800, color:'#8888a8' }}>
+                  📊 Intake Profile
+                  <span style={{ fontWeight:600, color:'#5a5a78', marginLeft:8 }}>
+                    {intake?.intake_completed_at
+                      ? `Completed ${new Date(intake.intake_completed_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`
+                      : 'Not yet completed'}
+                  </span>
+                </span>
+                <span style={{ fontSize:12, color:'#5a5a78' }}>{intakeOpen ? '▲' : '▼'}</span>
+              </button>
+            </div>
+          )}
+          {activeTab === 'overview' && intakeOpen && (
+            <div style={{ paddingBottom:32, marginTop:16 }}>
 
               {!intake ? (
                 <div style={{ background:'#161624', border:'1px solid #252538', borderRadius:14, padding:32, textAlign:'center', color:'#5a5a78' }}>
@@ -2698,8 +2717,8 @@ export default function ClientDetail() {
         </div>
 
 
-          {/* GOALS TAB */}
-          {activeTab === 'goals' && (
+          {/* PROGRESS TAB — section 2: goals (was the Goals tab) */}
+          {activeTab === 'progress' && (
             <div className="tab-content">
               {/* Header */}
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, gap:8, flexWrap:'wrap' as const }}>
@@ -2933,8 +2952,10 @@ export default function ClientDetail() {
             </div>
           )}
 
-        {/* ── DAILY PULSE TAB ── */}
-        {activeTab === 'pulse' && (
+        {/* ── PROGRESS TAB — section 3: daily pulse (was Pulse & Journal).
+            Pulse/journal are remote-client surfaces; hidden for in-person,
+            matching the old tab's inPersonOnly flag. ── */}
+        {activeTab === 'progress' && client?.training_type !== 'in_person' && (
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Daily Morning Pulse</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Sleep quality, energy, mood and journal entries logged daily. Last 30 days.</div>
@@ -3041,8 +3062,8 @@ export default function ClientDetail() {
           </div>
         )}
 
-        {/* ── JOURNAL TAB ── */}
-        {activeTab === 'pulse' && (
+        {/* ── PROGRESS TAB — section 4: journal (was Pulse & Journal) ── */}
+        {activeTab === 'progress' && client?.training_type !== 'in_person' && (
           <div>
             <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>Client Journal</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Only entries the client marked "Visible to Coach" appear here. Private entries are never shown.</div>
