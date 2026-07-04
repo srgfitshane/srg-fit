@@ -7,7 +7,7 @@ import { getUnreadInsights } from '@/lib/ai-insights'
 import AiInsightsPanel from '@/components/AiInsightsPanel'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
-import { buildCoachInbox, getDaysSince, type QueueItem as InboxQueueItem, type SemanticColor } from '@/lib/coach-inbox'
+import { buildCoachInbox, getDaysSince, pickPraise, type QueueItem as InboxQueueItem, type SemanticColor } from '@/lib/coach-inbox'
 
 const t = {
   bg:"#080810", surface:"#0f0f1a", surfaceUp:"#161624", surfaceHigh:"#1d1d2e", border:"#252538",
@@ -99,6 +99,8 @@ const queueTypeLabel: Record<QueueItem['type'], string> = {
   silent_client: 'Quiet',
   issue_report: 'Issue',
   program_ending: 'Ending',
+  birthday: 'Birthday',
+  digest: 'Weekly',
 }
 
 const queueTypeColor = (type: QueueItem['type']) => {
@@ -111,6 +113,8 @@ const queueTypeColor = (type: QueueItem['type']) => {
     case 'silent_client': return { color: t.orange, bg: t.orangeDim }
     case 'issue_report': return { color: t.red, bg: t.redDim }
     case 'program_ending': return { color: t.orange, bg: t.orangeDim }
+    case 'birthday': return { color: t.pink, bg: `${t.pink}15` }
+    case 'digest': return { color: t.orange, bg: t.orangeDim }
   }
 }
 
@@ -135,6 +139,12 @@ export default function CoachDashboard() {
   const [unreadMsgs,     setUnreadMsgs]     = useState(0)
   const [actionQueue,    setActionQueue]    = useState<QueueItem[]>([])
   const [dismissedQueueIds, setDismissedQueueIds] = useState<Set<string>>(new Set())
+  // Act-in-place state for the inbox: which message item has its inline
+  // composer open, and which review item is mid-quick-praise.
+  const [replyingTo,   setReplyingTo]   = useState<string | null>(null)
+  const [replyText,    setReplyText]    = useState('')
+  const [replySending, setReplySending] = useState(false)
+  const [praisingId,   setPraisingId]   = useState<string | null>(null)
   // Silent / quiet clients are folded into the actionQueue (silent_client items),
   // so we no longer keep a separate state for them. attentionList stays as a
   // local in the load effect to seed those queue items.
@@ -217,16 +227,12 @@ export default function CoachDashboard() {
 
       const queueItems: QueueItem[] = inbox.queue
         .filter((item) => !dismissed.has(item.id))
-        .map((item) => ({
-          id: item.id,
-          type: item.type,
-          priority: item.priority,
-          title: item.title,
-          detail: item.detail,
-          action: item.action,
-          color: semanticColorHex[item.color],
-          onClick: () => router.push(item.href),
-        }))
+        .map((item) => {
+          // Pass act-in-place payloads (sessionId/clean/clientProfileId/...)
+          // straight through; only href/color get resolved to page-side forms.
+          const { href, color, ...rest } = item
+          return { ...rest, color: semanticColorHex[color], onClick: () => router.push(href) }
+        })
 
       setActionQueue(queueItems)
 
@@ -339,6 +345,99 @@ export default function CoachDashboard() {
     setDismissedQueueIds(allIds)
     persistDismissals(allIds)
     setActionQueue([])
+  }
+
+  // One-tap quick praise on a clean review, straight from the queue row.
+  // Same write + notify path as the reviews page — no page hop.
+  const quickPraiseFromQueue = async (item: QueueItem) => {
+    if (!item.sessionId) return
+    setPraisingId(item.id)
+    const note = pickPraise()
+    const { error } = await supabase.from('workout_sessions').update({
+      coach_reviewed_at: new Date().toISOString(),
+      coach_review_notes: note,
+    }).eq('id', item.sessionId)
+    if (error) {
+      setPraisingId(null)
+      alert('Could not send quick review: ' + error.message)
+      return
+    }
+    if (item.clientProfileId) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        // send-notification inserts the bell row AND fires push — do NOT also
+        // insert into notifications here (double bell rows).
+        fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST', headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            user_id: item.clientProfileId,
+            notification_type: 'review_ready',
+            title: '💬 Coach reviewed your workout',
+            body: note,
+            link_url: `/dashboard/client/workout/${item.sessionId}`,
+          })
+        }).catch(err => console.warn('[notify:queue-praise]', err))
+      }
+    }
+    setActionQueue(prev => prev.filter(q => q.id !== item.id))
+    setPendingReviews(prev => Math.max(0, prev - 1))
+    setPraisingId(null)
+  }
+
+  // Inline reply to an unread client message from the queue row. Mirrors
+  // RichMessageThread's text send + notify, then marks that client's unread
+  // messages read so the item doesn't resurface on the next load.
+  const sendQueueReply = async (item: QueueItem) => {
+    const body = replyText.trim()
+    if (!body || !item.clientProfileId || !profile?.id) return
+    setReplySending(true)
+    const { error } = await supabase.from('messages').insert({
+      sender_id: profile.id, recipient_id: item.clientProfileId,
+      body, message_type: 'text', read: false,
+    })
+    if (error) {
+      setReplySending(false)
+      alert('Could not send: ' + error.message)
+      return
+    }
+    const { error: readErr } = await supabase.from('messages')
+      .update({ read: true })
+      .eq('sender_id', item.clientProfileId)
+      .eq('recipient_id', profile.id)
+      .eq('read', false)
+    if (readErr) console.warn('[queue-reply] mark-read failed:', readErr.message)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+        method: 'POST', headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        },
+        body: JSON.stringify({
+          user_id: item.clientProfileId,
+          notification_type: 'new_message',
+          title: `New message from ${profile.full_name || 'your coach'}`,
+          body: body.slice(0, 100),
+          link_url: '/dashboard/client?tab=messages&view=coach',
+        })
+      }).catch(err => console.warn('[notify:queue-reply]', err))
+    }
+    // Clear every message item from this sender (they're all read now) and
+    // refresh the unread chip from the DB rather than guessing the delta.
+    setActionQueue(prev => prev.filter(q => !(q.type === 'message' && q.clientProfileId === item.clientProfileId)))
+    const { count } = await supabase.from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', profile.id)
+      .eq('read', false)
+    setUnreadMsgs(count || 0)
+    setReplyingTo(null)
+    setReplyText('')
+    setReplySending(false)
   }
 
   const confirmLifecycle = async () => {
@@ -608,23 +707,53 @@ export default function CoachDashboard() {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {actionQueue.map(item => (
-                  <div key={item.id} style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
-                    <div style={{ width:10, height:10, borderRadius:'50%', background:item.color, flexShrink:0 }} />
-                    <button onClick={item.onClick}
-                      style={{ flex:1, minWidth:0, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", padding:0 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
-                        <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{item.title}</div>
-                        <span style={{ fontSize:10, fontWeight:800, color:queueTypeColor(item.type).color, background:queueTypeColor(item.type).bg, borderRadius:999, padding:'3px 7px' }}>
-                          {queueTypeLabel[item.type]}
-                        </span>
+                  <div key={item.id} style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:'12px 14px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                      <div style={{ width:10, height:10, borderRadius:'50%', background:item.color, flexShrink:0 }} />
+                      <button onClick={item.onClick}
+                        style={{ flex:1, minWidth:0, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:"'DM Sans',sans-serif", padding:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+                          <div style={{ fontSize:13, fontWeight:800, color:t.text }}>{item.title}</div>
+                          <span style={{ fontSize:10, fontWeight:800, color:queueTypeColor(item.type).color, background:queueTypeColor(item.type).bg, borderRadius:999, padding:'3px 7px' }}>
+                            {queueTypeLabel[item.type]}
+                          </span>
+                        </div>
+                        <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{item.detail}</div>
+                      </button>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                        {/* Act in place: clean reviews get one-tap praise, messages
+                            get an inline composer — no page hop for the two most
+                            frequent item types. */}
+                        {item.type === 'review' && item.clean && item.sessionId && (
+                          <button onClick={()=>{ void quickPraiseFromQueue(item) }} disabled={praisingId === item.id}
+                            title="Send a praise note and mark reviewed"
+                            style={{ background:t.greenDim, border:'1px solid '+t.green+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:800, color:t.green, cursor:praisingId === item.id?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                            {praisingId === item.id ? 'Sending...' : '⚡ Praise'}
+                          </button>
+                        )}
+                        {item.type === 'message' && item.clientProfileId && (
+                          <button onClick={()=>{ setReplyingTo(replyingTo === item.id ? null : item.id); setReplyText('') }}
+                            style={{ background:t.tealDim, border:'1px solid '+t.teal+'40', borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:800, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' as const }}>
+                            ↩ Reply
+                          </button>
+                        )}
+                        <div style={{ fontSize:11, fontWeight:800, color:item.color, cursor:'pointer', whiteSpace:'nowrap' as const }} onClick={item.onClick}>{item.action} →</div>
+                        <button onClick={()=>dismissQueueItem(item.id)}
+                          style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16, lineHeight:1, padding:'0 2px', fontFamily:"'DM Sans',sans-serif" }}>×</button>
                       </div>
-                      <div style={{ fontSize:12, color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{item.detail}</div>
-                    </button>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
-                      <div style={{ fontSize:11, fontWeight:800, color:item.color, cursor:'pointer', whiteSpace:'nowrap' as const }} onClick={item.onClick}>{item.action} →</div>
-                      <button onClick={()=>dismissQueueItem(item.id)}
-                        style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:16, lineHeight:1, padding:'0 2px', fontFamily:"'DM Sans',sans-serif" }}>×</button>
                     </div>
+                    {replyingTo === item.id && (
+                      <div style={{ display:'flex', gap:8, marginTop:10, marginLeft:22 }}>
+                        <input autoFocus value={replyText} onChange={e=>setReplyText(e.target.value)}
+                          onKeyDown={e=>{ if (e.key === 'Enter' && replyText.trim() && !replySending) void sendQueueReply(item) }}
+                          placeholder={`Reply to ${item.clientName?.split(' ')[0] || 'client'}...`}
+                          style={{ flex:1, minWidth:0, background:t.surfaceHigh, border:'1px solid '+t.teal+'40', borderRadius:9, padding:'8px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                        <button onClick={()=>{ void sendQueueReply(item) }} disabled={!replyText.trim() || replySending}
+                          style={{ background:replyText.trim()?t.tealDim:t.surfaceHigh, border:'1px solid '+(replyText.trim()?t.teal+'40':t.border), borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:800, color:replyText.trim()?t.teal:t.textMuted, cursor:(!replyText.trim()||replySending)?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                          {replySending ? 'Sending...' : 'Send'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

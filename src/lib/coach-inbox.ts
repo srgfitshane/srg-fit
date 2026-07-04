@@ -26,6 +26,10 @@ export type QueueItemType =
   | 'silent_client'
   | 'issue_report'
   | 'program_ending'
+  // Synthesized locally by the web dashboard (buildCoachInbox never emits
+  // them), so the desktop app is unaffected at runtime.
+  | 'birthday'
+  | 'digest'
 
 export type SemanticColor = 'red' | 'orange' | 'yellow' | 'green' | 'purple' | 'teal'
 
@@ -38,7 +42,32 @@ export type QueueItem = {
   action: string
   href: string
   color: SemanticColor
+  // Act-in-place payloads (optional). Set on review + message items so the
+  // dashboard can quick-praise / inline-reply without a page hop.
+  sessionId?: string        // review: workout_sessions id
+  clean?: boolean           // review: zero friction signals
+  clientProfileId?: string  // review + message: push / reply target
+  clientName?: string
 }
+
+// Rotating praise notes for one-tap quick reviews on clean sessions.
+// Written into coach_review_notes so the client sees a real coach reply
+// (same render path as a typed review). Rotated so repeat clients don't
+// get the identical canned line every week. Shared by the reviews page
+// and the dashboard inbox.
+export const PRAISE_VARIATIONS = [
+  'Keep up the good work 💪',
+  'Solid session — every rep counted. Keep it rolling!',
+  'Textbook work. Keep stacking weeks like this 🔥',
+  'Clean session top to bottom. Love to see it!',
+  'Great execution today — nothing to fix, just keep showing up 💪',
+  'Strong work! Consistency like this is what gets results.',
+  'Nailed it. Same energy next session 👊',
+  'All boxes checked — this is how progress gets built.',
+  'Really solid effort across the board. Keep it up!',
+  'Another one in the books — great work today 💪',
+]
+export const pickPraise = () => PRAISE_VARIATIONS[Math.floor(Math.random() * PRAISE_VARIATIONS.length)]
 
 export type ReviewUrgencyBreakdown = { red: number; yellow: number; green: number }
 
@@ -107,7 +136,10 @@ type ReviewQueueSession = {
   title: string
   review_due_at: string
   completed_at: string
-  client?: { profile?: { full_name?: string | null } | null } | null
+  energy_level?: number | null
+  mood?: string | null
+  notes_client?: string | null
+  client?: { profile?: { id?: string | null; full_name?: string | null } | null } | null
 }
 
 type InsightQueueRow = {
@@ -225,7 +257,7 @@ export async function buildCoachInbox(
   const [reviewSessionsRes, unreadInsightsRes, unreadMessagesRes, recentSessionsRes, openIssueRes, endingProgramsRes] = await Promise.all([
     supabase
       .from('workout_sessions')
-      .select('id, title, review_due_at, completed_at, client:clients!workout_sessions_client_id_fkey(id, profile:profiles!clients_profile_id_fkey(full_name))')
+      .select('id, title, review_due_at, completed_at, energy_level, mood, notes_client, client:clients!workout_sessions_client_id_fkey(id, profile:profiles!clients_profile_id_fkey(id, full_name))')
       .eq('coach_id', coachUserId)
       .eq('status', 'completed')
       .is('coach_reviewed_at', null)
@@ -277,6 +309,63 @@ export async function buildCoachInbox(
       .filter((client) => client.profile_id)
       .map((client) => [client.profile_id as string, client.profile?.full_name || 'Client']),
   )
+
+  // Act-in-place enrichment for review queue items: compute a `clean` flag
+  // (zero friction signals) so the dashboard can offer one-tap quick praise
+  // without opening the reviews page. Mirrors getReviewIntelligence there —
+  // skips, swaps, form checks, high-RPE sets, completion drop, low recovery —
+  // plus client notes, which the dashboard can't see and therefore must not
+  // praise over.
+  const reviewQueueSessions = (reviewSessionsRes.data || []) as ReviewQueueSession[]
+  const cleanBySession = new Map<string, boolean>()
+  if (reviewQueueSessions.length > 0) {
+    const reviewIds = reviewQueueSessions.map((s) => s.id)
+    const { data: reviewExercises } = await supabase
+      .from('session_exercises')
+      .select('id, session_id, skipped, skip_reason, original_exercise_name, swap_reason, client_video_url, notes_client, sets_prescribed')
+      .in('session_id', reviewIds)
+    const exRows = (reviewExercises || []) as Array<{
+      id: string; session_id: string; skipped: boolean | null; skip_reason: string | null
+      original_exercise_name: string | null; swap_reason: string | null
+      client_video_url: string | null; notes_client: string | null; sets_prescribed: number | null
+    }>
+    const exIds = exRows.map((e) => e.id)
+    type SetRow = { session_exercise_id: string; rpe: number | null; reps_completed: number | null; weight_value: number | null; weight_unit: string | null }
+    const { data: reviewSets } = exIds.length === 0
+      ? { data: [] as SetRow[] }
+      : await supabase
+          .from('exercise_sets')
+          .select('session_exercise_id, rpe, reps_completed, weight_value, weight_unit')
+          .in('session_exercise_id', exIds)
+    const setsByEx = new Map<string, SetRow[]>()
+    for (const row of (reviewSets || []) as SetRow[]) {
+      const list = setsByEx.get(row.session_exercise_id) || []
+      list.push(row)
+      setsByEx.set(row.session_exercise_id, list)
+    }
+    for (const session of reviewQueueSessions) {
+      let dirty = false
+      // Same lowEnergy definition as the reviews page: unlogged energy
+      // (null -> 0) also counts as a signal — unknown recovery gets eyes.
+      if ((session.energy_level || 0) <= 2 || session.mood === 'tired' || session.mood === 'awful') dirty = true
+      if (session.notes_client) dirty = true
+      for (const ex of exRows.filter((e) => e.session_id === session.id)) {
+        if (dirty) break
+        if (ex.skipped || ex.skip_reason || ex.original_exercise_name || ex.swap_reason || ex.client_video_url || ex.notes_client) { dirty = true; break }
+        const sets = setsByEx.get(ex.id) || []
+        if (sets.some((s) => (s.rpe || 0) >= 9)) { dirty = true; break }
+        // Same derived completion count as the reviews page — the
+        // session_exercises.sets_completed column drifts.
+        const completed = sets.filter((s) =>
+          (s.reps_completed != null && s.reps_completed > 0)
+          || (s.weight_value != null && s.weight_value > 0)
+          || (s.weight_unit === 'bw' && s.reps_completed != null)
+        ).length
+        if (completed < (ex.sets_prescribed || 0)) { dirty = true; break }
+      }
+      cleanBySession.set(session.id, !dirty)
+    }
+  }
 
   // 7. Engagement signal aggregation across workout_sessions / daily_checkins
   // / client_form_assignments. Single threshold (7 days) across all signals.
@@ -405,7 +494,7 @@ export async function buildCoachInbox(
 
   // 9. Build the unified queue. Reviews + insights + messages + friction + silent clients.
   const queue: QueueItem[] = [
-    ...((reviewSessionsRes.data || []) as ReviewQueueSession[]).map((session): QueueItem => {
+    ...reviewQueueSessions.map((session): QueueItem => {
       const urgency = getReviewUrgency(session.review_due_at)
       const timeLeft = formatReviewTimeLeft(session.review_due_at)
       const urgencyIcon = urgency === 'red' ? '🔴' : urgency === 'yellow' ? '🟡' : '🟢'
@@ -418,6 +507,10 @@ export async function buildCoachInbox(
         action: 'Open review',
         color: urgency === 'red' ? 'red' : urgency === 'yellow' ? 'yellow' : 'green',
         href: '/dashboard/coach/reviews',
+        sessionId: session.id,
+        clean: cleanBySession.get(session.id) === true,
+        clientProfileId: session.client?.profile?.id || undefined,
+        clientName: session.client?.profile?.full_name || undefined,
       }
     }),
     // Issue reports always priority 96 (above yellow reviews / insights but
@@ -484,6 +577,8 @@ export async function buildCoachInbox(
       action: 'Open inbox',
       color: 'teal',
       href: '/dashboard/coach/messages',
+      clientProfileId: message.sender_id,
+      clientName: clientNameByProfileId.get(message.sender_id) || undefined,
     })),
     ...frictionQueueItems,
     ...attentionList.slice(0, 6).map((client): QueueItem => {

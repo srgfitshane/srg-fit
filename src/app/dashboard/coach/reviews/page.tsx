@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { resolveSignedMediaUrl } from '@/lib/media'
+import { pickPraise } from '@/lib/coach-inbox'
 import GifPicker from '@/components/coach/GifPicker'
 
 const t = {
@@ -109,24 +110,6 @@ function countdown(dueAt: string) {
 }
 const fmtDuration = (s:number|null) => s ? `${Math.floor(s/60)}m` : '—'
 const moodEmoji = (m:string|null) => (m ? MOOD_EMOJI[m] : undefined) || '—'
-
-// Rotating praise notes for one-tap quick reviews on clean sessions.
-// Written into coach_review_notes so the client sees a real coach reply
-// (same render path as a typed review). Rotated so repeat clients don't
-// get the identical canned line every week.
-const PRAISE_VARIATIONS = [
-  'Keep up the good work 💪',
-  'Solid session — every rep counted. Keep it rolling!',
-  'Textbook work. Keep stacking weeks like this 🔥',
-  'Clean session top to bottom. Love to see it!',
-  'Great execution today — nothing to fix, just keep showing up 💪',
-  'Strong work! Consistency like this is what gets results.',
-  'Nailed it. Same energy next session 👊',
-  'All boxes checked — this is how progress gets built.',
-  'Really solid effort across the board. Keep it up!',
-  'Another one in the books — great work today 💪',
-]
-const pickPraise = () => PRAISE_VARIATIONS[Math.floor(Math.random() * PRAISE_VARIATIONS.length)]
 
 function getReviewIntelligence(review: Review): ReviewIntelligence {
   const skippedCount = review.exercises.filter(ex => ex.skipped).length
