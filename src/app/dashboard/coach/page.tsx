@@ -26,11 +26,12 @@ const getGreeting = () => {
 
 const CLIENT_COLORS = [t.teal, t.orange, t.purple, t.pink, t.green, t.yellow]
 
-// Always-visible nav — things you touch every session
+// Always-visible nav — things you touch every session. Check-ins is a
+// daily surface (it was buried in expanded); Client Load is occasional.
 const NAV_ESSENTIALS = [
   { label:'Reviews',    icon:'⏰', path:'/dashboard/coach/reviews'  },
   { label:'Messages',   icon:'💬', path:'/dashboard/coach/messages'  },
-  { label:'Client Load',icon:'📊', path:'/dashboard/coach/load'      },
+  { label:'Check-ins',  icon:'✅', path:'/dashboard/coach/checkins'  },
   { label:'Community',  icon:'🏘️', path:'/dashboard/coach/community' },
   { label:'Programs',   icon:'📋', path:'/dashboard/coach/programs'  },
   { label:'Workouts',   icon:'💪', path:'/dashboard/coach/workouts'  },
@@ -38,10 +39,10 @@ const NAV_ESSENTIALS = [
 
 // Shown when expanded — tools you need occasionally
 const NAV_EXPANDED = [
+  { label:'Client Load', icon:'📊', path:'/dashboard/coach/load'      },
   { label:'Outreach',    icon:'📣', path:'/dashboard/coach/outreach'  },
   { label:'Calendar',    icon:'📅', path:'/dashboard/coach/calendar'   },
   { label:'Resources',   icon:'📚', path:'/dashboard/coach/resources'  },
-  { label:'Check-ins',   icon:'✅', path:'/dashboard/coach/checkins'   },
   { label:'AI Insights', icon:'🧠', path:'/dashboard/coach/insights'   },
   { label:'Exercises',   icon:'🏋️', path:'/dashboard/coach/exercises'  },
   { label:'Forms',       icon:'📝', path:'/dashboard/coach/onboarding' },
@@ -688,15 +689,22 @@ export default function CoachDashboard() {
             </div>
           )}
 
-          {/* Desktop quick nav — full-width icon strip under greeting, hidden on mobile */}
+          {/* Desktop quick nav — essentials only, with the occasional tools
+              behind More. The old strip rendered all 15 destinations in one
+              row of equal-weight buttons. */}
           <div className="coach-quicknav">
-            {[...NAV_ESSENTIALS, ...NAV_EXPANDED].map(item => (
+            {[...NAV_ESSENTIALS, ...(navExpanded ? NAV_EXPANDED : [])].map(item => (
               <button key={item.label} onClick={()=>router.push(item.path)} className="coach-quicknav-btn"
                 style={{ '--border':t.border, '--surfaceUp':t.surfaceUp } as React.CSSProperties}>
                 <span style={{ fontSize:16 }}>{item.icon}</span>
                 <span style={{ fontSize:12, fontWeight:700, color:t.textDim }}>{item.label}</span>
               </button>
             ))}
+            <button onClick={()=>setNavExpanded(v=>!v)} className="coach-quicknav-btn"
+              aria-expanded={navExpanded}
+              style={{ '--border':t.border, '--surfaceUp':t.surfaceUp } as React.CSSProperties}>
+              <span style={{ fontSize:12, fontWeight:700, color:t.textMuted }}>{navExpanded ? 'Less ▲' : 'More ▾'}</span>
+            </button>
           </div>
 
           {/* Mobile-only quick nav — hidden on desktop where sidebar handles this */}
