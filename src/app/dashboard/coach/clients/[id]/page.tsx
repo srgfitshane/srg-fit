@@ -18,6 +18,7 @@ import {
   ResponsiveContainer, Legend
 } from 'recharts'
 import { alpha } from '@/lib/theme'
+import { resolveSignedMediaUrl } from '@/lib/media'
 import { toastError } from '@/components/ui/Toast'
 import GifPicker from '@/components/coach/GifPicker'
 
@@ -60,6 +61,9 @@ export default function ClientDetail() {
   const [workoutDetails,     setWorkoutDetails]     = useState<Record<string,any>>({}) // sessionId → {exercises, sets}
   const [nutritionPlan, setNutritionPlan] = useState<any>(null)
   const [nutritionLogs28d, setNutritionLogs28d] = useState<Array<{ log_date: string; total_calories: number | null; total_protein: number | null }>>([])
+  // Last 7 days of actual food entries (names, macros, photo thumbnails) —
+  // the coach-side view of what the client really ate, not just totals.
+  const [recentMeals, setRecentMeals] = useState<any[]>([])
   const [nutritionEdit, setNutritionEdit] = useState(false)
   const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
   const [nutritionSaving, setNutritionSaving] = useState(false)
@@ -245,6 +249,7 @@ export default function ClientDetail() {
         { data: activityData },
         { data: macroData },
         { data: nutritionLogsData },
+        { data: recentMealData },
       ] = await Promise.all([
         supabase.from('onboarding_forms').select('id,title,form_type,is_default,is_checkin_type').eq('coach_id', user.id),
         supabase.from('client_form_assignments').select('id, completed_at, response, coach_response, coach_response_video_url, coach_response_gif_url').eq('client_id', clientId).not('checkin_schedule_id', 'is', null).eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
@@ -260,6 +265,7 @@ export default function ClientDetail() {
         supabase.from('client_activities').select('*').eq('client_id', clientId).order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(8),
         supabase.from('food_entries').select('logged_at,calories,protein_g,carbs_g,fat_g').eq('client_id', clientId).gte('logged_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).order('logged_at', { ascending: true }),
         supabase.from('nutrition_daily_logs').select('log_date, total_calories, total_protein').eq('client_id', clientId).gte('log_date', localDateStr(new Date(Date.now() - 28 * 24 * 60 * 60 * 1000))).order('log_date', { ascending: false }),
+        supabase.from('food_entries').select('id, meal_time, food_name, serving_size, calories, protein_g, fiber_g, photo_url, source, logged_at').eq('client_id', clientId).gte('logged_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('logged_at', { ascending: false }).limit(100),
       ])
 
       setForms(formData || [])
@@ -298,6 +304,16 @@ export default function ClientDetail() {
         byDay[date].fat      += Number(entry.fat_g || 0)
       }
       setMonthlyMacros(Object.values(byDay).sort((a,b) => a.date.localeCompare(b.date)))
+
+      // Recent meals: sign photo paths (private bucket) for thumbnails.
+      const signedMeals = await Promise.all(((recentMealData || []) as any[]).map(async (m) => {
+        if (m.source === 'photo' && m.photo_url) {
+          const signed = await resolveSignedMediaUrl(supabase, 'workout-reviews', m.photo_url)
+          return { ...m, photo_url: signed }
+        }
+        return m
+      }))
+      setRecentMeals(signedMeals)
       if (schedData) {
         setScheduleForm({
           send_day:  schedData.send_day  ?? 0,
@@ -1655,6 +1671,59 @@ export default function ClientDetail() {
           {/* NUTRITION TAB */}
           {activeTab === 'nutrition' && (
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+
+              {/* Recent meals — what the client actually logged, last 7 days.
+                  Names + macros + photo-log thumbnails (signed; private
+                  bucket). Before this the coach only ever saw aggregates,
+                  so meal photos went into a void. */}
+              {recentMeals.length > 0 && (
+                <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:14, padding:'14px 16px' }}>
+                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.07em', marginBottom:12 }}>
+                    🍽️ Recent Meals — last 7 days
+                  </div>
+                  {(() => {
+                    const byDay = new Map<string, any[]>()
+                    for (const m of recentMeals) {
+                      const day = new Date(m.logged_at).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })
+                      const list = byDay.get(day) || []
+                      list.push(m)
+                      byDay.set(day, list)
+                    }
+                    return [...byDay.entries()].map(([day, items]) => {
+                      const dayCals = items.reduce((a, m) => a + Number(m.calories || 0), 0)
+                      return (
+                        <div key={day} style={{ marginBottom:12 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                            <span style={{ fontSize:12, fontWeight:800, color:t.teal }}>{day}</span>
+                            {dayCals > 0 && <span style={{ fontSize:11, fontWeight:700, color:t.orange }}>{Math.round(dayCals)} kcal</span>}
+                          </div>
+                          <div style={{ display:'flex', flexDirection:'column' as const, gap:4 }}>
+                            {items.map((m: any) => (
+                              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:10, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'6px 10px' }}>
+                                {m.source === 'photo' && m.photo_url && (
+                                  <img src={m.photo_url} alt={m.food_name}
+                                    style={{ width:44, height:44, borderRadius:8, objectFit:'cover' as const, flexShrink:0 }} />
+                                )}
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:12, fontWeight:700, color:t.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
+                                    {m.source === 'photo' ? '📸 ' : ''}{m.food_name}
+                                  </div>
+                                  <div style={{ fontSize:10, color:t.textMuted }}>
+                                    {(m.meal_time || '').replace('_', ' ')}
+                                    {m.calories != null ? ` · ${Math.round(m.calories)} kcal` : ''}
+                                    {m.protein_g != null ? ` · ${m.protein_g}g P` : ''}
+                                    {m.fiber_g ? ` · ${m.fiber_g}g fiber` : ''}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+              )}
 
               {/* 28-day adherence heatmap. Each cell = one day. Empty = no log;
                   filled intensity scales with calories logged vs the active

@@ -71,11 +71,16 @@ export default function CoachNutritionPage() {
       supabase.from('nutrition_templates').select('*').eq('coach_id', user.id).order('created_at')
     ])
 
-    const clientsWithNames: Client[] = []
-    for (const c of cls || []) {
-      const { data: p } = await supabase.from('profiles').select('full_name').eq('id', c.profile_id).single()
-      clientsWithNames.push({ ...c, full_name: p?.full_name || 'Unknown' })
-    }
+    // One .in() query for names instead of the previous per-client loop
+    // (N+1 -- one profiles round trip per client on every page open).
+    const profileIds = (cls || []).map((c) => c.profile_id).filter(Boolean)
+    const { data: profs } = profileIds.length > 0
+      ? await supabase.from('profiles').select('id, full_name').in('id', profileIds)
+      : { data: [] as Array<{ id: string; full_name: string | null }> }
+    const nameById = new Map((profs || []).map((p) => [p.id, p.full_name]))
+    const clientsWithNames: Client[] = (cls || []).map((c) => ({
+      ...c, full_name: nameById.get(c.profile_id) || 'Unknown',
+    }))
 
     setClients(clientsWithNames)
     setPlans(pls || [])
