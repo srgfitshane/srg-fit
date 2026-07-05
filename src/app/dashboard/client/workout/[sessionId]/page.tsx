@@ -837,6 +837,25 @@ ${candidateList}`
   // set or churn the next-set prefill -- those only make sense for the
   // tap-a-row-as-you-go flow. The persistence + offline-queue path is
   // identical either way.
+  // Round-based flow applies to alternating/rotating group types. 'straight'
+  // (visual grouping only) and null keep the classic one-exercise flow.
+  const CHAINED_GROUP_TYPES = ['superset', 'triset', 'circuit', 'contrast', 'giant']
+
+  // Live (un-skipped, loggable) members of an exercise's chained group, in
+  // session order. Scoped to the same role section — group letters can repeat
+  // across sections. Returns [] unless the group has 2+ live members.
+  function chainedGroupMembers(ex: SessionExercise): SessionExercise[] {
+    const sg = ex.superset_group?.trim()
+    if (!sg || !CHAINED_GROUP_TYPES.includes(ex.group_type || '')) return []
+    const members = exercises.filter(e =>
+      (e.superset_group?.trim() || null) === sg
+      && (e.exercise_role || 'main') === (ex.exercise_role || 'main')
+      && !e.is_open_slot
+      && !skipped[e.id]
+    )
+    return members.length > 1 ? members : []
+  }
+
   async function logSet(exId: string, setIdx: number, opts?: { silent?: boolean }) {
     const s = setData[exId][setIdx]
     if (s.logged) return // Already logged
@@ -887,31 +906,80 @@ ${candidateList}`
     const handleSuccessSideEffects = () => {
       updateSet(exId, setIdx, 'logged', true)
       loggingSet.current.delete(lockKey)
-      if (!opts?.silent) {
-        // Auto-start rest timer. Warmups fall back to a 30s default when
-        // the exercise doesn't prescribe a rest, so the timer still fires
-        // between warmup sets instead of silently skipping.
-        const exNow = exercises.find(e=>e.id===exId)
-        const restSec = exNow?.rest_seconds || (s.is_warmup ? 30 : 0)
+      if (opts?.silent) return
+
+      // Pre-fill next set with same values (also serves round N+1)
+      if (setIdx < setData[exId].length - 1) {
+        setSetData(prev => ({
+          ...prev,
+          [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
+        }))
+      }
+
+      const exNow = exercises.find(e=>e.id===exId)
+      const members = exNow && !s.is_warmup ? chainedGroupMembers(exNow) : []
+
+      if (members.length > 1) {
+        // ── Round flow for supersets/circuits: A1 → A2 → ... → rest → A1.
+        // All checks run on the closure snapshot of setData, counting the
+        // set just logged as done (the state update above hasn't landed).
+        const isRowDone = (m: SessionExercise, rowIdx: number) => {
+          const row = (setData[m.id] || [])[rowIdx]
+          if (!row) return true
+          if (m.id === exId && rowIdx === setIdx) return true
+          return row.logged || row.skipped
+        }
+        // Rounds are working-set indices — warmup rows don't rotate.
+        const workingRows = (m: SessionExercise) =>
+          (setData[m.id] || []).map((r, i) => ({ r, i })).filter(({ r }) => !r.is_warmup)
+        const roundIdx = (setData[exId] || []).slice(0, setIdx).filter(r => !r.is_warmup).length
+        const openCard = (m: SessionExercise) => {
+          setExpandedExId(m.id)
+          setActiveExIdx(exercises.findIndex(e => e.id === m.id))
+          setTimeout(() => cardRefs.current[m.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+        }
+
+        // Next member (rotation order) with THIS round still open.
+        const startPos = members.findIndex(m => m.id === exId)
+        let next: SessionExercise | null = null
+        for (let step = 1; step < members.length; step++) {
+          const m = members[(startPos + step) % members.length]
+          const target = workingRows(m)[roundIdx]
+          if (target && !isRowDone(m, target.i)) { next = m; break }
+        }
+        if (next) { openCard(next); return } // mid-round: no rest, straight to the next movement
+
+        // Round complete — one rest for the whole round. The coach may have
+        // put the rest prescription on any member, so take the group max.
+        const restSec = Math.max(0, ...members.map(m => m.rest_seconds || 0))
         if (restSec) {
           setRestTimer(restSec)
           setRestActive(true)
         }
-        // Pre-fill next set with same values
-        if (setIdx < setData[exId].length - 1) {
-          setSetData(prev => ({
-            ...prev,
-            [exId]: prev[exId].map((s2,i2) => i2===setIdx+1 ? {...s2, reps_completed:s.reps_completed, weight_value:s.weight_value, weight_unit:s.weight_unit} : s2)
-          }))
-        }
-        // If this tap completed the LAST remaining set, auto-collapse and
-        // advance to the next exercise (Shane: "complete when all sets are
-        // checked"). Computed off the closure snapshot, counting the set we
-        // just logged as done. Short delay lets the green check + rest timer
-        // register before the view moves.
-        const allDone = (setData[exId] || []).every((st, i) => i === setIdx ? true : (st.logged || st.skipped))
-        if (allDone) setTimeout(() => advanceToNext(exId), 600)
+        // Cycle to the first member with an open working set (next round),
+        // or leave the group when every round is logged.
+        const carrier = members.find(m => workingRows(m).some(({ i }) => !isRowDone(m, i)))
+        if (carrier) setTimeout(() => openCard(carrier), 600)
+        else setTimeout(() => advanceToNext(exId), 600)
+        return
       }
+
+      // ── Classic single-exercise flow ──
+      // Auto-start rest timer. Warmups fall back to a 30s default when
+      // the exercise doesn't prescribe a rest, so the timer still fires
+      // between warmup sets instead of silently skipping.
+      const restSec = exNow?.rest_seconds || (s.is_warmup ? 30 : 0)
+      if (restSec) {
+        setRestTimer(restSec)
+        setRestActive(true)
+      }
+      // If this tap completed the LAST remaining set, auto-collapse and
+      // advance to the next exercise (Shane: "complete when all sets are
+      // checked"). Computed off the closure snapshot, counting the set we
+      // just logged as done. Short delay lets the green check + rest timer
+      // register before the view moves.
+      const allDone = (setData[exId] || []).every((st, i) => i === setIdx ? true : (st.logged || st.skipped))
+      if (allDone) setTimeout(() => advanceToNext(exId), 600)
     }
 
     if (!error) {
@@ -2045,12 +2113,29 @@ ${candidateList}`
                   const sg = ex.superset_group?.trim() || null
                   const showGroupHeader = sg && sg !== lastGroup
                   if (sg) lastGroup = sg
+                  // Chained groups (superset/circuit/...) get live round progress
+                  // in the banner; straight-set groups stay label-only.
+                  const bannerRounds = (() => {
+                    if (!showGroupHeader) return null
+                    const gm = chainedGroupMembers(ex)
+                    if (gm.length < 2) return null
+                    const perMember = gm.map(m => (setData[m.id] || []).filter(r => !r.is_warmup))
+                    const total = Math.max(...perMember.map(rows => rows.length))
+                    if (!total) return null
+                    const done = Math.min(...perMember.map(rows => rows.filter(r => r.logged || r.skipped).length))
+                    return { done, total }
+                  })()
                   const groupHeader = showGroupHeader ? (
                     <div key={'gh-'+sg} style={{display:'flex',alignItems:'center',gap:8,margin:'12px 0 6px'}}>
                       <div style={{background:alpha(group.color, 9),border:'1px solid '+alpha(group.color, 25),borderRadius:6,padding:'2px 10px',fontSize:10,fontWeight:900,color:group.color,letterSpacing:'0.08em'}}>
                         {sg}
                       </div>
                       <div style={{fontSize:10,fontWeight:700,color:t.textMuted}}>{GROUP_TYPE_LABELS[ex.group_type||'straight']||'Straight Sets'}</div>
+                      {bannerRounds && (
+                        <div style={{fontSize:10,fontWeight:800,color:bannerRounds.done >= bannerRounds.total ? t.green : group.color}}>
+                          {bannerRounds.done >= bannerRounds.total ? '✓ all rounds' : `Round ${bannerRounds.done + 1}/${bannerRounds.total}`}
+                        </div>
+                      )}
                       <div style={{height:1,background:alpha(group.color, 13),flex:1}}/>
                     </div>
                   ) : null
@@ -2062,6 +2147,8 @@ ${candidateList}`
                   const complete = done >= total && total > 0
                   const isSkipped = skipped[ex.id]
                   const isOpen = expandedExId === ex.id
+                  // Rows read "Round N" instead of "Set N" inside chained groups.
+                  const isChained = chainedGroupMembers(ex).length > 1
 
                   // ── Open slot card ──────────────────────────────────────
                   if (ex.is_open_slot) return (
@@ -2269,7 +2356,7 @@ ${candidateList}`
                             <div style={{marginBottom:10}}>
                               {/* Column headers */}
                               <div style={{display:'grid',gridTemplateColumns:cols,gap:8,alignItems:'center',padding:'0 2px 6px',fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>
-                                <span>Set</span>
+                                <span>{isChained ? 'Round' : 'Set'}</span>
                                 <span style={{textAlign:'center'}}>{isTime?'Time (s)':'Reps'}</span>
                                 {!isTime && (
                                   <span style={{textAlign:'center'}}>
