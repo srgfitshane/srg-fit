@@ -2187,7 +2187,7 @@ ${candidateList}`
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
                         aria-label={`${isOpen?'Collapse':'Expand'} ${ex.exercise_name}`}
                         aria-expanded={isOpen}
-                        style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'none',border:'none',cursor:'pointer',textAlign:'left' as const,fontFamily:"'DM Sans',sans-serif"}}>
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:'11px 14px',background:'none',border:'none',cursor:'pointer',textAlign:'left' as const,fontFamily:"'DM Sans',sans-serif"}}>
                         {/* Status dot */}
                         <div style={{width:10,height:10,borderRadius:'50%',flexShrink:0,
                           background:isSkipped?t.border:complete?t.green:done>0?t.orange:t.surfaceHigh,
@@ -2223,11 +2223,11 @@ ${candidateList}`
 
                       {/* Expanded content */}
                       {isOpen && (
-                        <div style={{padding:'0 16px 16px'}}>
+                        <div style={{padding:'0 14px 12px'}}>
 
                           {/* Swap / Skip actions */}
                           {!isSkipped && (
-                            <div style={{display:'flex',gap:6,marginBottom:12}}>
+                            <div style={{display:'flex',gap:6,marginBottom:8}}>
                               <button onClick={()=>setSwapOpen(prev=>({...prev,[ex.id]:!prev[ex.id]}))}
                                 style={{background:swapOpen[ex.id]?t.tealDim:'transparent',border:'1px solid '+(swapOpen[ex.id]?alpha(t.teal, 31):t.border),borderRadius:8,padding:'5px 10px',fontSize:11,fontWeight:700,color:swapOpen[ex.id]?t.teal:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                 Swap
@@ -2357,9 +2357,9 @@ ${candidateList}`
                             const headerUnit = setsArr[0]?.weight_unit || 'lbs'
                             const cols = isTime ? '32px 1fr 56px' : '32px 1fr 1fr 56px'
                             return (
-                            <div style={{marginBottom:10}}>
+                            <div style={{marginBottom:8}}>
                               {/* Column headers */}
-                              <div style={{display:'grid',gridTemplateColumns:cols,gap:8,alignItems:'center',padding:'0 2px 6px',fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>
+                              <div style={{display:'grid',gridTemplateColumns:cols,gap:8,alignItems:'center',padding:'0 2px 4px',fontSize:10,fontWeight:800,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>
                                 <span>{isChained ? 'Round' : 'Set'}</span>
                                 <span style={{textAlign:'center'}}>{isTime?'Time (s)':'Reps'}</span>
                                 {!isTime && (
@@ -2378,15 +2378,16 @@ ${candidateList}`
                               </div>
                               {setsArr.map((s,idx)=>{
                                 const prior = prevSets[ex.id]?.[idx]
-                                const cell = {width:'100%',background:s.logged?'transparent':t.surfaceHigh,border:`1px solid ${s.logged?'transparent':t.border}`,borderRadius:8,padding:'9px 4px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center' as const,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}
+                                // fontSize 16 is load-bearing — below 16px iOS zooms on focus
+                                const cell = {width:'100%',background:s.logged?'transparent':t.surfaceHigh,border:`1px solid ${s.logged?'transparent':t.border}`,borderRadius:8,padding:'7px 4px',color:t.text,fontSize:16,fontWeight:700,textAlign:'center' as const,fontFamily:"'DM Sans',sans-serif",boxSizing:'border-box' as const}
                                 return (
-                                  <div key={idx} style={{borderRadius:10,background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:'transparent',border:`1px solid ${s.logged?alpha(t.green,31):'transparent'}`,padding:'3px 2px',marginBottom:4,opacity:s.skipped?0.5:1}}>
+                                  <div key={idx} style={{borderRadius:10,background:s.skipped?t.surfaceHigh:s.logged?t.greenDim:'transparent',border:`1px solid ${s.logged?alpha(t.green,31):'transparent'}`,padding:'2px 2px',marginBottom:3,opacity:s.skipped?0.5:1}}>
                                     {/* Per-set controls ABOVE the working set so it reads as a
                                         header for THIS set (warmup toggle, last-time ref +
                                         fill helpers, skip). Only on an unlogged, un-skipped
                                         row -- logged rows collapse to the single input line. */}
                                     {!s.logged && !s.skipped && (
-                                      <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap' as const,padding:'2px 4px 5px',fontSize:11}}>
+                                      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const,padding:'1px 4px 4px',fontSize:11}}>
                                         <label style={{display:'flex',alignItems:'center',gap:4,color:t.textMuted,cursor:'pointer'}}>
                                           <input type="checkbox" checked={s.is_warmup} onChange={e=>updateSet(ex.id,idx,'is_warmup',e.target.checked)} style={{accentColor:t.orange}}/>
                                           Warmup
@@ -2433,7 +2434,7 @@ ${candidateList}`
                                       ):(
                                         <button onClick={()=>{ if(s.logged){ updateSet(ex.id,idx,'logged',false) } else { logSet(ex.id,idx) } }}
                                           aria-label={s.logged?'Edit this set':'Mark set done and start rest'}
-                                          style={{justifySelf:'center',width:38,height:38,borderRadius:10,border:`2px solid ${s.logged?t.green:t.border}`,background:s.logged?t.green:t.surfaceHigh,color:s.logged?'#0f0f0f':t.textMuted,fontSize:17,fontWeight:800,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                                          style={{justifySelf:'center',width:34,height:34,borderRadius:9,border:`2px solid ${s.logged?t.green:t.border}`,background:s.logged?t.green:t.surfaceHigh,color:s.logged?'#0f0f0f':t.textMuted,fontSize:15,fontWeight:800,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                                           ✓
                                         </button>
                                       )}
@@ -2450,8 +2451,8 @@ ${candidateList}`
                               session_exercises.notes_client on blur. SKIPPED is reserved
                               by the skip flow so it's only editable when not skipped. */}
                           {!isSkipped && (
-                            <div style={{marginBottom:10}}>
-                              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:5}}>
+                            <div style={{marginBottom:8}}>
+                              <div style={{fontSize:10,fontWeight:700,color:t.textMuted,textTransform:'uppercase' as const,letterSpacing:'0.06em',marginBottom:4}}>
                                 Notes for this exercise
                               </div>
                               <textarea
@@ -2465,17 +2466,17 @@ ${candidateList}`
                                   await supabase.from('session_exercises').update({ notes_client: next }).eq('id', ex.id)
                                 }}
                                 placeholder="How the whole movement felt — pain, fatigue, cues that worked..."
-                                rows={2}
-                                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'9px 12px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",resize:'vertical',outline:'none'}}
+                                rows={1}
+                                style={{width:'100%',background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'8px 12px',color:t.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",resize:'vertical',outline:'none'}}
                               />
                             </div>
                           )}
 
                           {/* Add set + form check video */}
                           {!isSkipped && (<>
-                            <div style={{display:'flex',gap:8,marginBottom:10}}>
+                            <div style={{display:'flex',gap:8,marginBottom:8}}>
                               <button onClick={()=>addSet(ex.id)}
-                                style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'9px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
+                                style={{flex:1,background:'none',border:`1px dashed ${t.border}`,borderRadius:10,padding:'8px',fontSize:13,color:t.textDim,cursor:'pointer'}}>
                                 + Add Set
                               </button>
                               {videoUploads[ex.id] ? (<>
@@ -2494,7 +2495,7 @@ ${candidateList}`
                                   🗑
                                 </button>
                               </>) : (
-                                <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'9px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploading[ex.id]?t.teal:t.textDim,textAlign:'center' as const}}>
+                                <label style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:t.surfaceHigh,border:`1px solid ${t.border}`,borderRadius:10,padding:'8px 12px',cursor:videoUploading[ex.id]?'not-allowed':'pointer',fontSize:12,fontWeight:700,color:videoUploading[ex.id]?t.teal:t.textDim,textAlign:'center' as const}}>
                                   {videoUploading[ex.id]?'⏳ Uploading...':'📹 Form Check'}
                                   <input type="file" accept="video/mp4,video/quicktime,video/webm,video/*" style={{display:'none'}}
                                     disabled={videoUploading[ex.id]}
@@ -2503,7 +2504,7 @@ ${candidateList}`
                               )}
                             </div>
                             {!videoUploads[ex.id] && (
-                              <div style={{fontSize:10,color:t.textMuted,marginTop:4,textAlign:'center' as const}}>
+                              <div style={{fontSize:10,color:t.textMuted,margin:'2px 0 6px',textAlign:'center' as const}}>
                                 📹 Max 2 min — trim in your camera roll first if needed
                               </div>
                             )}
@@ -2517,7 +2518,7 @@ ${candidateList}`
                               set or two was left blank. */}
                           {!isSkipped && (
                             <button onClick={()=>completeExercise(ex.id)}
-                              style={{width:'100%',background:t.accent,border:`1px solid ${t.accent}`,borderRadius:10,padding:'12px',fontSize:14,fontWeight:800,color:'#0f0f0f',cursor:'pointer',marginBottom:10}}>
+                              style={{width:'100%',background:t.accent,border:`1px solid ${t.accent}`,borderRadius:10,padding:'11px',fontSize:14,fontWeight:800,color:'#0f0f0f',cursor:'pointer',marginBottom:8}}>
                               ✓ Complete exercise
                             </button>
                           )}
