@@ -771,16 +771,19 @@ ${candidateList}`
   }, [supabase])
 
   // Scroll the expanded exercise card into view whenever it changes.
-  // The card is tall (prescription + sets + actions) so we align to top with
-  // a small margin so the card header is just below the sticky top bar.
+  // Instant (not smooth) and delayed ~350ms on purpose: the previous card's
+  // collapse and the mobile keyboard closing both shift layout, and a smooth
+  // scrollIntoView aims at the element's position at CALL time — when the
+  // target moves mid-animation it overshoots and the exercise name ends up
+  // cut off above the fold. By 350ms layout + keyboard have settled, and an
+  // instant scroll can't be raced. scrollMarginTop on the card supplies the
+  // headroom.
   useEffect(() => {
     if (!expandedExId) return
-    const el = cardRefs.current[expandedExId]
-    if (!el) return
-    // requestAnimationFrame lets the DOM finish expanding before we measure
-    requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+    const id = setTimeout(() => {
+      cardRefs.current[expandedExId]?.scrollIntoView({ block: 'start' })
+    }, 350)
+    return () => clearTimeout(id)
   }, [expandedExId])
 
   function updateSet(exId: string, setIdx: number, field: keyof SetData, val: SetData[keyof SetData]) {
@@ -934,9 +937,10 @@ ${candidateList}`
           (setData[m.id] || []).map((r, i) => ({ r, i })).filter(({ r }) => !r.is_warmup)
         const roundIdx = (setData[exId] || []).slice(0, setIdx).filter(r => !r.is_warmup).length
         const openCard = (m: SessionExercise) => {
+          // Scrolling is handled by the expandedExId effect — one mechanism,
+          // no competing scroll animations.
           setExpandedExId(m.id)
           setActiveExIdx(exercises.findIndex(e => e.id === m.id))
-          setTimeout(() => cardRefs.current[m.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
         }
 
         // Next member (rotation order) with THIS round still open.
@@ -2177,7 +2181,7 @@ ${candidateList}`
                   return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface}}>
+                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface,scrollMarginTop:8}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
