@@ -29,6 +29,7 @@ type FoodEntry = {
   protein_g: number | null
   carbs_g: number | null
   fat_g: number | null
+  fiber_g: number | null
   serving_size: string
   serving_qty?: number | null
   logged_at: string
@@ -45,6 +46,7 @@ type NutritionPlan = {
   protein_g?: number | null
   carbs_g?: number | null
   fat_g?: number | null
+  fiber_g?: number | null
   meal_plan?: Array<{
     name?: string | null
     time?: string | null
@@ -63,6 +65,7 @@ type NutritionDailyLog = {
   total_protein?: number | null
   total_carbs?: number | null
   total_fat?: number | null
+  total_fiber?: number | null
 }
 
 type SavedFood = {
@@ -71,6 +74,7 @@ type SavedFood = {
   protein_g: number | null
   carbs_g: number | null
   fat_g: number | null
+  fiber_g: number | null
   serving_size: string
   serving_qty?: number | null
   logged_at?: string
@@ -83,6 +87,7 @@ type FatSecretServing = {
   protein?: string | number | null
   carbohydrate?: string | number | null
   fat?: string | number | null
+  fiber?: string | number | null
   serving_description?: string | null
   metric_serving_amount?: string | number | null
 }
@@ -163,7 +168,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [searchError,     setSearchError]     = useState('')
   const [commitError,     setCommitError]     = useState('')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
+  const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', fiber_g:'', serving_size:'1 serving' })
   const [pendingFood,     setPendingFood]     = useState<Partial<FoodEntry> | null>(null)
   const [pendingServings, setPendingServings] = useState(1)
   // Free-text draft for the servings field so clients can type any small
@@ -230,7 +235,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       setEntries(signedEnts)
     } else { setLog(null); setEntries([]) }
     const { data: prev } = await supabase.from('food_entries')
-      .select('food_name,calories,protein_g,carbs_g,fat_g,serving_size,serving_qty,logged_at,source')
+      .select('food_name,calories,protein_g,carbs_g,fat_g,fiber_g,serving_size,serving_qty,logged_at,source')
       .eq('client_id', clientRecord.id)
       .or('source.is.null,source.neq.photo')
       .order('logged_at', { ascending: false }).limit(30)
@@ -249,6 +254,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           protein_g: food.serving_qty && food.serving_qty > 1 && food.protein_g != null ? Math.round(food.protein_g / food.serving_qty * 10) / 10 : food.protein_g,
           carbs_g:   food.serving_qty && food.serving_qty > 1 && food.carbs_g   != null ? Math.round(food.carbs_g   / food.serving_qty * 10) / 10 : food.carbs_g,
           fat_g:     food.serving_qty && food.serving_qty > 1 && food.fat_g     != null ? Math.round(food.fat_g     / food.serving_qty * 10) / 10 : food.fat_g,
+          fiber_g:   food.serving_qty && food.serving_qty > 1 && food.fiber_g   != null ? Math.round(food.fiber_g   / food.serving_qty * 10) / 10 : food.fiber_g,
         }))
       )
     }
@@ -296,6 +302,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         protein_g: !isPhoto && pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
         carbs_g:   !isPhoto && pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
         fat_g:     !isPhoto && pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
+        fiber_g:   !isPhoto && pendingFood.fiber_g   != null ? Math.round(pendingFood.fiber_g   * s * 10) / 10 : null,
       }).select().single()
       if (error) {
         console.error('food_entries insert error:', error.message)
@@ -312,7 +319,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           addMode === 'quick' ? 'quick' :
           addMode === 'saved' ? 'saved' : 'search'
         )
-        const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', currentLog.id)
+        const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', currentLog.id)
         await recalcTotals(currentLog.id, fresh.data || [])
         await loadData()
       }
@@ -322,7 +329,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         setPendingFood(null); setPendingServings(1); setAddMode('confirmed')
         setSearchQ(''); setSearchResults([])
         setPhotoCaption(''); setPhotoPreviewUrl(null); setPhotoStorageUrl(null)
-        setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', serving_size:'1 serving' })
+        setQuick({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', fiber_g:'', serving_size:'1 serving' })
       }
       setSaving(false)
     }
@@ -331,7 +338,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   async function removeEntry(id: string) {
     await supabase.from('food_entries').delete().eq('id', id)
     if (log) {
-      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', log.id)
+      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', log.id)
       await recalcTotals(log.id, fresh.data || [])
     }
     await loadData()
@@ -347,24 +354,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       protein_g: entry.protein_g != null ? Math.round(entry.protein_g * scale * 10) / 10 : null,
       carbs_g:   entry.carbs_g   != null ? Math.round(entry.carbs_g   * scale * 10) / 10 : null,
       fat_g:     entry.fat_g     != null ? Math.round(entry.fat_g     * scale * 10) / 10 : null,
+      fiber_g:   entry.fiber_g   != null ? Math.round(entry.fiber_g   * scale * 10) / 10 : null,
     }
     const { error } = await supabase.from('food_entries').update(updated).eq('id', entry.id)
     if (error) { alert('Could not update servings: ' + error.message); return }
     setEditingEntry(null)
     if (log) {
-      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g').eq('daily_log_id', log.id)
+      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', log.id)
       await recalcTotals(log.id, fresh.data || [])
     }
     await loadData()
   }
 
-  async function recalcTotals(logId: string, ents: Array<Pick<FoodEntry, 'calories' | 'protein_g' | 'carbs_g' | 'fat_g'>>) {
+  async function recalcTotals(logId: string, ents: Array<Pick<FoodEntry, 'calories' | 'protein_g' | 'carbs_g' | 'fat_g' | 'fiber_g'>>) {
     const totals = ents.reduce((acc, e) => ({
       total_calories: acc.total_calories + (e.calories  || 0),
       total_protein:  acc.total_protein  + (e.protein_g || 0),
       total_carbs:    acc.total_carbs    + (e.carbs_g   || 0),
       total_fat:      acc.total_fat      + (e.fat_g     || 0),
-    }), { total_calories:0, total_protein:0, total_carbs:0, total_fat:0 })
+      total_fiber:    acc.total_fiber    + (e.fiber_g   || 0),
+    }), { total_calories:0, total_protein:0, total_carbs:0, total_fat:0, total_fiber:0 })
     const { data: updated } = await supabase.from('nutrition_daily_logs').update(totals).eq('id', logId).select().single()
     if (updated) setLog(updated)
   }
@@ -424,13 +433,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     const nutrients = food.foodNutrients || []
     const get = (name: string) => { const n = nutrients.find((item) => item.nutrientName?.toLowerCase().includes(name)); return n?.value ?? null }
     const isBranded = food.dataType === 'Branded'
-    let cal = get('energy'); let pro = get('protein'); let carb = get('carbohydrate'); let fat = get('total lipid')
+    let cal = get('energy'); let pro = get('protein'); let carb = get('carbohydrate'); let fat = get('total lipid'); let fib = get('fiber')
     const name = food.description || ''
     const cleaned = name === name.toUpperCase() ? name.toLowerCase().replace(/(^\w|,\s*\w)/g, (c:string) => c.toUpperCase()) : name
     if (isBranded) {
       const sSize = Number(food.servingSize)
       const sLabel = food.householdServingFullText?.trim() || (sSize > 0 ? `${sSize}${food.servingSizeUnit||'g'}` : '1 serving')
-      setPendingFood({ food_name: cleaned, calories: cal != null ? Math.round(cal*10)/10 : null, protein_g: pro != null ? Math.round(pro*10)/10 : null, carbs_g: carb != null ? Math.round(carb*10)/10 : null, fat_g: fat != null ? Math.round(fat*10)/10 : null, serving_size: sLabel })
+      setPendingFood({ food_name: cleaned, calories: cal != null ? Math.round(cal*10)/10 : null, protein_g: pro != null ? Math.round(pro*10)/10 : null, carbs_g: carb != null ? Math.round(carb*10)/10 : null, fat_g: fat != null ? Math.round(fat*10)/10 : null, fiber_g: fib != null ? Math.round(fib*10)/10 : null, serving_size: sLabel })
       return
     }
     let serving = getUSDAServing(food)
@@ -443,12 +452,13 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         const dget = (name: string) => { const n = (dn as Array<{ nutrient?: { name?: string | null } | null; amount?: number | null }>).find((v) => v.nutrient?.name?.toLowerCase().includes(name)); return n?.amount ?? null }
         if (cal == null) cal = dget('energy'); if (pro == null) pro = dget('protein')
         if (carb == null) carb = dget('carbohydrat'); if (fat == null) fat = dget('total lipid')
+        if (fib == null) fib = dget('fiber')
       } catch { serving = null }
     }
     if (!serving) { setSearchError('No serving size found for this food. Try a branded result or Quick Add.'); return }
     const scale = serving.grams / 100
     const r = (v: number | null) => v != null ? Math.round(v * scale * 10) / 10 : null
-    setPendingFood({ food_name: cleaned, calories: r(cal), protein_g: r(pro), carbs_g: r(carb), fat_g: r(fat), serving_size: serving.label })
+    setPendingFood({ food_name: cleaned, calories: r(cal), protein_g: r(pro), carbs_g: r(carb), fat_g: r(fat), fiber_g: r(fib), serving_size: serving.label })
   }
 
   // ── FatSecret food picker ─────────────────────────────────────────────────
@@ -461,7 +471,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   function pickFSFood(food: FatSecretFoodDetail | FatSecretSearchFood) {
     const serving = pickBestFSServing(food); if (!serving) return
     const r = (v: string | number | null | undefined) => v != null ? Math.round(parseFloat(String(v)) * 10) / 10 : null
-    setPendingFood({ food_name: food.food_name, calories: r(serving.calories), protein_g: r(serving.protein), carbs_g: r(serving.carbohydrate), fat_g: r(serving.fat), serving_size: serving.serving_description || '1 serving' })
+    setPendingFood({ food_name: food.food_name, calories: r(serving.calories), protein_g: r(serving.protein), carbs_g: r(serving.carbohydrate), fat_g: r(serving.fat), fiber_g: r(serving.fiber), serving_size: serving.serving_description || '1 serving' })
   }
 
   function parseFSDescription(desc: string) {
@@ -491,7 +501,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         if (!p.serving_size && n['energy-kcal_serving'] == null) {
           setBarcodeErr('Product found but serving info is missing. Try search or Quick Add.')
         } else {
-          setPendingFood({ food_name: p.product_name || 'Unknown product', calories: r(n['energy-kcal_serving']), protein_g: r(n.proteins_serving), carbs_g: r(n.carbohydrates_serving), fat_g: r(n.fat_serving), serving_size: p.serving_size || '1 serving' })
+          setPendingFood({ food_name: p.product_name || 'Unknown product', calories: r(n['energy-kcal_serving']), protein_g: r(n.proteins_serving), carbs_g: r(n.carbohydrates_serving), fat_g: r(n.fat_serving), fiber_g: r(n.fiber_serving), serving_size: p.serving_size || '1 serving' })
           setBarcodeVal('')
         }
       } else { setBarcodeErr('Product not found. Try searching by name or Quick Add.') }
@@ -532,6 +542,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       protein_g:   null,
       carbs_g:     null,
       fat_g:       null,
+      fiber_g:     null,
       source:      'photo',
       photo_url:   storageUrl,
     })
@@ -543,7 +554,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     protein:  acc.protein  + (e.protein_g || 0),
     carbs:    acc.carbs    + (e.carbs_g   || 0),
     fat:      acc.fat      + (e.fat_g     || 0),
-  }), { calories:0, protein:0, carbs:0, fat:0 })
+    fiber:    acc.fiber    + (e.fiber_g   || 0),
+  }), { calories:0, protein:0, carbs:0, fat:0, fiber:0 })
   const pct = (val: number, target: number) => target > 0 ? Math.min(100, Math.round((val/target)*100)) : 0
   const macros = [
     { label:'Calories', val:Math.round(totals.calories), target:plan?.calories_target, unit:'kcal', color:'#c8f545' },
@@ -743,6 +755,24 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         </div>
         )}
 
+        {/* Fiber bar — slim secondary stat, not a fifth ring. Shows once the
+            plan has a fiber target or any fiber has been logged today. */}
+        {clientRecord?.show_macros !== false && (plan?.fiber_g || totals.fiber > 0) ? (
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 14px', marginTop:-10, marginBottom:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: plan?.fiber_g ? 6 : 0 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:t.textDim }}>🌾 Fiber</span>
+              <span style={{ fontSize:11, fontWeight:800, color:'#22c55e' }}>
+                {Math.round(totals.fiber)}g{plan?.fiber_g ? ` / ${plan.fiber_g}g` : ''}
+              </span>
+            </div>
+            {plan?.fiber_g ? (
+              <div style={{ height:5, borderRadius:3, background:t.surfaceHigh, overflow:'hidden' }}>
+                <div style={{ height:'100%', width:`${pct(totals.fiber, plan.fiber_g)}%`, background:'#22c55e', borderRadius:3, transition:'width 0.5s ease' }}/>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {/* Add food buttons */}
         {addMode === 'none' && !pendingFood && (
           <div style={{ marginBottom:20 }}>
@@ -824,7 +854,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             </div>
             <input value={quick.food_name} onChange={e=>setQuick(p=>({...p,food_name:e.target.value}))} placeholder="Food name..." autoFocus style={{ ...inp, marginBottom:8 }}/>
             <div style={{ ...macroRow, marginBottom:8 }}>
-              {([{f:'calories',p:'kcal',l:'Calories'},{f:'protein_g',p:'g',l:'Protein'},{f:'carbs_g',p:'g',l:'Carbs'},{f:'fat_g',p:'g',l:'Fat'}] as const).map(field=>(
+              {([{f:'calories',p:'kcal',l:'Calories'},{f:'protein_g',p:'g',l:'Protein'},{f:'carbs_g',p:'g',l:'Carbs'},{f:'fat_g',p:'g',l:'Fat'},{f:'fiber_g',p:'g',l:'Fiber'}] as const).map(field=>(
                 <div key={field.f}>
                   <div style={{ fontSize:10, color:t.textMuted, marginBottom:3 }}>{field.l}</div>
                   <input type="number" inputMode="decimal" enterKeyHint="done" placeholder={field.p} value={quick[field.f]} onChange={e=>setQuick(p=>({...p,[field.f]:e.target.value}))} style={{ ...inp, padding:'8px', textAlign:'center', fontSize:14 }}/>
@@ -832,7 +862,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
               ))}
             </div>
             <input value={quick.serving_size} onChange={e=>setQuick(p=>({...p,serving_size:e.target.value}))} placeholder="Serving size (e.g. 1 cup, 100g)" style={{ ...inp, marginBottom:10 }}/>
-            <button onClick={()=>{ if(!quick.food_name) return; setPendingFood({ food_name:quick.food_name, calories:parseFloat(quick.calories)||null, protein_g:parseFloat(quick.protein_g)||null, carbs_g:parseFloat(quick.carbs_g)||null, fat_g:parseFloat(quick.fat_g)||null, serving_size:quick.serving_size }) }}
+            <button onClick={()=>{ if(!quick.food_name) return; setPendingFood({ food_name:quick.food_name, calories:parseFloat(quick.calories)||null, protein_g:parseFloat(quick.protein_g)||null, carbs_g:parseFloat(quick.carbs_g)||null, fat_g:parseFloat(quick.fat_g)||null, fiber_g:parseFloat(quick.fiber_g)||null, serving_size:quick.serving_size }) }}
               disabled={!quick.food_name} style={{ width:'100%', background:t.teal, border:'none', borderRadius:10, padding:'11px', fontSize:14, fontWeight:800, color:'#0f0f0f', cursor:'pointer', opacity:quick.food_name?1:0.5 }}>
               Next: Choose Meal →
             </button>
@@ -1011,7 +1041,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             {savedFoods.length === 0 && <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'20px 0' }}>Foods you log will appear here for quick re-adding.</div>}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
               {savedFoods.map((f) => (
-                <button key={f.food_name} onClick={()=>{ setPendingServings(1); setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, serving_size:f.serving_size }) }}
+                <button key={f.food_name} onClick={()=>{ setPendingServings(1); setPendingFood({ food_name:f.food_name, calories:f.calories, protein_g:f.protein_g, carbs_g:f.carbs_g, fat_g:f.fat_g, fiber_g:f.fiber_g, serving_size:f.serving_size }) }}
                   style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'center' as const }}>
                   <div style={{ fontSize:12, fontWeight:700, color:t.text, marginBottom:3, lineHeight:1.3 }}>{f.food_name.length>18?f.food_name.slice(0,16)+'…':f.food_name}</div>
                   {f.calories != null && <div style={{ fontSize:10, color:t.orange }}>{Math.round(f.calories)} kcal</div>}
@@ -1125,7 +1155,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                             <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings(e.serving_qty||1) }}>
                               <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
                               <div style={{ fontSize:11, color:t.textMuted }}>
-                                {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}
+                                {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}{e.fiber_g?` · ${e.fiber_g}g fiber`:''}
                               </div>
                             </div>
                             <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>x</button>
