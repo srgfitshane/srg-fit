@@ -80,6 +80,18 @@ type SavedFood = {
   logged_at?: string
 }
 
+type PrevDayEntry = {
+  food_name: string
+  meal_time: string | null
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  fiber_g: number | null
+  serving_size: string
+  serving_qty: number | null
+}
+
 type SearchResult = FatSecretSearchFood | USDAFoodSearchResult
 
 type FatSecretServing = {
@@ -183,6 +195,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   useEffect(() => { setPendingServingsStr(String(pendingServings)) }, [pendingServings])
   useEffect(() => { setEditServingsStr(String(editServings)) }, [editServings])
   const [savedFoods,      setSavedFoods]      = useState<SavedFood[]>([])
+  // Previous day's entries grouped by meal — powers the one-tap "same as
+  // yesterday" copy chips. Keyed off selectedDate, not literal yesterday.
+  const [prevDayMeals,    setPrevDayMeals]    = useState<Record<string, PrevDayEntry[]>>({})
+  const [copyingMeal,     setCopyingMeal]     = useState<string|null>(null)
   const [barcodeVal,      setBarcodeVal]      = useState('')
   const [barcodeLoading,  setBarcodeLoading]  = useState(false)
   const [barcodeErr,      setBarcodeErr]      = useState('')
@@ -258,6 +274,26 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         }))
       )
     }
+    // Previous day's entries (relative to the selected date) for the copy
+    // chips. Joined through the daily log's log_date — logged_at is when
+    // the entry was created, not the day it belongs to. Photo logs are
+    // excluded; a photo of yesterday's lunch isn't today's lunch.
+    const prevDate = (() => {
+      const d = new Date(selectedDate + 'T12:00:00'); d.setDate(d.getDate() - 1)
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    })()
+    const { data: prevDayEnts } = await supabase.from('food_entries')
+      .select('food_name, meal_time, calories, protein_g, carbs_g, fat_g, fiber_g, serving_size, serving_qty, log:nutrition_daily_logs!inner(log_date)')
+      .eq('client_id', clientRecord.id)
+      .eq('log.log_date', prevDate)
+      .or('source.is.null,source.neq.photo')
+    const grouped: Record<string, PrevDayEntry[]> = {}
+    for (const e of (prevDayEnts || []) as unknown as PrevDayEntry[]) {
+      const k = e.meal_time || 'snack'
+      if (!grouped[k]) grouped[k] = []
+      grouped[k].push(e)
+    }
+    setPrevDayMeals(grouped)
     setLoading(false)
   }, [clientRecord?.id, selectedDate, supabase])
 
@@ -333,6 +369,36 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       }
       setSaving(false)
     }
+  }
+
+  // One-tap re-log of a whole meal from the previous day. Values are copied
+  // as-is (already scaled by serving_qty when originally logged).
+  async function copyMeal(mealId: string) {
+    const src = prevDayMeals[mealId]
+    if (!src || src.length === 0 || !clientRecord) return
+    setCopyingMeal(mealId)
+    const currentLog = await ensureLog()
+    if (!currentLog?.id) {
+      setCopyingMeal(null)
+      alert('Could not start a daily log. Please refresh and try again.')
+      return
+    }
+    const rows = src.map(e => ({
+      daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time: mealId,
+      food_name: e.food_name, serving_size: e.serving_size, serving_qty: e.serving_qty,
+      calories: e.calories, protein_g: e.protein_g, carbs_g: e.carbs_g, fat_g: e.fat_g, fiber_g: e.fiber_g,
+      source: 'saved',
+    }))
+    const { error } = await supabase.from('food_entries').insert(rows)
+    if (error) {
+      setCopyingMeal(null)
+      alert('Could not copy meal: ' + error.message)
+      return
+    }
+    const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', currentLog.id)
+    await recalcTotals(currentLog.id, fresh.data || [])
+    await loadData()
+    setCopyingMeal(null)
   }
 
   async function removeEntry(id: string) {
@@ -800,6 +866,20 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                 </button>
               ))}
             </div>
+            {/* One-tap whole-meal copy from the previous day */}
+            {Object.keys(prevDayMeals).length > 0 && (
+              <div style={{ marginTop:10 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, marginBottom:6 }}>Same as yesterday?</div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const }}>
+                  {MEAL_LABELS.filter(m => prevDayMeals[m.id]?.length).map(m => (
+                    <button key={m.id} onClick={()=>{ void copyMeal(m.id) }} disabled={copyingMeal !== null}
+                      style={{ background:t.surfaceHigh, border:`1px solid ${t.border}`, borderRadius:999, padding:'6px 12px', fontSize:11, fontWeight:700, color:t.textDim, cursor:copyingMeal?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:copyingMeal && copyingMeal!==m.id ? 0.5 : 1 }}>
+                      {copyingMeal === m.id ? 'Copying...' : `${m.icon} ${m.label} (${prevDayMeals[m.id].length})`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
