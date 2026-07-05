@@ -176,6 +176,23 @@ function defaultSet(): SetData {
   return { reps_completed:'', duration_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false, skipped:false }
 }
 
+// Align the exercises array with DISPLAY order: role sections in order of
+// first appearance, original order_index order within each role — exactly
+// how the list renders. Navigation (advance, skip, round-chaining) walks
+// this array, so it MUST match the on-screen sequence: with interleaved
+// order_index data (B1,A1,B2,A2,B3) the raw array's "next" after B2 is A2,
+// while the card below B2 on screen is B3. Array.sort is stable, so
+// within-role order is preserved.
+function toDisplayOrder(exs: SessionExercise[]): SessionExercise[] {
+  const roleRank: Record<string, number> = {}
+  exs.forEach(ex => {
+    const role = ex.exercise_role || 'main'
+    if (!(role in roleRank)) roleRank[role] = Object.keys(roleRank).length
+  })
+  return [...exs].sort((a, b) =>
+    roleRank[a.exercise_role || 'main'] - roleRank[b.exercise_role || 'main'])
+}
+
 export default function ActiveWorkoutPage() {
   const supabase = createClient()
   const [videoUploads, setVideoUploads]   = useState<Record<string,string>>({})
@@ -519,9 +536,9 @@ ${candidateList}`
         initSets[ex.id] = rows
       }
       setSwapLibrary((exerciseLibrary || []) as ExerciseLibraryItem[])
-      const signedExercises = await withSignedMedia((exs || []) as SessionExercise[])
+      const signedExercises = toDisplayOrder(await withSignedMedia((exs || []) as SessionExercise[]))
       setExercises(signedExercises)
-      // Auto-open the first incomplete exercise
+      // Auto-open the first exercise AS DISPLAYED (post-sort)
       if (signedExercises.length > 0) setExpandedExId(signedExercises[0].id)
       setSkipped(signedExercises.reduce((acc, exerciseRow) => {
         acc[exerciseRow.id] = !!exerciseRow.skipped || !!(exerciseRow.notes_client?.startsWith('[SKIPPED]'))
@@ -719,7 +736,7 @@ ${candidateList}`
 
     setSession(safeSession)
     setSwapLibrary((exerciseLibrary || []) as ExerciseLibraryItem[])
-    const signedExercises = await withSignedMedia((exs || []) as SessionExercise[])
+    const signedExercises = toDisplayOrder(await withSignedMedia((exs || []) as SessionExercise[]))
     setExercises(signedExercises)
     setSkipped(signedExercises.reduce((acc, exerciseRow) => {
       acc[exerciseRow.id] = !!exerciseRow.skipped || !!(exerciseRow.notes_client?.startsWith('[SKIPPED]'))
@@ -1094,10 +1111,10 @@ ${candidateList}`
     }
     setSkipped(prev => ({ ...prev, [exId]: true }))
     setSkipOpen(prev => ({ ...prev, [exId]: false }))
-    // Auto-advance to next non-skipped exercise
-    const nextIdx = exercises.findIndex((ex, i) => i > activeExIdx && !skipped[ex.id])
-    const nextEx = nextIdx !== -1 ? exercises[nextIdx] : exercises[activeExIdx + 1]
-    if (nextEx) { setActiveExIdx(nextIdx !== -1 ? nextIdx : activeExIdx + 1); setExpandedExId(nextEx.id) }
+    // Auto-advance relative to the exercise that was just skipped. The old
+    // inline version advanced relative to activeExIdx, which goes stale when
+    // a card is opened by tapping it (only advance/chain update that index).
+    advanceToNext(exId)
   }
 
   // ── Add exercise to session ──────────────────────────────────────────────
