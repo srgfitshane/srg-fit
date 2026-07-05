@@ -624,10 +624,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   }), { calories:0, protein:0, carbs:0, fat:0, fiber:0 })
   const pct = (val: number, target: number) => target > 0 ? Math.min(100, Math.round((val/target)*100)) : 0
   const macros = [
-    { label:'Calories', val:Math.round(totals.calories), target:plan?.calories_target, unit:'kcal', color:'#c8f545' },
-    { label:'Protein',  val:Math.round(totals.protein),  target:plan?.protein_g,       unit:'g',    color:'#60a5fa' },
-    { label:'Carbs',    val:Math.round(totals.carbs),    target:plan?.carbs_g,         unit:'g',    color:'#f5a623' },
-    { label:'Fat',      val:Math.round(totals.fat),      target:plan?.fat_g,           unit:'g',    color:'#f472b6' },
+    // Bare number for calories — "kcal" doesn't fit the 5-across cards.
+    { label:'Cals',    val:Math.round(totals.calories), target:plan?.calories_target, unit:'',  color:'#c8f545' },
+    { label:'Protein', val:Math.round(totals.protein),  target:plan?.protein_g,       unit:'g', color:'#60a5fa' },
+    { label:'Carbs',   val:Math.round(totals.carbs),    target:plan?.carbs_g,         unit:'g', color:'#f5a623' },
+    { label:'Fat',     val:Math.round(totals.fat),      target:plan?.fat_g,           unit:'g', color:'#f472b6' },
+    { label:'Fiber',   val:Math.round(totals.fiber),    target:plan?.fiber_g,         unit:'g', color:'#22c55e' },
   ]
   const byMeal: Record<string, FoodEntry[]> = {}
   for (const e of entries) { const k = e.meal_time||'snack'; if (!byMeal[k]) byMeal[k]=[]; byMeal[k].push(e) }
@@ -800,44 +802,27 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
           </div>
         )}
 
-        {/* Macro rings */}
+        {/* Macro rings — 5 compact cards in one row: cals, P, C, F, fiber.
+            (Replaced the old 2x2 grid of larger cards + separate fiber bar.) */}
         {clientRecord?.show_macros !== false && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:20 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, marginBottom:20 }}>
           {macros.map(m => {
-            const p = pct(m.val, m.target ?? 0); const r=22, circ=2*Math.PI*r
+            const p = pct(m.val, m.target ?? 0); const r=16, circ=2*Math.PI*r
             return (
-              <div key={m.label} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'12px 8px', textAlign:'center' }}>
-                <svg width="56" height="56" style={{ display:'block', margin:'0 auto 6px' }}>
-                  <circle cx="28" cy="28" r={r} fill="none" stroke={t.surfaceHigh} strokeWidth="4"/>
-                  <circle cx="28" cy="28" r={r} fill="none" stroke={m.color} strokeWidth="4" strokeDasharray={circ} strokeDashoffset={circ-circ*p/100} strokeLinecap="round" transform="rotate(-90 28 28)" style={{ transition:'stroke-dashoffset 0.5s ease' }}/>
-                  <text x="28" y="33" textAnchor="middle" fontSize="10" fontWeight="700" fill={m.color}>{p}%</text>
+              <div key={m.label} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 4px', textAlign:'center', minWidth:0 }}>
+                <svg width="44" height="44" style={{ display:'block', margin:'0 auto 5px' }}>
+                  <circle cx="22" cy="22" r={r} fill="none" stroke={t.surfaceHigh} strokeWidth="3.5"/>
+                  <circle cx="22" cy="22" r={r} fill="none" stroke={m.color} strokeWidth="3.5" strokeDasharray={circ} strokeDashoffset={circ-circ*p/100} strokeLinecap="round" transform="rotate(-90 22 22)" style={{ transition:'stroke-dashoffset 0.5s ease' }}/>
+                  <text x="22" y="26" textAnchor="middle" fontSize="9" fontWeight="700" fill={m.color}>{p}%</text>
                 </svg>
-                <div style={{ fontSize:14, fontWeight:800 }}>{m.val}<span style={{ fontSize:10, color:t.textMuted, fontWeight:400 }}>{m.unit}</span></div>
-                {m.target ? <div style={{ fontSize:10, color:t.textMuted }}>/{m.target}{m.unit}</div> : <div style={{ fontSize:10, color:t.textMuted }}>&mdash;</div>}
-                <div style={{ fontSize:10, color:t.textMuted, marginTop:2 }}>{m.label}</div>
+                <div style={{ fontSize:13, fontWeight:800 }}>{m.val}<span style={{ fontSize:9, color:t.textMuted, fontWeight:400 }}>{m.unit}</span></div>
+                {m.target ? <div style={{ fontSize:9, color:t.textMuted }}>/{m.target}{m.unit}</div> : <div style={{ fontSize:9, color:t.textMuted }}>&mdash;</div>}
+                <div style={{ fontSize:9, color:t.textMuted, marginTop:2 }}>{m.label}</div>
               </div>
             )
           })}
         </div>
         )}
-
-        {/* Fiber bar — slim secondary stat, not a fifth ring. Shows once the
-            plan has a fiber target or any fiber has been logged today. */}
-        {clientRecord?.show_macros !== false && (plan?.fiber_g || totals.fiber > 0) ? (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:12, padding:'10px 14px', marginTop:-10, marginBottom:20 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: plan?.fiber_g ? 6 : 0 }}>
-              <span style={{ fontSize:11, fontWeight:700, color:t.textDim }}>🌾 Fiber</span>
-              <span style={{ fontSize:11, fontWeight:800, color:'#22c55e' }}>
-                {Math.round(totals.fiber)}g{plan?.fiber_g ? ` / ${plan.fiber_g}g` : ''}
-              </span>
-            </div>
-            {plan?.fiber_g ? (
-              <div style={{ height:5, borderRadius:3, background:t.surfaceHigh, overflow:'hidden' }}>
-                <div style={{ height:'100%', width:`${pct(totals.fiber, plan.fiber_g)}%`, background:'#22c55e', borderRadius:3, transition:'width 0.5s ease' }}/>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
 
         {/* Add food buttons */}
         {addMode === 'none' && !pendingFood && (
