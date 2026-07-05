@@ -776,8 +776,13 @@ ${candidateList}`
   // scrollIntoView aims at the element's position at CALL time — when the
   // target moves mid-animation it overshoots and the exercise name ends up
   // cut off above the fold. By 350ms layout + keyboard have settled, and an
-  // instant scroll can't be raced. scrollMarginTop on the card supplies the
-  // headroom.
+  // instant scroll can't be raced.
+  //
+  // The card's scrollMarginTop must clear the STICKY TOP BAR: the page
+  // scroller is the window (the outer div is minHeight:100vh so the inner
+  // overflow div never engages), and block:'start' aligns the card to the
+  // viewport top — directly underneath the ~56-64px sticky header. 72px
+  // clears it with the group banner peeking above the card.
   useEffect(() => {
     if (!expandedExId) return
     const id = setTimeout(() => {
@@ -2181,7 +2186,7 @@ ${candidateList}`
                   return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface,scrollMarginTop:8}}>
+                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface,scrollMarginTop:72}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}
