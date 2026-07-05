@@ -49,6 +49,9 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   const [isPrivate, setIsPrivate] = useState(existing?.is_private ?? true)
   const [saving,    setSaving]    = useState(false)
   const [collapsed, setCollapsed] = useState(alreadyDone)
+  // Unfilled pulse starts as a compact prompt row — the full wizard was
+  // eating a third of the screen before the first tap.
+  const [started,   setStarted]   = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [restoredDraft, setRestoredDraft] = useState(false)
   const [profileId, setProfileId] = useState<string | null>(null)
@@ -194,6 +197,26 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
     )
   }
 
+  // ── Not started — compact prompt, expands to the wizard on tap ───────────
+  if (!alreadyDone && !started) {
+    return (
+      <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
+        <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
+        <button onClick={()=>setStarted(true)}
+          style={{ ...btnBase, width:'100%', padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🌅</div>
+          <div style={{ flex:1, textAlign:'left' as const }}>
+            <div style={{ fontSize:14, fontWeight:800, color:t.text }}>Morning Pulse</div>
+            <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>30 seconds — how are you feeling today?</div>
+          </div>
+          <span style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 31), borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color:t.teal, flexShrink:0 }}>
+            Check in →
+          </span>
+        </button>
+      </div>
+    )
+  }
+
   // ── Active check-in ──────────────────────────────────────────────────────
   const STEPS = ['sleep','energy','sliders','journal'] as const
   const stepIdx = STEPS.indexOf(step)
@@ -204,7 +227,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   // color is bulletproof.
   const nextBtn = (onClick: () => void, color = t.teal, textColor = '#000') => (
     <button onClick={onClick}
-      style={{ marginTop:16, width:'100%', padding:'12px', borderRadius:12, border:'none',
+      style={{ marginTop:12, width:'100%', padding:'11px', borderRadius:12, border:'none',
         backgroundColor: color, background: color, color:textColor,
         fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
         boxShadow:'inset 0 -2px 0 rgba(0,0,0,0.15)' }}>
@@ -215,11 +238,11 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
   return (
     <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden', marginBottom:14 }}>
       <div style={{ height:3, background:'linear-gradient(90deg,'+t.teal+','+t.purple+')' }}/>
-      <div style={{ padding:'16px 16px 20px' }}>
+      <div style={{ padding:'14px 14px 14px' }}>
 
         {/* Header + step dots */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
-          <div style={{ width:38, height:38, borderRadius:11, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>🌅</div>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+          <div style={{ width:34, height:34, borderRadius:10, background:t.purpleDim, border:'1px solid '+alpha(t.purple, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>🌅</div>
           <div>
             <div style={{ fontSize:15, fontWeight:800 }}>Morning Pulse</div>
             <div style={{ fontSize:11, color:t.textMuted }}>Daily check-in</div>
@@ -235,11 +258,11 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
         {step === 'sleep' && (
           <div style={{ textAlign:'center' as const }}>
             <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>How did you sleep?</div>
-            <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap a star</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Tap a star</div>
             <div style={{ display:'flex', justifyContent:'center', gap:10 }}>
               {[1,2,3,4,5].map(n => (
                 <button key={n} onClick={()=>setSleep(n)}
-                  style={{ ...btnBase, fontSize:40, padding:'4px', transform:sleep===n?'scale(1.2)':'scale(1)', transition:'transform 0.1s' }}>
+                  style={{ ...btnBase, fontSize:34, padding:'4px', transform:sleep===n?'scale(1.2)':'scale(1)', transition:'transform 0.1s' }}>
                   {n<=(sleep||0)?'⭐':'☆'}
                 </button>
               ))}
@@ -253,11 +276,11 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
         {step === 'energy' && (
           <div style={{ textAlign:'center' as const }}>
             <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>Energy level?</div>
-            <div style={{ fontSize:12, color:t.textMuted, marginBottom:20 }}>Tap a bolt</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Tap a bolt</div>
             <div style={{ display:'flex', justifyContent:'center', gap:10 }}>
               {[1,2,3,4,5].map(n => (
                 <button key={n} onClick={()=>setEnergy(n)}
-                  style={{ ...btnBase, fontSize:40, padding:'4px', opacity:n<=(energy||0)?1:0.25, transition:'opacity 0.1s, transform 0.1s', transform:energy===n?'scale(1.2)':'scale(1)' }}>
+                  style={{ ...btnBase, fontSize:34, padding:'4px', opacity:n<=(energy||0)?1:0.25, transition:'opacity 0.1s, transform 0.1s', transform:energy===n?'scale(1.2)':'scale(1)' }}>
                   ⚡
                 </button>
               ))}
@@ -271,12 +294,12 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
         {step === 'sliders' && (
           <div>
             <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>How are you feeling?</div>
-            <div style={{ fontSize:12, color:t.textMuted, marginBottom:18 }}>Stress & Mood</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:12 }}>Stress & Mood</div>
             {([
               { key:'stress' as const, label:'😤 Stress', low:'Chill', high:'Maxed', color:t.red  },
               { key:'mood'   as const, label:'😊 Mood',   low:'Low',  high:'Great',  color:t.pink },
             ]).map(({ key, label, low, high, color }) => (
-              <div key={key} style={{ marginBottom:18 }}>
+              <div key={key} style={{ marginBottom:14 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
                   <div style={{ fontSize:13, fontWeight:700, color:t.textDim }}>{label}</div>
                   <div style={{ fontSize:16, fontWeight:900, color }}>{sliders[key]}</div>
@@ -360,7 +383,7 @@ export default function MorningPulse({ clientId, today, supabase, existing, onSa
 
         {/* Back button — shown on all steps except journal (which has Skip) */}
         {step !== 'journal' && (
-          <div style={{ textAlign:'center' as const, marginTop:16 }}>
+          <div style={{ textAlign:'center' as const, marginTop:8 }}>
             <button onClick={()=>{
               if(step==='energy') setStep('sleep')
               else if(step==='sliders') setStep('energy')
