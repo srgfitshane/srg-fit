@@ -65,7 +65,7 @@ export default function ClientDetail() {
   // the coach-side view of what the client really ate, not just totals.
   const [recentMeals, setRecentMeals] = useState<any[]>([])
   const [nutritionEdit, setNutritionEdit] = useState(false)
-  const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', water:'64', notes:'' })
+  const [nutritionForm, setNutritionForm] = useState({ calories:'', protein:'', carbs:'', fat:'', fiber:'', water:'64', notes:'' })
   const [nutritionSaving, setNutritionSaving] = useState(false)
   const [aiMacrosLoading, setAiMacrosLoading] = useState(false)
   // F1a: 7-day nutrition critique. Lazy-loaded — coach hits the button.
@@ -280,6 +280,7 @@ export default function ClientDetail() {
           protein:  String(nutritionData.protein_g || ''),
           carbs:    String(nutritionData.carbs_g || ''),
           fat:      String(nutritionData.fat_g || ''),
+          fiber:    String(nutritionData.fiber_g || ''),
           water:    String(nutritionData.water_oz || '64'),
           notes:    nutritionData.notes || '',
         })
@@ -1909,6 +1910,7 @@ export default function ClientDetail() {
                         protein:  String(nutritionPlan.protein_g || ''),
                         carbs:    String(nutritionPlan.carbs_g || ''),
                         fat:      String(nutritionPlan.fat_g || ''),
+                        fiber:    String(nutritionPlan.fiber_g || ''),
                         water:    String(nutritionPlan.water_oz || '64'),
                         notes:    nutritionPlan.notes || '',
                       })
@@ -1923,12 +1925,13 @@ export default function ClientDetail() {
                 {/* View mode — macro tiles */}
                 {!nutritionEdit && nutritionPlan && (
                   <>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10 }}>
                       {[
                         { label:'Calories', val: nutritionPlan.calories_target ? nutritionPlan.calories_target+'kcal' : '—', color:t.orange },
                         { label:'Protein',  val: nutritionPlan.protein_g  ? nutritionPlan.protein_g+'g'  : '—', color:t.teal   },
                         { label:'Carbs',    val: nutritionPlan.carbs_g    ? nutritionPlan.carbs_g+'g'    : '—', color:t.yellow },
                         { label:'Fat',      val: nutritionPlan.fat_g      ? nutritionPlan.fat_g+'g'      : '—', color:t.purple },
+                        { label:'Fiber',    val: nutritionPlan.fiber_g    ? nutritionPlan.fiber_g+'g'    : '—', color:t.green  },
                         { label:'Water',    val: nutritionPlan.water_oz   ? nutritionPlan.water_oz+'oz'  : '—', color:'#38bdf8' },
                       ].map(s => (
                         <div key={s.label} style={{ background:t.surfaceHigh, borderRadius:12, padding:'14px 16px', textAlign:'center' }}>
@@ -2032,6 +2035,7 @@ export default function ClientDetail() {
                         { label:'Protein (g)',      key:'protein',  placeholder:'150',  color:t.teal   },
                         { label:'Carbs (g)',        key:'carbs',    placeholder:'200',  color:t.yellow },
                         { label:'Fat (g)',          key:'fat',      placeholder:'65',   color:t.purple },
+                        { label:'Fiber (g)',        key:'fiber',    placeholder:'25',   color:t.green  },
                         { label:'Water (oz)',       key:'water',    placeholder:'64',   color:'#38bdf8' },
                       ].map(f => (
                         <div key={f.key}>
@@ -2068,6 +2072,7 @@ export default function ClientDetail() {
                           protein_g:  parseInt(nutritionForm.protein)  || null,
                           carbs_g:    parseInt(nutritionForm.carbs)    || null,
                           fat_g:      parseInt(nutritionForm.fat)      || null,
+                          fiber_g:    parseInt(nutritionForm.fiber)    || null,
                           water_oz:   parseInt(nutritionForm.water)    || 64,
                           notes:      nutritionForm.notes || null,
                           meal_plan:  mealPlan.length > 0 ? mealPlan : null,
