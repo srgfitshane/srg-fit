@@ -176,21 +176,22 @@ function defaultSet(): SetData {
   return { reps_completed:'', duration_completed:'', weight_value:'', weight_unit:'lbs', rpe:'', notes:'', is_warmup:false, logged:false, skipped:false }
 }
 
-// Align the exercises array with DISPLAY order: role sections in order of
-// first appearance, original order_index order within each role — exactly
-// how the list renders. Navigation (advance, skip, round-chaining) walks
-// this array, so it MUST match the on-screen sequence: with interleaved
-// order_index data (B1,A1,B2,A2,B3) the raw array's "next" after B2 is A2,
-// while the card below B2 on screen is B3. Array.sort is stable, so
-// within-role order is preserved.
+// Canonical section order — enforced regardless of builder order_index, so
+// a workout always reads Warm-Up → Main → Secondary → ... → Finisher.
+const ROLE_ORDER = ['warmup','main','secondary','accessory','variation','cooldown','finisher']
+
+// Sort the exercises array into DISPLAY order: canonical role sections,
+// original order_index order within each role (Array.sort is stable).
+// Navigation (advance, skip, round-chaining) walks this array, so it MUST
+// match the on-screen sequence — with interleaved order_index data
+// (B1,A1,B2,A2,B3) the raw array's "next" after B2 was A2 while the card
+// below B2 on screen was B3. Unknown roles sort after the known ones.
 function toDisplayOrder(exs: SessionExercise[]): SessionExercise[] {
-  const roleRank: Record<string, number> = {}
-  exs.forEach(ex => {
-    const role = ex.exercise_role || 'main'
-    if (!(role in roleRank)) roleRank[role] = Object.keys(roleRank).length
-  })
-  return [...exs].sort((a, b) =>
-    roleRank[a.exercise_role || 'main'] - roleRank[b.exercise_role || 'main'])
+  const rank = (ex: SessionExercise) => {
+    const i = ROLE_ORDER.indexOf(ex.exercise_role || 'main')
+    return i === -1 ? ROLE_ORDER.length : i
+  }
+  return [...exs].sort((a, b) => rank(a) - rank(b))
 }
 
 export default function ActiveWorkoutPage() {
@@ -2095,8 +2096,9 @@ ${candidateList}`
         {/* Exercise list — grouped by role */}
         <div style={{flex:1,overflowY:'auto',padding:'12px 16px 16px'}}>
           {(() => {
-            // Group exercises by role
-            const ROLE_ORDER = ['warmup','main','secondary','accessory','variation','cooldown','finisher']
+            // Group exercises by role. The array is already sorted into
+            // canonical role order (toDisplayOrder at load), so grouping by
+            // first appearance yields Warm-Up → Main → ... → Finisher.
             const ROLE_LABELS: Record<string,string> = {
               warmup:'🔥 Warm-Up', main:'💪 Main', secondary:'🎯 Secondary',
               accessory:'⚙️ Accessory', variation:'🔄 Variation', cooldown:'🧘 Cool-Down',
