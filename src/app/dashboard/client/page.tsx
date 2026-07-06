@@ -970,29 +970,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     } else {
       await supabase.from('habit_logs').insert({ habit_id: habitId, client_id: clientRecord.id, logged_date: today, value })
     }
-
-    // Mirror trackable numeric habits into daily_checkins for coach trend view
-    const habit = habits.find((h) => h.id === habitId)
-    if (habit && habit.habit_type !== 'check' && value > 0) {
-      const labelKey = habit.label?.toLowerCase().trim()
-      const columnMap: Record<string, string> = {
-        'sleep':        'sleep_hours',
-        'sleep hours':  'sleep_hours',
-        'daily steps':  'steps',
-        'steps':        'steps',
-        'water':        'water_oz',
-        'drink water':  'water_oz',
-        'hydration':    'water_oz',
-      }
-      const col = Object.entries(columnMap).find(([k]) => labelKey?.includes(k))?.[1]
-      if (col) {
-        await supabase.from('daily_checkins').upsert({
-          client_id:    clientRecord.id,
-          checkin_date: today,
-          [col]:        value,
-        }, { onConflict: 'client_id,checkin_date' })
-      }
-    }
+    // habit_logs is the single source of truth for numeric habits (water,
+    // steps, sleep). The old mirror into daily_checkins targeted sleep_hours /
+    // steps / water_oz columns that don't exist on that table, so it errored
+    // silently on every log — removed. Charts and the coach weekly brief read
+    // habit_logs directly.
   }
 
   const completeTask = async (taskId: string) => {
