@@ -470,7 +470,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time: mealId,
       food_name: e.food_name, serving_size: e.serving_size, serving_qty: e.serving_qty,
       calories: e.calories, protein_g: e.protein_g, carbs_g: e.carbs_g, fat_g: e.fat_g, fiber_g: e.fiber_g,
-      source: 'saved',
+      // 'manual' — a copied meal is a user-initiated re-log. NOT 'saved':
+      // the food_entries_source_check constraint only allows manual /
+      // barcode / search / template / photo, so 'saved' failed every insert.
+      source: 'manual',
     }))
     const { error } = await supabase.from('food_entries').insert(rows)
     if (error) {
