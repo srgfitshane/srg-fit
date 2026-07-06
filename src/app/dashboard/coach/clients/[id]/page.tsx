@@ -20,6 +20,7 @@ import {
 import { alpha } from '@/lib/theme'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { toastError } from '@/components/ui/Toast'
+import { syncWaterHabit } from '@/lib/water-habit'
 import GifPicker from '@/components/coach/GifPicker'
 
 const t = {
@@ -2088,6 +2089,9 @@ export default function ClientDetail() {
                           if (error || !newPlan) { setNutritionSaving(false); alert('Could not create nutrition plan: ' + (error?.message || 'unknown error')); return }
                           setNutritionPlan(newPlan)
                         }
+                        // Mirror the water target onto the client's water habit
+                        // (single source of truth for water). Best-effort.
+                        await syncWaterHabit(supabase, { clientId, coachId, targetOz: payload.water_oz })
                         setNutritionSaving(false)
                         setNutritionEdit(false)
                       }}

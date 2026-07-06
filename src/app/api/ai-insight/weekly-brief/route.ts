@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
       .select('id, status, completed_at, scheduled_date, session_rpe, overall_rpe, energy_level, title, notes_client, mood')
       .eq('client_id', clientId).gte('scheduled_date', currStartYmd).lte('scheduled_date', currEndYmd),
     supabase.from('nutrition_daily_logs')
-      .select('log_date, total_calories, total_protein, water_oz')
+      .select('log_date, total_calories, total_protein')
       .eq('client_id', clientId).gte('log_date', currStartYmd).lte('log_date', currEndYmd),
     supabase.from('habit_logs')
       .select('habit_id, logged_date, value, completed')
@@ -142,8 +142,16 @@ export async function POST(req: NextRequest) {
     },
     habits: habitsSafe.map(h => {
       const logs = habitLogsCurrSafe.filter(l => l.habit_id === h.id)
-      const completedDays = logs.filter(l => l.completed).length
-      return { label: h.label, target: h.target, days_hit: completedDays, days_logged: logs.length }
+      // Numeric habits (water, steps, sleep) are logged by value, not the
+      // `completed` flag, so count a positive value as a hit and surface the
+      // average — this is how hydration reaches the coach's brief now that
+      // habit_logs is the single source of truth.
+      const valueLogs = logs.filter(l => (l.value || 0) > 0)
+      const daysHit = logs.filter(l => l.completed || (l.value || 0) > 0).length
+      const avgValue = valueLogs.length
+        ? Math.round((valueLogs.reduce((s, l) => s + (l.value || 0), 0) / valueLogs.length) * 10) / 10
+        : null
+      return { label: h.label, target: h.target, days_hit: daysHit, days_logged: logs.length, avg_value: avgValue }
     }),
     prs: prsCurrSafe.map(pr => ({
       exercise: (pr as any).exercise?.name || '?',
