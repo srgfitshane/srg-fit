@@ -563,12 +563,41 @@ on them without asking, but keep them in mind:
 - **TodayTab extraction**: `src/app/dashboard/client/page.tsx` has
   ~260 lines of TodayTab still inline. Pattern to follow: see how
   NutritionTab, TrainingTab, BillingTab are already extracted.
-- **Circuits / supersets in the workout logger** (back burner, Shane's
-  next-up idea, May 28): the logger's set grid is straight-sets only.
-  Supporting circuits/supersets needs grouped exercises + round-based
-  logging (log A1→B1→C1, rest, repeat). `group_type` is already
-  referenced in the logger UI, so the data model may be partway there —
-  check before planning. Deserves its own session + plan.
+- **Circuits / supersets in the workout logger**: DONE (Jul 5 2026).
+  Round-based auto-chain for chained group types (superset/triset/
+  circuit/contrast/giant): checking a set hops to the next group member,
+  rest fires once per round (group-max rest_seconds), banner shows live
+  round progress. Exercises array is sorted into canonical role order
+  (`toDisplayOrder` + `ROLE_ORDER`) so navigation always matches display.
+
+## Next-session improvement queue (proposed Jul 5 2026)
+
+Agreed direction with Shane; reconfirm item-by-item before building.
+
+1. **Sticky rest timer** (tiny, client): the rest banner in
+   `workout/[sessionId]/page.tsx` is in normal flow, so the auto-chain
+   scroll puts it off-screen mid-rest. Make it sticky below the top bar
+   (~56-64px offset) or a floating pill.
+2. **iOS Add-to-Home-Screen nudge** (small, client): dismissible card
+   when iOS Safari && !standalone, linking
+   `/srg-fit-home-screen-guide.pdf`. iOS push only works installed —
+   this completes the push pipeline.
+3. **7-day nutrition adherence strip** (small, client): dots above the
+   day view in `nutrition-tab.tsx` from `nutrition_daily_logs` totals
+   vs plan targets (fiber included now).
+4. **Offline queue for food logging** (medium, client): mirror
+   `workout-offline-queue.ts` for `food_entries`.
+5. **Lazy-load client-detail tabs** (medium, coach):
+   `clients/[id]/page.tsx` fires ~15 queries upfront for all tabs;
+   fetch per-tab on first open.
+6. **Extend-program-4-weeks button** (bigger, coach): act on
+   `program_ending` queue items by cloning the final week's sessions
+   forward. Own session + plan.
+7. **Water ownership decision** (decide before UI): `plans.water_oz`,
+   `nutrition_daily_logs.water_oz`, and habits all track water — pick a
+   single source first.
+
+Recommended batch: 1+2+3 together, then 5; 6 as its own session.
 
 ## Check-in coach responses (May 29 2026)
 
