@@ -572,32 +572,30 @@ on them without asking, but keep them in mind:
 
 ## Next-session improvement queue (proposed Jul 5 2026)
 
-Agreed direction with Shane; reconfirm item-by-item before building.
+Client batch shipped Jul 6 2026: **sticky rest timer** (rest banner
+now lives in the sticky header stack in `workout/[sessionId]/page.tsx`;
+card scrollMarginTop is 72/124 depending on restActive), **iOS
+Add-to-Home-Screen nudge** (Today tab card, iOS Safari && !standalone,
+14-day snooze, links `/srg-fit-home-screen-guide.pdf`), and **offline
+queue for food logging** (`src/lib/food-offline-queue.ts` mirrors the
+workout queue; flush resolves-or-creates the daily log, dedupes on
+client-stamped `logged_at`; pending entries render in the list and
+feed the macro rings).
 
-1. **Sticky rest timer** (tiny, client): the rest banner in
-   `workout/[sessionId]/page.tsx` is in normal flow, so the auto-chain
-   scroll puts it off-screen mid-rest. Make it sticky below the top bar
-   (~56-64px offset) or a floating pill.
-2. **iOS Add-to-Home-Screen nudge** (small, client): dismissible card
-   when iOS Safari && !standalone, linking
-   `/srg-fit-home-screen-guide.pdf`. iOS push only works installed —
-   this completes the push pipeline.
-3. **7-day nutrition adherence strip** (small, client): dots above the
+Remaining — reconfirm item-by-item before building:
+
+1. **7-day nutrition adherence strip** (small, client): dots above the
    day view in `nutrition-tab.tsx` from `nutrition_daily_logs` totals
-   vs plan targets (fiber included now).
-4. **Offline queue for food logging** (medium, client): mirror
-   `workout-offline-queue.ts` for `food_entries`.
-5. **Lazy-load client-detail tabs** (medium, coach):
+   vs plan targets (fiber included now). Skipped in the Jul 6 batch.
+2. **Lazy-load client-detail tabs** (medium, coach):
    `clients/[id]/page.tsx` fires ~15 queries upfront for all tabs;
    fetch per-tab on first open.
-6. **Extend-program-4-weeks button** (bigger, coach): act on
+3. **Extend-program-4-weeks button** (bigger, coach): act on
    `program_ending` queue items by cloning the final week's sessions
    forward. Own session + plan.
-7. **Water ownership decision** (decide before UI): `plans.water_oz`,
+4. **Water ownership decision** (decide before UI): `plans.water_oz`,
    `nutrition_daily_logs.water_oz`, and habits all track water — pick a
    single source first.
-
-Recommended batch: 1+2+3 together, then 5; 6 as its own session.
 
 ## Check-in coach responses (May 29 2026)
 

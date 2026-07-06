@@ -799,8 +799,10 @@ ${candidateList}`
   // The card's scrollMarginTop must clear the STICKY TOP BAR: the page
   // scroller is the window (the outer div is minHeight:100vh so the inner
   // overflow div never engages), and block:'start' aligns the card to the
-  // viewport top — directly underneath the ~56-64px sticky header. 72px
-  // clears it with the group banner peeking above the card.
+  // viewport top — directly underneath the sticky header stack: top bar
+  // ~56-64px, plus the rest banner ~52px when a rest is running (which is
+  // exactly when the auto-chain scroll fires). scrollMarginTop 72/124 on
+  // the card clears it with the group banner peeking above the card.
   useEffect(() => {
     if (!expandedExId) return
     const id = setTimeout(() => {
@@ -2036,8 +2038,15 @@ ${candidateList}`
         }`}</style>
       <div style={{minHeight:'100vh',background:t.bg,color:t.text,fontFamily:"'DM Sans',sans-serif",maxWidth:480,margin:'0 auto',display:'flex',flexDirection:'column'}}>
 
+        {/* Sticky header stack: top bar + offline + rest banners share ONE
+            sticky wrapper (instead of sticky on the top bar alone) so the
+            rest countdown stays visible when the auto-chain scroll jumps to
+            the next card mid-circuit. Solid bg on the wrapper because the
+            banners use alpha() fills that would otherwise show scrolled
+            content through them. */}
+        <div style={{position:'sticky',top:0,zIndex:50,background:t.bg}}>
         {/* Top bar */}
-        <div style={{background:t.surface,borderBottom:`1px solid ${t.border}`,padding:'12px 16px',display:'flex',alignItems:'center',gap:12,position:'sticky',top:0,zIndex:50}}>
+        <div style={{background:t.surface,borderBottom:`1px solid ${t.border}`,padding:'12px 16px',display:'flex',alignItems:'center',gap:12}}>
           <button onClick={()=>setShowCancelSheet(true)}
             aria-label="Exit workout and return to dashboard"
             style={{background:'none',border:'none',color:t.textDim,cursor:'pointer',fontSize:20,lineHeight:1}}>←</button>
@@ -2084,6 +2093,7 @@ ${candidateList}`
             </button>
           </div>
         )}
+        </div>
 
         {/* Coach notes */}
         {session?.notes_coach && (
@@ -2205,7 +2215,7 @@ ${candidateList}`
                   return (
                     <React.Fragment key={ex.id}>
                     {groupHeader}
-                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface,scrollMarginTop:72}}>
+                    <div ref={el => { cardRefs.current[ex.id] = el }} style={{marginBottom:8,border:`1px solid ${isOpen?alpha(group.color, 31):isSkipped?t.border:complete?alpha(t.green, 25):t.border}`,borderRadius:14,overflow:'hidden',background:t.surface,scrollMarginTop:restActive?124:72}}>
 
                       {/* Card header — always visible, tap to expand */}
                       <button onClick={()=>setExpandedExId(isOpen ? null : ex.id)}

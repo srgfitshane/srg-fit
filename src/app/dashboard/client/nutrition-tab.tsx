@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { resolveSignedMediaUrl } from '@/lib/media'
 import { alpha } from '@/lib/theme'
+import { enqueueFoodEntry, flushFoodQueue, pendingFoodForDate, pendingFoodCount, removeQueuedFoodEntry } from '@/lib/food-offline-queue'
+import { toastInfo, toastSuccess } from '@/components/ui/Toast'
 
 const FS_API = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/nutrition-search`
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
@@ -35,6 +37,9 @@ type FoodEntry = {
   logged_at: string
   photo_url?: string | null
   source?: string | null
+  // True for offline-queued entries that haven't reached the DB yet;
+  // their id is the queue item's client_uid, not a DB row id.
+  pending?: boolean
 }
 type AddMode = 'none' | 'search' | 'quick' | 'barcode' | 'saved' | 'image' | 'confirmed'
 
@@ -178,7 +183,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [searchResults,   setSearchResults]   = useState<SearchResult[]>([])
   const [searching,       setSearching]       = useState(false)
   const [searchError,     setSearchError]     = useState('')
-  const [commitError,     setCommitError]     = useState('')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [quick, setQuick] = useState({ food_name:'', calories:'', protein_g:'', carbs_g:'', fat_g:'', fiber_g:'', serving_size:'1 serving' })
   const [pendingFood,     setPendingFood]     = useState<Partial<FoodEntry> | null>(null)
@@ -222,6 +226,9 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [photoStorageUrl, setPhotoStorageUrl] = useState<string|null>(null)
   const [photoUploading,  setPhotoUploading]  = useState(false)
   const [photoErr,        setPhotoErr]        = useState('')
+  // Offline queue state — mirrors the workout logger's banner
+  const [isOffline,       setIsOffline]       = useState(false)
+  const [queuedFoodCount, setQueuedFoodCount] = useState(0)
 
   const loadData = useCallback(async () => {
     if (!clientRecord?.id) return
@@ -231,6 +238,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       supabase.from('nutrition_daily_logs').select('*').eq('client_id', clientRecord.id).eq('log_date', selectedDate).single()
     ])
     setPlan(activePlan)
+    // Offline-queued entries for this date render alongside DB rows so a
+    // just-logged food never silently vanishes from the list. They feed
+    // the macro rings too (the totals reduce runs over `entries`).
+    // photo_url in a queued payload is a raw storage path — unsignable
+    // while offline — so null it for display; the row falls back to the
+    // standard (non-image) branch until it syncs.
+    const pendingLocal: FoodEntry[] = pendingFoodForDate(clientRecord.id, selectedDate)
+      .map(q => ({ ...(q.payload as unknown as FoodEntry), id: q.client_uid, pending: true, photo_url: null }))
     if (dailyLog) {
       setLog(dailyLog)
       const { data: ents } = await supabase.from('food_entries').select('*').eq('daily_log_id', dailyLog.id).order('logged_at')
@@ -248,8 +263,8 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         }
         return e
       }))
-      setEntries(signedEnts)
-    } else { setLog(null); setEntries([]) }
+      setEntries([...signedEnts, ...pendingLocal])
+    } else { setLog(null); setEntries(pendingLocal) }
     const { data: prev } = await supabase.from('food_entries')
       .select('food_name,calories,protein_g,carbs_g,fat_g,fiber_g,serving_size,serving_qty,logged_at,source')
       .eq('client_id', clientRecord.id)
@@ -301,6 +316,44 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   // Stop camera on unmount
   useEffect(() => () => { stopCamera() }, [])
 
+  // Offline queue: track navigator state, drain pending food logs on
+  // reconnect. Same shape as the workout logger's effect.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const initialOnline = window.navigator.onLine !== false
+    setIsOffline(!initialOnline)
+    setQueuedFoodCount(pendingFoodCount())
+
+    let flushing = false
+    const tryFlush = async () => {
+      if (flushing) return
+      flushing = true
+      try {
+        const before = pendingFoodCount()
+        const { flushed, remaining } = await flushFoodQueue(supabase)
+        setQueuedFoodCount(remaining)
+        if (flushed > 0 && before > 0) {
+          toastSuccess(`Synced ${flushed} pending food log${flushed === 1 ? '' : 's'}`)
+          // Reload so the synced rows come back as real DB entries
+          void loadData()
+        }
+      } finally {
+        flushing = false
+      }
+    }
+
+    const handleOnline  = () => { setIsOffline(false); void tryFlush() }
+    const handleOffline = () => { setIsOffline(true) }
+    window.addEventListener('online',  handleOnline)
+    window.addEventListener('offline', handleOffline)
+    if (initialOnline) void tryFlush()
+
+    return () => {
+      window.removeEventListener('online',  handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [supabase, loadData])
+
   async function ensureLog() {
     if (!clientRecord) return null
     if (log) return log
@@ -316,50 +369,80 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
     if (!pendingFood) return
     if (!clientRecord) return
     setSaving(true)
-    setCommitError('')
     let succeeded = false
+    const s = pendingServings
+    const isPhoto = pendingFood.source === 'photo'
+    // Insert body sans daily_log_id (the queue path resolves the daily log
+    // at flush time). logged_at is stamped client-side so the flush can
+    // dedupe if an insert landed but the network ack was lost.
+    const entryBody = {
+      client_id: clientRecord.id, meal_time,
+      food_name:    pendingFood.food_name || '',
+      serving_size: isPhoto ? '1 photo' : `${s !== 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
+      serving_qty:  isPhoto ? null : s,
+      source:       pendingFood.source || null,
+      photo_url:    pendingFood.photo_url || null,
+      calories:  !isPhoto && pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
+      protein_g: !isPhoto && pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
+      carbs_g:   !isPhoto && pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
+      fat_g:     !isPhoto && pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
+      fiber_g:   !isPhoto && pendingFood.fiber_g   != null ? Math.round(pendingFood.fiber_g   * s * 10) / 10 : null,
+      logged_at: new Date().toISOString(),
+    }
+    const markSaved = () => {
+      succeeded = true
+      const mealLabel = MEAL_LABELS.find(m => m.id === meal_time)?.label || meal_time
+      setLastSavedLabel(`${pendingFood.food_name} → ${mealLabel}`)
+      setReturnMode(
+        addMode === 'image' ? 'image' :
+        addMode === 'barcode' ? 'barcode' :
+        addMode === 'quick' ? 'quick' :
+        addMode === 'saved' ? 'saved' : 'search'
+      )
+    }
+    // Save failed (offline OR server error) — park in localStorage, show
+    // the entry as pending in the list, and let the 'online' flush land it.
+    // Same optimistic pattern as the workout logger's logSet.
+    const queueEntry = () => {
+      const queued = enqueueFoodEntry({
+        client_id: clientRecord.id,
+        coach_id:  clientRecord.coach_id || null,
+        plan_id:   plan?.id || null,
+        log_date:  selectedDate,
+        payload:   entryBody,
+      })
+      setQueuedFoodCount(pendingFoodCount())
+      // photo_url stays null in the optimistic row — it's a raw storage
+      // path, unsignable offline; the real signed entry arrives post-flush
+      setEntries(prev => [...prev, { ...(entryBody as unknown as FoodEntry), id: queued.client_uid, pending: true, photo_url: null }])
+      markSaved()
+      toastInfo('Saved offline — will sync when you reconnect', 4000)
+    }
     try {
-      const s = pendingServings
-      const isPhoto = pendingFood.source === 'photo'
+      // Skip the network entirely if the device is offline — queue immediately.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) { queueEntry(); return }
       const currentLog = await ensureLog()
       if (!currentLog?.id) {
-        console.error('commitEntry: ensureLog returned null')
-        setCommitError('Could not start a daily log. Please refresh and try again.')
-        setSaving(false); return
+        console.error('commitEntry: ensureLog returned null — queueing')
+        queueEntry(); return
       }
-      const { data: saved, error } = await supabase.from('food_entries').insert({
-        daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time,
-        food_name:    pendingFood.food_name || '',
-        serving_size: isPhoto ? '1 photo' : `${s !== 1 ? s+'x ' : ''}${pendingFood.serving_size || '1 serving'}`,
-        serving_qty:  isPhoto ? null : s,
-        source:       pendingFood.source || null,
-        photo_url:    pendingFood.photo_url || null,
-        calories:  !isPhoto && pendingFood.calories  != null ? Math.round(pendingFood.calories  * s * 10) / 10 : null,
-        protein_g: !isPhoto && pendingFood.protein_g != null ? Math.round(pendingFood.protein_g * s * 10) / 10 : null,
-        carbs_g:   !isPhoto && pendingFood.carbs_g   != null ? Math.round(pendingFood.carbs_g   * s * 10) / 10 : null,
-        fat_g:     !isPhoto && pendingFood.fat_g     != null ? Math.round(pendingFood.fat_g     * s * 10) / 10 : null,
-        fiber_g:   !isPhoto && pendingFood.fiber_g   != null ? Math.round(pendingFood.fiber_g   * s * 10) / 10 : null,
-      }).select().single()
-      if (error) {
-        console.error('food_entries insert error:', error.message)
-        setCommitError('Could not save this food. ' + error.message)
-        setSaving(false); return
+      const { data: saved, error } = await supabase.from('food_entries')
+        .insert({ daily_log_id: currentLog.id, ...entryBody }).select().single()
+      if (error || !saved) {
+        if (error) console.error('food_entries insert error:', error.message)
+        queueEntry(); return
       }
-      if (saved) {
-        succeeded = true
-        const mealLabel = MEAL_LABELS.find(m => m.id === meal_time)?.label || meal_time
-        setLastSavedLabel(`${pendingFood.food_name} → ${mealLabel}`)
-        setReturnMode(
-          addMode === 'image' ? 'image' :
-          addMode === 'barcode' ? 'barcode' :
-          addMode === 'quick' ? 'quick' :
-          addMode === 'saved' ? 'saved' : 'search'
-        )
-        const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', currentLog.id)
-        await recalcTotals(currentLog.id, fresh.data || [])
-        await loadData()
-      }
-    } catch (e) { console.error('commitEntry exception:', e) }
+      markSaved()
+      const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', currentLog.id)
+      await recalcTotals(currentLog.id, fresh.data || [])
+      await loadData()
+    } catch (e) {
+      console.error('commitEntry exception:', e)
+      // Threw before the insert resolved — queue it. If the row DID land
+      // and something after the insert threw, succeeded is already true
+      // (and even a lost-ack queue would be deduped on logged_at at flush).
+      if (!succeeded) queueEntry()
+    }
     finally {
       if (succeeded) {
         setPendingFood(null); setPendingServings(1); setAddMode('confirmed')
@@ -387,7 +470,10 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
       daily_log_id: currentLog.id, client_id: clientRecord.id, meal_time: mealId,
       food_name: e.food_name, serving_size: e.serving_size, serving_qty: e.serving_qty,
       calories: e.calories, protein_g: e.protein_g, carbs_g: e.carbs_g, fat_g: e.fat_g, fiber_g: e.fiber_g,
-      source: 'saved',
+      // 'manual' — a copied meal is a user-initiated re-log. NOT 'saved':
+      // the food_entries_source_check constraint only allows manual /
+      // barcode / search / template / photo, so 'saved' failed every insert.
+      source: 'manual',
     }))
     const { error } = await supabase.from('food_entries').insert(rows)
     if (error) {
@@ -402,6 +488,14 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   }
 
   async function removeEntry(id: string) {
+    // Pending (offline-queued) entries live in localStorage, not the DB
+    const target = entries.find(e => e.id === id)
+    if (target?.pending) {
+      removeQueuedFoodEntry(id)
+      setQueuedFoodCount(pendingFoodCount())
+      setEntries(prev => prev.filter(e => e.id !== id))
+      return
+    }
     await supabase.from('food_entries').delete().eq('id', id)
     if (log) {
       const fresh = await supabase.from('food_entries').select('calories,protein_g,carbs_g,fat_g,fiber_g').eq('daily_log_id', log.id)
@@ -787,6 +881,18 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
         {plan && <span style={{ fontSize:12, color:t.teal, marginLeft:'auto' }}>📋 {plan.name}</span>}
       </div>
 
+      {/* Offline / pending-sync banner — mirrors the workout logger's */}
+      {(isOffline || queuedFoodCount > 0) && (
+        <div style={{ background:isOffline ? alpha(t.orange, 13) : alpha(t.teal, 13), border:`1px solid ${isOffline ? alpha(t.orange, 25) : alpha(t.teal, 25)}`, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', gap:10, fontSize:12, marginBottom:14 }}>
+          <span style={{ fontSize:14 }}>{isOffline ? '📡' : '⏳'}</span>
+          <span style={{ flex:1, color:isOffline ? t.orange : t.teal, fontWeight:700 }}>
+            {isOffline
+              ? (queuedFoodCount > 0 ? `Offline · ${queuedFoodCount} food${queuedFoodCount === 1 ? '' : 's'} saved locally` : 'Offline — foods you log will sync when you reconnect')
+              : `Syncing ${queuedFoodCount} pending food log${queuedFoodCount === 1 ? '' : 's'}…`}
+          </span>
+        </div>
+      )}
+
       {loading ? <div style={{ padding:'40px 0', textAlign:'center', color:t.textMuted }}>Loading...</div> : (<>
 
         {!plan && (
@@ -1156,12 +1262,6 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
             )}
 
             <div style={{ fontSize:12, fontWeight:700, color:t.textDim, marginBottom:10 }}>Which meal is this?</div>
-            {commitError && (
-              <div style={{ background:alpha(t.orange, 12), border:`1px solid ${alpha(t.orange, 38)}`, borderRadius:10, padding:'10px 12px', fontSize:12, color:t.orange, marginBottom:10, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:8 }}>
-                <span style={{ fontSize:14, lineHeight:1, marginTop:1 }}>⚠</span>
-                <span>{commitError}</span>
-              </div>
-            )}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:12 }}>
               {MEAL_LABELS.map(m=>(
                 <button key={m.id} onClick={()=>commitEntry(m.id)} disabled={saving}
@@ -1217,10 +1317,12 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
                         /* Standard entry — name, macros, optional servings editor */
                         <div style={{ padding:'10px 12px' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ setEditingEntry(editingEntry===e.id?null:e.id); setEditServings(e.serving_qty||1) }}>
+                            {/* Pending entries: no servings editor — the queued payload is
+                                final until it syncs. Delete still works (removes from queue). */}
+                            <div style={{ flex:1, cursor:e.pending?'default':'pointer' }} onClick={()=>{ if (e.pending) return; setEditingEntry(editingEntry===e.id?null:e.id); setEditServings(e.serving_qty||1) }}>
                               <div style={{ fontSize:13, fontWeight:600 }}>{e.food_name}</div>
                               <div style={{ fontSize:11, color:t.textMuted }}>
-                                {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}{e.fiber_g?` · ${e.fiber_g}g fiber`:''}
+                                {e.serving_size}{e.calories?` · ${Math.round(e.calories)} kcal`:''}{e.protein_g?` · ${e.protein_g}g P`:''}{e.carbs_g?` · ${e.carbs_g}g C`:''}{e.fat_g?` · ${e.fat_g}g F`:''}{e.fiber_g?` · ${e.fiber_g}g fiber`:''}{e.pending?' · ⏳ syncs when online':''}
                               </div>
                             </div>
                             <button onClick={()=>removeEntry(e.id)} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:18, padding:'2px 4px', lineHeight:1 }}>x</button>
