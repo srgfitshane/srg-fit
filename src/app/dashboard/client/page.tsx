@@ -306,6 +306,9 @@ type WorkoutSessionCompletionRecord = {
 type LogPopupState = {
   habit: HabitRecord
   draft: string
+  // 'add' (default for additive habits — input is the amount just consumed)
+  // vs 'edit' (input overwrites today's total, to correct a mis-log).
+  mode?: 'add' | 'edit'
 }
 
 type SubscriptionRecord = {
@@ -410,6 +413,21 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setInstallNudge(isIOS && isSafari && !standalone && !snoozed)
     } catch { /* UA sniff is best-effort */ }
   }, [])
+  // Keep kbInset in sync with the on-screen keyboard so bottom-sheet popups
+  // clear it. visualViewport.height shrinks by the keyboard; the gap from
+  // innerHeight (minus any scroll offset) is how far to lift the sheet.
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const onResize = () => setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop))
+    vv.addEventListener('resize', onResize)
+    vv.addEventListener('scroll', onResize)
+    onResize()
+    return () => {
+      vv.removeEventListener('resize', onResize)
+      vv.removeEventListener('scroll', onResize)
+    }
+  }, [])
   const [clientRecord, setClientRecord] = useState<DashboardClientRecord | null>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])
@@ -441,6 +459,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   })
   const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
+  // On-screen keyboard height, tracked via visualViewport so the bottom-sheet
+  // log popup can lift above it. iOS Safari overlays the keyboard on fixed
+  // elements without shrinking the layout viewport, so a bottom:0 sheet gets
+  // buried — including its Save button.
+  const [kbInset,      setKbInset]      = useState(0)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>(() => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('view') === 'coach' ? 'coach' : 'hub'
@@ -2151,7 +2174,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         {logPopup && (
           <>
             <div onClick={()=>setLogPopup(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40, backdropFilter:'blur(4px)' }} />
-            <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', padding:'24px 20px 40px', zIndex:41, fontFamily:"'DM Sans',sans-serif" }}>
+            <div style={{ position:'fixed', bottom:kbInset, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', padding:'24px 20px 40px', zIndex:41, fontFamily:"'DM Sans',sans-serif", transition:'bottom 0.2s ease', maxHeight:`calc(100dvh - ${kbInset}px - 12px)`, overflowY:'auto' }}>
               {/* Handle bar */}
               <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }} />
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
@@ -2166,8 +2189,26 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   </div>
                 </div>
               </div>
-              {/* Quick-add presets for additive habits — one tap = log a glass / a walk. */}
-              {isAdditiveHabit(logPopup.habit) && quickAddPresets(logPopup.habit.unit).length > 0 && (
+              {/* Add vs Edit-total toggle — only for additive habits that
+                  already have a value today. Single-value habits (weight,
+                  sleep) already overwrite on save, so they don't need it. */}
+              {isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 && (
+                <div style={{ display:'flex', gap:6, marginBottom:14, background:t.surfaceUp, borderRadius:10, padding:4 }}>
+                  {([['add','+ Add'],['edit','Edit total']] as const).map(([m,label]) => {
+                    const active = (logPopup.mode||'add') === m
+                    return (
+                      <button key={m}
+                        onClick={()=>setLogPopup(p=>p?{...p, mode:m, draft: m==='edit' ? String(habitLogs[p.habit.id]||0) : ''}:null)}
+                        style={{ flex:1, background: active ? t.surface : 'transparent', border:'1px solid '+(active?alpha(logPopup.habit.color||t.teal,40):'transparent'), borderRadius:8, padding:'8px', fontSize:12, fontWeight:800, color: active ? (logPopup.habit.color||t.teal) : t.textMuted, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Quick-add presets for additive habits — one tap = log a glass / a walk.
+                  Hidden in edit mode (a "+amount" preset makes no sense there). */}
+              {isAdditiveHabit(logPopup.habit) && (logPopup.mode||'add')==='add' && quickAddPresets(logPopup.habit.unit).length > 0 && (
                 <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
                   {quickAddPresets(logPopup.habit.unit).map(amt => {
                     const color = logPopup.habit.color || t.teal
@@ -2263,19 +2304,21 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   <>
                     <input
                       type="number" autoFocus inputMode="numeric"
-                      placeholder={isAdditiveHabit(logPopup.habit) ? 'Add amount' : '0'}
+                      placeholder={logPopup.mode==='edit' ? 'New total' : isAdditiveHabit(logPopup.habit) ? 'Add amount' : '0'}
                       value={logPopup.draft}
                       onChange={e=>setLogPopup(p=>p?{...p, draft:e.target.value}:null)}
                       onKeyDown={e=>{
                         if(e.key==='Enter'){
                           const v = +logPopup.draft||0
                           if(v > 0){
-                            const isAdd = isAdditiveHabit(logPopup.habit)
+                            const isEdit = logPopup.mode === 'edit'
+                            const isAdd = !isEdit && isAdditiveHabit(logPopup.habit)
                             const finalValue = isAdd
                               ? (habitLogs[logPopup.habit.id] || 0) + v
                               : v
                             logHabit(logPopup.habit.id, finalValue)
-                            if (isAdd) toastSuccess(`+${v}${logPopup.habit.unit||''} · ${finalValue}${logPopup.habit.unit||''} today`)
+                            if (isEdit) toastSuccess(`Updated · ${finalValue}${logPopup.habit.unit||''} today`)
+                            else if (isAdd) toastSuccess(`+${v}${logPopup.habit.unit||''} · ${finalValue}${logPopup.habit.unit||''} today`)
                             setLogPopup(null)
                           }
                         }
@@ -2294,19 +2337,23 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   if (!v || v <= 0) { setLogPopup(null); return }
                   // Additive habits (water, etc.) accumulate across the day —
                   // the popup input is the AMOUNT JUST CONSUMED, not the day's
-                  // running total.
-                  const isAdd = isAdditiveHabit(logPopup.habit)
+                  // running total — UNLESS the client switched to Edit-total
+                  // mode to correct a mis-log, where the input IS the new total.
+                  const isEdit = logPopup.mode === 'edit'
+                  const isAdd = !isEdit && isAdditiveHabit(logPopup.habit)
                   const finalValue = isAdd
                     ? (habitLogs[logPopup.habit.id] || 0) + v
                     : v
                   logHabit(logPopup.habit.id, finalValue)
-                  if (isAdd) {
+                  if (isEdit) {
+                    toastSuccess(`Updated · ${finalValue}${logPopup.habit.unit||''} today`)
+                  } else if (isAdd) {
                     toastSuccess(`+${v}${logPopup.habit.unit||''} · ${finalValue}${logPopup.habit.unit||''} today`)
                   }
                   setLogPopup(null)
                 }}
                 style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                {isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 ? 'Add ✓' : 'Save ✓'}
+                {logPopup.mode==='edit' ? 'Update total ✓' : isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 ? 'Add ✓' : 'Save ✓'}
               </button>
             </div>
           </>
