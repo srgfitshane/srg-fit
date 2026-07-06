@@ -391,6 +391,25 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setPushNudgeSnoozed(!!ts && Date.now() - Number(ts) < 14 * 24 * 60 * 60 * 1000)
     } catch { setPushNudgeSnoozed(false) }
   }, [])
+  // iOS Safari can only deliver push once the app is installed to the home
+  // screen — until then there's no Push API at all, so the push nudge above
+  // never shows on iOS. This card closes that gap: iOS Safari + not
+  // installed → link the install guide. Same 14-day snooze as the push
+  // nudge. Inside the installed app display-mode is standalone, so it
+  // disappears on its own once they've added it.
+  const [installNudge, setInstallNudge] = useState(false)
+  useEffect(() => {
+    try {
+      const ua = window.navigator.userAgent
+      const isIOS = /iPhone|iPad|iPod/.test(ua)
+      const isSafari = !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua) // other iOS browsers can't Add to Home Screen from their share menu pre-16.4; the guide is Safari-specific
+      const standalone = window.matchMedia?.('(display-mode: standalone)').matches
+        || (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+      const ts = window.localStorage.getItem('install-nudge-snooze')
+      const snoozed = !!ts && Date.now() - Number(ts) < 14 * 24 * 60 * 60 * 1000
+      setInstallNudge(isIOS && isSafari && !standalone && !snoozed)
+    } catch { /* UA sniff is best-effort */ }
+  }, [])
   const [clientRecord, setClientRecord] = useState<DashboardClientRecord | null>(null)
   const [coachProfileId, setCoachProfileId] = useState<string|null>(null)
   const [habits,       setHabits]       = useState<HabitRecord[]>([])
@@ -1281,6 +1300,26 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </button>
               <button onClick={()=>{ try { window.localStorage.setItem('push-nudge-snooze', String(Date.now())) } catch { /* private mode */ } setPushNudgeSnoozed(true) }}
                 aria-label="Dismiss notifications prompt"
+                style={{ background:'none', border:'none', color:t.textMuted, fontSize:14, cursor:'pointer', padding:4, flexShrink:0 }}>
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* ── iOS INSTALL NUDGE ── */}
+          {installNudge && !overrideClientId && (
+            <div className="fade" style={{ marginBottom:14, background:t.surfaceUp, border:'1px solid '+alpha(t.teal, 25), borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:20 }}>📲</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:800 }}>Install the SRG Fit app</div>
+                <div style={{ fontSize:11, color:t.textMuted }}>Add it to your home screen to unlock push notifications</div>
+              </div>
+              <a href="/srg-fit-home-screen-guide.pdf" target="_blank" rel="noopener noreferrer"
+                style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 40), borderRadius:9, padding:'8px 14px', fontSize:12, fontWeight:800, color:t.teal, cursor:'pointer', textDecoration:'none', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                Show me
+              </a>
+              <button onClick={()=>{ try { window.localStorage.setItem('install-nudge-snooze', String(Date.now())) } catch { /* private mode */ } setInstallNudge(false) }}
+                aria-label="Dismiss install prompt"
                 style={{ background:'none', border:'none', color:t.textMuted, fontSize:14, cursor:'pointer', padding:4, flexShrink:0 }}>
                 ✕
               </button>
