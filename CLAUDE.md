@@ -593,9 +593,32 @@ Remaining — reconfirm item-by-item before building:
 3. **Extend-program-4-weeks button** (bigger, coach): act on
    `program_ending` queue items by cloning the final week's sessions
    forward. Own session + plan.
-4. **Water ownership decision** (decide before UI): `plans.water_oz`,
-   `nutrition_daily_logs.water_oz`, and habits all track water — pick a
-   single source first.
+
+Water ownership — RESOLVED Jul 6 2026 (see below).
+
+## Water tracking = the habit tracker (Jul 6 2026)
+
+Decided + implemented: **`habit_logs` is the single source of truth for
+water** (all real water data lives there — the client logs via the
+dashboard habit popup; unit `oz` makes it an additive habit with
+quick-add presets).
+
+- `nutrition_daily_logs.water_oz` was a dead column (0 rows, never
+  written) that the coach weekly AI brief SELECTed and never used —
+  dropped from the query. The brief now derives water from the water
+  habit (`habit_logs`), and its habits stat counts numeric `value` logs
+  (not the `completed` flag, which `logHabit` never sets) + surfaces
+  `avg_value`, so hydration actually reaches the coach.
+- The old `logHabit` mirror into `daily_checkins` wrote `sleep_hours` /
+  `steps` / `water_oz` columns that **do not exist** on that table — it
+  errored silently on every numeric habit log. Removed.
+- `nutrition_plans.water_oz` stays as the coach's water TARGET. On plan
+  save it now provisions the client's water habit via
+  `src/lib/water-habit.ts` (`syncWaterHabit`): updates the existing
+  hydration habit (label ilike water/hydrat/drink) or creates a `Water`
+  habit (oz, `habit_type='number'`) — idempotent, best-effort, won't
+  clobber a glasses/cups/ml habit. Wired into both plan-save surfaces:
+  `coach/nutrition/page.tsx` and `coach/clients/[id]/page.tsx`.
 
 ## Check-in coach responses (May 29 2026)
 
