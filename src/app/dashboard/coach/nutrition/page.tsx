@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
+import { syncWaterHabit } from '@/lib/water-habit'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -165,6 +166,9 @@ export default function CoachNutritionPage() {
         }
       }
     }
+    // Mirror the plan's water target onto the client's water habit (single
+    // source of truth for water) so they can log against it. Best-effort.
+    await syncWaterHabit(supabase, { clientId: form.client_id, coachId, targetOz: payload.water_oz })
     setSaving(false); setView('plans'); setEditing(null)
     loadData()
   }
