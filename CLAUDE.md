@@ -699,6 +699,22 @@ finished — common because nothing auto-flips status to 'completed').
   the type column — any new notification type needs the constraint updated
   before the first insert lands.
 
+## Notification type constraint audit (Jul 7 2026)
+
+The "add the type to the constraint before sending it" reminder above had
+been violated six times — every one silently failing (0 bell rows each)
+while `send-notification` still fired push (except `trial_ending`, a
+direct insert with no push, so trial reminders reached nobody). Migration
+`extend_notifications_type_check_full_set` added the missing types so the
+constraint now matches what the code actually sends:
+`issue_report` (client issue reports), `program_assigned` (workout assign
+in `coach/workouts` + nutrition plan assign in `coach/nutrition`),
+`shoutout` / `announcement` / `community_reply` (CommunityFeed), and
+`trial_ending` (stripe webhook). **Before adding a NEW notification_type,
+run `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname =
+'notifications_notification_type_check'` and extend it first** — the JS
+client swallows the check-violation, so a wrong/new type fails invisibly.
+
 ## Handy reference: active Edge Functions
 
 - `generate-ai-insight` (v3) — coach-only, `verify_jwt: true`
