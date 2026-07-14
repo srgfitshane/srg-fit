@@ -557,7 +557,8 @@ on them without asking, but keep them in mind:
   Recurring item.
 - **USDA API key rotation**: DONE (Shane rotated it, May 2026).
 - **Resend domain verification**: once verified, switch SMTP sender
-  to `noreply@srgfit.training`.
+  to `noreply@srgfit.training`, and move `send-invite-email` +
+  `send-daily-recap` off the `onboarding@resend.dev` sender.
 - **Stripe webhook live verification**: confirm
   `checkout.session.completed` fires correctly in live mode.
 - **TodayTab extraction**: `src/app/dashboard/client/page.tsx` has
@@ -734,6 +735,19 @@ client swallows the check-violation, so a wrong/new type fails invisibly.
   (already in the notifications check constraint). Dedupes against
   same-day `workout_due` bell rows so re-runs can't double-push. Source:
   `supabase/functions/send-workout-reminders/index.ts`.
+- `send-daily-recap` (v3) — coach daily recap email via Resend, pg_cron
+  daily 0:00 UTC (jobname `send-daily-recap`). Fixed Jul 13 2026: was
+  500ing nightly since April — sender `info@srg.fitness` isn't Resend-
+  verified (403), and its milestones query selected `title`, a column
+  that doesn't exist (`message`/`milestone_type` are real). Now sends
+  from `onboarding@resend.dev` (same as send-invite-email) and surfaces
+  query errors + the Resend status in logs/response. Source:
+  `supabase/functions/send-daily-recap/index.ts`. NOTE: pg_cron marks
+  this job "succeeded" even when the function 500s — it only tracks the
+  HTTP call, so check edge function logs, not cron history.
+- `send-community-digest` (v1) — pg_cron daily 13:00 UTC. Source:
+  `supabase/functions/send-community-digest/index.ts`.
+- `notify-new-client` (v1) — deployed-only, source NOT in repo.
 - `stripe-checkout` (v2), `stripe-webhook` (v3), `stripe-portal` (v2)
 
 ## Questions to ask when stuck
