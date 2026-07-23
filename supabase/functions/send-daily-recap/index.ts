@@ -18,6 +18,21 @@ serve(async (_req: Request) => {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const coachId = '133f93d0-2399-4542-bc57-db4de8b98d79'
 
+    // ── Respect the coach's self-serve toggle ─────────────────────────────
+    // notification_preferences.email_daily_recap defaults true, so a missing
+    // row (or true) still sends. Only an explicit false silences the recap.
+    const { data: recapPref } = await adminDb
+      .from('notification_preferences')
+      .select('email_daily_recap')
+      .eq('user_id', coachId)
+      .maybeSingle()
+    if (recapPref?.email_daily_recap === false) {
+      console.log('Daily recap disabled by coach preference — skipping')
+      return new Response(JSON.stringify({ success:true, skipped:true, reason:'disabled_by_pref' }), {
+        headers:{'Content-Type':'application/json'}, status:200
+      })
+    }
+
     // ── Gather all stats in parallel ──────────────────────────────────────
     const results = await Promise.all([
       adminDb.from('workout_sessions').select('id', { count:'exact', head:true })
