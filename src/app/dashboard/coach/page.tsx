@@ -165,6 +165,9 @@ export default function CoachDashboard() {
   // Digest grid is collapsed by default — red-flagged digests surface in the
   // unified queue, so the full grid is a drill-down, not standing chrome.
   const [digestsOpen, setDigestsOpen] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [recapEmail, setRecapEmail] = useState(true)
+  const [recapSaving, setRecapSaving] = useState(false)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -173,6 +176,15 @@ export default function CoachDashboard() {
       if (!user) { router.push('/login'); return }
       const { data: prof } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single()
       setProfile(prof)
+
+      // Coach setting: nightly recap email toggle. Defaults on when no row
+      // exists, matching the edge function's send-unless-explicitly-false rule.
+      const { data: recapPrefRow } = await supabase
+        .from('notification_preferences')
+        .select('email_daily_recap')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setRecapEmail(recapPrefRow?.email_daily_recap ?? true)
 
       // Load dismissed action queue IDs from localStorage (per-coach, expires after 7 days)
       const dismissKey = `srg_dismissed_queue_${user.id}`
@@ -369,6 +381,25 @@ export default function CoachDashboard() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  // Flip the nightly recap email on/off. Optimistic + reverts on error so a
+  // silent RLS/network failure can't lie about the saved state (Rule 14).
+  const toggleRecapEmail = async () => {
+    if (!profile?.id || recapSaving) return
+    const next = !recapEmail
+    setRecapEmail(next)
+    setRecapSaving(true)
+    const { error } = await supabase.from('notification_preferences').upsert({
+      user_id: profile.id,
+      email_daily_recap: next,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+    setRecapSaving(false)
+    if (error) {
+      setRecapEmail(!next)
+      alert('Could not save that setting: ' + error.message)
+    }
   }
 
   // Persist dismissed action queue IDs to localStorage (per-coach, 7-day expiry)
@@ -664,6 +695,30 @@ export default function CoachDashboard() {
               <span style={{ position:'absolute', top:-4, right:-4, background:t.orange, borderRadius:'50%', width:16, height:16, fontSize:9, fontWeight:900, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>{aiInsights.length}</span>
             )}
           </button>
+          <div style={{ position:'relative', flexShrink:0 }}>
+            <button onClick={()=>setShowSettings(v=>!v)} title="Settings" aria-expanded={showSettings}
+              style={{ background:showSettings?t.surfaceHigh:'none', border:'1px solid '+t.border, borderRadius:8, padding:'6px 10px', fontSize:16, cursor:'pointer', marginRight:4, display:'flex', alignItems:'center' }}>
+              ⚙️
+            </button>
+            {showSettings && (
+              <>
+                <div onClick={()=>setShowSettings(false)} style={{ position:'fixed', inset:0, zIndex:110 }} />
+                <div style={{ position:'absolute', top:'calc(100% + 8px)', right:0, width:288, background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:14, padding:16, zIndex:120, boxShadow:'0 12px 32px rgba(0,0,0,0.5)' }}>
+                  <div style={{ fontSize:12, fontWeight:800, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>Settings</div>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:t.text }}>Daily recap email</div>
+                      <div style={{ fontSize:11, color:t.textMuted, marginTop:3, lineHeight:1.45 }}>A summary of client activity emailed to you each night.</div>
+                    </div>
+                    <button onClick={toggleRecapEmail} disabled={recapSaving} aria-pressed={recapEmail} title={recapEmail?'On':'Off'}
+                      style={{ position:'relative', width:44, height:24, borderRadius:24, border:'1px solid '+(recapEmail?t.teal:t.border), background:recapEmail?t.teal:t.surfaceHigh, cursor:recapSaving?'default':'pointer', flexShrink:0, padding:0, opacity:recapSaving?0.6:1, transition:'all 0.2s' }}>
+                      <span style={{ position:'absolute', top:3, left:recapEmail?22:3, width:16, height:16, borderRadius:'50%', background:recapEmail?'#04121a':t.textMuted, transition:'all 0.2s' }} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={handleSignOut} style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'6px 10px', fontSize:12, fontWeight:700, color:t.red, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>Out</button>
         </div>
 
