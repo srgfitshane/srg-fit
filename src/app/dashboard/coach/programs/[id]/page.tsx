@@ -72,6 +72,7 @@ export default function ProgramBuilder() {
   const [pendingRole, setPendingRole] = useState<string>('main')
   const [pendingGroup, setPendingGroup] = useState<string>('')
   const [pendingGroupType, setPendingGroupType] = useState<string>('straight')
+  const [savedFlash, setSavedFlash] = useState(false)
   const [addExTab,   setAddExTab]   = useState<'exercise'|'template'|'create'>('exercise')
   // Quick-create form state for the Create New tab. Pre-fills name from
   // the current search box so 'searched but missing' becomes 'create it'
@@ -604,7 +605,8 @@ export default function ProgramBuilder() {
         reps: ex.reps_prescribed || '8-12',
         target_weight: ex.weight_prescribed || '',
         rest_seconds: ex.rest_seconds || 90,
-        exercise_role: orderStart === 0 ? 'main' : orderStart === 1 ? 'secondary' : 'accessory',
+        exercise_role: pendingRole,
+        superset_group: pendingGroup || null,
         notes: ex.notes || null,
         order_index: orderStart++,
       }).select(`*, exercise:exercises(name, muscles)`).single()
@@ -614,6 +616,12 @@ export default function ProgramBuilder() {
           : b
         ))
       }
+    }
+    // Persist the chosen group's format so an imported group isn't left straight.
+    if (pendingGroup && (block?.group_types || {})[pendingGroup] !== pendingGroupType) {
+      const updated = { ...(block?.group_types || {}), [pendingGroup]: pendingGroupType }
+      await supabase.from('workout_blocks').update({ group_types: updated }).eq('id', blockId)
+      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, group_types: updated } : b))
     }
     setShowAddEx(null)
   }
@@ -834,7 +842,7 @@ export default function ProgramBuilder() {
 
         {/* Top bar */}
         <div style={{ background:t.surface, borderBottom:'1px solid '+t.border, padding:'0 24px', display:'flex', alignItems:'center', height:60, gap:12 }}>
-          <button onClick={()=>router.push('/dashboard/coach/programs')} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
+          <button onClick={()=>{ (document.activeElement as HTMLElement)?.blur(); setTimeout(()=>router.push('/dashboard/coach/programs'), 120) }} style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif" }}>← Back</button>
           <div style={{ width:1, height:28, background:t.border }} />
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -924,6 +932,11 @@ export default function ProgramBuilder() {
               </>
             )}
           </div>
+          <button onClick={()=>{ (document.activeElement as HTMLElement)?.blur(); setSavedFlash(true); setTimeout(()=>setSavedFlash(false), 2000) }}
+            title="Every edit auto-saves as you go — this confirms it's committed"
+            style={{ background: savedFlash ? t.green+'18' : t.tealDim, border:'1px solid '+(savedFlash?t.green:t.teal)+'40', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:800, color: savedFlash?t.green:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
+            {savedFlash ? '✓ Saved!' : '✓ Save'}
+          </button>
           {program?.client_id && (
             <button onClick={()=>{ setShowSend(true); setSendDone(false); setSendError('') }}
               style={{ background:'linear-gradient(135deg,'+t.orange+','+t.orange+'cc)', border:'none', borderRadius:9, padding:'7px 16px', fontSize:12, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -1527,9 +1540,11 @@ export default function ProgramBuilder() {
                       setNewExName(''); setNewExEquipment(''); setNewExMuscle(''); setNewExMovement('')
                       setNewExImageFile(null)
                       setNewExSaving(false)
-                      // Switch to library with new name pre-filled so coach can add immediately.
-                      setExSearch(created?.name || '')
-                      setAddExTab('exercise')
+                      // Add the new exercise straight into the block with the
+                      // Role/Group chosen at the top of the modal (same as the
+                      // Exercise Library tab), instead of making the coach re-find it.
+                      if (created) await addExercise(showAddEx!, created.id)
+                      else setAddExTab('exercise')
                     }}
                     style={{ width:'100%', padding:'12px', borderRadius:11, border:'none',
                       background: newExName.trim() ? 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)' : t.surfaceHigh,
