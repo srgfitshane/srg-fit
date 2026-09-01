@@ -355,7 +355,7 @@ export default function ActiveWorkoutPage() {
         body: JSON.stringify({
           // F2c: server appends injury+equipment context from intake
           clientId: session?.client_id,
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           max_tokens: 200,
           messages: [{
             role: 'user',
@@ -1202,7 +1202,7 @@ ${candidateList}`
         body: JSON.stringify({
           // F2c: server appends injury+equipment context from intake
           clientId: session?.client_id,
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           max_tokens: 200,
           messages: [{ role: 'user', content: `You are a personal trainer. A client has done: ${exercises.map(e => e.exercise_name).join(', ')}. Muscles worked: ${currentMuscles.join(', ') || 'unknown'}. Suggest 5 exercises to ADD that complement this session (fill gaps, finish strong). Return ONLY the IDs from this list, one per line:\n${candidateList}` }]
         })

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         notification_type: 'call_request',
         title: 'New client call request',
         body: clientName ? `${clientName} sent a call request with availability.` : 'A client sent a call request with availability.',
-        link_url: '/dashboard/coach/messages',
+        link_url: `/dashboard/coach/clients/${clientId}?tab=messages`,
       }),
     })
     if (!res.ok) {

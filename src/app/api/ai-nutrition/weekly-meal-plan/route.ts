@@ -109,7 +109,7 @@ Keep all 7 days. Don't truncate. Use compact whitespace.`
     body: JSON.stringify({
       // 7 days × ~4 meals × ~4 items + grocery list ≈ 6-8k tokens.
       // Bumped to give comfortable headroom.
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 12000,
       messages: [{ role: 'user', content: prompt }],
     }),

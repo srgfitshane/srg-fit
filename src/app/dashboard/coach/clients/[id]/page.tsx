@@ -875,6 +875,22 @@ export default function ClientDetail() {
                         style={{ background: !noteRaw.trim() || noteStructuring ? t.surfaceHigh : 'linear-gradient(135deg,'+t.purple+','+alpha(t.purple, 80)+')', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:800, color: !noteRaw.trim() || noteStructuring ? t.textMuted : '#fff', cursor: !noteRaw.trim() || noteStructuring ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                         {noteStructuring ? 'Structuring…' : '✨ Structure'}
                       </button>
+                      <button
+                        onClick={async () => {
+                          if (!noteRaw.trim()) return
+                          setNoteSaving(true); setNoteError(null)
+                          const { error } = await supabase.from('coach_notes').insert({
+                            client_id: clientId, coach_id: coachId, content: noteRaw.trim(), note_type: 'general',
+                          })
+                          setNoteSaving(false)
+                          if (error) { setNoteError('Could not save note: ' + error.message); return }
+                          setNoteRaw(''); setNoteSavedFlash(true); setTimeout(() => setNoteSavedFlash(false), 2200)
+                        }}
+                        disabled={!noteRaw.trim() || noteSaving}
+                        title="Save your note as-is, without AI structuring"
+                        style={{ background: !noteRaw.trim() || noteSaving ? t.surfaceHigh : 'linear-gradient(135deg,'+t.green+','+alpha(t.green, 80)+')', border:'none', borderRadius:9, padding:'8px 16px', fontSize:12, fontWeight:800, color: !noteRaw.trim() || noteSaving ? t.textMuted : '#000', cursor: !noteRaw.trim() || noteSaving ? 'default' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                        {noteSaving ? 'Saving…' : '💾 Save note'}
+                      </button>
                       {noteRaw && (
                         <button
                           onClick={() => setNoteRaw('')}

@@ -340,7 +340,7 @@ Make the weeks array exactly ${duration_weeks} entries. Each day should have 4-8
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       // Sonnet 4 supports up to 64k output tokens. A 12-week × 4-day × 7-ex
       // program lands around ~30-40k tokens of structured JSON, so we
       // size accordingly. The previous 8000 cap truncated mid-JSON for
