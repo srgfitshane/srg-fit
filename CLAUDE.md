@@ -49,7 +49,7 @@ specifically points to her. Shane prefers:
 - **Payments**: Stripe (live keys, apiVersion `2022-11-15`)
 - **Email**: Supabase SMTP; upgrade sender to
   `noreply@srgfit.training` once Resend domain verified
-- **AI**: Claude API (`claude-sonnet-4-20250514`) via Supabase Edge
+- **AI**: Claude API (`claude-sonnet-5`) via Supabase Edge
   Functions + `/api/ai-swap` + `/api/ai-nutrition` server routes.
   **NEVER call `api.anthropic.com` from the client side** — always
   proxy through a server route.
