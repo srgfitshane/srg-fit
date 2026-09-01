@@ -375,38 +375,29 @@ export default function ClientDetail() {
   }
 
   const resendInvite = async () => {
-    if (!coachId) return
     setResending(true)
-    // Find the most recent pending invite for this client's email
-    const email = client?.profile?.email
-    if (email) {
-      const { data: inv } = await supabase
-        .from('client_invites')
-        .select('id')
-        .eq('coach_id', coachId)
-        .eq('email', email)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-      if (inv) {
-        const { error } = await supabase.from('client_invites').update({
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString()
-        }).eq('id', inv.id)
-        if (error) { setResending(false); alert('Could not refresh invite: ' + error.message); return }
-        await supabase.functions.invoke('send-invite-email', { body: { invite_id: inv.id } })
-      } else {
-        // Create a fresh invite if none found
-        const { data: newInv, error } = await supabase.from('client_invites').insert({
-          coach_id: coachId, email, full_name: client?.profile?.full_name
-        }).select().single()
-        if (error || !newInv) { setResending(false); alert('Could not create invite: ' + (error?.message || 'unknown error')); return }
-        await supabase.functions.invoke('send-invite-email', { body: { invite_id: newInv.id } })
+    try {
+      // Sends a Supabase set-password (recovery) email to the client's existing
+      // account. Works for accounts that were provisioned but never activated,
+      // and surfaces a real error instead of a false "Sent!". Replaces the old
+      // client_invites + Resend-sandbox path that silently never delivered.
+      const res = await fetch('/api/invite/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setResending(false)
+      if (!res.ok) {
+        alert('Could not send set-password email: ' + (data?.error || res.status))
+        return
       }
+      setResendDone(true)
+      setTimeout(() => setResendDone(false), 2500)
+    } catch (e: any) {
+      setResending(false)
+      alert('Could not send set-password email: ' + (e?.message || 'network error'))
     }
-    setResending(false)
-    setResendDone(true)
-    setTimeout(() => setResendDone(false), 2500)
   }
 
   const saveAndBack = async () => {

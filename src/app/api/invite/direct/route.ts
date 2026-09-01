@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import { localDateStr } from '@/lib/date'
 
 const COACH_ID = '133f93d0-2399-4542-bc57-db4de8b98d79'
@@ -59,11 +60,20 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      await admin.auth.admin.generateLink({
-        type: 'recovery',
-        email: email.trim().toLowerCase(),
-        options: { redirectTo: `${siteUrl}/auth/callback?next=/set-password` },
+      // Actually SEND the set-password email. generateLink only mints a link
+      // (it never emails), so existing users used to get nothing. The public
+      // recovery path makes Supabase deliver it.
+      const pub = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      )
+      const { error: recErr } = await pub.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
       })
+      if (recErr) {
+        return NextResponse.json({ error: recErr.message }, { status: 502 })
+      }
 
       // Mark token consumed
       await admin.from('signup_tokens').update({
