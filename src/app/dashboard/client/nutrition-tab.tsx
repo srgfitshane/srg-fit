@@ -163,13 +163,15 @@ type NutritionTabProps = {
     teal: string
     orange: string
   }
+  /** Preselect a day (YYYY-MM-DD) — used when deep-linked from the calendar. */
+  initialDate?: string
 }
 
 function isFatSecretFood(food: SearchResult): food is FatSecretSearchFood {
   return 'food_id' in food
 }
 
-export default function NutritionTab({ clientRecord, supabase, t }: NutritionTabProps) {
+export default function NutritionTab({ clientRecord, supabase, t, initialDate }: NutritionTabProps) {
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
   const [plan,            setPlan]            = useState<NutritionPlan | null>(null)
   const [log,             setLog]             = useState<NutritionDailyLog | null>(null)
@@ -178,7 +180,7 @@ export default function NutritionTab({ clientRecord, supabase, t }: NutritionTab
   const [addMode,         setAddMode]         = useState<AddMode>('none')
   const [lastSavedLabel,  setLastSavedLabel]  = useState('')   // e.g. "Chicken Breast → Lunch"
   const [returnMode,      setReturnMode]      = useState<AddMode>('search') // where Add More goes back to
-  const [selectedDate,    setSelectedDate]    = useState(today)
+  const [selectedDate,    setSelectedDate]    = useState(() => (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) ? initialDate : today)
   const [searchQ,         setSearchQ]         = useState('')
   const [searchResults,   setSearchResults]   = useState<SearchResult[]>([])
   const [searching,       setSearching]       = useState(false)

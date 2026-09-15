@@ -1896,7 +1896,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
           {/* ── NUTRITION TAB ── */}
           {activeNav === 'nutrition' && (clientRecord?.show_nutrition !== false ? (
-            <NutritionTab clientRecord={clientRecord} supabase={supabase} t={t} />
+            <NutritionTab clientRecord={clientRecord} supabase={supabase} t={t} initialDate={searchParams.get('date') || undefined} />
           ) : (
             <div style={{ padding:'40px 20px', textAlign:'center' as const, color:'#5a5a78', fontSize:14 }}>
               Nutrition tracking is not enabled for your account. Contact your coach to enable it.

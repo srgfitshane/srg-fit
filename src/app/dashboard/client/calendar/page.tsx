@@ -6,6 +6,7 @@ import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
 import { localDateStr } from '@/lib/date'
 import { toastError } from '@/components/ui/Toast'
+import { CLIENT_ACTIVITY_TYPES, getClientActivityConfig, getClientActivityTitle, summarizeClientActivity, type ClientActivityRecord } from '@/lib/client-activities'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -81,6 +82,16 @@ export default function ClientCalendarPage() {
   const [rescheduling, setRescheduling] = useState<string|null>(null)
   const [reschedPick,  setReschedPick]  = useState<string>('')
   const [clientId,     setClientId]     = useState<string|null>(null)
+  const [dayNutrition, setDayNutrition] = useState<{ total_calories?: number; total_protein?: number } | null>(null)
+  const [coachId,      setCoachId]      = useState<string|null>(null)
+  const [dayHabits,    setDayHabits]    = useState<any[]>([])
+  const [dayHabitLogs, setDayHabitLogs] = useState<Record<string, number>>({})
+  const [dayActivities, setDayActivities] = useState<ClientActivityRecord[]>([])
+  const [showAddActivity, setShowAddActivity] = useState(false)
+  const [actType,     setActType]     = useState<string>('walk')
+  const [actDuration, setActDuration] = useState('')
+  const [actNotes,    setActNotes]    = useState('')
+  const [actSaving,   setActSaving]   = useState(false)
   // Task add modal
   const [taskIcon, setTaskIcon] = useState('✅')
 
@@ -117,8 +128,9 @@ export default function ClientCalendarPage() {
           .from('clients').select('id, coach_id').eq('profile_id', user.id).single()
         if (!clientData) { setLoading(false); return }
         setClientId(clientData.id)
+        setCoachId(clientData.coach_id)
 
-        const [{ data: calEvts }, { data: sessions }, { data: journals }, { data: taskData }] = await Promise.all([
+        const [{ data: calEvts }, { data: sessions }, { data: journals }, { data: taskData }, { data: habitsData }] = await Promise.all([
           supabase.from('calendar_events').select('*')
             .eq('coach_id', clientData.coach_id)
             .eq('client_id', clientData.id)
@@ -134,9 +146,14 @@ export default function ClientCalendarPage() {
           supabase.from('client_tasks').select('*')
             .eq('client_id', clientData.id)
             .order('created_at'),
+          supabase.from('habits').select('*')
+            .eq('client_id', clientData.id)
+            .eq('active', true)
+            .order('order_index'),
         ])
 
         setTasks((taskData || []) as ClientTask[])
+        setDayHabits(habitsData || [])
 
         setJournalDates(new Set(((journals||[]) as JournalEntrySummary[]).map(j => j.entry_date)))
 
@@ -176,6 +193,64 @@ export default function ClientCalendarPage() {
     }, 0)
     return () => window.clearTimeout(timeoutId)
   }, [router, supabase])
+
+  // Per-day log state for the selected date: nutrition summary, habit values,
+  // and logged activities. Reloads whenever the selected day changes.
+  useEffect(() => {
+    if (!clientId) { setDayNutrition(null); setDayHabitLogs({}); setDayActivities([]); return }
+    let cancelled = false
+    void (async () => {
+      const [{ data: nut }, { data: hLogs }, { data: acts }] = await Promise.all([
+        supabase.from('nutrition_daily_logs').select('total_calories, total_protein')
+          .eq('client_id', clientId).eq('log_date', selectedDate).maybeSingle(),
+        supabase.from('habit_logs').select('habit_id, value')
+          .eq('client_id', clientId).eq('logged_date', selectedDate),
+        supabase.from('client_activities').select('*')
+          .eq('client_id', clientId).eq('activity_date', selectedDate)
+          .order('created_at', { ascending: false }),
+      ])
+      if (cancelled) return
+      setDayNutrition(nut as { total_calories?: number; total_protein?: number } | null)
+      const map: Record<string, number> = {}
+      ;((hLogs || []) as { habit_id: string; value: number | null }[]).forEach(l => { map[l.habit_id] = Number(l.value) || 0 })
+      setDayHabitLogs(map)
+      setDayActivities((acts || []) as ClientActivityRecord[])
+    })()
+    return () => { cancelled = true }
+  }, [clientId, selectedDate, supabase])
+
+  // Log/update a habit for the selected date. Mirrors the dashboard's
+  // value-based logHabit (check habits use 1/0), the canonical habit_logs path.
+  const logHabitForDate = async (habitId: string, value: number) => {
+    if (!clientId) return
+    setDayHabitLogs(prev => ({ ...prev, [habitId]: value }))
+    const { data: existing } = await supabase.from('habit_logs').select('id')
+      .eq('habit_id', habitId).eq('client_id', clientId).eq('logged_date', selectedDate).maybeSingle()
+    const { error } = existing
+      ? await supabase.from('habit_logs').update({ value }).eq('id', existing.id)
+      : await supabase.from('habit_logs').insert({ habit_id: habitId, client_id: clientId, logged_date: selectedDate, value })
+    if (error) toastError('Could not save habit: ' + error.message)
+  }
+
+  const saveActivity = async () => {
+    if (!clientId || !coachId || actSaving) return
+    setActSaving(true)
+    const { data, error } = await supabase.from('client_activities').insert({
+      client_id: clientId, coach_id: coachId, activity_date: selectedDate,
+      activity_type: actType,
+      duration_minutes: actDuration ? parseInt(actDuration) : null,
+      notes: actNotes.trim() || null,
+    }).select().single()
+    setActSaving(false)
+    if (error || !data) { toastError('Could not save activity: ' + (error?.message || 'unknown error')); return }
+    setDayActivities(prev => [data as ClientActivityRecord, ...prev])
+    setShowAddActivity(false); setActType('walk'); setActDuration(''); setActNotes('')
+  }
+
+  const deleteActivity = async (id: string) => {
+    await supabase.from('client_activities').delete().eq('id', id)
+    setDayActivities(prev => prev.filter(a => a.id !== id))
+  }
 
   // Calendar grid helpers
   const firstDay = new Date(viewYear, viewMonth, 1)
@@ -432,7 +507,7 @@ export default function ClientCalendarPage() {
                       ) : (
                         <button onClick={()=>router.push('/dashboard/client/workout/'+e.source_id)}
                           style={{ marginTop:6, width:'100%', background:'none', border:`1px solid ${t.border}`, borderRadius:10, padding:'8px', fontSize:12, fontWeight:700, color:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                          Edit
+                          View
                         </button>
                       )
                     )}
@@ -466,6 +541,95 @@ export default function ClientCalendarPage() {
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+            {selectedDate <= todayStr && (
+              <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid '+t.border, display:'flex', flexDirection:'column' as const, gap:10 }}>
+                <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Log for this day</div>
+
+                {/* Nutrition */}
+                <div style={{ display:'flex', alignItems:'center', gap:10, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
+                  <div style={{ width:36, height:36, borderRadius:10, background:alpha(t.orange, 9), border:'1px solid '+alpha(t.orange, 19), display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>🍎</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:800 }}>Nutrition</div>
+                    <div style={{ fontSize:11, color:t.textMuted }}>
+                      {dayNutrition && (dayNutrition.total_calories || dayNutrition.total_protein)
+                        ? `${Math.round(dayNutrition.total_calories||0)} cal · ${Math.round(dayNutrition.total_protein||0)}g protein`
+                        : 'Nothing logged yet'}
+                    </div>
+                  </div>
+                  <button onClick={()=>router.push('/dashboard/client?tab=nutrition&date='+selectedDate)}
+                    style={{ background:t.orangeDim, border:'1px solid '+alpha(t.orange, 25), borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0 }}>
+                    {dayNutrition && (dayNutrition.total_calories || dayNutrition.total_protein) ? 'Edit' : 'Log'}
+                  </button>
+                </div>
+
+                {/* Habits */}
+                {dayHabits.length > 0 && (
+                  <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
+                    <div style={{ fontSize:12, fontWeight:800, marginBottom:10 }}>Habits</div>
+                    <div style={{ display:'flex', flexDirection:'column' as const, gap:8 }}>
+                      {dayHabits.map((h:any) => {
+                        const val = dayHabitLogs[h.id] || 0
+                        const target = Number(h.target) || 0
+                        const isCheck = h.habit_type === 'check'
+                        const done = isCheck ? val > 0 : (target > 0 && val >= target)
+                        return (
+                          <div key={h.id} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            {isCheck ? (
+                              <button onClick={()=>logHabitForDate(h.id, val ? 0 : 1)}
+                                style={{ width:26, height:26, borderRadius:7, border:'2px solid '+(done?t.green:alpha(t.teal, 38)), background:done?t.green:t.tealDim, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, fontSize:13, color:'#000' }}>
+                                {done ? '✓' : ''}
+                              </button>
+                            ) : (
+                              <div style={{ width:26, textAlign:'center' as const, flexShrink:0, fontSize:15 }}>{h.icon || '•'}</div>
+                            )}
+                            <div style={{ flex:1, minWidth:0, fontSize:13, fontWeight:600, color: done ? t.textMuted : t.text }}>{h.label}</div>
+                            {!isCheck && (
+                              <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                                <input type="number" inputMode="decimal" value={val || ''} placeholder="0"
+                                  onChange={ev=>logHabitForDate(h.id, parseFloat(ev.target.value) || 0)}
+                                  style={{ width:64, background:t.surfaceUp, border:'1px solid '+(done?alpha(t.green, 38):t.border), borderRadius:8, padding:'6px 8px', fontSize:14, color:t.text, textAlign:'center' as const, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark' as const }}/>
+                                <span style={{ fontSize:11, color:t.textMuted, minWidth:34 }}>{target ? `/ ${target}` : ''} {h.unit || ''}</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Activities */}
+                <div style={{ background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'12px 14px' }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: dayActivities.length ? 10 : 0 }}>
+                    <div style={{ fontSize:12, fontWeight:800 }}>Activity</div>
+                    <button onClick={()=>{ setActType('walk'); setActDuration(''); setActNotes(''); setShowAddActivity(true) }}
+                      style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'5px 12px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                      + Add
+                    </button>
+                  </div>
+                  {dayActivities.length > 0 && (
+                    <div style={{ display:'flex', flexDirection:'column' as const, gap:8 }}>
+                      {dayActivities.map(a => {
+                        const cfg = getClientActivityConfig(a.activity_type)
+                        const bits = summarizeClientActivity(a)
+                        return (
+                          <div key={a.id} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            <div style={{ fontSize:15, flexShrink:0 }}>{cfg.icon}</div>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:700 }}>{getClientActivityTitle(a)}</div>
+                              {bits.length > 0 && <div style={{ fontSize:11, color:t.textMuted }}>{bits.join(' · ')}</div>}
+                            </div>
+                            <button onClick={()=>deleteActivity(a.id)}
+                              style={{ background:'none', border:'none', color:t.textMuted, cursor:'pointer', fontSize:15, lineHeight:1, padding:4 }}>✕</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -640,6 +804,47 @@ export default function ClientCalendarPage() {
             <button onClick={saveTask} disabled={!taskTitle.trim() || taskSaving || (taskType==='number' && !(parseFloat(taskTarget) > 0))}
               style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: taskTitle.trim() ? `linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})` : t.surfaceHigh, color: taskTitle.trim() ? '#000' : t.textMuted, fontSize:15, fontWeight:800, cursor: taskTitle.trim() ? 'pointer' : 'default', fontFamily:"'DM Sans',sans-serif" }}>
               {taskSaving ? 'Saving...' : 'Save Task'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Add Activity Modal */}
+      {showAddActivity && (
+        <>
+          <div onClick={()=>setShowAddActivity(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50 }}/>
+          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:51, padding:'24px 20px 48px', fontFamily:"'DM Sans',sans-serif" }}>
+            <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }}/>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>Add Activity</div>
+            <div style={{ fontSize:12, color:t.textMuted, marginBottom:18 }}>{selectedLabel}</div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Type</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const }}>
+                {CLIENT_ACTIVITY_TYPES.map(a => (
+                  <button key={a.id} onClick={()=>setActType(a.id)}
+                    style={{ padding:'8px 12px', borderRadius:10, border:'1px solid '+(actType===a.id?alpha(t.teal, 38):t.border), background:actType===a.id?t.tealDim:'transparent', fontSize:13, fontWeight:700, color:actType===a.id?t.teal:t.textDim, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                    {a.icon} {a.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Duration (min)</div>
+              <input value={actDuration} onChange={e=>setActDuration(e.target.value)} inputMode="numeric" placeholder="e.g. 30"
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:16, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark' as const, boxSizing:'border-box' as const }}/>
+            </div>
+
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Notes</div>
+              <input value={actNotes} onChange={e=>setActNotes(e.target.value)} placeholder="Optional — how it felt, where, etc."
+                style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:10, padding:'11px 14px', fontSize:15, color:t.text, fontFamily:"'DM Sans',sans-serif", outline:'none', colorScheme:'dark' as const, boxSizing:'border-box' as const }}/>
+            </div>
+
+            <button onClick={saveActivity} disabled={actSaving}
+              style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, color:'#000', fontSize:15, fontWeight:800, cursor: actSaving ? 'default' : 'pointer', opacity: actSaving ? 0.7 : 1, fontFamily:"'DM Sans',sans-serif" }}>
+              {actSaving ? 'Saving...' : 'Save Activity'}
             </button>
           </div>
         </>
