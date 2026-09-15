@@ -12,7 +12,6 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { toastError } from '@/components/ui/Toast'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
-import { resolveSignedMediaUrl } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
 import { alpha } from '@/lib/theme'
 
@@ -62,19 +61,14 @@ function Avatar({ name, role, size=32, color }:{ name:string, role:string, size?
  * editable: when true, each tile gets a small × button that calls
  * onRemove(index). Used only by the composer preview.
  */
-function ImageGrid({
-  images,
-  editable = false,
-  onRemove,
-}: {
-  images: { url: string; key: string }[]
-  editable?: boolean
+function ImageTile({ url, idx, style, editable, onRemove }: {
+  url: string
+  idx: number
+  style?: React.CSSProperties
+  editable: boolean
   onRemove?: (idx: number) => void
 }) {
-  const count = images.length
-  if (count === 0) return null
-
-  const Tile = ({ url, idx, style }: { url: string; idx: number; style?: React.CSSProperties }) => (
+  return (
     <div style={{ position:'relative', overflow:'hidden', background:'#000', ...style }}>
       {url.includes('giphy.com') ? (
         <img
@@ -102,13 +96,26 @@ function ImageGrid({
       )}
     </div>
   )
+}
+
+function ImageGrid({
+  images,
+  editable = false,
+  onRemove,
+}: {
+  images: { url: string; key: string }[]
+  editable?: boolean
+  onRemove?: (idx: number) => void
+}) {
+  const count = images.length
+  if (count === 0) return null
 
   // Single-image layout matches the old design: full width, capped
   // height, no grid wrapper — keeps existing posts visually identical.
   if (count === 1) {
     return (
       <div style={{ borderRadius:10, overflow:'hidden', maxHeight:320 }}>
-        <Tile url={images[0].url} idx={0} style={{ height:'100%', maxHeight:320 }} />
+        <ImageTile url={images[0].url} idx={0} editable={editable} onRemove={onRemove} style={{ height:'100%', maxHeight:320 }} />
       </div>
     )
   }
@@ -116,7 +123,7 @@ function ImageGrid({
   if (count === 2) {
     return (
       <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gap:2, aspectRatio:'2 / 1' }}>
-        {images.map((img, i) => <Tile key={img.key} url={img.url} idx={i} />)}
+        {images.map((img, i) => <ImageTile key={img.key} url={img.url} idx={i} editable={editable} onRemove={onRemove} />)}
       </div>
     )
   }
@@ -125,9 +132,9 @@ function ImageGrid({
     return (
       <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gap:2, aspectRatio:'1 / 1' }}>
         {/* Left column — tall primary. Spans both rows. */}
-        <Tile url={images[0].url} idx={0} style={{ gridRow:'1 / 3' }} />
-        <Tile url={images[1].url} idx={1} />
-        <Tile url={images[2].url} idx={2} />
+        <ImageTile url={images[0].url} idx={0} editable={editable} onRemove={onRemove} style={{ gridRow:'1 / 3' }} />
+        <ImageTile url={images[1].url} idx={1} editable={editable} onRemove={onRemove} />
+        <ImageTile url={images[2].url} idx={2} editable={editable} onRemove={onRemove} />
       </div>
     )
   }
@@ -135,7 +142,7 @@ function ImageGrid({
   // count === 4
   return (
     <div style={{ borderRadius:10, overflow:'hidden', display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr', gap:2, aspectRatio:'1 / 1' }}>
-      {images.slice(0, 4).map((img, i) => <Tile key={img.key} url={img.url} idx={i} />)}
+      {images.slice(0, 4).map((img, i) => <ImageTile key={img.key} url={img.url} idx={i} editable={editable} onRemove={onRemove} />)}
     </div>
   )
 }
@@ -272,7 +279,6 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const [gifLoading,    setGifLoading]    = useState(false)
   const gf = useMemo(() => new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || ''), [])
   const [nowMs,        setNowMs]        = useState(() => Date.now())
-  const [showArchived, setShowArchived] = useState(false)
   const [coachMenu,    setCoachMenu]    = useState<string|null>(null)
   // Coach shoutout state (coach-only). Selected client + picker
   // visibility. Stays unconditional even on the client role so React
@@ -287,11 +293,48 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   // client's first name for ALL viewers (coach + clients), preserving
   // privacy by never exposing surnames in the public feed.
   const [featuredFirstNames, setFeaturedFirstNames] = useState<Record<string, string>>({})
+  const [draftsLoadedFor, setDraftsLoadedFor] = useState<string | null>(null)
+  const draftStorageKey = me && coachId ? `form-draft:community:${coachId}:${me.id}` : null
+
+  useEffect(() => {
+    if (!draftStorageKey) return
+    try {
+      const saved = localStorage.getItem(draftStorageKey)
+      if (saved) {
+        const restored = JSON.parse(saved)
+        if (typeof restored.body === 'string') setDraft(restored.body)
+        if (restored.replies && typeof restored.replies === 'object' && !Array.isArray(restored.replies)) {
+          setReplyDrafts(Object.fromEntries(Object.entries(restored.replies).filter((entry): entry is [string, string] => typeof entry[1] === 'string')))
+        }
+      }
+    } catch { /* Storage may be unavailable or contain an incomplete draft. */ }
+    setDraftsLoadedFor(draftStorageKey)
+  }, [draftStorageKey])
+
+  useEffect(() => {
+    if (!draftStorageKey || draftsLoadedFor !== draftStorageKey) return
+    const persist = () => {
+      try {
+        const replies = Object.fromEntries(Object.entries(replyDrafts).filter(([, body]) => body.trim()))
+        if (draft.trim() || Object.keys(replies).length) {
+          localStorage.setItem(draftStorageKey, JSON.stringify({ body: draft, replies }))
+        } else {
+          localStorage.removeItem(draftStorageKey)
+        }
+      } catch { /* Keep the in-memory draft when storage is unavailable. */ }
+    }
+    const timer = setTimeout(persist, 800)
+    window.addEventListener('pagehide', persist)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('pagehide', persist)
+    }
+  }, [draft, replyDrafts, draftStorageKey, draftsLoadedFor])
 
   const loadPosts = useCallback(async (cid?: string) => {
     const id = cid || coachId
     if (!id) return
-    const { data: postData } = await supabase
+    const { data: postData, error: postsError } = await supabase
       .from('community_posts')
       .select('*, reactions:community_reactions(*)')
       .eq('coach_id', id)
@@ -300,6 +343,10 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
+    if (postsError) {
+      toastError('Could not load the community. Please refresh and try again.')
+      return
+    }
     const resolvedPosts = await Promise.all(((postData || []) as CommunityPost[]).map(async (post) => {
       // community-media is a PUBLIC bucket. The original code used
       // createSignedUrl "to mirror the post code path" so the bucket
@@ -357,10 +404,14 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       setFeaturedFirstNames(prev => ({ ...prev, ...map }))
     }
     if (resolvedPosts.length) {
-      const { data: replyData } = await supabase
+      const { data: replyData, error: repliesError } = await supabase
         .from('community_replies').select('*').eq('coach_id', id)
         .in('post_id', resolvedPosts.map((post) => post.id))
         .order('created_at', { ascending: true })
+      if (repliesError) {
+        toastError('Could not load the replies. Please refresh and try again.')
+        return
+      }
       const grouped: Record<string,CommunityReply[]> = {}
       // Collect all unique author IDs from posts + replies and fetch their profiles
       const authorIds = [...new Set([
@@ -559,17 +610,13 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   }
 
   const post = async () => {
+    if (posting) return
     const hasContent = draft.trim() || imageFiles.length > 0 || videoFile || gifUrl
     if (!hasContent) return
-    if (!me || !coachId) return
+    if (!me || !coachId) { toastError('Your session could not be loaded. Please refresh before posting.'); return }
     setPosting(true)
-
-    // Upload every staged image in parallel. Each returns its storage
-    // path or null on failure; we drop nulls rather than silently
-    // advance-failing a post (an orphaned image is worse than one
-    // image quietly missing from a 4-pic post — but at least the post
-    // is clearly broken, prompting user to retry). If ALL uploads fail
-    // we abort the post.
+    try {
+    // A post must include every attachment the author selected.
     let imagePaths: string[] = []
     if (imageFiles.length > 0) {
       setUploading(true)
@@ -582,9 +629,8 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       }))
       setUploading(false)
       imagePaths = results.filter((p): p is string => !!p)
-      if (imagePaths.length === 0 && !draft.trim() && !videoFile && !gifUrl) {
-        alert('All image uploads failed. Please try again.')
-        setPosting(false)
+      if (imagePaths.length !== imageFiles.length) {
+        toastError('Could not upload every image. Your post has not been published; please try again.')
         return
       }
     }
@@ -598,7 +644,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       const path = `${me.id}/${Date.now()}.${ext}`
       const { error } = await supabase.storage
         .from('community-media').upload(path, videoFile, { upsert: false })
-      if (!error) videoPath = path
+      if (error) {
+        toastError('Could not upload the video. Your post has not been published; please try again.')
+        return
+      }
+      videoPath = path
       setUploading(false)
     }
 
@@ -627,9 +677,8 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       image_url_4: p4 ?? null,
       video_url:   videoPath,
     }).select('id').single()
-    if (insertErr) {
-      toastError('Could not post: ' + insertErr.message)
-      setPosting(false)
+    if (insertErr || !inserted) {
+      toastError('Could not post: ' + (insertErr?.message || 'The post was not saved.'))
       return
     }
 
@@ -673,29 +722,39 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     }
     setDraft(''); clearAllMedia(); setGifUrl(null); setAsAnnouncement(false)
     setShoutoutClientId(null); setShoutoutClientName(''); setShoutoutClientPid(null); setShowShoutoutPicker(false)
-    setPosting(false); await loadPosts()
+    await loadPosts()
+    } catch {
+      toastError('Could not publish your post. Your draft is still here; please try again.')
+    } finally {
+      setPosting(false)
+      setUploading(false)
+    }
   }
 
   const deletePost = async (postId: string) => {
     if (!confirm('Delete this post? This cannot be undone.')) return
-    await supabase.from('community_replies').delete().eq('post_id', postId)
-    await supabase.from('community_posts').delete().eq('id', postId)
+    // Replies and reactions are removed atomically by their ON DELETE CASCADE foreign keys.
+    const { data, error } = await supabase.from('community_posts').delete().eq('id', postId).select('id').single()
+    if (error || !data) { toastError('Could not delete the post. Please refresh and try again.'); return }
     await loadPosts()
   }
 
   const archivePost = async (postId: string, currentArchived: boolean) => {
-    await supabase.from('community_posts').update({ archived: !currentArchived }).eq('id', postId)
+    const { data, error } = await supabase.from('community_posts').update({ archived: !currentArchived }).eq('id', postId).select('id').single()
+    if (error || !data) { toastError('Could not update the post archive. Please refresh and try again.'); return }
     await loadPosts()
   }
 
   const pinPost = async (postId: string, currentPinned: boolean | null) => {
-    await supabase.from('community_posts').update({ pinned: !currentPinned }).eq('id', postId)
+    const { data, error } = await supabase.from('community_posts').update({ pinned: !currentPinned }).eq('id', postId).select('id').single()
+    if (error || !data) { toastError('Could not update the pin. Please refresh and try again.'); return }
     await loadPosts()
   }
 
   const deleteReply = async (replyId: string) => {
     if (!confirm('Delete this reply?')) return
-    await supabase.from('community_replies').delete().eq('id', replyId)
+    const { data, error } = await supabase.from('community_replies').delete().eq('id', replyId).select('id').single()
+    if (error || !data) { toastError('Could not delete the reply. Please refresh and try again.'); return }
     await loadPosts()
   }
 
@@ -745,13 +804,15 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   }
 
   const submitReply = async (postId: string) => {
+    if (replyPosting) return
     const body = replyDrafts[postId]?.trim() || ''
     const media = replyMedia[postId] || null
     // Allow reply with media-only (no text) -- mirrors fb/reddit behavior
     // where you can post just a reaction GIF.
     if (!body && !media) return
-    if (!me || !coachId) return
+    if (!me || !coachId) { toastError('Your session could not be loaded. Please refresh before replying.'); return }
     setReplyPosting(postId)
+    try {
 
     // Upload staged image/video to community-media if needed.
     let mediaUrl: string | null = null
@@ -775,16 +836,15 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       }
     }
 
-    const { error } = await supabase.from('community_replies').insert({
+    const { data, error } = await supabase.from('community_replies').insert({
       post_id: postId, coach_id: coachId, author_id: me.id, author_role: role,
       body, media_url: mediaUrl, media_type: mediaType,
-    })
-    setReplyPosting(null)
-    if (error) {
+    }).select('id').single()
+    if (error || !data) {
       // Don't clear the draft on failure -- the user keeps what they typed
       // and can retry. Previously the insert silently failed (RLS, network)
       // and the reply just vanished.
-      toastError('Could not post reply: ' + error.message)
+      toastError('Could not post reply: ' + (error?.message || 'The reply was not saved.'))
       return
     }
 
@@ -820,14 +880,21 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     setReplyDrafts(p => ({ ...p, [postId]: '' }))
     clearReplyMedia(postId)
     setReplyOpen(null); await loadPosts()
+    } catch {
+      toastError('Could not publish your reply. Your draft is still here; please try again.')
+    } finally {
+      setReplyPosting(null)
+    }
   }
 
   const toggleReaction = async (postId:string, emoji:string) => {
-    if (!me) return
+    if (!me) { toastError('Your session could not be loaded. Please refresh before reacting.'); return }
     const selectedPost = posts.find((post) => post.id === postId)
     const existing = selectedPost?.reactions?.find((reaction) => reaction.user_id === me.id && reaction.emoji === emoji)
-    if (existing) await supabase.from('community_reactions').delete().eq('id', existing.id)
-    else await supabase.from('community_reactions').insert({ post_id: postId, user_id: me.id, emoji })
+    const { data, error } = existing
+      ? await supabase.from('community_reactions').delete().eq('id', existing.id).select('id').single()
+      : await supabase.from('community_reactions').insert({ post_id: postId, user_id: me.id, emoji }).select('id').single()
+    if (error || !data) { toastError('Could not update your reaction. Please try again.'); return }
     setReactOpen(null); await loadPosts()
   }
 
@@ -904,7 +971,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                 )}
                 {videoPreview && (
                   <div style={{ position:'relative', marginTop:8, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border }}>
-                    <video src={videoPreview} controls style={{ width:'100%', maxHeight:240, display:'block' }}/>
+                    <video src={videoPreview} controls playsInline preload="metadata" style={{ width:'100%', maxHeight:240, display:'block' }}/>
                     <button onClick={clearVideo} style={{ position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, cursor:'pointer', color:'#fff', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>×</button>
                   </div>
                 )}
@@ -1212,7 +1279,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   })()}
                   {p.video_url && (
                     <div style={{ borderRadius:10, overflow:'hidden', marginBottom:10 }}>
-                      <video src={p.video_url} controls playsInline style={{ width:'100%', maxHeight:320, display:'block', background:'#000' }}/>
+                      <video src={p.video_url} controls playsInline preload="metadata" style={{ width:'100%', maxHeight:320, display:'block', background:'#000' }}/>
                     </div>
                   )}
                   <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
