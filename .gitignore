@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Claude Code agent artifacts (worktrees, plans, local settings, builds)
+.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
