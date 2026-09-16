@@ -92,6 +92,8 @@ export default function ClientCalendarPage() {
   const [actDuration, setActDuration] = useState('')
   const [actNotes,    setActNotes]    = useState('')
   const [actSaving,   setActSaving]   = useState(false)
+  const [dayMenuOpen, setDayMenuOpen] = useState(false)
+  const [daySheet,    setDaySheet]    = useState<'view'|'edit'|null>(null)
   // Task add modal
   const [taskIcon, setTaskIcon] = useState('✅')
 
@@ -407,7 +409,7 @@ export default function ClientCalendarPage() {
                 const hasSched = dayItems.some(e => e.type === 'workout' && e.status !== 'completed')
                 const hasEvt  = dayItems.some(e => e.type === 'calendar')
                 return (
-                  <div key={i} onClick={() => setSelectedDate(ds)}
+                  <div key={i} onClick={() => { setSelectedDate(ds); setDayMenuOpen(true) }}
                     style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 4px', borderRadius:12,
                       background: isSel ? alpha(t.teal, 13) : isToday ? t.surfaceHigh : 'transparent',
                       border: '1px solid ' + (isSel ? alpha(t.teal, 38) : isToday ? alpha(t.teal, 15) : 'transparent'),
@@ -424,17 +426,25 @@ export default function ClientCalendarPage() {
             </div>
           </div>
 
-          {/* ── SELECTED DAY DETAIL ── */}
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:16, marginBottom:16 }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-              <div style={{ fontSize:14, fontWeight:800, color: selectedDate === todayStr ? t.teal : t.text }}>
-                {selectedLabel}
-              </div>
-              <button onClick={()=>{ setTaskDate(selectedDate); setShowAddTask(true) }}
-                style={{ background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:8, padding:'5px 12px', fontSize:12, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                + Add Task
-              </button>
-            </div>
+          {/* ── DAY SHEET (opened from the day menu) ── */}
+          {daySheet && (
+            <>
+              <div onClick={()=>setDaySheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:60 }}/>
+              <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:520, maxHeight:'85vh', overflowY:'auto', background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:61, padding:'20px 16px 40px', fontFamily:"'DM Sans',sans-serif" }}>
+                <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 16px' }}/>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, gap:12 }}>
+                  <div style={{ fontSize:16, fontWeight:800, color: selectedDate === todayStr ? t.teal : t.text, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{selectedLabel}</div>
+                  {selectedDate <= todayStr && (
+                    <div style={{ display:'flex', background:t.surfaceHigh, borderRadius:9, padding:3, gap:2, flexShrink:0 }}>
+                      {(['view','edit'] as const).map(m => (
+                        <button key={m} onClick={()=>setDaySheet(m)}
+                          style={{ padding:'5px 14px', borderRadius:7, border:'none', background: daySheet===m ? t.teal : 'transparent', color: daySheet===m ? '#000' : t.textMuted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", textTransform:'capitalize' as const }}>
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
             {selectedItems.length === 0 && !hasJournal && tasksForDate(selectedDate).length === 0 ? (
               <div style={{ fontSize:13, color:t.textMuted, textAlign:'center', padding:'16px 0' }}>Nothing scheduled</div>
             ) : (
@@ -544,7 +554,7 @@ export default function ClientCalendarPage() {
               </div>
             )}
 
-            {selectedDate <= todayStr && (
+            {daySheet === 'edit' && selectedDate <= todayStr && (
               <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid '+t.border, display:'flex', flexDirection:'column' as const, gap:10 }}>
                 <div style={{ fontSize:11, fontWeight:800, color:t.textMuted, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Log for this day</div>
 
@@ -632,7 +642,9 @@ export default function ClientCalendarPage() {
                 </div>
               </div>
             )}
-          </div>
+              </div>
+            </>
+          )}
 
           {/* ── MONTHLY CALENDAR ── */}
           <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, padding:'14px 10px', marginBottom:16 }}>
@@ -662,7 +674,7 @@ export default function ClientCalendarPage() {
                 const dayItems = itemsForDate(ds)
                 const hasJ     = journalDates.has(ds)
                 return (
-                  <div key={i} onClick={() => setSelectedDate(ds)}
+                  <div key={i} onClick={() => { setSelectedDate(ds); setDayMenuOpen(true) }}
                     className="cal-cell"
                     style={{
                       background: isSel ? alpha(t.teal, 13) : isToday ? t.surfaceHigh : t.surfaceUp,
@@ -726,6 +738,33 @@ export default function ClientCalendarPage() {
         </div>
       </div>
       <ClientBottomNav />
+
+      {/* Day action menu */}
+      {dayMenuOpen && (
+        <>
+          <div onClick={()=>setDayMenuOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50 }}/>
+          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:51, padding:'20px 20px 40px', fontFamily:"'DM Sans',sans-serif" }}>
+            <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 16px' }}/>
+            <div style={{ fontSize:16, fontWeight:800, marginBottom:16, color: selectedDate === todayStr ? t.teal : t.text }}>{selectedLabel}</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <button onClick={()=>{ setDayMenuOpen(false); setDaySheet('view') }}
+                style={{ display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', fontSize:14, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <span style={{ fontSize:18 }}>👁</span> View day
+              </button>
+              {selectedDate <= todayStr && (
+                <button onClick={()=>{ setDayMenuOpen(false); setDaySheet('edit') }}
+                  style={{ display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left', background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:12, padding:'14px 16px', fontSize:14, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  <span style={{ fontSize:18 }}>✏️</span> Edit / log
+                </button>
+              )}
+              <button onClick={()=>{ setDayMenuOpen(false); setTaskDate(selectedDate); setShowAddTask(true) }}
+                style={{ display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left', background:t.tealDim, border:'1px solid '+alpha(t.teal, 25), borderRadius:12, padding:'14px 16px', fontSize:14, fontWeight:700, color:t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <span style={{ fontSize:18 }}>➕</span> Add task
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Add Task Modal */}
       {showAddTask && (
