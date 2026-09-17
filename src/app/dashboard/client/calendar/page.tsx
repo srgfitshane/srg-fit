@@ -429,8 +429,8 @@ export default function ClientCalendarPage() {
           {/* ── DAY SHEET (opened from the day menu) ── */}
           {daySheet && (
             <>
-              <div onClick={()=>setDaySheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:60 }}/>
-              <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:520, maxHeight:'85vh', overflowY:'auto', background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:61, padding:'20px 16px 40px', fontFamily:"'DM Sans',sans-serif" }}>
+              <div onClick={()=>setDaySheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:10000 }}/>
+              <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:520, maxHeight:'85vh', overflowY:'auto', background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:10001, padding:'20px 16px calc(40px + env(safe-area-inset-bottom))', fontFamily:"'DM Sans',sans-serif" }}>
                 <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 16px' }}/>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, gap:12 }}>
                   <div style={{ fontSize:16, fontWeight:800, color: selectedDate === todayStr ? t.teal : t.text, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{selectedLabel}</div>
@@ -742,8 +742,8 @@ export default function ClientCalendarPage() {
       {/* Day action menu */}
       {dayMenuOpen && (
         <>
-          <div onClick={()=>setDayMenuOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50 }}/>
-          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:51, padding:'20px 20px 40px', fontFamily:"'DM Sans',sans-serif" }}>
+          <div onClick={()=>setDayMenuOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:10000 }}/>
+          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:10001, padding:'20px 20px calc(28px + env(safe-area-inset-bottom))', fontFamily:"'DM Sans',sans-serif" }}>
             <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 16px' }}/>
             <div style={{ fontSize:16, fontWeight:800, marginBottom:16, color: selectedDate === todayStr ? t.teal : t.text }}>{selectedLabel}</div>
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -769,8 +769,8 @@ export default function ClientCalendarPage() {
       {/* Add Task Modal */}
       {showAddTask && (
         <>
-          <div onClick={()=>setShowAddTask(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50 }}/>
-          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:51, padding:'24px 20px 48px', fontFamily:"'DM Sans',sans-serif" }}>
+          <div onClick={()=>setShowAddTask(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:10000 }}/>
+          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:10001, padding:'24px 20px calc(48px + env(safe-area-inset-bottom))', fontFamily:"'DM Sans',sans-serif" }}>
             <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }}/>
             <div style={{ fontSize:16, fontWeight:800, marginBottom:20 }}>Add Task</div>
 
@@ -851,8 +851,8 @@ export default function ClientCalendarPage() {
       {/* Add Activity Modal */}
       {showAddActivity && (
         <>
-          <div onClick={()=>setShowAddActivity(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50 }}/>
-          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:51, padding:'24px 20px 48px', fontFamily:"'DM Sans',sans-serif" }}>
+          <div onClick={()=>setShowAddActivity(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:10000 }}/>
+          <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:t.surface, borderTop:'1px solid '+t.border, borderRadius:'20px 20px 0 0', zIndex:10001, padding:'24px 20px calc(48px + env(safe-area-inset-bottom))', fontFamily:"'DM Sans',sans-serif" }}>
             <div style={{ width:36, height:4, borderRadius:2, background:t.border, margin:'0 auto 20px' }}/>
             <div style={{ fontSize:16, fontWeight:800, marginBottom:4 }}>Add Activity</div>
             <div style={{ fontSize:12, color:t.textMuted, marginBottom:18 }}>{selectedLabel}</div>
