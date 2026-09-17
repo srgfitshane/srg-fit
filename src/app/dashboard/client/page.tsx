@@ -457,7 +457,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     }
     return 'today'
   })
-  const [plusOpen,     setPlusOpen]     = useState(false)
   const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
   // On-screen keyboard height, tracked via visualViewport so the bottom-sheet
   // log popup can lift above it. iOS Safari overlays the keyboard on fixed
@@ -541,7 +540,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
   const openTab = (tab: DashboardTab) => {
     if (tab !== 'messages') setMessagesView('hub')
-    setPlusOpen(false)
     activeNavRef.current = tab
     setActiveNav(tab)
 
@@ -1129,7 +1127,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   }
 
   const openActivityLog = () => {
-    setPlusOpen(false)
     setActivityDraft(createActivityDraft(today))
     setShowActivityLog(true)
   }
@@ -1211,9 +1208,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         ::-webkit-scrollbar{width:4px;}
         ::-webkit-scrollbar-thumb{background:${t.border};border-radius:4px;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-        @keyframes scaleIn{from{opacity:0;transform:scale(0.85);}to{opacity:1;transform:scale(1);}}
         .fade{animation:fadeUp 0.3s ease forwards;}
-        .plus-action{animation:scaleIn 0.15s ease forwards;}
         /* Mobile tap target improvements */
         button{-webkit-tap-highlight-color:transparent;}
         input,textarea,select{font-size:16px!important;} /* Prevent iOS zoom on focus */
@@ -1275,9 +1270,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
         {/* Main content — padded for bottom nav */}
         <div className="scroll-view" style={{ flex:1, overflowY: activeNav === 'messages' ? 'hidden' : 'auto', padding: activeNav === 'messages' ? 0 : '16px 16px 100px', WebkitOverflowScrolling:'touch' }}>
-
-          {/* Click-outside dismiss for + menu */}
-          {plusOpen && <div onClick={()=>setPlusOpen(false)} style={{ position:'fixed', inset:0, zIndex:19 }} />}
 
           {/* ── TODAY TAB ── */}
           {activeNav === 'today' && <>
@@ -1653,6 +1645,11 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   </div>
                 </div>
               )}
+              <button onClick={openActivityLog}
+                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', marginTop:14, padding:'11px', borderRadius:11, border:'1px solid '+alpha(t.green, 25), background:t.greenDim, color:t.green, fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-6.7-4.35-8.78-9.31C1.55 7.79 3.86 4 7.89 4c1.84 0 3.06.87 4.11 2.13C13.05 4.87 14.27 4 16.11 4c4.03 0 6.34 3.79 4.67 7.69C18.7 16.65 12 21 12 21z"/></svg>
+                Add activity
+              </button>
             </div>
           </div>
 
@@ -2062,53 +2059,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           )}
 
         </div>
-
-        {/* ── Floating + button — hidden on message thread ── */}
-        {!(activeNav === 'messages' && messagesView === 'coach') && (
-        <div style={{ position:'fixed', bottom:'calc(72px + env(safe-area-inset-bottom))', right:'max(16px, calc((100vw - 480px) / 2 + 16px))', zIndex:30 }}>
-          {/* Action menu */}
-          {plusOpen && (
-            <div className="plus-action" style={{ position:'absolute', bottom:60, right:0, display:'flex', flexDirection:'column', gap:10, alignItems:'flex-end', pointerEvents:'all' }}>
-              <button onClick={()=>openTab('nutrition')}
-                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+alpha(t.teal, 25), borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.teal} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
-                </svg>
-                Log Food
-              </button>
-              <button onClick={openActivityLog}
-                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+alpha(t.green, 25), borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 21s-6.7-4.35-8.78-9.31C1.55 7.79 3.86 4 7.89 4c1.84 0 3.06.87 4.11 2.13C13.05 4.87 14.27 4 16.11 4c4.03 0 6.34 3.79 4.67 7.69C18.7 16.65 12 21 12 21z"/>
-                </svg>
-                Log Activity
-              </button>
-              <button onClick={() => {
-                setPlusOpen(false)
-                if (nextSessions.length > 0) {
-                  router.push(workoutUrl(nextSessions[0].id))
-                  return
-                }
-                openTab('training')
-              }}
-                style={{ display:'flex', alignItems:'center', gap:10, background:t.surface, border:'1px solid '+alpha(t.orange, 25), borderRadius:14, padding:'12px 18px', fontSize:13, fontWeight:700, color:t.text, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><path d="M8 6h8M8 18h8"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
-                </svg>
-                {nextSessions.length > 0 ? 'Start Workout' : 'Open Training'}
-              </button>
-            </div>
-          )}
-          {/* + button */}
-          <button onClick={()=>setPlusOpen(o=>!o)}
-            aria-label={plusOpen ? 'Close quick actions' : 'Open quick actions'}
-            style={{ width:52, height:52, borderRadius:26, background:plusOpen ? t.surfaceHigh : `linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border: plusOpen ? '1px solid '+t.border : 'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 4px 20px rgba(0,201,177,0.35)', transition:'all 0.2s ease', transform: plusOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={plusOpen ? t.textMuted : '#000'} strokeWidth="2.5" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-        </div>
-        )}
 
         {/* ── Past Journal Entries Sheet ── */}
         {pastEntriesOpen && (
