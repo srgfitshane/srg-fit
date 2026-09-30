@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/invite-utils.smoke.ts && node --experimental-strip-types tests/client-activities.smoke.ts && node tests/account-access.smoke.mjs && node tests/stripe-routes.smoke.mjs && node tests/edge-auth.smoke.mjs"
+    "test": "node --experimental-strip-types tests/invite-utils.smoke.ts && node --experimental-strip-types tests/client-activities.smoke.ts && node tests/account-access.smoke.mjs && node tests/stripe-routes.smoke.mjs && node tests/edge-auth.smoke.mjs && node tests/profile-privacy.smoke.mjs"
   },
   "dependencies": {
     "@giphy/js-fetch-api": "^5.7.0",

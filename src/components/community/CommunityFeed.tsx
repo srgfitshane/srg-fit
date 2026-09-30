@@ -391,18 +391,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     const featuredIds = [...new Set(
       resolvedPosts.map(p => p.featured_client_id).filter((x): x is string => !!x)
     )]
-    if (featuredIds.length) {
-      const { data: clientRows } = await supabase
-        .from('clients')
-        .select('id, display_name, profile:profiles!profile_id(full_name)')
-        .in('id', featuredIds)
-      const map: Record<string, string> = {}
-      for (const c of clientRows || []) {
-        const full = ((c as any).profile?.full_name || c.display_name || '').trim()
-        map[c.id] = full.split(' ')[0] || 'a client'
-      }
-      setFeaturedFirstNames(prev => ({ ...prev, ...map }))
-    }
+    const authorIds = new Set(resolvedPosts.map(post => post.author_id))
     if (resolvedPosts.length) {
       const { data: replyData, error: repliesError } = await supabase
         .from('community_replies').select('*').eq('coach_id', id)
@@ -413,22 +402,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         return
       }
       const grouped: Record<string,CommunityReply[]> = {}
-      // Collect all unique author IDs from posts + replies and fetch their profiles
-      const authorIds = [...new Set([
-        ...resolvedPosts.map(p => p.author_id),
-        ...((replyData || []) as CommunityReply[]).map(r => r.author_id),
-      ])]
-      if (authorIds.length) {
-        const { data: authorProfs } = await supabase
-          .from('profiles').select('id, full_name').in('id', authorIds)
-        if (authorProfs) {
-          setProfiles(prev => {
-            const next = { ...prev }
-            authorProfs.forEach((p: ProfileRecord) => { next[p.id] = p })
-            return next
-          })
-        }
-      }
+      for (const reply of (replyData || []) as CommunityReply[]) authorIds.add(reply.author_id)
       // Resolve image/video paths to public URLs (community-media is a
       // public bucket). Previously used createSignedUrl which gave each
       // call a unique ?token=... and forced the browser to re-download
@@ -450,6 +424,19 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     } else {
       setReplies({})
     }
+    try {
+      const response = await fetch('/api/community/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorIds: [...authorIds], featuredClientIds: featuredIds }),
+      })
+      if (!response.ok) throw new Error('Community names unavailable')
+      const data: { profiles: ProfileRecord[]; featuredFirstNames: Record<string, string> } = await response.json()
+      setProfiles(prev => ({ ...prev, ...Object.fromEntries(data.profiles.map(profile => [profile.id, profile])) }))
+      setFeaturedFirstNames(data.featuredFirstNames)
+    } catch {
+      toastError('Could not load community names. Please refresh and try again.')
+    }
   }, [coachId, supabase])
 
   useEffect(() => {
@@ -469,9 +456,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
           resolvedCoachId = clientData.coach_id
         }
         setCoachId(resolvedCoachId)
-        const { data: coachProf } = await supabase.from('profiles').select('id, full_name').eq('id', resolvedCoachId).single<ProfileRecord>()
         const profMap: Record<string,ProfileRecord> = {}
-        if (coachProf) profMap[coachProf.id] = coachProf
         if (prof) profMap[user.id] = prof
         setProfiles(profMap)
         await loadPosts(resolvedCoachId)
