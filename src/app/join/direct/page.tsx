@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const t = {
@@ -26,20 +26,17 @@ function DirectJoinInner() {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string|null>(null)
   const [done,    setDone]    = useState(false)
-  const [invalid, setInvalid] = useState(false)
-
-  useEffect(() => {
-    if (!token) setInvalid(true)
-  }, [token])
+  const invalid = !token
 
   const inp: React.CSSProperties = {
     width:'100%', background:t.surfaceUp, border:`1px solid ${t.border}`,
-    borderRadius:10, padding:'12px 14px', fontSize:14, color:t.text,
+    borderRadius:10, padding:'12px 14px', fontSize:16, color:t.text,
     outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box',
     colorScheme:'dark',
   }
 
   const handleJoin = async () => {
+    if (loading || invalid) return
     if (!name.trim())  { setError('Please enter your name'); return }
     if (!email.trim() || !email.includes('@')) { setError('Please enter a valid email'); return }
     setLoading(true); setError(null)
@@ -47,7 +44,7 @@ function DirectJoinInner() {
       const res = await fetch('/api/invite/direct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), token }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase(), token }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Something went wrong')
@@ -106,16 +103,16 @@ function DirectJoinInner() {
                 <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
                   <div>
                     <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Full Name</label>
-                    <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name" style={inp} />
+                    <input aria-label="Full name" autoComplete="name" value={name} onChange={e=>setName(e.target.value)} placeholder="Your full name" style={inp} />
                   </div>
                   <div>
                     <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Email Address</label>
-                    <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com"
+                    <input type="email" aria-label="Email address" autoComplete="email" autoCapitalize="none" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com"
                       onKeyDown={e=>e.key==='Enter'&&handleJoin()} style={inp} />
                   </div>
 
                   {error && (
-                    <div style={{ background:t.redDim, border:`1px solid ${t.red}40`, borderRadius:10, padding:'10px 14px', fontSize:13, color:t.red }}>
+                    <div role="alert" style={{ background:t.redDim, border:`1px solid ${t.red}40`, borderRadius:10, padding:'10px 14px', fontSize:13, color:t.red }}>
                       {error}
                     </div>
                   )}

@@ -22,7 +22,8 @@ function SetPasswordInner() {
   const [password,  setPassword]  = useState('')
   const [confirm,   setConfirm]   = useState('')
   const [otpEmail,  setOtpEmail]  = useState('')
-  const [otpCode,   setOtpCode]   = useState('')
+  const [linkRequested, setLinkRequested] = useState(false)
+  const [passwordSaved, setPasswordSaved] = useState(false)
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState('')
   const [done,      setDone]      = useState(false)
@@ -56,12 +57,18 @@ function SetPasswordInner() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) { setSessionOk(true); setChecking(false); return }
 
-      // 4. No session — show OTP fallback
+      // A missing or expired session needs a fresh account-access link.
       const emailParam = searchParams.get('email')
       if (emailParam) setOtpEmail(emailParam)
+      if (searchParams.get('error') || window.location.hash.includes('error=')) {
+        setError('This link is invalid or has expired. Request a new link below.')
+      }
       setChecking(false)
     }
-    void checkSession()
+    void checkSession().catch(() => {
+      setError('Could not verify your session. Please try a new account link.')
+      setChecking(false)
+    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
@@ -72,53 +79,59 @@ function SetPasswordInner() {
     return () => subscription.unsubscribe()
   }, [searchParams, supabase])
 
-  const handleVerifyOtp = async () => {
+  const handleRequestLink = async () => {
+    if (loading) return
     setError('')
     setLoading(true)
-    const { data, error: otpError } = await supabase.auth.verifyOtp({ email: otpEmail, token: otpCode, type: 'invite' })
-    if (otpError) {
-      setError(`Verification failed: ${otpError.message}`)
+    try {
+      const { error: sendError } = await supabase.auth.resetPasswordForEmail(otpEmail.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/auth/callback?next=/set-password`,
+      })
+      if (sendError) throw sendError
+      setLinkRequested(true)
+    } catch {
+      setError('Could not send an account link. Please try again or contact your coach.')
+    } finally {
       setLoading(false)
-      return
     }
-    if (data.session) setSessionOk(true)
-    setLoading(false)
   }
 
   const handleSubmit = async () => {
+    if (loading) return
     setError('')
-    if (!password || password.length < 8) {
+    if (!passwordSaved && (!password || password.length < 8)) {
       setError('Password must be at least 8 characters')
       return
     }
-    if (password !== confirm) {
+    if (!passwordSaved && password !== confirm) {
       setError('Passwords do not match')
       return
     }
     setLoading(true)
-    const { error: updateError } = await supabase.auth.updateUser({ password })
-    if (updateError) {
-      const msg = updateError.message.toLowerCase()
-      if (msg.includes('weak') || msg.includes('strength') || msg.includes('characters') || msg.includes('policy')) {
-        setError('Password not strong enough. Use at least 8 characters with a letter, number, and special character (e.g. !, @, #).')
-      } else {
-        setError(updateError.message)
+    try {
+      if (!passwordSaved) {
+        const { error: updateError } = await supabase.auth.updateUser({ password })
+        if (updateError) throw updateError
+        setPasswordSaved(true)
       }
-      setLoading(false)
-      return
-    }
-    // Activate client record via server API (service role bypasses RLS race condition)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await fetch('/api/activate-client', {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error('Your session has expired. Please request a new account link.')
+      const response = await fetch('/api/activate-client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id }),
       })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Your password was saved, but account setup could not finish. Please retry.')
+      }
+      setDone(true)
+      router.replace(result.next === '/dashboard/client' || result.next === '/dashboard/coach' ? result.next : '/onboarding')
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not finish account setup. Please try again.')
+    } finally {
+      setLoading(false)
     }
-    setDone(true)
-    // Small delay just to show the success state, then go straight to onboarding
-    setTimeout(() => router.push('/onboarding'), 800)
   }
 
   const inp = {
@@ -127,7 +140,7 @@ function SetPasswordInner() {
     border: `1px solid ${t.border}`,
     borderRadius: 10,
     padding: '12px 14px',
-    fontSize: 14,
+    fontSize: 16,
     color: t.text,
     outline: 'none',
     fontFamily: "'DM Sans',sans-serif",
@@ -162,26 +175,20 @@ function SetPasswordInner() {
                 <div style={{ fontSize:13, color:t.textMuted }}>Setting up your profile...</div>
               </div>
             ) : !sessionOk ? (
-              /* ── Step 1: Verify identity via OTP ── */
+              /* Request a fresh link when no authenticated session is available. */
               <>
-                <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>Check your email</div>
+                <div style={{ fontSize:18, fontWeight:800, marginBottom:4 }}>Get an account link</div>
                 <div style={{ fontSize:13, color:t.textMuted, marginBottom:24, lineHeight:1.6 }}>
-                  We sent a 6-digit code to your email. Enter it below to continue.
+                  Open the link in your invitation email, or request a fresh link to set your password.
                 </div>
 
                 <div style={{ marginBottom:14 }}>
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Email Address</label>
-                  <input type="email" value={otpEmail} onChange={e => setOtpEmail(e.target.value)}
+                  <input type="email" autoComplete="email" aria-label="Email address" value={otpEmail} onChange={e => { setOtpEmail(e.target.value); setLinkRequested(false) }}
                     placeholder="you@email.com" style={inp} />
                 </div>
 
-                <div style={{ marginBottom:20 }}>
-                  <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>6-Digit Code</label>
-                  <input type="text" inputMode="numeric" value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g,''))}
-                    placeholder="123456" maxLength={6}
-                    onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
-                    style={{ ...inp, letterSpacing:'0.2em', fontSize:22, fontWeight:'bold', textAlign:'center' as const }} />
-                </div>
+                {linkRequested && <p role="status" style={{ color:t.teal, fontSize:13, marginBottom:16 }}>If an account exists for this email, a link has been requested. Check your inbox and spam folder.</p>}
 
                 {error && (
                   <div style={{ background:t.redDim, border:`1px solid ${t.red}40`, borderRadius:10, padding:'10px 14px', fontSize:13, color:t.red, marginBottom:16 }}>
@@ -189,12 +196,12 @@ function SetPasswordInner() {
                   </div>
                 )}
 
-                <button onClick={handleVerifyOtp} disabled={loading || !otpEmail || otpCode.length !== 6}
+                <button onClick={handleRequestLink} disabled={loading || !otpEmail.includes('@') || linkRequested}
                   style={{ width:'100%', padding:'13px', borderRadius:12, border:'none',
-                    background: loading || !otpEmail || otpCode.length !== 6 ? '#1d1d2e' : `linear-gradient(135deg,${t.orange},${t.orange}cc)`,
-                    color: loading || !otpEmail || otpCode.length !== 6 ? t.textMuted : '#000',
-                    fontSize:14, fontWeight:800, cursor: loading || !otpEmail || otpCode.length !== 6 ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  {loading ? 'Verifying...' : 'Verify Code →'}
+                    background: loading || linkRequested ? '#1d1d2e' : `linear-gradient(135deg,${t.orange},${t.orange}cc)`,
+                    color: loading || linkRequested ? t.textMuted : '#000',
+                    fontSize:14, fontWeight:800, cursor: loading || linkRequested ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  {loading ? 'Requesting...' : 'Email Me a Link →'}
                 </button>
               </>
             ) : (
@@ -207,7 +214,7 @@ function SetPasswordInner() {
 
                 <div style={{ marginBottom:14 }}>
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Password</label>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                  <input type="password" autoComplete="new-password" aria-label="Password" disabled={passwordSaved} value={password} onChange={e => setPassword(e.target.value)}
                     placeholder="Min. 8 characters" style={inp} />
                   <div style={{ fontSize:11, color:t.textMuted, marginTop:6, lineHeight:1.5 }}>
                     Must be at least 8 characters and include a letter, a number, and a special character (e.g. <span style={{ fontFamily:'monospace' }}>!</span>, <span style={{ fontFamily:'monospace' }}>@</span>, <span style={{ fontFamily:'monospace' }}>#</span>)
@@ -216,7 +223,7 @@ function SetPasswordInner() {
 
                 <div style={{ marginBottom:20 }}>
                   <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Confirm Password</label>
-                  <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+                  <input type="password" autoComplete="new-password" aria-label="Confirm password" disabled={passwordSaved} value={confirm} onChange={e => setConfirm(e.target.value)}
                     placeholder="Re-enter password" style={inp}
                     onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
                 </div>
@@ -232,7 +239,7 @@ function SetPasswordInner() {
                     background: loading || !password || !confirm ? '#1d1d2e' : 'linear-gradient(135deg,#00c9b1,#00c9b1cc)',
                     color: loading || !password || !confirm ? t.textMuted : '#000',
                     fontSize:14, fontWeight:800, cursor: loading || !password || !confirm ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  {loading ? 'Setting password...' : 'Set Password & Continue →'}
+                  {loading ? 'Finishing setup...' : passwordSaved ? 'Retry Account Setup →' : 'Set Password & Continue →'}
                 </button>
               </>
             )}

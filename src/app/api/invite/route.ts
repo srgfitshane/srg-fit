@@ -1,193 +1,100 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient, createServerSupabaseClient } from '@/lib/supabase-server'
-import { buildInviteUrl, isCoachRole } from '@/lib/invite-utils'
+import { createAdminClient, requireCoachApi, sendAccountAccessEmail } from '@/lib/supabase-server'
+import { normalizeInviteEmail } from '@/lib/invite-utils'
 import { localDateStr } from '@/lib/date'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const gate = await requireCoachApi()
+    if ('error' in gate) return gate.error
+    const { user } = gate
+    const input = await request.json().catch(() => null)
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return NextResponse.json({ error: 'A valid request body is required.' }, { status: 400 })
+    }
+    const email = normalizeInviteEmail(input.email)
+    const nameValue = input.fullName ?? input.full_name
+    const fullName = typeof nameValue === 'string' ? nameValue.trim() : ''
+    if (!email || !fullName || fullName.length > 200) {
+      return NextResponse.json({ error: 'Enter a valid email address and client name.' }, { status: 400 })
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+    if (!siteUrl) throw new Error('Account email is not configured: site URL is missing.')
     const admin = createAdminClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    const { email, fullName, full_name, message, onboarding_form_id, resend } = await request.json()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (input.onboarding_form_id) {
+      const { data: form, error } = await admin.from('onboarding_forms').select('id')
+        .eq('id', input.onboarding_form_id).eq('coach_id', user.id).maybeSingle()
+      if (error) throw error
+      if (!form) return NextResponse.json({ error: 'Onboarding form not found.' }, { status: 400 })
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (!isCoachRole(profile?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const { data: profile, error: profileError } = await admin.from('profiles')
+      .select('id, role').eq('email', email).maybeSingle()
+    if (profileError) throw profileError
+    if (profile && profile.role !== 'client') {
+      return NextResponse.json({ error: 'This email belongs to a coach account.' }, { status: 409 })
     }
 
-    if (!email) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    const { data: existingClient, error: existingClientError } = profile
+      ? await admin.from('clients').select('id, coach_id, active').eq('profile_id', profile.id).maybeSingle()
+      : { data: null, error: null }
+    if (existingClientError) throw existingClientError
+    if (existingClient && existingClient.coach_id !== user.id) {
+      return NextResponse.json({ error: 'This account is already assigned to another coach.' }, { status: 409 })
     }
 
-    // Use NEXT_PUBLIC_SITE_URL env var, fall back to request origin
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin
-    // Always use the coach's ID — hardcoded as the single coach on this platform
-    const coachId = user.id
-
-    // Check if user already exists
-    const normalizedName = fullName || full_name || null
-
-    const { data: existingProfile } = await admin
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
-
-    if (existingProfile) {
-      // User already has an auth account — send a password reset so they can set/reset their password
-      // This covers: existing Stripe clients, previously invited users, etc.
-      const { error: resetErr } = await admin.auth.admin.generateLink({
-        type: 'recovery',
-        email,
-        options: {
-          redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
-        }
+    let profileId = profile?.id as string | undefined
+    if (profileId) {
+      await sendAccountAccessEmail(email)
+    } else {
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+        data: { full_name: fullName, role: 'client' },
+        redirectTo: `${siteUrl.replace(/\/+$/, '')}/auth/callback?next=/set-password`,
       })
-      if (resetErr) {
-        return NextResponse.json({ error: resetErr.message }, { status: 500 })
-      }
-      // Make sure they have an active client record linked to this coach
-      const { data: existingClient } = await admin
-        .from('clients')
-        .select('id')
-        .eq('profile_id', existingProfile.id)
-        .eq('coach_id', user.id)
-        .single()
-      if (!existingClient) {
-        await admin.from('clients').insert({
-          profile_id: existingProfile.id,
-          coach_id: user.id,
-          start_date: localDateStr(),
-          active: true,
-        })
-      }
-      return NextResponse.json({
-        success: true,
-        message: `${email} already has an account — a login link has been sent so they can access the app.`,
-      })
+      if (error) throw error
+      if (!data.user) throw new Error('The invitation did not create an account. Please try again.')
+      profileId = data.user.id
     }
 
-    let inviteRow: { id: string; token: string; email: string; full_name: string | null; status: string; created_at: string; expires_at: string; accepted_at: string | null; message: string | null; onboarding_form_id?: string | null; profile_id?: string | null } | null = null
+    const client = existingClient
+    if (!client) {
+      const { data, error } = await admin.from('clients').insert({
+        profile_id: profileId, coach_id: user.id, start_date: localDateStr(), active: false,
+      }).select('id').single()
+      if (error) throw error
+      if (!data) throw new Error('Email requested, but the client record could not be saved. Please retry.')
+    }
 
-    if (resend) {
-      const { data: existingInvite } = await admin
-        .from('client_invites')
-        .select('id, token, email, full_name, status, created_at, expires_at, accepted_at, message, onboarding_form_id, profile_id')
-        .eq('coach_id', user.id)
-        .eq('email', email)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (existingInvite) {
-        const { data: updatedInvite, error: updateInviteError } = await admin.from('client_invites').update({
-          status: 'pending',
-          token: crypto.randomUUID(),
-          full_name: normalizedName,
-          message: message || existingInvite.message || null,
-          onboarding_form_id: onboarding_form_id || existingInvite.onboarding_form_id || null,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        }).eq('id', existingInvite.id).select('id, token, email, full_name, status, created_at, expires_at, accepted_at, message, onboarding_form_id, profile_id').single()
-
-        if (updateInviteError) {
-          return NextResponse.json({ error: updateInviteError.message }, { status: 500 })
-        }
-        inviteRow = updatedInvite
+    // Existing active clients only need the access email, not another invitation.
+    if (!client?.active) {
+      const { data: pending, error: pendingError } = await admin.from('client_invites')
+        .select('id').eq('coach_id', user.id).eq('email', email).eq('status', 'pending')
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (pendingError) throw pendingError
+      const invite = {
+        coach_id: user.id, email, full_name: fullName, profile_id: profileId,
+        status: 'pending', accepted_at: null,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        ...(typeof input.message === 'string' ? { message: input.message.trim().slice(0, 2000) || null } : {}),
+        ...(input.onboarding_form_id ? { onboarding_form_id: input.onboarding_form_id } : {}),
       }
+      const write = pending
+        ? admin.from('client_invites').update(invite).eq('id', pending.id)
+        : admin.from('client_invites').insert(invite)
+      const { data, error } = await write.select('id').single()
+      if (error) throw error
+      if (!data) throw new Error('Email requested, but invitation history could not be saved. Please retry.')
     }
-
-    const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
-      email,
-      {
-        data: { full_name: normalizedName || email, role: 'client' },
-        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
-      }
-    )
-
-    if ((inviteError || !invited.user) && !(resend && inviteRow)) {
-      return NextResponse.json(
-        { error: inviteError?.message || 'Failed to send invite' },
-        { status: 500 }
-      )
-    }
-
-    if (!inviteRow) {
-      const { data: createdInvite, error: inviteRowError } = await admin
-        .from('client_invites')
-        .insert({
-          coach_id: user.id,
-          email,
-          full_name: normalizedName,
-          message: message || null,
-          onboarding_form_id: onboarding_form_id || null,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .select('id, token, email, full_name, status, created_at, expires_at, accepted_at, message, onboarding_form_id, profile_id')
-        .single()
-
-      if (inviteRowError) {
-        return NextResponse.json({ error: inviteRowError.message }, { status: 500 })
-      }
-      inviteRow = createdInvite
-    }
-
-    // Keep a pending client shell linked to this coach so acceptance can activate it cleanly.
-    const { data: existingClient } = await admin
-      .from('clients')
-      .select('id')
-      .eq('profile_id', invited?.user?.id || inviteRow?.profile_id)
-      .eq('coach_id', user.id)
-      .single()
-
-    if (!existingClient) {
-      await admin.from('clients').insert({
-        profile_id: invited?.user?.id || inviteRow?.profile_id,
-        coach_id: user.id,
-        start_date: localDateStr(),
-        active: false,
-      })
-    }
-
-    await admin.from('client_invites').update({
-      status: 'pending',
-      profile_id: invited?.user?.id || inviteRow?.profile_id || null,
-    }).eq('id', inviteRow.id)
-
-    // Notify coach — fire and forget
-    fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-new-client`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_name: normalizedName || email,
-        client_email: email,
-        plan: 'Coach Invite',
-        source: 'coach_dashboard',
-      }),
-    }).catch(err => console.warn('[notify:invite-email] failed', err))
 
     return NextResponse.json({
       success: true,
-      message: `Invite sent to ${email}.`,
-      userId: invited?.user?.id || inviteRow?.profile_id || null,
-      inviteId: inviteRow.id,
-      invite: inviteRow,
-      inviteUrl: buildInviteUrl(siteUrl, inviteRow.token),
+      message: 'Account email requested. Ask your client to check their inbox and spam folder.',
+      userId: profileId,
     })
-
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Could not send the account email. Please try again.'
+    return NextResponse.json({ error: message }, { status: 502 })
   }
 }

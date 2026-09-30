@@ -6,8 +6,16 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const token_hash = searchParams.get('token_hash')
-  const type = searchParams.get('type') as 'invite' | 'recovery' | 'email' | null
-  const next = searchParams.get('next') ?? '/set-password'
+  const requestedType = searchParams.get('type')
+  const type = requestedType === 'invite' || requestedType === 'recovery' || requestedType === 'email' ? requestedType : null
+  const requestedNext = searchParams.get('next')
+  const next = requestedNext === '/onboarding' || requestedNext === '/dashboard/client' ? requestedNext : '/set-password'
+
+  // Auth's implicit flow returns credentials in a browser-only fragment.
+  // A redirect without a fragment preserves it for the password page to consume.
+  if (!code && !token_hash && !searchParams.has('error')) {
+    return NextResponse.redirect(`${origin}${next}`)
+  }
 
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -46,9 +54,9 @@ export async function GET(request: Request) {
       const url = `${origin}${next}#access_token=${data.session.access_token}&refresh_token=${data.session.refresh_token}&type=${type}`
       return NextResponse.redirect(url)
     }
-    console.error('[auth/callback] verifyOtp failed:', error?.message, { token_hash: token_hash?.slice(0,20), type })
+    console.error('[auth/callback] verifyOtp failed:', error?.code)
   }
 
   console.error('[auth/callback] falling through to login', { code: !!code, token_hash: !!token_hash, type })
-  return NextResponse.redirect(`${origin}/login?error=auth-rejected`)
+  return NextResponse.redirect(`${origin}/set-password?error=auth-rejected`)
 }

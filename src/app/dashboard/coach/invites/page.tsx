@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { localDateStr } from '@/lib/date'
+import { getInviteAvailability } from '@/lib/invite-utils'
 
 const t = {
   bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', surfaceHigh:'#1d1d2e',
@@ -16,7 +17,7 @@ const COACH_ID = '133f93d0-2399-4542-bc57-db4de8b98d79'
 
 type Invite = {
   id: string; email: string; full_name: string | null; status: string
-  created_at: string; accepted_at: string | null; token: string
+  created_at: string; accepted_at: string | null; expires_at: string | null
 }
 
 type SignupToken = {
@@ -51,25 +52,37 @@ export default function InvitesPage() {
   const [tokenBusy,   setTokenBusy]   = useState(false)
   const [tokenError,  setTokenError]  = useState('')
 
-  // Per-row "Copy Link" feedback for the email-invite history
-  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [historyError, setHistoryError] = useState('')
+  const [resentId, setResentId] = useState<string | null>(null)
 
   const directLink = activeToken ? `${SITE_URL}/join/direct?token=${activeToken.token}` : ''
 
-  const copyEmailInviteLink = async (inv: Invite) => {
-    if (!inv.token) return
-    await navigator.clipboard.writeText(`${SITE_URL}/invite/${inv.token}`)
-    setCopiedInviteId(inv.id)
-    setTimeout(() => setCopiedInviteId(prev => prev === inv.id ? null : prev), 2000)
-  }
-
   const loadInvites = useCallback(async () => {
-    const { data } = await supabase
-      .from('client_invites').select('id,email,full_name,status,created_at,accepted_at,token')
+    const { data, error: loadError } = await supabase
+      .from('client_invites').select('id,email,full_name,status,created_at,accepted_at,expires_at')
       .eq('coach_id', COACH_ID).order('created_at', { ascending: false }).limit(50)
+    if (loadError) { setHistoryError('Could not load invitations. Please refresh.'); setLoading(false); return }
     setInvites(data || [])
     setLoading(false)
   }, [supabase])
+
+  const resendInvite = async (inv: Invite) => {
+    if (resendingId) return
+    setResendingId(inv.id); setHistoryError(''); setResentId(null)
+    try {
+      const response = await fetch('/api/invite', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inv.email, fullName: inv.full_name || inv.email }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) throw new Error(result.error || 'Could not request an account email.')
+      setResentId(inv.id)
+      await loadInvites()
+    } catch (failure) {
+      setHistoryError(failure instanceof Error ? failure.message : 'Could not connect. Please try again.')
+    } finally { setResendingId(null) }
+  }
 
   const loadActiveToken = useCallback(async () => {
     const { data } = await supabase
@@ -119,17 +132,22 @@ export default function InvitesPage() {
   }
 
   const sendInvite = async () => {
+    if (sending) return
     if (!email.trim() || !name.trim()) { setError('Name and email required'); return }
     setSending(true); setError(''); setSent(false)
+    try {
     const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.trim(), fullName: name.trim() }),
     })
     const result = await res.json()
-    if (!res.ok) { setError(result.error || 'Failed to send'); setSending(false); return }
-    setSent(true); setSending(false); setEmail(''); setName('')
+    if (!res.ok || !result.success) throw new Error(result.error || 'Could not request an account email.')
+    setSent(true); setEmail(''); setName('')
     void loadInvites()
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not connect. Your details are still here; please try again.')
+    } finally { setSending(false) }
   }
 
   const saveOfflineClient = async () => {
@@ -152,7 +170,7 @@ export default function InvitesPage() {
 
   const inp: React.CSSProperties = {
     width:'100%', background:t.surfaceUp, border:`1px solid ${t.border}`,
-    borderRadius:10, padding:'10px 13px', fontSize:13, color:t.text,
+    borderRadius:10, padding:'10px 13px', fontSize:16, color:t.text,
     outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box',
   }
 
@@ -238,7 +256,7 @@ export default function InvitesPage() {
               <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="client@email.com" onKeyDown={e=>e.key==='Enter'&&sendInvite()} style={inp} />
             </div>
             {error && <div style={{ background:t.redDim, border:'1px solid '+t.red+'40', borderRadius:8, padding:'9px 13px', fontSize:12, color:t.red }}>{error}</div>}
-            {sent  && <div style={{ background:t.green+'15', border:'1px solid '+t.green+'40', borderRadius:8, padding:'9px 13px', fontSize:12, color:t.green }}>✓ Invite sent!</div>}
+            {sent  && <div role="status" style={{ background:t.green+'15', border:'1px solid '+t.green+'40', borderRadius:8, padding:'9px 13px', fontSize:12, color:t.green }}>✓ Account email requested. Ask your client to check their inbox and spam folder.</div>}
             <button onClick={sendInvite} disabled={sending||!email||!name} style={{ background: sending||!email||!name ? t.surfaceHigh : 'linear-gradient(135deg,'+t.teal+','+t.teal+'cc)', border:'none', borderRadius:10, padding:'11px', fontSize:13, fontWeight:800, color: sending||!email||!name ? t.textMuted : '#000', cursor: sending||!email||!name ? 'not-allowed' : 'pointer', fontFamily:"'DM Sans',sans-serif" }}>
               {sending ? 'Sending...' : 'Send Invite'}
             </button>
@@ -277,29 +295,30 @@ export default function InvitesPage() {
         {/* ── Invite history ── */}
         <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:16, overflow:'hidden' }}>
           <div style={{ padding:'16px 20px', borderBottom:'1px solid '+t.border, fontSize:13, fontWeight:800 }}>Recent Invites</div>
+          {historyError && <div role="alert" style={{ padding:16, color:t.red, fontSize:13 }}>{historyError}</div>}
           {loading ? (
             <div style={{ padding:'32px', textAlign:'center', color:t.textMuted, fontSize:13 }}>Loading...</div>
           ) : invites.length === 0 ? (
             <div style={{ padding:'32px', textAlign:'center', color:t.textMuted, fontSize:13 }}>No invites sent yet.</div>
           ) : invites.map((inv, i) => {
-            const justCopied = copiedInviteId === inv.id
-            const showCopy = inv.status === 'pending' && !!inv.token
+            const justResent = resentId === inv.id
+            const expired = getInviteAvailability(inv) === 'expired'
             return (
             <div key={inv.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom: i < invites.length-1 ? '1px solid '+t.border : 'none' }}>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:13, fontWeight:600 }}>{inv.full_name || inv.email}</div>
                 <div style={{ fontSize:11, color:t.textMuted }}>{inv.email}</div>
               </div>
-              {showCopy && (
-                <button onClick={()=>copyEmailInviteLink(inv)} aria-label={`Copy invite link for ${inv.email}`}
-                  style={{ background: justCopied ? t.green+'20' : t.tealDim, border:`1px solid ${justCopied ? t.green+'40' : t.teal+'40'}`, borderRadius:8, padding:'5px 10px', fontSize:11, fontWeight:700, color: justCopied ? t.green : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, whiteSpace:'nowrap' as const }}>
-                  {justCopied ? '✓ Copied' : 'Copy Link'}
+              {inv.status !== 'cancelled' && (
+                <button onClick={()=>resendInvite(inv)} disabled={resendingId !== null || justResent} aria-label={`Resend account email for ${inv.email}`}
+                  style={{ background: justResent ? t.green+'20' : t.tealDim, border:`1px solid ${justResent ? t.green+'40' : t.teal+'40'}`, borderRadius:8, minHeight:44, padding:'5px 10px', fontSize:11, fontWeight:700, color: justResent ? t.green : t.teal, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", flexShrink:0, whiteSpace:'nowrap' as const }}>
+                  {resendingId === inv.id ? 'Requesting...' : justResent ? '✓ Requested' : 'Resend Email'}
                 </button>
               )}
               <span style={{ fontSize:11, fontWeight:700, flexShrink:0, borderRadius:20, padding:'3px 10px',
                 color: inv.status==='accepted' ? t.green : inv.status==='pending' ? t.orange : t.textMuted,
                 background: inv.status==='accepted' ? t.green+'15' : inv.status==='pending' ? t.orangeDim : t.surfaceHigh }}>
-                {inv.status==='accepted' ? 'Joined' : inv.status==='pending' ? 'Pending' : inv.status}
+                {inv.status==='accepted' ? 'Joined' : expired ? 'Expired' : inv.status==='pending' ? 'Pending' : inv.status}
               </span>
               <div style={{ fontSize:11, color:t.textMuted, flexShrink:0 }}>
                 {new Date(inv.created_at).toLocaleDateString([], { month:'short', day:'numeric' })}

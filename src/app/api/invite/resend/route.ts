@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCoachApi, createAdminClient } from '@/lib/supabase-server'
-import { createClient } from '@supabase/supabase-js'
+import { requireCoachApi, createAdminClient, sendAccountAccessEmail } from '@/lib/supabase-server'
 
 // =================================================================
 // Resend account access to an existing client — coach-only.
@@ -18,21 +17,30 @@ import { createClient } from '@supabase/supabase-js'
 // =================================================================
 
 export async function POST(req: NextRequest) {
+  try {
   const gate = await requireCoachApi()
   if ('error' in gate) return gate.error
   const { user } = gate
 
-  const { clientId } = await req.json()
-  if (!clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+  const input = await req.json().catch(() => null)
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return NextResponse.json({ error: 'A valid request body is required.' }, { status: 400 })
+  }
+  const { clientId } = input
+  if (typeof clientId !== 'string' || !/^[0-9a-f-]{36}$/i.test(clientId)) {
+    return NextResponse.json({ error: 'A valid client ID is required.' }, { status: 400 })
+  }
 
   const admin = createAdminClient()
 
   // Ownership gate + email lookup
-  const { data: client } = await admin
+  const { data: client, error: clientError } = await admin
     .from('clients')
     .select('coach_id, profile:profiles!profile_id(email)')
     .eq('id', clientId)
-    .single()
+    .maybeSingle()
+
+  if (clientError) throw clientError
 
   if (!client || client.coach_id !== user.id) {
     return NextResponse.json({ error: 'Not your client' }, { status: 403 })
@@ -42,23 +50,11 @@ export async function POST(req: NextRequest) {
   const email = (Array.isArray(profile) ? profile[0]?.email : profile?.email)?.trim().toLowerCase()
   if (!email) return NextResponse.json({ error: 'This client has no email on file' }, { status: 400 })
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srgfit.app'
-
-  // resetPasswordForEmail sends via Supabase SMTP. Use the anon client — the
-  // standard public recovery path — so the email actually goes out.
-  const pub = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-
-  const { error } = await pub.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
-  })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 502 })
-  }
-
+  await sendAccountAccessEmail(email)
   return NextResponse.json({ success: true, email })
+  } catch (error: unknown) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Could not request an account email. Please try again.',
+    }, { status: 502 })
+  }
 }

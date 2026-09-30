@@ -15,7 +15,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { token } = await request.json()
+    const input = await request.json().catch(() => null)
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return NextResponse.json({ error: 'A valid request body is required.' }, { status: 400 })
+    }
+    const { token } = input
     if (!token || typeof token !== 'string') {
       return NextResponse.json({ error: 'Missing invite token' }, { status: 400 })
     }
@@ -48,21 +52,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data: existingClient } = await admin
+    const { data: profile, error: profileError } = await admin.from('profiles')
+      .select('role, full_name').eq('id', user.id).single()
+    if (profileError || !profile) throw profileError || new Error('Your profile was not found.')
+    if (profile.role !== 'client') {
+      return NextResponse.json({ error: 'This invitation requires a client account.' }, { status: 403 })
+    }
+
+    const { data: existingClient, error: clientLookupError } = await admin
       .from('clients')
-      .select('id')
+      .select('id, coach_id, active, paused, archived, onboarding_completed')
       .eq('profile_id', user.id)
-      .eq('coach_id', invite.coach_id)
       .maybeSingle()
 
+    if (clientLookupError) throw clientLookupError
+    if (existingClient && existingClient.coach_id !== invite.coach_id) {
+      return NextResponse.json({ error: 'This account is already assigned to another coach.' }, { status: 409 })
+    }
+    if (existingClient && (existingClient.paused || existingClient.archived || (!existingClient.active && existingClient.onboarding_completed))) {
+      return NextResponse.json({ error: 'Please contact your coach to reactivate your account.' }, { status: 403 })
+    }
+
+    // Save profile details before consuming the invitation so a failed write
+    // can be retried with the same link.
+    if (invite.full_name && !profile.full_name) {
+      const { data: updated, error } = await admin.from('profiles')
+        .update({ full_name: invite.full_name }).eq('id', user.id).select('id').single()
+      if (error || !updated) throw error || new Error('Your profile could not be saved.')
+    }
+
     if (existingClient) {
-      await admin
+      const { data: updated, error: updateError } = await admin
         .from('clients')
         .update({
           active: true,
-          start_date: localDateStr(),
         })
         .eq('id', existingClient.id)
+        .select('id').single()
+      if (updateError || !updated) throw updateError || new Error('Client activation was not saved.')
     } else {
       const { error: createClientError } = await admin.from('clients').insert({
         profile_id: user.id,
@@ -77,7 +104,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await admin
+    const { data: accepted, error: acceptError } = await admin
       .from('client_invites')
       .update({
         status: 'accepted',
@@ -85,18 +112,8 @@ export async function POST(request: NextRequest) {
         profile_id: user.id,
       })
       .eq('id', invite.id)
-
-    if (invite.full_name) {
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (!profile?.full_name) {
-        await admin.from('profiles').update({ full_name: invite.full_name }).eq('id', user.id)
-      }
-    }
+      .select('id').single()
+    if (acceptError || !accepted) throw acceptError || new Error('Invitation acceptance was not saved.')
 
     return NextResponse.json({
       success: true,

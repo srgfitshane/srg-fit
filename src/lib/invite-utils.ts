@@ -21,12 +21,20 @@ export function isCoachRole(role: string | null | undefined) {
   return role === 'coach'
 }
 
+export function normalizeInviteEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const email = value.trim().toLowerCase()
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
 export function getInviteAvailability(invite: InviteRecordLike | null | undefined, now = new Date()): InviteAvailability {
   if (!invite) return 'invalid'
   if (invite.status === 'accepted') return 'already_accepted'
   if (invite.status === 'cancelled') return 'expired'
-  if (!invite.expires_at) return 'invalid'
-  if (new Date(invite.expires_at).getTime() < now.getTime()) return 'expired'
+  if (invite.status !== 'pending' || !invite.expires_at) return 'invalid'
+  const expiresAt = new Date(invite.expires_at).getTime()
+  if (!Number.isFinite(expiresAt)) return 'invalid'
+  if (expiresAt <= now.getTime()) return 'expired'
   return 'valid'
 }
 
@@ -38,7 +46,9 @@ export function isInviteClaimAllowed(invite: InviteClaimRecord, user: InviteClai
   const normalizedInviteEmail = typeof invite.email === 'string' ? invite.email.trim().toLowerCase() : ''
   const normalizedUserEmail = typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''
 
-  if (invite.profile_id && user.id && invite.profile_id !== user.id) {
+  if (!user.id || !normalizedInviteEmail || !normalizedUserEmail) return false
+
+  if (invite.profile_id && invite.profile_id !== user.id) {
     return false
   }
 

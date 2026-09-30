@@ -1,143 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase-server'
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient, sendAccountAccessEmail } from '@/lib/supabase-server'
+import { normalizeInviteEmail } from '@/lib/invite-utils'
 import { localDateStr } from '@/lib/date'
-
-const COACH_ID = '133f93d0-2399-4542-bc57-db4de8b98d79'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, token } = await request.json()
-
-    if (!token || typeof token !== 'string') {
+    const input = await request.json().catch(() => null)
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return NextResponse.json({ error: 'A valid request body is required.' }, { status: 400 })
+    }
+    const email = normalizeInviteEmail(input.email)
+    const name = typeof input.name === 'string' ? input.name.trim() : ''
+    const token = input.token
+    if (typeof token !== 'string' || !token) {
       return NextResponse.json({ error: 'Invalid invite link' }, { status: 403 })
     }
-
-    if (!email || !name) {
-      return NextResponse.json({ error: 'Name and email are required' }, { status: 400 })
+    if (!email || !name || name.length > 200) {
+      return NextResponse.json({ error: 'Enter a valid name and email address.' }, { status: 400 })
     }
 
     const admin = createAdminClient()
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://srgfit.app'
-
-    // Validate token against signup_tokens table — must exist and be unused
-    const { data: tokenRow, error: tokenError } = await admin
-      .from('signup_tokens')
-      .select('id, coach_id, used_at')
-      .eq('token', token)
-      .maybeSingle()
-
-    if (tokenError || !tokenRow) {
-      return NextResponse.json({ error: 'Invalid invite link' }, { status: 403 })
-    }
-
-    if (tokenRow.used_at) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+    if (!siteUrl) throw new Error('Account email is not configured.')
+    const { data: tokenRow, error: tokenError } = await admin.from('signup_tokens')
+      .select('id, coach_id, used_at, used_by_email, used_by_profile_id').eq('token', token).maybeSingle()
+    if (tokenError) throw tokenError
+    if (!tokenRow) return NextResponse.json({ error: 'Invalid invite link' }, { status: 403 })
+    // A failed attempt may resume only for the email that claimed the link.
+    if (tokenRow.used_at && (tokenRow.used_by_email !== email || tokenRow.used_by_profile_id)) {
       return NextResponse.json({ error: 'This invite link has already been used. Please request a new one from your coach.' }, { status: 410 })
     }
+    const { data: coach, error: coachError } = await admin.from('profiles')
+      .select('id').eq('id', tokenRow.coach_id).eq('role', 'coach').maybeSingle()
+    if (coachError) throw coachError
+    if (!coach) return NextResponse.json({ error: 'This invite is no longer available.' }, { status: 410 })
 
-    // Check if profile already exists
-    const { data: existingProfile } = await admin
-      .from('profiles')
-      .select('id')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle()
+    const { data: profile, error: profileError } = await admin.from('profiles')
+      .select('id, role').eq('email', email).maybeSingle()
+    if (profileError) throw profileError
+    if (profile && profile.role !== 'client') {
+      return NextResponse.json({ error: 'This email already belongs to a coach account.' }, { status: 409 })
+    }
 
-    if (existingProfile) {
-      // Existing user — ensure client record exists and send recovery link
-      const { data: existingClient } = await admin
-        .from('clients')
-        .select('id')
-        .eq('profile_id', existingProfile.id)
-        .eq('coach_id', COACH_ID)
-        .maybeSingle()
+    const { data: client, error: clientError } = profile
+      ? await admin.from('clients').select('id, coach_id').eq('profile_id', profile.id).maybeSingle()
+      : { data: null, error: null }
+    if (clientError) throw clientError
+    if (client && client.coach_id !== tokenRow.coach_id) {
+      return NextResponse.json({ error: 'This account is already assigned to another coach.' }, { status: 409 })
+    }
 
-      if (!existingClient) {
-        await admin.from('clients').insert({
-          profile_id: existingProfile.id,
-          coach_id: COACH_ID,
-          start_date: localDateStr(),
-          active: true,
-        })
-      }
+    // Claim before sending mail so two different people cannot consume one link.
+    if (!tokenRow.used_at) {
+      const { data: claimed, error } = await admin.from('signup_tokens')
+        .update({ used_at: new Date().toISOString(), used_by_email: email })
+        .eq('id', tokenRow.id).is('used_at', null).select('id').maybeSingle()
+      if (error) throw error
+      if (!claimed) return NextResponse.json({ error: 'This link was just used. Please request a new one from your coach.' }, { status: 409 })
+    }
 
-      // Actually SEND the set-password email. generateLink only mints a link
-      // (it never emails), so existing users used to get nothing. The public
-      // recovery path makes Supabase deliver it.
-      const pub = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-      )
-      const { error: recErr } = await pub.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+    let profileId = profile?.id as string | undefined
+    if (profileId) {
+      await sendAccountAccessEmail(email)
+    } else {
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+        data: { full_name: name, role: 'client' },
+        redirectTo: `${siteUrl.replace(/\/+$/, '')}/auth/callback?next=/set-password`,
       })
-      if (recErr) {
-        return NextResponse.json({ error: recErr.message }, { status: 502 })
-      }
-
-      // Mark token consumed
-      await admin.from('signup_tokens').update({
-        used_at: new Date().toISOString(),
-        used_by_email: email.trim().toLowerCase(),
-        used_by_profile_id: existingProfile.id,
-      }).eq('id', tokenRow.id)
-
-      return NextResponse.json({ success: true })
+      if (error) throw error
+      if (!data.user) throw new Error('Could not create your account. Please try again.')
+      profileId = data.user.id
     }
 
-    // New user — send invite email
-    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
-      email.trim().toLowerCase(),
-      {
-        data: { full_name: name.trim(), role: 'client' },
-        redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
-      }
-    )
-
-    if (inviteErr || !invited.user) {
-      return NextResponse.json({ error: inviteErr?.message || 'Failed to send invite' }, { status: 500 })
+    if (!client) {
+      const { data, error } = await admin.from('clients').insert({
+        profile_id: profileId, coach_id: tokenRow.coach_id, start_date: localDateStr(), active: false,
+      }).select('id').single()
+      if (error) throw error
+      if (!data) throw new Error('Could not finish setting up your account. Please try again.')
     }
 
-    // Create client record (inactive until password set)
-    const { data: existingClient } = await admin
-      .from('clients')
-      .select('id')
-      .eq('profile_id', invited.user.id)
-      .eq('coach_id', COACH_ID)
-      .maybeSingle()
+    const { data: completed, error: completeError } = await admin.from('signup_tokens')
+      .update({ used_by_profile_id: profileId }).eq('id', tokenRow.id)
+      .eq('used_by_email', email).select('id').single()
+    if (completeError) throw completeError
+    if (!completed) throw new Error('Could not finish your invitation. Please try again.')
 
-    if (!existingClient) {
-      await admin.from('clients').insert({
-        profile_id: invited.user.id,
-        coach_id: COACH_ID,
-        start_date: localDateStr(),
-        active: false,
-      })
-    }
-
-    // Mark token consumed
-    await admin.from('signup_tokens').update({
-      used_at: new Date().toISOString(),
-      used_by_email: email.trim().toLowerCase(),
-      used_by_profile_id: invited.user.id,
-    }).eq('id', tokenRow.id)
-
-    // Notify coach — fire and forget
     fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-new-client`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_name: name.trim(),
-        client_email: email.trim().toLowerCase(),
-        plan: 'Direct Invite',
-        source: 'direct',
-      }),
-    }).catch(err => console.warn('[notify:invite-direct] failed', err))
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ client_name: name, client_email: email, plan: 'Direct Invite', source: 'direct' }),
+    }).catch(() => {})
 
     return NextResponse.json({ success: true })
-
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+  } catch (error: unknown) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Could not complete your invitation. Please try again.',
+    }, { status: 502 })
   }
 }

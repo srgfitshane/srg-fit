@@ -37,6 +37,22 @@ export function createAdminClient() {
   )
 }
 
+// Recovery email uses a stateless public Auth client. generateLink creates
+// tokens only; every server resend must actually request an email here.
+export async function sendAccountAccessEmail(email: string): Promise<void> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+  if (!siteUrl) throw new Error('Account email is not configured: site URL is missing.')
+  const authClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+  const { error } = await authClient.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: `${siteUrl.replace(/\/+$/, '')}/auth/callback?next=/set-password`,
+  })
+  if (error) throw error
+}
+
 export async function requireUser() {
   const supabase = await createServerSupabaseClient()
   const {
