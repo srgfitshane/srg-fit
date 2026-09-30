@@ -416,6 +416,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   // Keep kbInset in sync with the on-screen keyboard so bottom-sheet popups
   // clear it. visualViewport.height shrinks by the keyboard; the gap from
   // innerHeight (minus any scroll offset) is how far to lift the sheet.
+  const [kbInset, setKbInset] = useState(0)
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
@@ -458,11 +459,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
     return 'today'
   })
   const [logPopup,     setLogPopup]     = useState<LogPopupState | null>(null)
-  // On-screen keyboard height, tracked via visualViewport so the bottom-sheet
-  // log popup can lift above it. iOS Safari overlays the keyboard on fixed
-  // elements without shrinking the layout viewport, so a bottom:0 sheet gets
-  // buried — including its Save button.
-  const [kbInset,      setKbInset]      = useState(0)
   const [messagesView, setMessagesView] = useState<'hub'|'coach'>(() => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('view') === 'coach' ? 'coach' : 'hub'
@@ -2156,7 +2152,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                         style={{
                           flex:1, minWidth:80,
                           background:t.surfaceUp,
-                          border:'1px solid '+color+'55',
+                          border:'1px solid '+alpha(color, 33),
                           borderRadius:10, padding:'10px 8px',
                           fontSize:13, fontWeight:800, color:color,
                           cursor:'pointer', fontFamily:"'DM Sans',sans-serif",
@@ -2212,7 +2208,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                           const mm = (logPopup.draft||'').split(':')[1] || ''
                           setLogPopup(p=>p?{...p, draft: e.target.value+':'+mm}:null)
                         }}
-                        style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                        style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+alpha(logPopup.habit.color||t.teal, 38), borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
                       />
                       <div style={{ fontSize:11, color:t.textMuted, marginTop:4, fontWeight:700 }}>HRS</div>
                     </div>
@@ -2227,7 +2223,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                           const hh = (logPopup.draft||'').split(':')[0] || '0'
                           setLogPopup(p=>p?{...p, draft: hh+':'+val}:null)
                         }}
-                        style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                        style={{ width:'100%', background:t.surfaceUp, border:'2px solid '+alpha(logPopup.habit.color||t.teal, 38), borderRadius:12, padding:'14px 8px', fontSize:28, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
                       />
                       <div style={{ fontSize:11, color:t.textMuted, marginTop:4, fontWeight:700 }}>MIN</div>
                     </div>
@@ -2255,7 +2251,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                           }
                         }
                       }}
-                      style={{ flex:1, background:t.surfaceUp, border:'2px solid '+(logPopup.habit.color||t.teal)+'60', borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
+                      style={{ flex:1, background:t.surfaceUp, border:'2px solid '+alpha(logPopup.habit.color||t.teal, 38), borderRadius:12, padding:'14px 16px', fontSize:24, fontWeight:800, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", colorScheme:'dark', textAlign:'center' as const }}
                     />
                     <div style={{ fontSize:16, fontWeight:700, color:t.textMuted, flexShrink:0 }}>{logPopup.habit.unit}</div>
                   </>
@@ -2284,7 +2280,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   }
                   setLogPopup(null)
                 }}
-                style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+(logPopup.habit.color||t.teal)+'cc)', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background:'linear-gradient(135deg,'+(logPopup.habit.color||t.teal)+','+alpha(logPopup.habit.color||t.teal, 80)+')', color:'#000', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
                 {logPopup.mode==='edit' ? 'Update total ✓' : isAdditiveHabit(logPopup.habit) && (habitLogs[logPopup.habit.id]||0) > 0 ? 'Add ✓' : 'Save ✓'}
               </button>
             </div>
@@ -2699,29 +2695,68 @@ const CANCEL_REASONS = [
 ]
 
 function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientRecord | null; supabase: ReturnType<typeof createClient> }) {
-  const [sub, setSub] = useState<SubscriptionRecord | null>(null)
+  const [sub, setSub] = useState<(SubscriptionRecord & { status?: string }) | null>(null)
   const [loading, setLoading] = useState(true)
+  const [billingError, setBillingError] = useState('')
   const [portalLoading, setPortalLoading] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [cancelStep, setCancelStep] = useState<'survey'|'confirm'|'done'>('survey')
   const [cancelReason, setCancelReason] = useState('')
   const [cancelDetails, setCancelDetails] = useState('')
   const [canceling, setCanceling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
+  const [draftReady, setDraftReady] = useState<string | null>(null)
+  const draftKey = clientRecord?.id ? `form-draft:billing-cancel:${clientRecord.id}` : null
   const tc = {
-    surface:'#161624', surfaceHigh:'#1d1d2e', border:'#252538',
-    teal:'#00c9b1', tealDim:'#00c9b115',
-    text:'#eeeef8', textDim:'#8888a8', textMuted:'#5a5a78',
-    success:'#22c55e', warn:'#f59e0b', danger:'#ef4444', dangerDim:'#ef444415',
+    surface:t.surfaceUp, surfaceHigh:t.surfaceHigh, border:t.border,
+    teal:t.teal, tealDim:t.tealDim,
+    text:t.text, textDim:t.textDim, textMuted:t.textMuted,
+    success:t.green, warn:t.orange, danger:t.red, dangerDim:t.redDim,
   }
 
   useEffect(() => {
-    if (!clientRecord?.id) { setLoading(false); return }
-    supabase.from('subscriptions').select('*')
-      .eq('client_id', clientRecord.id)
-      .order('created_at', { ascending: false })
-      .limit(1).single()
-      .then(({ data }) => { setSub((data as SubscriptionRecord | null) || null); setLoading(false) })
+    let disposed = false
+    const timer = setTimeout(() => {
+      if (!clientRecord?.id) { setLoading(false); return }
+      setLoading(true)
+      setBillingError('')
+      supabase.from('subscriptions').select('*')
+        .eq('client_id', clientRecord.id)
+        .order('created_at', { ascending: false })
+        .limit(1).maybeSingle()
+        .then(({ data, error }) => {
+          if (disposed) return
+          if (error) setBillingError('Could not load your billing details. Please refresh and try again.')
+          else setSub(data)
+          setLoading(false)
+        })
+    }, 0)
+    return () => { disposed = true; clearTimeout(timer) }
   }, [clientRecord?.id, supabase])
+
+  useEffect(() => {
+    if (!draftKey) return
+    const timer = setTimeout(() => {
+      setCancelReason('')
+      setCancelDetails('')
+      try {
+        const draft = JSON.parse(localStorage.getItem(draftKey) || 'null')
+        if (draft && CANCEL_REASONS.some(reason => reason.id === draft.reason)) setCancelReason(draft.reason)
+        if (typeof draft?.details === 'string') setCancelDetails(draft.details.slice(0, 5000))
+      } catch { /* Browser storage may be unavailable. */ }
+      setDraftReady(draftKey)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [draftKey])
+
+  useEffect(() => {
+    if (!draftKey || draftReady !== draftKey || cancelStep === 'done') return
+    const timer = setTimeout(() => {
+      try { localStorage.setItem(draftKey, JSON.stringify({ reason: cancelReason, details: cancelDetails })) }
+      catch { /* Keep the editable response in memory if storage is full. */ }
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [draftKey, draftReady, cancelReason, cancelDetails, cancelStep])
 
   const openPortal = async () => {
     setPortalLoading(true)
@@ -2733,7 +2768,7 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
         body: JSON.stringify({ user_id: user.id }),
       })
       const data = await res.json()
-      if (data.url) window.location.href = data.url
+      if (res.ok && data.url) window.location.href = data.url
       else throw new Error(data.error || 'Could not open billing portal')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not open billing portal'
@@ -2743,32 +2778,43 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
   }
 
   const submitCancel = async () => {
-    if (!cancelReason) return
+    if (!cancelReason || canceling) return
     setCanceling(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    await fetch('/api/stripe/cancel', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user?.id, reason: cancelReason, details: cancelDetails }),
-    })
-    setCanceling(false)
-    setCancelStep('done')
-    setSub((prev) => prev ? { ...prev, cancel_at_period_end: true } : prev)
+    setCancelError('')
+    try {
+      const response = await fetch('/api/stripe/cancel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason, details: cancelDetails }),
+      })
+      const result = await response.json()
+      if (!response.ok || result.success !== true || result.subscription?.cancel_at_period_end !== true) {
+        throw new Error(result.error || 'Could not confirm cancellation. Please try again.')
+      }
+      setSub(previous => ({ ...previous, ...result.subscription }))
+      setCancelStep('done')
+      if (draftKey) { try { localStorage.removeItem(draftKey) } catch {} }
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : 'Could not cancel your subscription. Your response is saved; please try again.')
+    } finally {
+      setCanceling(false)
+    }
   }
 
   const statusColors: Record<string,string> = {
     active:tc.success, trialing:tc.teal, past_due:tc.warn,
-    canceled:tc.danger, unpaid:tc.danger, paused:tc.textDim, none:tc.textMuted,
+    canceled:tc.danger, unpaid:tc.danger, incomplete:tc.warn, incomplete_expired:tc.danger, paused:tc.textDim, none:tc.textMuted,
   }
   const statusLabel: Record<string,string> = {
     active:'Active', trialing:'Trial', past_due:'Past Due',
-    canceled:'Canceled', unpaid:'Unpaid', paused:'Paused', none:'No subscription',
+    canceled:'Canceled', unpaid:'Unpaid', incomplete:'Payment incomplete', incomplete_expired:'Payment expired', paused:'Paused', none:'No subscription',
   }
-  const status = clientRecord?.subscription_status || 'none'
+  const status = sub?.status || clientRecord?.subscription_status || 'none'
   const fmtDate = (d:string|null) => d ? new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '\u2014'
   const isActive = ['active','trialing'].includes(status)
   const isCanceling = sub?.cancel_at_period_end
 
   if (loading) return <div style={{padding:40,textAlign:'center',color:tc.textMuted,fontSize:13}}>Loading billing info...</div>
+  if (billingError) return <div role="alert" style={{padding:20,color:tc.danger,fontSize:14}}>{billingError}</div>
 
   return (
     <div style={{paddingBottom:32,fontFamily:"'DM Sans',sans-serif"}}>
@@ -2790,12 +2836,12 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
         {sub && (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {sub.trial_end && status==='trialing' && (
-              <div style={{background:`${tc.teal}15`,border:`1px solid ${tc.teal}30`,borderRadius:9,padding:'10px 14px'}}>
+              <div style={{background:alpha(tc.teal, 8),border:`1px solid ${alpha(tc.teal, 19)}`,borderRadius:9,padding:'10px 14px'}}>
                 <p style={{fontSize:12,color:tc.teal,margin:0,fontWeight:700}}>Trial ends {fmtDate(sub.trial_end)} — nothing charged until then</p>
               </div>
             )}
             {isCanceling && (
-              <div style={{background:`${tc.warn}15`,border:`1px solid ${tc.warn}30`,borderRadius:9,padding:'10px 14px'}}>
+              <div style={{background:alpha(tc.warn, 8),border:`1px solid ${alpha(tc.warn, 19)}`,borderRadius:9,padding:'10px 14px'}}>
                 <p style={{fontSize:12,color:tc.warn,margin:0,fontWeight:700}}>Cancels {fmtDate(sub.current_period_end ?? null)} — access continues until then</p>
               </div>
             )}
@@ -2815,14 +2861,14 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
           {portalLoading?'Opening...':'Update Payment Method'}
         </button>
         {isActive && !isCanceling && (
-          <button onClick={()=>{setShowCancel(true);setCancelStep('survey')}}
-            style={{width:'100%',padding:13,borderRadius:12,border:`1px solid ${tc.danger}30`,background:tc.dangerDim,color:tc.danger,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+          <button onClick={()=>{setShowCancel(true);setCancelStep('survey');setCancelError('')}}
+            style={{width:'100%',padding:13,borderRadius:12,border:`1px solid ${alpha(tc.danger, 19)}`,background:tc.dangerDim,color:tc.danger,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             Cancel Subscription
           </button>
         )}
         {isCanceling && (
           <button onClick={openPortal}
-            style={{width:'100%',padding:13,borderRadius:12,border:`1px solid ${tc.teal}40`,background:tc.tealDim,color:tc.teal,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+            style={{width:'100%',padding:13,borderRadius:12,border:`1px solid ${alpha(tc.teal, 25)}`,background:tc.tealDim,color:tc.teal,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             Undo Cancellation
           </button>
         )}
@@ -2833,9 +2879,9 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
 
       {showCancel && (
         <>
-          <div onClick={()=>{if(cancelStep!=='done')setShowCancel(false)}}
+          <div onClick={()=>{if(cancelStep!=='done' && !canceling)setShowCancel(false)}}
             style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:50,backdropFilter:'blur(4px)'}}/>
-          <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:tc.surface,borderTop:`1px solid ${tc.border}`,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px 48px'}}>
+          <div role="dialog" aria-modal="true" aria-label="Cancel subscription" style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,maxHeight:'90dvh',overflowY:'auto',background:tc.surface,borderTop:`1px solid ${tc.border}`,borderRadius:'20px 20px 0 0',zIndex:51,fontFamily:"'DM Sans',sans-serif",padding:'24px 20px calc(24px + env(safe-area-inset-bottom))'}}>
             <div style={{width:36,height:4,borderRadius:2,background:tc.border,margin:'0 auto 20px'}}/>
             {cancelStep==='survey' && <>
               <div style={{fontSize:17,fontWeight:800,marginBottom:6,color:tc.text}}>Before you go...</div>
@@ -2843,15 +2889,16 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
               <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:20}}>
                 {CANCEL_REASONS.map(r=>(
                   <button key={r.id} onClick={()=>setCancelReason(r.id)}
-                    style={{padding:'12px 16px',borderRadius:11,border:`1px solid ${cancelReason===r.id?tc.teal+'60':tc.border}`,background:cancelReason===r.id?tc.tealDim:tc.surfaceHigh,color:cancelReason===r.id?tc.teal:tc.text,fontSize:13,fontWeight:cancelReason===r.id?700:500,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
+                    aria-pressed={cancelReason===r.id}
+                    style={{padding:'12px 16px',borderRadius:11,border:`1px solid ${cancelReason===r.id?alpha(tc.teal, 38):tc.border}`,background:cancelReason===r.id?tc.tealDim:tc.surfaceHigh,color:cancelReason===r.id?tc.teal:tc.text,fontSize:13,fontWeight:cancelReason===r.id?700:500,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",textAlign:'left' as const}}>
                     {r.label}
                   </button>
                 ))}
               </div>
               {cancelReason && (
                 <textarea value={cancelDetails} onChange={e=>setCancelDetails(e.target.value)}
-                  placeholder="Anything else you would like to share? (optional)" rows={3}
-                  style={{width:'100%',background:tc.surfaceHigh,border:`1px solid ${tc.border}`,borderRadius:10,padding:'10px 13px',fontSize:13,color:tc.text,fontFamily:"'DM Sans',sans-serif",resize:'none',outline:'none',lineHeight:1.6,boxSizing:'border-box' as const,colorScheme:'dark',marginBottom:16}}/>
+                  aria-label="Cancellation feedback" placeholder="Anything else you would like to share? (optional)" rows={3} maxLength={5000}
+                  style={{width:'100%',background:tc.surfaceHigh,border:`1px solid ${tc.border}`,borderRadius:10,padding:'10px 13px',fontSize:16,color:tc.text,fontFamily:"'DM Sans',sans-serif",resize:'none',outline:'none',lineHeight:1.6,boxSizing:'border-box' as const,marginBottom:16}}/>
               )}
               <div style={{display:'flex',gap:10}}>
                 <button onClick={()=>setShowCancel(false)}
@@ -2864,12 +2911,13 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
               <div style={{fontSize:17,fontWeight:800,marginBottom:6,color:tc.text}}>Confirm cancellation</div>
               <div style={{fontSize:13,color:tc.textMuted,marginBottom:20,lineHeight:1.6}}>Your access continues until the end of your current billing period. You can rejoin anytime.</div>
               {sub?.current_period_end && (
-                <div style={{background:`${tc.warn}15`,border:`1px solid ${tc.warn}30`,borderRadius:10,padding:'12px 16px',marginBottom:20}}>
+                <div style={{background:alpha(tc.warn, 8),border:`1px solid ${alpha(tc.warn, 19)}`,borderRadius:10,padding:'12px 16px',marginBottom:20}}>
                   <p style={{fontSize:13,color:tc.warn,margin:0,fontWeight:700}}>Access ends {fmtDate(sub.current_period_end)}</p>
                 </div>
               )}
+              {cancelError && <div role="alert" style={{background:tc.dangerDim,border:`1px solid ${alpha(tc.danger, 30)}`,borderRadius:10,padding:12,color:tc.danger,fontSize:13,lineHeight:1.6,marginBottom:16}}>{cancelError}</div>}
               <div style={{display:'flex',gap:10}}>
-                <button onClick={()=>setCancelStep('survey')}
+                <button onClick={()=>setCancelStep('survey')} disabled={canceling}
                   style={{flex:1,padding:12,borderRadius:11,border:`1px solid ${tc.border}`,background:'transparent',color:tc.textMuted,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Go back</button>
                 <button onClick={submitCancel} disabled={canceling}
                   style={{flex:1,padding:12,borderRadius:11,border:'none',background:tc.danger,color:'#fff',fontSize:13,fontWeight:800,cursor:canceling?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:canceling?0.6:1}}>
@@ -2879,13 +2927,13 @@ function BillingTab({ clientRecord, supabase }: { clientRecord: DashboardClientR
             </>}
             {cancelStep==='done' && (
               <div style={{textAlign:'center',padding:'16px 0'}}>
-                <div style={{fontSize:40,marginBottom:12}}>{'\U0001F499'}</div>
+                <div style={{fontSize:40,marginBottom:12}}>{'\u{1F499}'}</div>
                 <div style={{fontSize:17,fontWeight:800,marginBottom:8,color:tc.text}}>Thank you for the feedback</div>
                 <div style={{fontSize:13,color:tc.textMuted,lineHeight:1.7,marginBottom:24}}>
-                  Your subscription has been canceled. You still have access until the end of your billing period. If you ever want to come back, the door is always open.
+                  Your cancellation is scheduled. You still have access until the end of your billing period. If you ever want to come back, the door is always open.
                 </div>
                 <button onClick={()=>setShowCancel(false)}
-                  style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${tc.teal},${tc.teal}cc)`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+                  style={{padding:'12px 32px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${tc.teal},${alpha(tc.teal, 80)})`,color:'#000',fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
                   Close
                 </button>
               </div>

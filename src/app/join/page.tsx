@@ -40,6 +40,7 @@ export default function JoinPage() {
   const selectedPlan = PLANS.find(p => p.id === selected)!
 
   const handleJoin = async () => {
+    if (loading) return
     if (!name.trim())                           { setError('Please enter your name'); return }
     if (!email.trim() || !email.includes('@'))  { setError('Please enter a valid email address'); return }
     setLoading(true)
@@ -48,22 +49,23 @@ export default function JoinPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: selectedPlan.priceId, email: email.trim(), name: name.trim() }),
+        body: JSON.stringify({ priceId: selectedPlan.priceId, email: email.trim().toLowerCase(), name: name.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Something went wrong')
+      if (typeof data.url !== 'string' || !data.url) throw new Error('Checkout could not be opened. Please try again.')
       window.location.href = data.url
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Checkout could not be opened. Please try again.')
       setLoading(false)
     }
   }
 
   const inp: React.CSSProperties = {
     width:'100%', background:'#161624', border:'1px solid #252538',
-    borderRadius:10, padding:'12px 14px', fontSize:14, color:'#eeeef8',
+    borderRadius:10, padding:'12px 14px', fontSize:16, color:'#eeeef8',
     outline:'none', fontFamily:"'DM Sans',sans-serif",
-    colorScheme:'dark' as any, boxSizing:'border-box' as any,
+    colorScheme:'dark', boxSizing:'border-box',
   }
 
   const ctaReady = !loading && email.trim() && name.trim()
@@ -135,12 +137,12 @@ export default function JoinPage() {
           <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Your Name</div>
-              <input type="text" value={name} onChange={e => setName(e.target.value)}
+              <input type="text" aria-label="Your name" autoComplete="name" value={name} onChange={e => setName(e.target.value)}
                 placeholder="First and last name" style={inp} />
             </div>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Email Address</div>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              <input type="email" aria-label="Email address" autoComplete="email" autoCapitalize="none" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="you@email.com" onKeyDown={e => e.key === 'Enter' && handleJoin()}
                 style={inp} />
             </div>
@@ -155,7 +157,7 @@ export default function JoinPage() {
             🔒 Secure checkout · Card required · Cancel anytime before day 7
           </div>
           {error && (
-            <div style={{ marginTop:10, fontSize:13, color:'#ef4444', background:'#ef444415', border:'1px solid #ef444430', borderRadius:10, padding:'10px 14px' }}>{error}</div>
+            <div role="alert" style={{ marginTop:10, fontSize:13, color:'#ef4444', background:'#ef444415', border:'1px solid #ef444430', borderRadius:10, padding:'10px 14px' }}>{error}</div>
           )}
         </div>
 
