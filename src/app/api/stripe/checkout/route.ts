@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { normalizeInviteEmail } from '@/lib/invite-utils'
 
 function getAllowedPriceIds() {
   return [
@@ -9,17 +10,29 @@ function getAllowedPriceIds() {
 }
 
 export async function POST(req: NextRequest) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' as Stripe.LatestApiVersion })
   try {
-    const { priceId, email, name } = await req.json() as { priceId?: string; email?: string; name?: string }
-    if (!priceId) return NextResponse.json({ error: 'Missing priceId' }, { status: 400 })
+    const input: unknown = await req.json().catch(() => null)
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return NextResponse.json({ error: 'Invalid signup details' }, { status: 400 })
+    }
+    const { priceId, email: rawEmail, name: rawName } = input as Record<string, unknown>
+    if (typeof priceId !== 'string' || !priceId) return NextResponse.json({ error: 'Missing priceId' }, { status: 400 })
 
     const allowedPriceIds = getAllowedPriceIds()
     if (!allowedPriceIds.includes(priceId)) {
       return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 })
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin
+    const email = rawEmail === undefined ? undefined : normalizeInviteEmail(rawEmail)
+    if (email === null || (rawName !== undefined && (typeof rawName !== 'string' || rawName.trim().length > 120))) {
+      return NextResponse.json({ error: 'Enter a valid email and a name under 120 characters' }, { status: 400 })
+    }
+    const name = typeof rawName === 'string' ? rawName.trim() : undefined
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '')
+    if (!siteUrl || !process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json({ error: 'Signup is temporarily unavailable. Please contact Shane.' }, { status: 503 })
+    }
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2022-11-15' as Stripe.LatestApiVersion })
 
     // Pre-create customer with name so webhook can set full_name immediately
     let customerId: string | undefined
@@ -46,10 +59,10 @@ export async function POST(req: NextRequest) {
       billing_address_collection: 'auto',
     })
 
+    if (!session.url) throw new Error('Checkout URL unavailable')
     return NextResponse.json({ url: session.url })
-  } catch (error: unknown) {
-    console.error('Stripe checkout error:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+  } catch {
+    console.error('[stripe-checkout] request failed')
+    return NextResponse.json({ error: 'Could not open checkout. Please try again.' }, { status: 502 })
   }
 }

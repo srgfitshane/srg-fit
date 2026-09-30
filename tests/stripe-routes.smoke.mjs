@@ -10,6 +10,7 @@ const environment = {
   STRIPE_SECRET_KEY: 'test-only', STRIPE_WEBHOOK_SECRET: 'test-only',
   COACH_PROFILE_ID: 'coach-1', NEXT_PUBLIC_SITE_URL: 'https://srgfit.example',
   NEXT_PUBLIC_SUPABASE_URL: 'https://supabase.example', SUPABASE_SERVICE_ROLE_KEY: 'test-only',
+  NEXT_PUBLIC_STRIPE_PRICE_MONTHLY: 'price-monthly', NEXT_PUBLIC_STRIPE_PRICE_WEEKLY: 'price-weekly',
 }
 
 function loadSource(source, mocks = {}, globals = {}) {
@@ -35,6 +36,7 @@ function loadFile(path, mocks, globals) {
 }
 
 const { subscriptionSnapshot } = loadFile('src/lib/stripe-subscription.ts')
+const { normalizeInviteEmail } = loadFile('src/lib/invite-utils.ts')
 const next = { NextResponse: { json: (body, options = {}) => ({ status: options.status || 200, body }) } }
 const plain = value => JSON.parse(JSON.stringify(value))
 
@@ -378,6 +380,139 @@ for (const [name, sessionId, session, confirmed] of [
   assert.equal(output.includes('Checkout confirmed'), confirmed)
   assert.equal(retrieved, session ? 1 : 0)
   if (!confirmed) assert.match(output, /do not pay again/)
+})
+
+function publicCheckoutRoute(options = {}) {
+  const customers = [], sessions = []
+  let initialized = 0
+  class Stripe {
+    constructor() { initialized += 1 }
+    customers = { create: async input => { customers.push(plain(input)); return { id: 'cus-new' } } }
+    checkout = { sessions: { create: async input => {
+      sessions.push(plain(input))
+      if (options.providerError) throw new Error('Private provider details')
+      return { url: options.noUrl ? null : 'https://checkout.stripe.example/session' }
+    } } }
+  }
+  const { POST } = loadFile('src/app/api/stripe/checkout/route.ts', {
+    'next/server': next, stripe: Stripe, '@/lib/invite-utils': { normalizeInviteEmail },
+  }, { process: { env: { ...environment, ...options.environment } } })
+  return { POST, customers, sessions, initialized: () => initialized }
+}
+
+for (const [name, input] of [
+  ['null body', null], ['array body', []], ['missing plan', {}], ['object plan', { priceId: {} }],
+  ['unapproved plan', { priceId: 'price-attacker' }],
+  ['object email', { priceId: 'price-monthly', email: {} }],
+  ['invalid email', { priceId: 'price-monthly', email: 'not-email' }],
+  ['object name', { priceId: 'price-monthly', name: {} }],
+  ['oversized name', { priceId: 'price-monthly', name: 'x'.repeat(121) }],
+]) await test(`checkout rejects ${name} without contacting Stripe`, async () => {
+  const route = publicCheckoutRoute()
+  assert.equal((await route.POST(request(input))).status, 400)
+  assert.equal(route.initialized(), 0)
+})
+
+await test('checkout rejects malformed JSON before contacting Stripe', async () => {
+  const route = publicCheckoutRoute()
+  assert.equal((await route.POST({ json: async () => { throw new Error('Invalid JSON') } })).status, 400)
+  assert.equal(route.initialized(), 0)
+})
+
+await test('checkout normalizes identity and uses the configured return address', async () => {
+  const route = publicCheckoutRoute({ environment: { NEXT_PUBLIC_SITE_URL: 'https://srgfit.example/' } })
+  assert.equal((await route.POST(request({ priceId: 'price-weekly', email: ' CLIENT@Example.com ', name: ' Test Client ' }))).status, 200)
+  assert.deepEqual(route.customers, [{ email: 'client@example.com', name: 'Test Client' }])
+  assert.equal(route.sessions[0].customer, 'cus-new')
+  assert.equal(route.sessions[0].success_url, 'https://srgfit.example/join/success?session_id={CHECKOUT_SESSION_ID}')
+  assert.equal(route.sessions[0].subscription_data.trial_period_days, 7)
+  assert.deepEqual(route.sessions[0].line_items, [{ price: 'price-weekly', quantity: 1 }])
+})
+
+await test('checkout still allows Stripe to collect identity when it is not provided', async () => {
+  const route = publicCheckoutRoute()
+  assert.equal((await route.POST(request({ priceId: 'price-monthly' }))).status, 200)
+  assert.equal(route.customers.length, 0)
+  assert.equal(route.sessions.length, 1)
+})
+
+for (const key of ['STRIPE_SECRET_KEY', 'NEXT_PUBLIC_SITE_URL']) await test(`checkout missing ${key} fails before provider access`, async () => {
+  const route = publicCheckoutRoute({ environment: { [key]: '' } })
+  assert.equal((await route.POST(request({ priceId: 'price-monthly' }))).status, 503)
+  assert.equal(route.initialized(), 0)
+})
+
+for (const options of [{ providerError: true }, { noUrl: true }]) await test('checkout failure returns no provider details or false success', async () => {
+  const route = publicCheckoutRoute(options)
+  const response = await route.POST(request({ priceId: 'price-monthly' }))
+  assert.equal(response.status, 502)
+  assert.equal(response.body.error, 'Could not open checkout. Please try again.')
+})
+
+function portalRoute(options = {}) {
+  const server = database(options.auth === false || options.authError ? [] : [{
+    table: 'profiles', data: options.noProfile ? null : { role: options.role || 'client' }, error: options.profileError,
+  }])
+  server.auth = { getUser: async () => ({ data: { user: options.auth === false ? null : { id: 'user-1' } }, error: options.authError }) }
+  const denied = options.auth === false || options.authError || options.profileError || options.noProfile || (options.role && options.role !== 'client')
+  const admin = database(denied ? [] : [{ table: 'clients', data: options.noCustomer ? null : { stripe_customer_id: 'cus-own' } }])
+  const sessions = []
+  let initialized = 0, adminCreated = 0
+  class Stripe {
+    constructor() { initialized += 1 }
+    billingPortal = { sessions: { create: async input => {
+      sessions.push(plain(input))
+      if (options.providerError) throw new Error('Private customer details')
+      return { url: options.noUrl ? null : 'https://billing.stripe.example/session' }
+    } } }
+  }
+  const { POST } = loadFile('src/app/api/stripe/portal/route.ts', {
+    'next/server': next, stripe: Stripe,
+    '@/lib/supabase-server': { createServerSupabaseClient: async () => server, createAdminClient: () => { adminCreated += 1; return admin } },
+  }, { process: { env: { ...environment, ...options.environment } } })
+  return { POST, admin, sessions, initialized: () => initialized, adminCreated: () => adminCreated, done() { server.done(); admin.done() } }
+}
+
+for (const [name, options, status] of [
+  ['signed-out user', { auth: false }, 401], ['invalid session', { authError: { message: 'Expired' } }, 401],
+  ['coach', { role: 'coach' }, 403], ['unknown role', { role: 'other' }, 403],
+  ['missing profile', { noProfile: true }, 403], ['failed role lookup', { profileError: { message: 'Denied' } }, 502],
+]) await test(`portal rejects ${name} without privileged provider access`, async () => {
+  const route = portalRoute(options)
+  assert.equal((await route.POST()).status, status)
+  assert.equal(route.initialized(), 0)
+  assert.equal(route.adminCreated(), 0)
+  route.done()
+})
+
+await test('portal opens only the authenticated client customer account', async () => {
+  const route = portalRoute()
+  assert.equal((await route.POST()).status, 200)
+  assert.deepEqual(route.admin.calls[0].filters, [['profile_id', 'user-1']])
+  assert.deepEqual(route.sessions, [{ customer: 'cus-own', return_url: 'https://srgfit.example/dashboard/client' }])
+  route.done()
+})
+
+await test('portal without a billing customer does not contact Stripe', async () => {
+  const route = portalRoute({ noCustomer: true })
+  assert.equal((await route.POST()).status, 404)
+  assert.equal(route.initialized(), 0)
+  route.done()
+})
+
+for (const key of ['STRIPE_SECRET_KEY', 'NEXT_PUBLIC_SITE_URL']) await test(`portal missing ${key} fails before provider access`, async () => {
+  const route = portalRoute({ environment: { [key]: '' } })
+  assert.equal((await route.POST()).status, 503)
+  assert.equal(route.initialized(), 0)
+  route.done()
+})
+
+for (const options of [{ providerError: true }, { noUrl: true }]) await test('portal failure returns no provider details or false success', async () => {
+  const route = portalRoute(options)
+  const response = await route.POST()
+  assert.equal(response.status, 502)
+  assert.equal(response.body.error, 'Could not open billing. Please try again.')
+  route.done()
 })
 
 console.log(`Stripe route smoke tests passed (${count} cases).`)
