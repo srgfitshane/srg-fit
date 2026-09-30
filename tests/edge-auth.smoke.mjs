@@ -182,4 +182,9 @@ for (const failTable of ['subscriptions', 'clients', 'stripe_events']) await tes
   assert.equal((await f.run()).status, 500)
   assert.equal(f.writes.some(x => x.table === 'stripe_events' && x.value.processed === true), false)
 })
+for (const name of ['send-invite-email', 'notify-new-client', 'send-daily-recap']) await test(`${name} sends only from the verified SRG Fit domain`, () => {
+  const source = readFileSync(`supabase/functions/${name}/index.ts`, 'utf8')
+  assert.match(source, /from:\s*'SRG Fit <noreply@srgfit\.training>'/)
+  assert.doesNotMatch(source, /onboarding@resend\.dev|info@srg\.fitness/)
+})
 console.log(`Edge security: ${passed} passed (mocked services; no live actions)`)

@@ -71,7 +71,7 @@ serve(async (req: Request) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${resendKey}` },
       body: JSON.stringify({
-        from: 'SRG Fit <info@srg.fitness>',
+        from: 'SRG Fit <noreply@srgfit.training>',
         to: [COACH_EMAIL],
         subject: `🎉 New client: ${client_name || client_email}`,
         html,
