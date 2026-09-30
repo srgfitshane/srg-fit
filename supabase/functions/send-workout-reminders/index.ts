@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.3'
+import { requireServiceCaller } from '../_shared/auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://srgfit.app',
@@ -26,6 +27,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const denied = await requireServiceCaller(req, { headers: corsHeaders })
+    if (denied) return denied
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, serviceKey)

@@ -32,3 +32,16 @@ verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+# These handlers perform explicit user/service authentication before any work.
+[functions.stripe-checkout]
+verify_jwt = false
+
+[functions.stripe-portal]
+verify_jwt = false
+
+[functions.check-program-endings]
+verify_jwt = false
+
+[functions.send-workout-reminders]
+verify_jwt = false

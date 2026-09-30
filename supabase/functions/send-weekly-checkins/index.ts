@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { requireServiceCaller } from '../_shared/auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://srgfit.app',
@@ -13,6 +14,8 @@ serve(async (req: Request) => {
   }
 
   try {
+    const denied = await requireServiceCaller(req, { headers: corsHeaders })
+    if (denied) return denied
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     // Must use service role so cron tasks bypass RLS

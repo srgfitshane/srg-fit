@@ -1,12 +1,15 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { requireServiceCaller } from '../_shared/auth.ts'
 
 const COACH_EMAIL = 'shane@srgfit.training'
 const COACH_NAME  = 'Shane'
 const SITE_URL    = 'https://srgfit.app'
 
-serve(async (_req: Request) => {
+serve(async (req: Request) => {
   try {
+    const denied = await requireServiceCaller(req)
+    if (denied) return denied
     const adminDb = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
