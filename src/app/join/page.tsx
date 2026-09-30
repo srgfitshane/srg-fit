@@ -1,13 +1,6 @@
 'use client'
 import { useState } from 'react'
 
-const t = {
-  bg:'#080810', surface:'#0f0f1a', surfaceUp:'#161624', border:'#252538',
-  teal:'#00c9b1', tealDim:'#00c9b115', orange:'#f5a623', orangeDim:'#f5a62315',
-  text:'#eeeef8', textMuted:'#5a5a78', textDim:'#8888a8',
-  green:'#22c55e', red:'#ef4444',
-}
-
 const PLANS = [
   {
     id: 'monthly', label: 'Monthly', price: '$200', interval: '/month', badge: 'Most Popular',
@@ -93,7 +86,7 @@ export default function JoinPage() {
             <span style={{ background:'linear-gradient(135deg,#00c9b1,#f5a623)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>Real Support.</span>
           </div>
           <div style={{ fontSize:15, color:'#5a5a78', lineHeight:1.7, maxWidth:460, margin:'0 auto' }}>
-            For the person who's done with cookie-cutter apps and ready to actually feel strong, capable, and at home in their own body. You bring the work. Shane brings the plan, the eyes-on, and the steady support.
+            For the person who&apos;s done with cookie-cutter apps and ready to actually feel strong, capable, and at home in their own body. You bring the work. Shane brings the plan, the eyes-on, and the steady support.
           </div>
         </div>
 
@@ -103,7 +96,7 @@ export default function JoinPage() {
           {/* Trial banner */}
           <div style={{ background:'#00c9b118', border:'1px solid #00c9b140', borderRadius:14, padding:'14px 18px', marginBottom:20, textAlign:'center' }}>
             <div style={{ fontSize:18, fontWeight:900, color:'#00c9b1', marginBottom:3 }}>🔥 7-Day Free Trial</div>
-            <div style={{ fontSize:13, color:'#5a5a78', lineHeight:1.6 }}>Start training today. Card collected upfront, nothing charged for 7 days. Cancel before your trial ends and you won't pay a thing.</div>
+            <div style={{ fontSize:13, color:'#5a5a78', lineHeight:1.6 }}>Start training today. Card collected upfront, nothing charged for 7 days. Cancel before your trial ends and you won&apos;t pay a thing.</div>
           </div>
 
           {/* Plan selector */}
@@ -163,7 +156,7 @@ export default function JoinPage() {
 
         {/* Features */}
         <div style={{ maxWidth:600, margin:'32px auto 0', padding:'0 24px 80px' }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:16 }}>What You'll Get</div>
+          <div style={{ fontSize:12, fontWeight:700, color:'#5a5a78', textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center', marginBottom:16 }}>What You&apos;ll Get</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:10 }}>
             {FEATURES.map(f => (
               <div key={f.title} style={{ background:'#0f0f1a', border:'1px solid #252538', borderRadius:14, padding:'16px 18px' }}>
@@ -174,7 +167,7 @@ export default function JoinPage() {
             ))}
           </div>
           <div style={{ marginTop:28, background:'#00c9b115', border:'1px solid #00c9b130', borderRadius:14, padding:'16px 18px', textAlign:'center' }}>
-            <div style={{ fontSize:13, fontWeight:800, color:'#00c9b1', marginBottom:5 }}>Not sure if it's right for you?</div>
+            <div style={{ fontSize:13, fontWeight:800, color:'#00c9b1', marginBottom:5 }}>Not sure if it&apos;s right for you?</div>
             <div style={{ fontSize:12, color:'#5a5a78', lineHeight:1.6 }}>
               Send a note to <a href="mailto:shane@srgfit.training" style={{ color:'#00c9b1', textDecoration:'none' }}>shane@srgfit.training</a>. Shane reads and answers every one personally. No pressure either way.
             </div>
