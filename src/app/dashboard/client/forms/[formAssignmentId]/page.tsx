@@ -1,11 +1,13 @@
 'use client'
 import type { CSSProperties } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter, useParams } from 'next/navigation'
 import ClientBottomNav from '@/components/client/ClientBottomNav'
 import { alpha } from '@/lib/theme'
 import { fetchServerDraft, saveServerDraft, clearServerDraft } from '@/lib/form-drafts'
+import { prepareProgressPhoto } from '@/lib/progress-photo'
+import { localDateStr } from '@/lib/date'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceUp:"var(--surface-up)", surfaceHigh:"var(--surface-high)",
@@ -42,6 +44,38 @@ type FormAssignment = {
 
 type AnswerValue = string | number | string[] | null
 
+function uploadedPhotoPaths(value: AnswerValue | undefined, profileId: string | null): string[] {
+  if (!profileId || !Array.isArray(value)) return []
+  return [...new Set(value.filter(path => {
+    if (typeof path !== 'string') return false
+    const parts = path.split('/')
+    return parts.length === 2 && parts[0] === profileId
+      && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}\.(jpg|png|webp)$/i.test(parts[1])
+  }))]
+}
+
+function progressPhotoAngle(mapping: string): string {
+  const angle = mapping.replace(/^progress_photo_/, '')
+  // The generic side question does not identify left versus right.
+  if (angle === 'side') return 'other'
+  if (['front', 'back', 'side_left', 'side_right', 'other'].includes(angle)) return angle
+  throw new Error('This photo question has an unsupported angle. Please contact your coach.')
+}
+
+function SelectedPhotoPreview({ file }: { file: File }) {
+  const imageRef = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    const image = imageRef.current
+    if (!image) return
+    const url = URL.createObjectURL(file)
+    image.src = url
+    return () => { image.removeAttribute('src'); URL.revokeObjectURL(url) }
+  }, [file])
+  // Local device preview only; the effect owns and releases its object URL.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img ref={imageRef} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+}
+
 export default function ClientFormPage() {
   const supabase = useMemo(() => createClient(), [])
   const router   = useRouter()
@@ -56,6 +90,8 @@ export default function ClientFormPage() {
   const [answers,    setAnswers]    = useState<Record<string, AnswerValue>>({})
   const [errors,     setErrors]     = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitWarning, setSubmitWarning] = useState<string | null>(null)
+  const submittingRef = useRef(false)
   const [restoredDraft, setRestoredDraft] = useState(false)
   const [profileId, setProfileId] = useState<string | null>(null)
   // Picked files per file-type question (one or more per question)
@@ -128,7 +164,7 @@ export default function ClientFormPage() {
   // server-side at 5s (cross-device backup, lighter network use). Both are
   // cleared on successful submit.
   useEffect(() => {
-    if (!formAssignmentId || submitted) return
+    if (!formAssignmentId || submitted || submitting) return
     if (Object.keys(answers).length === 0) return
     const localHandle = window.setTimeout(() => {
       try {
@@ -144,7 +180,11 @@ export default function ClientFormPage() {
       window.clearTimeout(localHandle)
       if (serverHandle) window.clearTimeout(serverHandle)
     }
-  }, [answers, formAssignmentId, submitted, profileId])
+  }, [answers, formAssignmentId, submitted, submitting, profileId])
+
+  function keepDraft(next: Record<string, AnswerValue>) {
+    try { window.localStorage.setItem(`form-draft:${formAssignmentId}`, JSON.stringify(next)) } catch { /* Keep the in-memory answers if browser storage is unavailable. */ }
+  }
 
   const setAnswer = (qId: string, val: AnswerValue) => {
     setAnswers(p => ({ ...p, [qId]: val }))
@@ -156,6 +196,12 @@ export default function ClientFormPage() {
     const errs: Record<string, string> = {}
     questions.forEach(q => {
       if (!q.required) return
+      if (q.question_type === 'file') {
+        if (!(files[q.id]?.length) && uploadedPhotoPaths(answers[q.id], profileId).length === 0) {
+          errs[q.id] = 'Please select a photo. After a refresh, unuploaded photos must be selected again.'
+        }
+        return
+      }
       const val = answers[q.id]
       if (val === undefined || val === null || val === '' ||
           (Array.isArray(val) && val.length === 0)) {
@@ -173,163 +219,119 @@ export default function ClientFormPage() {
   ])
 
   const submit = async () => {
-    if (!validate()) return
+    if (submitting || submitted || submittingRef.current || !validate()) return
+    submittingRef.current = true
     setSubmitting(true)
     setSubmitError(null)
-
-    const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
-      setSubmitting(false)
-      setSubmitError('Your session expired. Please refresh the page and log in again -- your answers are saved on this device and will be restored.')
-      return
-    }
-
-    // Find the client record for the coach_id and the metrics client_id
-    // NOTE: progress_photos.client_id stores profile_id (auth.uid),
-    // metrics.client_id stores clients.id. Both are needed.
-    const { data: clientRec, error: clientErr } = await supabase
-      .from('clients')
-      .select('id, coach_id')
-      .eq('profile_id', user.id)
-      .single<{ id: string; coach_id: string | null }>()
-
-    if (clientErr || !clientRec) {
-      setSubmitting(false)
-      setSubmitError('Could not find your client profile. Your answers are saved on this device -- please contact your coach.')
-      return
-    }
-
-    // Upload any picked files first so the response JSON can store URLs.
-    // Path scheme: <profile_id>/<YYYY-MM-DD>-<angle>-<rand>.<ext>
-    // Storage RLS requires the leading folder to be auth.uid().
-    const uploadedAnswers: Record<string, AnswerValue> = { ...answers }
-    const photoInserts: Array<{ angle: string; storage_path: string }> = []
-    const today = new Date()
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-    let uploadFailures = 0
-
-    for (const q of questions) {
-      if (q.question_type !== 'file') continue
-      const picked = files[q.id] || []
-      if (picked.length === 0) continue
-      const urls: string[] = []
-      for (let i = 0; i < picked.length; i++) {
-        const f = picked[i]
-        const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
-        const rand = Math.random().toString(36).slice(2, 8)
-        const angle = (q.maps_to || '').replace(/^progress_photo_/, '') || 'photo'
-        const path = `${user.id}/${todayStr}-${angle}-${rand}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from('progress-photos')
-          .upload(path, f, { upsert: false, contentType: f.type })
-        if (upErr) {
-          console.error('progress-photos upload', upErr)
-          uploadFailures++
-          continue
-        }
-        urls.push(path)
-        if (q.maps_to && q.maps_to.startsWith('progress_photo_')) {
-          photoInserts.push({ angle, storage_path: path })
-        }
+    setSubmitWarning(null)
+    keepDraft(answers)
+    try {
+      const { data: { user }, error: userErr } = await supabase.auth.getUser()
+      if (userErr || !user || user.id !== profileId) {
+        throw new Error('Your session changed or expired. Sign in again; your written answers are kept on this device.')
       }
-      uploadedAnswers[q.id] = urls
-    }
-
-    // Mark the assignment complete with file URLs baked into the response.
-    // THIS is the call whose silent failure caused Anubha to lose her writing.
-    // Now we check error explicitly and bail with a visible message.
-    const { data: asgn, error: updateErr } = await supabase.from('client_form_assignments').update({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-      response: uploadedAnswers,
-    }).eq('id', formAssignmentId).select('client_id, form:onboarding_forms(form_type, is_checkin_type, id)').single<{ client_id: string; form: AssignmentForm | null }>()
-
-    if (updateErr || !asgn) {
-      setSubmitting(false)
-      setSubmitError('Could not save your responses. Your answers are still saved on this device -- please try again or refresh the page. (Error: ' + (updateErr?.message || 'unknown') + ')')
-      return
-    }
-
-    const isCheckin = asgn?.form?.form_type === 'check_in' || asgn?.form?.is_checkin_type
-    if (isCheckin && clientRec) {
-      // Fan out body-metric mapped fields into the metrics table.
-      // Upsert keyed on (client_id, logged_date) so re-submissions on
-      // the same day merge instead of duplicating rows.
-      const metricRow: Record<string, string | number | null> = {
-        client_id: clientRec.id,
-        coach_id:  clientRec.coach_id,
-        logged_date: todayStr,
+      const { data: clientRec, error: clientErr } = await supabase.from('clients')
+        .select('id, coach_id').eq('profile_id', user.id).single<{ id: string; coach_id: string | null }>()
+      if (clientErr || !clientRec || assignment?.id !== formAssignmentId || assignment.client_id !== clientRec.id || !form) {
+        throw new Error('Could not confirm your assigned form. Your answers are kept; please refresh or contact your coach.')
       }
-      let hasMetric = false
+      const uploadedAnswers: Record<string, AnswerValue> = { ...answers }
+      const todayStr = localDateStr()
+      const isCheckin = form.form_type === 'check_in' || form.is_checkin_type
+      const photoRows: Array<{ id: string; client_id: string; coach_id: string | null; storage_path: string; photo_date: string; angle: string; weight_at_time: number | null }> = []
+      const weightQuestion = questions.find(q => q.maps_to === 'weight')
+      const rawWeight = weightQuestion ? answers[weightQuestion.id] : null
+      const weight = rawWeight !== null && rawWeight !== undefined && rawWeight !== '' ? Number(rawWeight) : null
+      const weightAtTime = weight !== null && Number.isFinite(weight) ? weight : null
+
       for (const q of questions) {
-        if (!q.maps_to || !metricColumns.has(q.maps_to)) continue
-        const v = answers[q.id]
-        if (v === undefined || v === null || v === '') continue
-        const n = Number(v)
-        if (!isFinite(n)) continue
-        metricRow[q.maps_to] = n
-        hasMetric = true
+        if (q.question_type !== 'file') continue
+        const mapped = isCheckin && q.maps_to?.startsWith('progress_photo_')
+        const angle = mapped ? progressPhotoAngle(q.maps_to!) : null
+        const paths = uploadedPhotoPaths(uploadedAnswers[q.id], user.id)
+        uploadedAnswers[q.id] = paths
+        for (const file of files[q.id] || []) {
+          const prepared = await prepareProgressPhoto(file)
+          const extension = prepared.type === 'image/png' ? 'png' : prepared.type === 'image/webp' ? 'webp' : 'jpg'
+          const path = `${user.id}/${crypto.randomUUID()}.${extension}`
+          const { data, error } = await supabase.storage.from('progress-photos').upload(path, prepared, {
+            upsert: false, contentType: prepared.type, cacheControl: '3600',
+          })
+          if (error || !data) throw new Error('A photo could not upload. Your answers and confirmed uploads are kept. Retry here; after a refresh, select any unuploaded photos again.')
+          paths.push(path)
+          uploadedAnswers[q.id] = [...paths]
+          // Persist each confirmed path immediately, so retry/reload does not
+          // re-upload it. Unuploaded File objects stay in memory for retry.
+          setAnswers({ ...uploadedAnswers })
+          keepDraft(uploadedAnswers)
+          setFiles(previous => ({ ...previous, [q.id]: (previous[q.id] || []).filter(picked => picked !== file) }))
+        }
+        if (mapped && angle) {
+          for (const path of paths) photoRows.push({
+            id: path.split('/')[1].split('.')[0], client_id: user.id, coach_id: clientRec.coach_id,
+            storage_path: path, photo_date: todayStr, angle, weight_at_time: weightAtTime,
+          })
+        }
       }
-      if (hasMetric) {
-        // Non-blocking: if metrics fan-out fails the response is still saved.
-        const { error: mErr } = await supabase.from('metrics').upsert(metricRow, { onConflict: 'client_id,logged_date' })
-        if (mErr) console.error('[checkin] metrics fan-out failed:', mErr)
+      if (photoRows.length) {
+        const { data, error } = await supabase.from('progress_photos').upsert(photoRows, { onConflict: 'id' }).select('id')
+        if (error || !data || data.length !== photoRows.length) {
+          throw new Error('Your photos uploaded, but could not be added to Progress. Your answers and uploads are kept; retry here without selecting the uploaded photos again.')
+        }
       }
+      // Completion is last: failed photos must never lead to "All done".
+      const { data: saved, error: updateErr } = await supabase.from('client_form_assignments').update({
+        status: 'completed', completed_at: new Date().toISOString(), response: uploadedAnswers,
+      }).eq('id', formAssignmentId).eq('client_id', clientRec.id).select('id').single()
+      if (updateErr || !saved) throw new Error('Could not save your responses. Your answers and uploads are kept; please retry here.')
 
-      // Insert progress_photos rows for each uploaded photo.
-      // Note: progress_photos.client_id holds the profile_id (auth.uid).
-      if (photoInserts.length > 0) {
-        // Pull current weight from the answers if present so we can
-        // stamp it on the photo row (helpful for side-by-side views).
-        let weightAtTime: number | null = null
-        for (const q of questions) {
-          if (q.maps_to === 'weight' && answers[q.id] !== undefined && answers[q.id] !== '') {
-            const n = Number(answers[q.id])
-            if (isFinite(n)) weightAtTime = n
-            break
+      try { window.localStorage.removeItem(`form-draft:${formAssignmentId}`) } catch { /* The primary save is confirmed. */ }
+      void clearServerDraft(user.id, `forms:${formAssignmentId}`).catch(() => {})
+      setSubmitted(true)
+
+      // These copies are auxiliary: the confirmed response remains the source
+      // of truth. Show a warning on failure instead of discarding the response
+      // or logging health-related provider error details.
+      if (isCheckin) {
+        try {
+          const metricRow: Record<string, string | number | null> = { client_id: clientRec.id, coach_id: clientRec.coach_id, logged_date: todayStr }
+          let hasMetric = false
+          for (const q of questions) {
+            if (!q.maps_to || !metricColumns.has(q.maps_to)) continue
+            const value = answers[q.id]
+            if (value === undefined || value === null || value === '') continue
+            const number = Number(value)
+            if (!Number.isFinite(number)) continue
+            metricRow[q.maps_to] = number
+            hasMetric = true
           }
+          if (hasMetric) {
+            const { data, error } = await supabase.from('metrics').upsert(metricRow, { onConflict: 'client_id,logged_date' }).select('id').single()
+            if (error || !data) throw new Error('metrics sync')
+          }
+          const { data, error } = await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() })
+            .eq('id', clientRec.id).select('id').single()
+          if (error || !data) throw new Error('check-in timestamp sync')
+        } catch {
+          setSubmitWarning('Your responses and photos were saved, but a progress-summary update failed. Your coach can still review the full check-in. Please let them know; no need to submit again.')
         }
-        const { error: pErr } = await supabase.from('progress_photos').insert(
-          photoInserts.map(p => ({
-            client_id: user.id,
-            coach_id:  clientRec.coach_id,
-            storage_path: p.storage_path,
-            photo_date: todayStr,
-            angle: p.angle,
-            weight_at_time: weightAtTime,
-          }))
-        )
-        if (pErr) console.error('[checkin] progress_photos insert failed:', pErr)
+        try {
+          const { triggerAiInsight } = await import('@/lib/ai-insights')
+          if (clientRec.coach_id) {
+            triggerAiInsight(clientRec.id, clientRec.coach_id, 'checkin_brief')
+            triggerAiInsight(clientRec.id, clientRec.coach_id, 'red_flag')
+          }
+        } catch { /* AI insights must not block a confirmed check-in. */ }
       }
-
-      // Update last check-in timestamp + trigger AI insights. Non-blocking.
-      const { error: clientUpdErr } = await supabase.from('clients').update({ last_checkin_at: new Date().toISOString() }).eq('id', clientRec.id)
-      if (clientUpdErr) console.error('[checkin] last_checkin_at update failed:', clientUpdErr)
-      try {
-        const { triggerAiInsight } = await import('@/lib/ai-insights')
-        if (clientRec.coach_id) {
-          triggerAiInsight(clientRec.id, clientRec.coach_id, 'checkin_brief')
-          triggerAiInsight(clientRec.id, clientRec.coach_id, 'red_flag')
-        }
-      } catch { /* non-blocking */ }
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not submit your form. Your answers are kept; please retry here.')
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
     }
-
-    // Success -- clear local + server drafts so neither pre-fills on next visit.
-    try { window.localStorage.removeItem(`form-draft:${formAssignmentId}`) } catch { /* */ }
-    if (profileId) void clearServerDraft(profileId, `forms:${formAssignmentId}`)
-
-    if (uploadFailures > 0) {
-      // Soft-warn: response saved but some photos didn't upload.
-      setSubmitError(`Your responses were saved, but ${uploadFailures} photo${uploadFailures === 1 ? '' : 's'} failed to upload. You can re-add them from the Progress page later.`)
-      setTimeout(() => { setSubmitted(true); setSubmitting(false) }, 100)
-      return
-    }
-
-    setSubmitted(true)
-    setSubmitting(false)
   }
 
-  const inp: CSSProperties = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 13px', fontSize:14, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' }
+  const inp: CSSProperties = { width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 13px', fontSize:16, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif", boxSizing:'border-box' }
 
   if (loading) return (
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.textMuted }}>
@@ -354,6 +356,7 @@ export default function ClientFormPage() {
           <div style={{ fontSize:14, color:t.textMuted, marginBottom:24, lineHeight:1.6 }}>
             Your responses have been submitted. Your coach will review them shortly.
           </div>
+          {submitWarning && <p role="status" style={{ color:t.orange, fontSize:13, lineHeight:1.5, marginBottom:20 }}>{submitWarning}</p>}
           <button onClick={()=>router.push('/dashboard/client')}
             style={{ background:`linear-gradient(135deg,${t.teal},${alpha(t.teal, 80)})`, border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
             Back to Dashboard
@@ -385,6 +388,7 @@ export default function ClientFormPage() {
                 <span style={{ flex:1, minWidth:200 }}>💾 We restored your in-progress answers from your last visit.</span>
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => {
                     // Wipe local + server drafts and reset answers so the
                     // client gets a true fresh slate. Banner hides since
@@ -392,6 +396,7 @@ export default function ClientFormPage() {
                     try { window.localStorage.removeItem(`form-draft:${formAssignmentId}`) } catch { /* */ }
                     if (profileId) void clearServerDraft(profileId, `forms:${formAssignmentId}`)
                     setAnswers({})
+                    setFiles({})
                     setRestoredDraft(false)
                   }}
                   style={{ background:'transparent', border:'1px solid '+alpha(t.orange, 60), borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:700, color:t.orange, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
@@ -402,6 +407,7 @@ export default function ClientFormPage() {
           </div>
 
           {/* Questions */}
+          <fieldset disabled={submitting} style={{ border:0, padding:0, margin:0, minWidth:0 }}>
           <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
             {questions.map((q, idx) => (
               <div key={q.id} style={{ background:t.surface, border:'1px solid '+(errors[q.id]?alpha(t.red, 38):t.border), borderRadius:14, padding:'18px 20px' }}>
@@ -494,12 +500,14 @@ export default function ClientFormPage() {
                 {/* File upload — image/photo picker (multi) */}
                 {q.question_type === 'file' && (() => {
                   const picked = files[q.id] || []
+                  const uploaded = uploadedPhotoPaths(answers[q.id], profileId)
                   const removeAt = (i: number) => setFiles(p => ({ ...p, [q.id]: (p[q.id] || []).filter((_, j) => j !== i) }))
                   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
                     const list = Array.from(e.target.files || [])
                     if (list.length === 0) return
                     setFiles(p => ({ ...p, [q.id]: [...(p[q.id] || []), ...list] }))
-                    setAnswer(q.id, [...(picked.map(f => f.name)), ...list.map(f => f.name)])
+                    setErrors(p => { const next = { ...p }; delete next[q.id]; return next })
+                    setSubmitError(null)
                     e.target.value = ''
                   }
                   return (
@@ -508,10 +516,8 @@ export default function ClientFormPage() {
                         <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginBottom:10 }}>
                           {picked.map((f, i) => (
                             <div key={i} style={{ position:'relative', width:96, height:96, borderRadius:10, overflow:'hidden', border:'1px solid '+t.border, background:t.surfaceHigh }}>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img alt={f.name} src={URL.createObjectURL(f)}
-                                style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
-                              <button type="button" onClick={() => removeAt(i)}
+                              <SelectedPhotoPreview file={f} />
+                              <button type="button" aria-label={`Remove selected photo ${i + 1}`} onClick={() => removeAt(i)}
                                 style={{ position:'absolute', top:4, right:4, width:22, height:22, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.65)', color:'#fff', fontSize:12, cursor:'pointer', lineHeight:1, padding:0 }}>
                                 ×
                               </button>
@@ -519,8 +525,17 @@ export default function ClientFormPage() {
                           ))}
                         </div>
                       )}
+                      {uploaded.length > 0 && <div style={{ fontSize:12, color:t.green, marginBottom:10 }}>
+                        <p style={{ marginBottom:6 }}>✓ {uploaded.length} photo{uploaded.length === 1 ? '' : 's'} uploaded and kept for this response. Retry will reuse them.</p>
+                        {uploaded.map((path, index) => <button key={path} type="button"
+                          onClick={() => setAnswer(q.id, uploaded.filter(uploadedPath => uploadedPath !== path))}
+                          style={{ background:'transparent', border:'1px solid '+t.border, borderRadius:8, color:t.textMuted, padding:'6px 10px', margin:'0 6px 6px 0', fontSize:12, cursor:'pointer' }}>
+                          Remove uploaded photo {index + 1} from this response
+                        </button>)}
+                      </div>}
+                      <p style={{ fontSize:12, color:t.textMuted, marginBottom:10, lineHeight:1.5 }}>Large photos are resized without cropping. After a refresh, select any photos that had not uploaded yet. Already uploaded photos are kept.</p>
                       <label style={{ display:'block', cursor:'pointer' }}>
-                        <input type="file" accept="image/*" multiple onChange={onPick} style={{ display:'none' }} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple onChange={onPick} style={{ display:'none' }} />
                         <div style={{ border:'2px dashed '+t.border, borderRadius:10, padding:'18px', textAlign:'center', color:t.textMuted, fontSize:13, background:t.surfaceUp }}>
                           📸 {picked.length === 0 ? 'Tap to add photo' : 'Add another'}
                         </div>
@@ -535,10 +550,11 @@ export default function ClientFormPage() {
               </div>
             ))}
           </div>
+          </fieldset>
 
           {/* Error banner -- appears above Submit when an attempt failed */}
           {submitError && (
-            <div style={{ marginTop:24, background:t.redDim, border:'1px solid '+alpha(t.red, 38), borderRadius:12, padding:'12px 16px', color:t.red, fontSize:13, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:10 }}>
+            <div role="alert" style={{ marginTop:24, background:t.redDim, border:'1px solid '+alpha(t.red, 38), borderRadius:12, padding:'12px 16px', color:t.red, fontSize:13, lineHeight:1.5, display:'flex', alignItems:'flex-start', gap:10 }}>
               <span style={{ fontSize:16, lineHeight:1, marginTop:1 }}>⚠</span>
               <span>{submitError}</span>
             </div>
