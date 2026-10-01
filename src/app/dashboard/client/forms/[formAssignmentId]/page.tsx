@@ -232,12 +232,20 @@ export default function ClientFormPage() {
       }
       const { data: clientRec, error: clientErr } = await supabase.from('clients')
         .select('id, coach_id').eq('profile_id', user.id).single<{ id: string; coach_id: string | null }>()
-      if (clientErr || !clientRec || assignment?.id !== formAssignmentId || assignment.client_id !== clientRec.id || !form) {
+      if (clientErr || !clientRec || assignment?.id !== formAssignmentId || assignment.client_id !== clientRec.id) {
         throw new Error('Could not confirm your assigned form. Your answers are kept; please refresh or contact your coach.')
+      }
+      // Reconfirm metadata through client RLS, including when this tab loaded
+      // before access to the assigned form was repaired.
+      const { data: assignedForm, error: formError } = await supabase.from('onboarding_forms')
+        .select('id, form_type, is_checkin_type').eq('id', assignment.form_id)
+        .single<Pick<AssignmentForm, 'id' | 'form_type' | 'is_checkin_type'>>()
+      if (formError || !assignedForm || assignedForm.id !== assignment.form_id) {
+        throw new Error('Could not load your assigned form. Your answers are kept; please retry or contact your coach.')
       }
       const uploadedAnswers: Record<string, AnswerValue> = { ...answers }
       const todayStr = localDateStr()
-      const isCheckin = form.form_type === 'check_in' || form.is_checkin_type
+      const isCheckin = assignedForm.form_type === 'check_in' || assignedForm.is_checkin_type
       const photoRows: Array<{ id: string; client_id: string; coach_id: string | null; storage_path: string; photo_date: string; angle: string; weight_at_time: number | null }> = []
       const weightQuestion = questions.find(q => q.maps_to === 'weight')
       const rawWeight = weightQuestion ? answers[weightQuestion.id] : null

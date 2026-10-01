@@ -21,12 +21,12 @@ const photoQuestion = { id: 'photo', question_type: 'file', maps_to: 'progress_p
 let cases = 0
 
 function harness(options = {}) {
-  const state = { events: [], uploads: [], rows: [], errors: [], warnings: [], draft: new Map(), cleared: [], completed: false, lock: { current: false }, prepared: 0 }
+  const state = { events: [], uploads: [], rows: [], formReads: [], errors: [], warnings: [], draft: new Map(), cleared: [], completed: false, lock: { current: false }, prepared: 0 }
   const picked = options.files ?? { photo: [file('one.jpg')] }
   let uuid = 0
   const context = {
     module: { exports: {} }, Error, Set, Number, Date,
-    profileId: 'profile', formAssignmentId: 'assignment', assignment: { id: 'assignment', client_id: 'client', ...options.assignment },
+    profileId: 'profile', formAssignmentId: 'assignment', assignment: { id: 'assignment', client_id: 'client', form_id: 'assigned-form', ...options.assignment },
     form: options.noForm ? null : { form_type: options.notCheckin ? 'intake' : 'check_in' },
     answers: { note: 'Long personal response', ...options.answers }, files: picked,
     questions: options.questions ?? [photoQuestion, { id: 'note', question_type: 'textarea', required: true }],
@@ -68,12 +68,21 @@ function harness(options = {}) {
       } },
       from: table => {
         let mutation = null
+        const read = { columns: null, filters: [] }
         const chain = {
-          select: () => chain,
-          eq: (column, value) => { if (mutation) mutation.filters.push([column, value]); return chain },
+          select: columns => { read.columns = columns; return chain },
+          eq: (column, value) => { (mutation ? mutation.filters : read.filters).push([column, value]); return chain },
           upsert: (payload, config) => { mutation = { table, kind: 'upsert', payload: plain(payload), config: plain(config), filters: [] }; state.rows.push(mutation); state.events.push(table); return chain },
           update: payload => { mutation = { table, kind: 'update', payload: plain(payload), filters: [] }; state.rows.push(mutation); state.events.push(table); return chain },
           single: async () => {
+            if (!mutation && table === 'onboarding_forms') {
+              state.formReads.push(plain(read))
+              if (options.formThrows) throw new Error('Network unavailable')
+              return { data: options.noFormRow ? null : {
+                id: options.wrongForm ? 'other-form' : 'assigned-form',
+                form_type: options.notCheckin ? 'intake' : 'check_in', is_checkin_type: false,
+              }, error: options.formReadError }
+            }
             if (!mutation) return { data: options.noClient ? null : { id: 'client', coach_id: options.noCoach ? null : 'coach' }, error: options.clientError }
             if (options.throwTable === table) throw new Error('Network unavailable')
             return { data: options.noRowTable === table ? null : { id: table === 'client_form_assignments' ? 'assignment' : 'row' }, error: options.errorTable === table ? {} : null }
@@ -110,7 +119,7 @@ for (const [mapping, angle] of [['progress_photo_front', 'front'], ['progress_ph
   assert.equal(h.state.rows.find(row => row.table === 'progress_photos').payload[0].angle, angle)
   assert.equal(h.state.completed, true); cases++
 }
-for (const options of [{ noUser: true }, { changedUser: true }, { authError: {} }, { authThrows: true }, { noClient: true }, { clientError: {} }, { assignment: { client_id: 'someone-else' } }, { assignment: { id: 'other' } }, { noForm: true }, { prepareError: true }, { uploadError: true }, { uploadThrows: true }, { noUploadRow: true }, { errorTable: 'progress_photos' }, { noRowTable: 'progress_photos' }, { shortPhotos: true }, { throwTable: 'progress_photos' }, { errorTable: 'client_form_assignments' }, { noRowTable: 'client_form_assignments' }, { throwTable: 'client_form_assignments' }]) {
+for (const options of [{ noUser: true }, { changedUser: true }, { authError: {} }, { authThrows: true }, { noClient: true }, { clientError: {} }, { assignment: { client_id: 'someone-else' } }, { assignment: { id: 'other' } }, { noFormRow: true }, { formReadError: {} }, { formThrows: true }, { wrongForm: true }, { prepareError: true }, { uploadError: true }, { uploadThrows: true }, { noUploadRow: true }, { errorTable: 'progress_photos' }, { noRowTable: 'progress_photos' }, { shortPhotos: true }, { throwTable: 'progress_photos' }, { errorTable: 'client_form_assignments' }, { noRowTable: 'client_form_assignments' }, { throwTable: 'client_form_assignments' }]) {
   const h = harness(options); await h.submit()
   assert.equal(h.state.completed, false); assert.ok(h.state.errors.at(-1))
   assert.equal(h.state.draft.size, 1); assert.equal(h.state.cleared.length, 0)
@@ -119,6 +128,23 @@ for (const options of [{ noUser: true }, { changedUser: true }, { authError: {} 
     assert.equal(h.state.rows.filter(row => row.table === 'client_form_assignments').length, 0)
   }
   cases++
+}
+{
+  // A tab with null cached metadata must recover through the actual form read.
+  const h = harness({ noForm: true }); await h.submit()
+  assert.equal(h.state.completed, true)
+  assert.deepEqual(h.state.formReads, [{ columns: 'id, form_type, is_checkin_type', filters: [['id', 'assigned-form']] }])
+  assert.equal(h.state.rows.filter(row => row.table === 'progress_photos').length, 1); cases++
+}
+for (const options of [{ noUser: true }, { changedUser: true }, { noClient: true }, { assignment: { client_id: 'someone-else' } }, { assignment: { id: 'other' } }]) {
+  const h = harness(options); await h.submit()
+  assert.equal(h.state.formReads.length, 0); assert.equal(h.state.uploads.length, 0)
+  assert.equal(h.state.rows.length, 0); cases++
+}
+for (const options of [{ noFormRow: true }, { formReadError: {} }, { formThrows: true }, { wrongForm: true }]) {
+  const h = harness(options); await h.submit()
+  assert.equal(h.state.uploads.length, 0); assert.equal(h.state.rows.length, 0)
+  assert.equal(h.context.files.photo.length, 1); cases++
 }
 {
   const options = { failUploadAt: 2 }
