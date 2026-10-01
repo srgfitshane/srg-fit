@@ -15,6 +15,8 @@ declare
   actual jsonb;
   expected integer;
   params jsonb;
+  page_offset integer;
+  all_ids uuid[] := '{}';
 begin
   if jsonb_array_length(first_page->'items') <> least(25, (first_page->>'total')::integer)
     or (first_page->>'total')::integer <> (select count(*) from public.exercises)
@@ -35,6 +37,17 @@ begin
       'withCues', count(*) filter (where cues is not null and cues <> ''))
     from public.exercises
   ) then raise exception 'Library stats mismatch'; end if;
+
+  for page_offset in 0..((first_page->>'total')::integer / 25) loop
+    actual := public.get_coach_exercise_library(p_offset => page_offset * 25);
+    all_ids := all_ids || coalesce((select array_agg((item->>'id')::uuid)
+      from jsonb_array_elements(actual->'items') item), '{}'::uuid[]);
+  end loop;
+  if cardinality(all_ids) <> (first_page->>'total')::integer
+    or (select count(distinct id) from unnest(all_ids) id) <> cardinality(all_ids)
+    or exists (select 1 from public.exercises where not (id = any(all_ids))) then
+    raise exception 'An exercise is missing or repeated across full library pages';
+  end if;
 
   foreach q in array array['', 'quad', 'BACK', '%', '_', 'no-such-exercise-qa-76a921'] loop
     foreach video in array array['all', 'has', 'missing'] loop

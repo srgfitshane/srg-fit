@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { toastError } from '@/components/ui/Toast'
@@ -65,6 +65,10 @@ function keepExerciseDraft(coachId: string, id: string, draft: { name: string; d
 export default function ExerciseLibrary() {
   const [exercises, setExercises]   = useState<any[]>([])
   const [loading,   setLoading]     = useState(true)
+  const [loadError, setLoadError] = useState<string|null>(null)
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState({ total:0, withVideo:0, withMuscles:0, withPattern:0, withCues:0 })
+  const loadRequest = useRef(0)
   const [search,    setSearch]      = useState('')
   const [filterMuscle,  setFilterMuscle]  = useState('all')
   const [filterPattern, setFilterPattern] = useState('all')
@@ -90,6 +94,8 @@ export default function ExerciseLibrary() {
   const router   = useRouter()
   const supabase = createClient()
   const searchRef = useRef<HTMLInputElement>(null)
+  // Paging/refetching must not unmount an editor or its selected media files.
+  const refreshBlocked = saving || deleting || !!editingId || showNew || !!pendingUpload || !!pendingDelete
   const closeNew = () => {
     if (saveLock.current) return
     newExerciseId.current = null
@@ -104,38 +110,62 @@ export default function ExerciseLibrary() {
     keepExerciseDraft(coachId, 'new', { ...newEx, savedId: newExerciseId.current })
   }, [coachId, showNew, newEx])
 
+  const load = useCallback(async () => {
+    const request = ++loadRequest.current
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (request !== loadRequest.current) return
+      if (authError) throw new Error('Could not confirm your session. Please retry.')
+      if (!user) {
+        router.push('/login')
+        throw new Error('Sign in again to load the exercise library.')
+      }
+      setCoachId(user.id)
+      const { data, error } = await supabase.rpc('get_coach_exercise_library', {
+        p_search: search, p_muscle: filterMuscle, p_pattern: filterPattern,
+        p_video: filterVideo, p_detail: filterDetail,
+        p_offset: (page - 1) * PAGE_SIZE, p_limit: PAGE_SIZE,
+      })
+      if (request !== loadRequest.current) return
+      if (error || !data || !Array.isArray(data.items) || !data.stats
+        || !Number.isInteger(data.total) || data.total < 0)
+        throw new Error('Could not load the exercise library. Please retry.')
+      // Deleting the last item on the last page can reduce the page count.
+      const lastPage = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+      if (page > lastPage) { setPage(lastPage); return }
+      setExercises(data.items)
+      setTotal(data.total)
+      setStats(data.stats)
+    } catch (error) {
+      if (request === loadRequest.current)
+        setLoadError(error instanceof Error ? error.message : 'Could not load the exercise library. Please retry.')
+    } finally {
+      if (request === loadRequest.current) setLoading(false)
+    }
+  }, [supabase, router, search, filterMuscle, filterPattern, filterVideo, filterDetail, page])
+
   useEffect(() => {
-    load()
-    // Visibility refetch — coach uploads a video / edits on another
-    // device, returns to this tab; library now reflects current state.
+    if (refreshBlocked) { setLoading(false); return }
+    setLoading(true)
+    // Debounce typing; invalidate in-flight results as soon as filters change.
+    const timer = setTimeout(() => { void load() }, 300)
+    return () => { clearTimeout(timer); loadRequest.current = loadRequest.current + 1 }
+  }, [load, refreshBlocked])
+
+  useEffect(() => {
     let lastRefreshAt = 0
     const onVis = () => {
-      if (document.visibilityState !== 'visible') return
+      if (document.visibilityState !== 'visible' || refreshBlocked) return
       const now = Date.now()
       if (now - lastRefreshAt < 15_000) return
       lastRefreshAt = now
-      load()
+      void load()
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
-  }, [])
-
-  const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-    setCoachId(user.id)
-    // Fetch in two pages to get past PostgREST's 1000-row server cap
-    const [{ data: page1 }, { data: page2 }] = await Promise.all([
-      supabase.from('exercises').select(
-        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,image_url,thumbnail_url,coach_id'
-      ).order('name').range(0, 999),
-      supabase.from('exercises').select(
-        'id,name,muscles,secondary_muscles,equipment,equipment_list,difficulty,movement_pattern,modifiers,is_timed,default_duration_seconds,tags,description,cues,video_url,video_url_female,image_url,thumbnail_url,coach_id'
-      ).order('name').range(1000, 1999),
-    ])
-    setExercises([...(page1 || []), ...(page2 || [])])
-    setLoading(false)
-  }
+  }, [load, refreshBlocked])
 
   const uploadMedia = async (exerciseId: string, file: File, field: 'video_url'|'video_url_female'|'image_url'): Promise<string> => {
     const key = `${exerciseId}:${field}`
@@ -289,31 +319,7 @@ export default function ExerciseLibrary() {
     } finally { saveLock.current = false; setSaving(false) }
   }
 
-  const filtered = exercises.filter(e => {
-    const q = search.toLowerCase()
-    if (q && !e.name.toLowerCase().includes(q) && !(e.muscles||[]).join(' ').toLowerCase().includes(q)) return false
-    if (filterMuscle !== 'all' && !(e.muscles||[]).includes(filterMuscle) && e.equipment !== filterMuscle) return false
-    if (filterPattern !== 'all' && e.movement_pattern !== filterPattern) return false
-    if (filterVideo === 'has' && !e.video_url) return false
-    if (filterVideo === 'missing' && e.video_url) return false
-    if (filterDetail === 'missing' && e.muscles?.length > 0 && e.movement_pattern && e.description) return false
-    return true
-  })
-  const displayed = filtered.slice(0, page * PAGE_SIZE)
-
-  const stats = {
-    total: exercises.length,
-    withVideo: exercises.filter(e=>e.video_url).length,
-    withMuscles: exercises.filter(e=>e.muscles?.length>0).length,
-    withPattern: exercises.filter(e=>e.movement_pattern).length,
-    withCues: exercises.filter(e=>e.cues).length,
-  }
-
-  if (loading) return (
-    <div style={{background:t.bg,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'DM Sans',sans-serif",color:t.teal,fontSize:14,fontWeight:700}}>
-      Loading library...
-    </div>
-  )
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <>      <style>{`*{box-sizing:border-box;margin:0;padding:0;}body{background:${t.bg};}input,select,textarea{color-scheme:dark;}`}</style>
@@ -333,45 +339,49 @@ export default function ExerciseLibrary() {
             style={{background:'#8b5cf61a',border:'1px solid #8b5cf640',borderRadius:9,padding:'8px 14px',fontSize:13,fontWeight:700,color:'#a78bfa',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             🤖 AI Enrich
           </button>
-          <button disabled={saving} onClick={()=>{setSaveError(null);const {savedId,...text}=readExerciseDraft(coachId,'new');newExerciseId.current=savedId||null;setNewEx(p=>({...p,...text}));setShowNew(true)}} style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+          <button disabled={refreshBlocked || loading || !!loadError} onClick={()=>{setSaveError(null);const {savedId,...text}=readExerciseDraft(coachId,'new');newExerciseId.current=savedId||null;setNewEx(p=>({...p,...text}));setShowNew(true)}} style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             + Add Exercise
           </button>
         </div>
 
         {/* Filters */}
         <div style={{background:t.surface,borderBottom:'1px solid '+t.border,padding:'10px 24px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-          <input ref={searchRef} value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder="Search name or muscle..."
-            style={{flex:1,minWidth:180,background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 12px',fontSize:13,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
-          <select value={filterMuscle} onChange={e=>{setFilterMuscle(e.target.value);setPage(1)}}
+          <input disabled={refreshBlocked} ref={searchRef} value={search} maxLength={200} aria-label="Search exercises by name or muscle" onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder="Search name or muscle..."
+            style={{flex:1,minWidth:180,background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 12px',fontSize:16,color:t.text,outline:'none',fontFamily:"'DM Sans',sans-serif"}}/>
+          <select disabled={refreshBlocked} aria-label="Filter by muscle" value={filterMuscle} onChange={e=>{setFilterMuscle(e.target.value);setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterMuscle!=='all'?t.teal:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Muscles</option>
             {MUSCLES.map(m=><option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={filterPattern} onChange={e=>{setFilterPattern(e.target.value);setPage(1)}}
+          <select disabled={refreshBlocked} aria-label="Filter by movement pattern" value={filterPattern} onChange={e=>{setFilterPattern(e.target.value);setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterPattern!=='all'?t.purple:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Patterns</option>
             {PATTERNS.map(p=><option key={p} value={p} style={{textTransform:'capitalize'}}>{p}</option>)}
           </select>
-          <select value={filterVideo} onChange={e=>{setFilterVideo(e.target.value as any);setPage(1)}}
+          <select disabled={refreshBlocked} aria-label="Filter by video availability" value={filterVideo} onChange={e=>{setFilterVideo(e.target.value as 'all'|'has'|'missing');setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterVideo!=='all'?t.orange:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Videos</option>
             <option value="has">Has Video</option>
             <option value="missing">No Video</option>
           </select>
-          <select value={filterDetail} onChange={e=>{setFilterDetail(e.target.value as any);setPage(1)}}
+          <select disabled={refreshBlocked} aria-label="Filter by detail completeness" value={filterDetail} onChange={e=>{setFilterDetail(e.target.value as 'all'|'missing');setPage(1)}}
             style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:9,padding:'7px 10px',fontSize:12,color:filterDetail!=='all'?t.red:t.textMuted,outline:'none',fontFamily:"'DM Sans',sans-serif"}}>
             <option value="all">All Detail</option>
             <option value="missing">Needs Detail</option>
           </select>
-          <span style={{fontSize:12,color:t.textMuted}}>{displayed.length}/{filtered.length}</span>
+          <span aria-live="polite" style={{fontSize:12,color:t.textMuted}}>{loading ? 'Searching...' : loadError ? 'Unable to load' : `${total ? (page-1)*PAGE_SIZE+1 : 0}–${Math.min(page*PAGE_SIZE,total)} of ${total}`}</span>
           {(search||filterMuscle!=='all'||filterPattern!=='all'||filterVideo!=='all'||filterDetail!=='all') && (
-            <button onClick={()=>{setSearch('');setFilterMuscle('all');setFilterPattern('all');setFilterVideo('all');setFilterDetail('all');setPage(1)}}
+            <button disabled={refreshBlocked} onClick={()=>{setSearch('');setFilterMuscle('all');setFilterPattern('all');setFilterVideo('all');setFilterDetail('all');setPage(1)}}
               style={{background:'none',border:'none',color:t.textMuted,cursor:'pointer',fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>✕ Clear</button>
           )}
         </div>
 
         {/* Grid */}
         <div style={{maxWidth:1280,margin:'0 auto',padding:20}}>
+          {loadError && <div role="alert" style={{background:t.redDim,border:'1px solid '+t.red,borderRadius:10,padding:14,marginBottom:16}}>
+            {loadError}
+            <button disabled={loading || refreshBlocked} onClick={()=>{void load()}} style={{marginLeft:12,background:t.surfaceHigh,color:t.text,border:'1px solid '+t.border,borderRadius:8,padding:'8px 12px',cursor:'pointer'}}>Retry</button>
+          </div>}
           {saveError && <div role="alert" style={{background:t.redDim,border:'1px solid '+t.red,borderRadius:10,padding:14,marginBottom:16,color:t.text}}>
             {saveError}
             {pendingUpload && <div style={{marginTop:10}}>
@@ -380,7 +390,7 @@ export default function ExerciseLibrary() {
                 style={{background:t.surfaceHigh,color:t.text,border:'1px solid '+t.border,borderRadius:8,padding:'8px 12px',cursor:'pointer'}}>Retry Media Save</button>
             </div>}
           </div>}
-          {filtered.length === 0 ? (
+          {loading ? <div role="status" style={{textAlign:'center',padding:'60px 20px',color:t.teal}}>Loading library...</div> : loadError ? null : exercises.length === 0 ? (
             <div style={{textAlign:'center',padding:'60px 20px',color:t.textMuted}}>
               <div style={{fontSize:32,marginBottom:12}}>🔍</div>
               <div style={{fontSize:14,fontWeight:700}}>No exercises match</div>
@@ -388,7 +398,7 @@ export default function ExerciseLibrary() {
           ) : (
             <>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
-              {displayed.map(ex => (
+              {exercises.map(ex => (
                 <ExerciseCard key={ex.id} ex={ex}
                   isEditing={editingId===ex.id}
                   isUploading={uploading===ex.id}
@@ -398,17 +408,18 @@ export default function ExerciseLibrary() {
                   onUploadFemale={(f:File)=>quickUpload(ex.id,f,'video_url_female')}
                   onDelete={()=>setPendingDelete({ id: ex.id, name: ex.name })}
                   onDuplicate={()=>duplicateExercise(ex)}
-                  saving={saving} coachId={coachId} t={t}/>
+                  saving={saving || (!!editingId && editingId!==ex.id) || !!pendingUpload || !!pendingDelete} coachId={coachId} t={t}/>
               ))}
             </div>
 
-            {/* Load More */}
-            {displayed.length < filtered.length && (
-              <div style={{textAlign:'center',padding:'24px 0'}}>
-                <button onClick={()=>setPage(p=>p+1)}
-                  style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'10px 28px',fontSize:13,fontWeight:700,color:t.text,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
-                  Load more ({filtered.length - displayed.length} remaining)
-                </button>
+            {/* Bounded pages keep the media grid small. */}
+            {pageCount > 1 && (
+              <div aria-label="Exercise library pages" style={{display:'flex',flexWrap:'wrap',justifyContent:'center',alignItems:'center',gap:14,padding:'24px 0'}}>
+                <button disabled={refreshBlocked || page===1} onClick={()=>setPage(p=>p-1)}
+                  style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'10px 20px',fontSize:13,color:t.text,cursor:'pointer',opacity:refreshBlocked||page===1?0.4:1}}>Previous</button>
+                <span style={{fontSize:13,color:t.textDim}}>Page {page} of {pageCount}</span>
+                <button disabled={refreshBlocked || page>=pageCount} onClick={()=>setPage(p=>p+1)}
+                  style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:10,padding:'10px 20px',fontSize:13,color:t.text,cursor:'pointer',opacity:refreshBlocked||page>=pageCount?0.4:1}}>Next</button>
               </div>
             )}
             </>
