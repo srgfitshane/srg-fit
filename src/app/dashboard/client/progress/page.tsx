@@ -9,6 +9,7 @@ import {
 } from 'recharts'
 import { alpha } from '@/lib/theme'
 import { localDateStr } from '@/lib/date'
+import { prepareProgressPhoto } from '@/lib/progress-photo'
 
 const t = {
   bg:"var(--bg)", surface:"var(--surface)", surfaceHigh:"var(--surface-high)", border:"var(--border)",
@@ -98,6 +99,9 @@ export default function ClientProgressPage() {
   const [logForm, setLogForm] = useState<Record<string,string>>({})
   const [photoForm, setPhotoForm] = useState({ angle:'front', caption:'', weight_at_time:'' })
   const [photoFile, setPhotoFile] = useState<File|null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const photoUploadingRef = useRef(false)
+  const pendingPhotoRef = useRef<{ file: File; profileId: string; path: string; id: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>([])
@@ -360,26 +364,83 @@ export default function ClientProgressPage() {
     setLogOpen('none'); setLogForm({}); setSaving(false); loadData()
   }
 
-  async function uploadPhoto() {
-    if (!photoFile) return
-    setSaving(true)
-    const { data:{ user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
-    const ext = photoFile.name.split('.').pop()
-    const path = `${user.id}/${Date.now()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('progress-photos').upload(path, photoFile)
-    if (!upErr) {
-      await supabase.from('progress_photos').insert({
-        client_id: user.id, storage_path: path,
-        photo_date: localDateStr(),
-        angle: photoForm.angle, caption: photoForm.caption||null,
-        weight_at_time: photoForm.weight_at_time ? parseFloat(photoForm.weight_at_time) : null,
-      })
+  function photoDraftKey() {
+    return clientProfileId ? `progress-photo-draft:v1:${clientProfileId}` : null
+  }
+
+  function openPhoto() {
+    setPhotoError(null)
+    const key = photoDraftKey()
+    try {
+      const raw = key ? localStorage.getItem(key) : null
+      if (raw) {
+        const draft = JSON.parse(raw)
+        if (draft && ANGLES.includes(draft.angle) && typeof draft.caption === 'string' && typeof draft.weight_at_time === 'string') {
+          setPhotoForm({ angle: draft.angle, caption: draft.caption, weight_at_time: draft.weight_at_time })
+        }
+      }
+    } catch { /* Browser storage may be unavailable; keep the current form. */ }
+    setPhotoOpen(true)
+  }
+
+  function updatePhotoForm(update: Partial<typeof photoForm>) {
+    const next = { ...photoForm, ...update }
+    setPhotoForm(next)
+    const key = photoDraftKey()
+    if (key) {
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* Keep the in-memory form if storage is full. */ }
     }
-    setPhotoOpen(false); setSaving(false); setPhotoFile(null)
-    setPhotoForm({ angle:'front', caption:'', weight_at_time:'' })
-    setPhotoRefreshKey(k => k + 1)
-    loadData()
+  }
+
+  async function uploadPhoto() {
+    if (!photoFile || saving || photoUploadingRef.current) return
+    photoUploadingRef.current = true
+    setSaving(true)
+    setPhotoError(null)
+    try {
+      const weight = photoForm.weight_at_time.trim() ? Number(photoForm.weight_at_time) : null
+      if (!ANGLES.includes(photoForm.angle) || (weight !== null && (!Number.isFinite(weight) || weight <= 0))) {
+        throw new Error('Choose a valid angle and enter a positive weight, or leave weight blank.')
+      }
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user || user.id !== clientProfileId) {
+        throw new Error('Your session changed or expired. Refresh and sign in again; your caption draft is kept.')
+      }
+      let pending = pendingPhotoRef.current
+      if (!pending || pending.file !== photoFile || pending.profileId !== user.id) {
+        const prepared = await prepareProgressPhoto(photoFile)
+        const id = crypto.randomUUID()
+        const extension = prepared.type === 'image/png' ? 'png' : prepared.type === 'image/webp' ? 'webp' : 'jpg'
+        const path = `${user.id}/${id}.${extension}`
+        const { data, error } = await supabase.storage.from('progress-photos').upload(path, prepared, {
+          contentType: prepared.type, cacheControl: '3600', upsert: false,
+        })
+        if (error || !data) throw new Error('Could not upload your photo. Your selection and caption are kept; please try again.')
+        pending = { file: photoFile, profileId: user.id, path, id }
+        pendingPhotoRef.current = pending
+      }
+      // Reuse the confirmed upload and row id if the record save needs a retry.
+      // The live client ALL policy allows this owner-scoped, idempotent upsert.
+      const { data, error } = await supabase.from('progress_photos').upsert({
+        id: pending.id, client_id: user.id, storage_path: pending.path,
+        photo_date: localDateStr(), angle: photoForm.angle,
+        caption: photoForm.caption.trim() || null, weight_at_time: weight,
+      }, { onConflict: 'id' }).select('id').single()
+      if (error || !data) throw new Error('Your photo uploaded, but its details could not be saved. Keep this form open and try again; the upload will be reused.')
+      const key = photoDraftKey()
+      if (key) { try { localStorage.removeItem(key) } catch { /* The save is confirmed even if local cleanup fails. */ } }
+      pendingPhotoRef.current = null
+      setPhotoOpen(false)
+      setPhotoFile(null)
+      if (fileRef.current) fileRef.current.value = ''
+      setPhotoForm({ angle:'front', caption:'', weight_at_time:'' })
+      setPhotoRefreshKey(k => k + 1)
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : 'Could not save your photo. Your selection and caption are kept; please try again.')
+    } finally {
+      photoUploadingRef.current = false
+      setSaving(false)
+    }
   }
 
   if (loading) return <div style={{color:t.textMuted,padding:40,textAlign:'center'}}>Loading...</div>
@@ -393,7 +454,7 @@ export default function ClientProgressPage() {
           <p style={{ color:t.textMuted, margin:'4px 0 0', fontSize:13 }}>Track your transformation over time</p>
         </div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {clientRecord?.show_progress_photos !== false && <button onClick={()=>setPhotoOpen(true)} style={{ background:alpha(t.purple, 13), color:t.purple, border:'1px solid '+alpha(t.purple, 27),
+          {clientRecord?.show_progress_photos !== false && <button onClick={openPhoto} style={{ background:alpha(t.purple, 13), color:t.purple, border:'1px solid '+alpha(t.purple, 27),
             borderRadius:10, padding:'9px 16px', fontWeight:700, cursor:'pointer', fontSize:13 }}>
             📸 Add Photo
           </button>}
@@ -807,45 +868,47 @@ export default function ClientProgressPage() {
 
       {/* Upload Photo Modal */}
       {photoOpen && (
-        <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
-          <div style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:420 }}>
+        <div style={{ position:'fixed', inset:0, background:'#000a', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10020, padding:20 }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="progress-photo-title" style={{ background:t.surface, border:'1px solid '+t.border, borderRadius:20, padding:26, width:'100%', maxWidth:420, maxHeight:'90dvh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
-              <div style={{ fontWeight:800, fontSize:17 }}>📸 Add Progress Photo</div>
-              <button onClick={()=>setPhotoOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
+              <div id="progress-photo-title" style={{ fontWeight:800, fontSize:17 }}>📸 Add Progress Photo</div>
+              <button aria-label="Close photo upload" disabled={saving} onClick={()=>setPhotoOpen(false)} style={{ background:'none', border:'none', color:t.textMuted, fontSize:20, cursor:'pointer' }}>✕</button>
             </div>
             {/* File drop zone */}
-            <div onClick={()=>fileRef.current?.click()}
-              style={{ border:'2px dashed '+t.border, borderRadius:12, padding:32, textAlign:'center',
-                cursor:'pointer', marginBottom:16, color:t.textMuted, fontSize:13,
+            <button type="button" disabled={saving} onClick={()=>fileRef.current?.click()}
+              style={{ width:'100%', border:'2px dashed '+t.border, borderRadius:12, padding:32, textAlign:'center',
+                cursor:'pointer', marginBottom:12, color:t.textMuted, fontSize:13,
                 background: photoFile ? alpha(t.green, 7) : 'transparent' }}>
               {photoFile ? `✅ ${photoFile.name}` : '📁 Click to select photo'}
-              <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
-                onChange={e => setPhotoFile(e.target.files?.[0]||null)} />
-            </div>
+            </button>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" disabled={saving} style={{ display:'none' }}
+              onChange={e => { setPhotoFile(e.target.files?.[0]||null); pendingPhotoRef.current = null; setPhotoError(null) }} />
+            <p style={{ color:t.textMuted, fontSize:12, lineHeight:1.5, margin:'0 0 16px' }}>Large photos use a high-quality JPEG copy, up to 1,920 pixels on the longest edge, without cropping. Already-small photos stay unchanged when that saves space. Your original stays on your device. Caption drafts are kept here; after a refresh, select the photo again.</p>
             <div style={{ display:'grid', gap:12 }}>
               <div>
-                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Angle</label>
-                <select value={photoForm.angle} onChange={e=>setPhotoForm(p=>({...p,angle:e.target.value}))}
+                <label htmlFor="photo-angle" style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Angle</label>
+                <select id="photo-angle" disabled={saving} value={photoForm.angle} onChange={e=>updatePhotoForm({angle:e.target.value})}
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
-                    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13 }}>
+                    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:16 }}>
                   {ANGLES.map(a => <option key={a} value={a}>{a.replace('_',' ')}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Weight at time (lbs)</label>
-                <input type="number" step="0.1" inputMode="decimal" enterKeyHint="done" value={photoForm.weight_at_time}
-                  onChange={e=>setPhotoForm(p=>({...p,weight_at_time:e.target.value}))}
+                <label htmlFor="photo-weight" style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Weight at time (lbs)</label>
+                <input id="photo-weight" disabled={saving} type="number" min="0.1" step="0.1" inputMode="decimal" enterKeyHint="done" value={photoForm.weight_at_time}
+                  onChange={e=>updatePhotoForm({weight_at_time:e.target.value})}
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
-                    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' }} />
+                    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:16, boxSizing:'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Caption (optional)</label>
-                <input type="text" value={photoForm.caption}
-                  onChange={e=>setPhotoForm(p=>({...p,caption:e.target.value}))}
+                <label htmlFor="photo-caption" style={{ fontSize:11, fontWeight:700, color:t.textMuted, display:'block', marginBottom:4 }}>Caption (optional)</label>
+                <input id="photo-caption" disabled={saving} type="text" value={photoForm.caption}
+                  onChange={e=>updatePhotoForm({caption:e.target.value})}
                   style={{ width:'100%', background:t.surfaceHigh, border:'1px solid '+t.border,
-                    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:13, boxSizing:'border-box' }} />
+                    borderRadius:8, padding:'9px 12px', color:t.text, fontSize:16, boxSizing:'border-box' }} />
               </div>
             </div>
+            {photoError && <p role="alert" style={{ color:t.red, fontSize:13, lineHeight:1.5, margin:'14px 0 0' }}>{photoError}</p>}
             <button onClick={uploadPhoto} disabled={saving||!photoFile}
               style={{ marginTop:16, width:'100%', background: photoFile?t.purple:'#333', color: photoFile?'#fff':t.textMuted,
                 border:'none', borderRadius:10, padding:'12px', fontWeight:800, cursor: photoFile?'pointer':'not-allowed', fontSize:14 }}>
