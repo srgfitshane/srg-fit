@@ -248,6 +248,9 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   // only renders when role === 'coach'.
   const [asAnnouncement, setAsAnnouncement] = useState(false)
   const [reactOpen,    setReactOpen]    = useState<string|null>(null)
+  const [reacting, setReacting] = useState(false)
+  const reactionLock = useRef(false)
+  const postsLoadRequest = useRef(0)
   const [replyDrafts,  setReplyDrafts]  = useState<Record<string,string>>({})
   const [replyOpen,    setReplyOpen]    = useState<string|null>(null)
   const [replyPosting, setReplyPosting] = useState<string|null>(null)
@@ -334,6 +337,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   const loadPosts = useCallback(async (cid?: string) => {
     const id = cid || coachId
     if (!id) return
+    const request = ++postsLoadRequest.current
     const { data: postData, error: postsError } = await supabase
       .from('community_posts')
       .select('*, reactions:community_reactions(*)')
@@ -343,6 +347,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50)
+    if (request !== postsLoadRequest.current) return
     if (postsError) {
       toastError('Could not load the community. Please refresh and try again.')
       return
@@ -384,6 +389,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         video_url: vid,
       }
     }))
+    if (request !== postsLoadRequest.current) return
     setPosts(resolvedPosts)
     // Resolve first names for any featured clients (shoutout posts).
     // First-name-only by design — clients see WHO's being celebrated
@@ -397,6 +403,7 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
         .from('community_replies').select('*').eq('coach_id', id)
         .in('post_id', resolvedPosts.map((post) => post.id))
         .order('created_at', { ascending: true })
+      if (request !== postsLoadRequest.current) return
       if (repliesError) {
         toastError('Could not load the replies. Please refresh and try again.')
         return
@@ -432,10 +439,11 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
       })
       if (!response.ok) throw new Error('Community names unavailable')
       const data: { profiles: ProfileRecord[]; featuredFirstNames: Record<string, string> } = await response.json()
+      if (request !== postsLoadRequest.current) return
       setProfiles(prev => ({ ...prev, ...Object.fromEntries(data.profiles.map(profile => [profile.id, profile])) }))
       setFeaturedFirstNames(data.featuredFirstNames)
     } catch {
-      toastError('Could not load community names. Please refresh and try again.')
+      if (request === postsLoadRequest.current) toastError('Could not load community names. Please refresh and try again.')
     }
   }, [coachId, supabase])
 
@@ -507,6 +515,8 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
     if (!coachId) return
     const ch = supabase.channel('community-shared-v1')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_posts',   filter: `coach_id=eq.${coachId}` }, () => loadPosts())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'community_posts',   filter: `coach_id=eq.${coachId}` }, () => loadPosts())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'community_posts' }, () => loadPosts())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_replies', filter: `coach_id=eq.${coachId}` }, () => loadPosts())
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'community_replies' }, () => loadPosts())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_reactions' }, () => loadPosts())
@@ -873,14 +883,29 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
   }
 
   const toggleReaction = async (postId:string, emoji:string) => {
+    if (reactionLock.current) return
     if (!me) { toastError('Your session could not be loaded. Please refresh before reacting.'); return }
     const selectedPost = posts.find((post) => post.id === postId)
+    if (!selectedPost) { toastError('This post is no longer available. Please refresh before reacting.'); return }
     const existing = selectedPost?.reactions?.find((reaction) => reaction.user_id === me.id && reaction.emoji === emoji)
-    const { data, error } = existing
-      ? await supabase.from('community_reactions').delete().eq('id', existing.id).select('id').single()
-      : await supabase.from('community_reactions').insert({ post_id: postId, user_id: me.id, emoji }).select('id').single()
-    if (error || !data) { toastError('Could not update your reaction. Please try again.'); return }
-    setReactOpen(null); await loadPosts()
+    reactionLock.current = true
+    setReacting(true)
+    try {
+      const { data, error } = existing
+        ? await supabase.from('community_reactions').delete().eq('id', existing.id).eq('user_id', me.id).select('id').single()
+        : await supabase.from('community_reactions').insert({ post_id: postId, user_id: me.id, emoji }).select('id').single()
+      if (error || !data) throw new Error('Reaction save failed')
+      postsLoadRequest.current++
+      setPosts(prev => prev.map(post => post.id !== postId ? post : {
+        ...post,
+        reactions: existing
+          ? (post.reactions || []).filter(reaction => reaction.id !== existing.id)
+          : [...(post.reactions || []).filter(reaction => !(reaction.user_id === me.id && reaction.emoji === emoji)), { id:data.id, post_id:postId, user_id:me.id, emoji }],
+      }))
+      setReactOpen(null)
+      void loadPosts()
+    } catch { toastError('Could not update your reaction. Please try again.') }
+    finally { reactionLock.current = false; setReacting(false) }
   }
 
   const groupReactions = (reactions:CommunityReaction[] = []) => {
@@ -1270,17 +1295,18 @@ export default function CommunityFeed({ role, backPath, showBottomNav = false }:
                   <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
                     {grouped.map(([emoji, { count, mine }]) => (
                       <button key={emoji} onClick={()=>toggleReaction(p.id, emoji)}
+                        disabled={reacting} aria-pressed={mine} aria-label={`React with ${emoji}, ${count} ${count===1?'reaction':'reactions'}`}
                         style={{ padding:'3px 8px', borderRadius:20, border:'1px solid '+(mine?alpha(t.teal, 38):t.border), background:mine?t.tealDim:'transparent', cursor:'pointer', fontSize:12, fontFamily:"'DM Sans',sans-serif", color:mine?t.teal:t.textDim }}>
                         {emoji}{count > 1 ? ` ${count}` : ''}
                       </button>
                     ))}
                     <div style={{ position:'relative' }}>
-                      <button onClick={e=>{ e.stopPropagation(); setReactOpen(reactOpen===p.id?null:p.id) }}
+                      <button disabled={reacting} aria-label="Choose a reaction" onClick={e=>{ e.stopPropagation(); setReactOpen(reactOpen===p.id?null:p.id) }}
                         style={{ background:'none', border:'1px solid '+t.border, borderRadius:20, padding:'3px 8px', cursor:'pointer', fontSize:11, color:t.textMuted, fontFamily:"'DM Sans',sans-serif" }}>+ 😄</button>
                       {reactOpen === p.id && (
                         <div style={{ position:'absolute', bottom:'calc(100% + 6px)', left:0, background:t.surfaceHigh, border:'1px solid '+t.border, borderRadius:24, padding:'5px 8px', display:'flex', gap:3, zIndex:10, boxShadow:'0 4px 20px rgba(0,0,0,.5)', whiteSpace:'nowrap' }}>
                           {QUICK_REACTIONS.map(emoji => (
-                            <button key={emoji} onClick={()=>toggleReaction(p.id, emoji)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, padding:'2px' }}>{emoji}</button>
+                            <button key={emoji} disabled={reacting} aria-label={`React with ${emoji}`} onClick={()=>toggleReaction(p.id, emoji)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, padding:'2px' }}>{emoji}</button>
                           ))}
                         </div>
                       )}

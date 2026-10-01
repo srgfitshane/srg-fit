@@ -239,7 +239,12 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   const [recSeconds,   setRecSeconds]   = useState(0)
   const [reactTarget,  setReactTarget]  = useState<string|null>(null)
   const [reactPos,     setReactPos]     = useState<{x:number,y:number}>({x:0,y:0})
+  const [reactionError, setReactionError] = useState<string|null>(null)
+  const [reacting, setReacting] = useState(false)
+  const reactionLock = useRef(false)
+  const threadLoadRequest = useRef(0)
   const longPressRef = useRef<ReturnType<typeof setTimeout>|null>(null)
+  const longPressFired = useRef(false)
   const initialLoadRef = useRef(true)
   const [previewFile,  setPreviewFile]  = useState<File|null>(null)
   const [uploading,    setUploading]    = useState(false)
@@ -263,18 +268,22 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   // ── Load thread + reactions ───────────────────────────────────────────────
   const loadThread = useCallback(async () => {
-    const { data: msgs } = await supabase
+    const request = ++threadLoadRequest.current
+    const { data: msgs, error: messagesError } = await supabase
       .from('messages')
       .select('*')
       .or(`and(sender_id.eq.${myId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${myId})`)
       .order('created_at', { ascending: true })
 
-    if (!msgs) return
+    if (request !== threadLoadRequest.current) return
+    if (messagesError || !msgs) { setReactionError('Could not load messages. Please refresh and try again.'); return }
 
     const msgIds = msgs.map(m => m.id)
-    const { data: reactions } = msgIds.length
+    const { data: reactions, error: reactionsError } = msgIds.length
       ? await supabase.from('message_reactions').select('*').in('message_id', msgIds)
-      : { data: [] }
+      : { data: [], error: null }
+    if (request !== threadLoadRequest.current) return
+    if (reactionsError || !reactions) { setReactionError('Could not load reactions. Please refresh and try again.'); return }
 
     // The shared resolver reuses URLs across refetches and clears its
     // account-scoped cache on sign-out. Private media never uses public URLs.
@@ -290,6 +299,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         reactions: (reactions || []).filter(r => r.message_id === m.id),
       }
     }))
+    if (request !== threadLoadRequest.current) return
     setThread(withReactions)
     // Pin on initial load; respects userScrolledUp so a reaction/visibility
     // refetch doesn't yank the user down while they're reading history.
@@ -304,7 +314,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   useEffect(() => {
     const timeoutId = setTimeout(() => { void loadThread() }, 0)
-    return () => clearTimeout(timeoutId)
+    return () => { clearTimeout(timeoutId); threadLoadRequest.current = threadLoadRequest.current + 1 }
   }, [loadThread])
 
   // Parent-driven refresh. Skip the very first render (refreshKey starts
@@ -670,36 +680,70 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
 
   // ── Reactions ─────────────────────────────────────────────────────────────
   const toggleReaction = async (msgId: string, emoji: string) => {
+    if (reactionLock.current) return
     const msg = thread.find(m => m.id === msgId)
+    if (!myId || !msg) { setReactionError('This message is no longer available. Please refresh before reacting.'); return }
     const existing = msg?.reactions?.find(r => r.user_id === myId && r.emoji === emoji)
-    if (existing) {
-      await supabase.from('message_reactions').delete().eq('id', existing.id)
-    } else {
-      await supabase.from('message_reactions').insert({ message_id: msgId, user_id: myId, emoji })
-    }
-    setReactTarget(null)
-    loadThread()
+    reactionLock.current = true
+    setReacting(true)
+    setReactionError(null)
+    try {
+      const { data, error } = existing
+        ? await supabase.from('message_reactions').delete().eq('id', existing.id).eq('user_id', myId).select('id').single()
+        : await supabase.from('message_reactions').insert({ message_id: msgId, user_id: myId, emoji }).select('id').single()
+      if (error || !data) throw new Error('Could not save your reaction. Please try again.')
+      // A refresh started before this save must not replace the confirmed result.
+      threadLoadRequest.current++
+      setThread(prev => prev.map(message => message.id !== msgId ? message : {
+        ...message,
+        reactions: existing
+          ? (message.reactions || []).filter(reaction => reaction.id !== existing.id)
+          : [...(message.reactions || []).filter(reaction => !(reaction.user_id === myId && reaction.emoji === emoji)), { id:data.id, message_id:msgId, user_id:myId, emoji }],
+      }))
+      setReactTarget(null)
+      // Pull concurrent reactions too; the confirmed local result stays visible.
+      void loadThread()
+    } catch {
+      setReactionError('Could not save your reaction. Please try again.')
+    } finally { reactionLock.current = false; setReacting(false) }
   }
 
   // ── Long-press reactions (SMS-style) ──────────────────────────────────────
   const handlePressStart = (msgId: string, e: React.TouchEvent | React.MouseEvent) => {
+    longPressFired.current = false
     if (reactTarget) { setReactTarget(null); return }
     const touch = 'touches' in e ? e.touches[0] : e as React.MouseEvent
     const x = touch.clientX
     const y = touch.clientY
     longPressRef.current = setTimeout(() => {
+      longPressFired.current = true
       setReactTarget(msgId)
       setReactPos({ x, y })
       if ('vibrate' in navigator) navigator.vibrate(40)
     }, 480)
   }
 
-  const handlePressEnd = () => {
+  const handlePressEnd = (e: React.TouchEvent) => {
     if (longPressRef.current) {
       clearTimeout(longPressRef.current)
       longPressRef.current = null
     }
+    if (longPressFired.current) {
+      if (e.type === 'touchend') {
+        // Suppress the compatibility click that would hit the picker backdrop.
+        e.preventDefault()
+        e.stopPropagation()
+      } else {
+        // Scroll/cancel must stay native; React touchmove listeners are passive.
+        setReactTarget(null)
+      }
+      longPressFired.current = false
+    }
   }
+
+  useEffect(() => () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current)
+  }, [])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const fmtTime = (s: number) => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
@@ -861,8 +905,8 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         }
       `}</style>
 
-      <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, height:'100%', fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg, overflow:'hidden' }}
-        onClick={()=>setReactTarget(null)}>
+      <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, height:'100%', fontFamily:"'DM Sans',sans-serif", color:c.text, background:c.bg, overflow:'hidden' }}>
+        {reactionError && <div role="alert" style={{padding:'10px 14px',color:c.red,fontSize:14}}>{reactionError}</div>}
 
         {/* ── Global reaction picker overlay ── */}
         {reactTarget && (
@@ -902,6 +946,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
             }} onClick={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
               {QUICK_REACTIONS.map(emoji => (
                 <button key={emoji}
+                  disabled={reacting}
                   aria-label={`React with ${emoji}`}
                   onTouchEnd={e=>{ e.preventDefault(); e.stopPropagation(); toggleReaction(reactTarget, emoji) }}
                   onClick={e=>{ e.stopPropagation(); toggleReaction(reactTarget, emoji) }}
@@ -960,6 +1005,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                     onTouchStart={e=>handlePressStart(msg.id, e)}
                     onTouchEnd={handlePressEnd}
                     onTouchMove={handlePressEnd}
+                    onTouchCancel={handlePressEnd}
                     onContextMenu={e=>{ e.preventDefault(); setReactTarget(msg.id); setReactPos({x:e.clientX,y:e.clientY}) }}
                     style={{
                       background: isMe ? c.teal : c.surfaceHigh,
@@ -988,6 +1034,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
                     <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:4, justifyContent: isMe?'flex-end':'flex-start' }}>
                       {grouped.map(([emoji, {count, mine}]) => (
                         <button key={emoji} className="rmt-reaction-pill"
+                          disabled={reacting} aria-pressed={mine} aria-label={`React with ${emoji}, ${count} ${count===1?'reaction':'reactions'}`}
                           onClick={()=>toggleReaction(msg.id, emoji)}
                           style={{ ...btnBase, padding:'3px 8px', fontSize:13, background: mine ? c.tealDim : c.surfaceHigh, border:'1px solid '+(mine?alpha(c.teal, 25):c.border), color: mine?c.teal:c.textDim }}>
                           {emoji}{count > 1 ? ` ${count}` : ''}
