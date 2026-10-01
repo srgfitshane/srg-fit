@@ -41,6 +41,27 @@ const blank = {
   _imageFile: null as File|null,
 }
 
+function exerciseDraftKey(coachId: string, id: string) {
+  return `exercise-draft:v1:${coachId}:${id}`
+}
+
+function readExerciseDraft(coachId: string, id: string): { name?: string; description?: string; cues?: string; savedId?: string|null } {
+  try {
+    const value = JSON.parse(localStorage.getItem(exerciseDraftKey(coachId, id)) || '{}')
+    const text = Object.fromEntries(['name', 'description', 'cues'].filter(key => typeof value?.[key] === 'string').map(key => [key, value[key]]))
+    return { ...text, savedId: typeof value?.savedId === 'string' && /^[0-9a-f-]{36}$/i.test(value.savedId) ? value.savedId : null }
+  } catch { return {} }
+}
+
+function keepExerciseDraft(coachId: string, id: string, draft: { name: string; description: string; cues: string; savedId?: string|null }|null) {
+  if (!coachId) return
+  try {
+    const key = exerciseDraftKey(coachId, id)
+    if (!draft) localStorage.removeItem(key)
+    else localStorage.setItem(key, JSON.stringify({ name: draft.name, description: draft.description, cues: draft.cues, savedId: draft.savedId }))
+  } catch { /* Keep the open editor when browser storage is unavailable. */ }
+}
+
 export default function ExerciseLibrary() {
   const [exercises, setExercises]   = useState<any[]>([])
   const [loading,   setLoading]     = useState(true)
@@ -55,7 +76,13 @@ export default function ExerciseLibrary() {
   const [editingId, setEditingId]   = useState<string|null>(null)
   const [uploading, setUploading]   = useState<string|null>(null)
   const [saving,    setSaving]      = useState(false)
+  const [saveError, setSaveError] = useState<string|null>(null)
+  const [pendingUpload, setPendingUpload] = useState<{ id: string; file: File; field: 'video_url'|'video_url_female'|'image_url' }|null>(null)
+  const saveLock = useRef(false)
+  const newExerciseId = useRef<string|null>(null)
+  const uploadedMedia = useRef(new WeakMap<File, Map<string, string>>())
   const [newEx,     setNewEx]       = useState({...blank})
+  const [coachId, setCoachId] = useState('')
   // Delete-exercise confirmation. Replaces the old browser confirm()
   // with a styled bottom-sheet matching the rest of the app.
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
@@ -63,6 +90,19 @@ export default function ExerciseLibrary() {
   const router   = useRouter()
   const supabase = createClient()
   const searchRef = useRef<HTMLInputElement>(null)
+  const closeNew = () => {
+    if (saveLock.current) return
+    newExerciseId.current = null
+    setShowNew(false)
+    setNewEx({...blank})
+    setSaveError(null)
+    keepExerciseDraft(coachId, 'new', null)
+  }
+
+  useEffect(() => {
+    if (!coachId || !showNew) return
+    keepExerciseDraft(coachId, 'new', { ...newEx, savedId: newExerciseId.current })
+  }, [coachId, showNew, newEx])
 
   useEffect(() => {
     load()
@@ -83,6 +123,7 @@ export default function ExerciseLibrary() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
+    setCoachId(user.id)
     // Fetch in two pages to get past PostgREST's 1000-row server cap
     const [{ data: page1 }, { data: page2 }] = await Promise.all([
       supabase.from('exercises').select(
@@ -96,38 +137,35 @@ export default function ExerciseLibrary() {
     setLoading(false)
   }
 
-  const uploadVideo = async (exerciseId: string, file: File, field: 'video_url'|'video_url_female' = 'video_url'): Promise<string|null> => {
+  const uploadMedia = async (exerciseId: string, file: File, field: 'video_url'|'video_url_female'|'image_url'): Promise<string> => {
+    const key = `${exerciseId}:${field}`
+    const cached = uploadedMedia.current.get(file)?.get(key)
+    if (cached) return cached
     setUploading(exerciseId)
-    const ext = file.name.split('.').pop()
-    const suffix = field === 'video_url_female' ? 'demo_f' : 'demo'
-    const path = `${exerciseId}/${suffix}.${ext}`
-    const { error } = await supabase.storage.from('exercise-videos')
-      .upload(path, file, { upsert: true, contentType: file.type })
-    if (error) { setUploading(null); console.error(error); return null }
-    const { data: { publicUrl } } = supabase.storage.from('exercise-videos').getPublicUrl(path)
-    setUploading(null)
-    return publicUrl
-  }
-
-  // Mirror of uploadVideo for static demo media (image or GIF). Stored in the
-  // same exercise-videos bucket under <id>/image.<ext>. Used when no video
-  // exists and we want a still demo or animated GIF instead.
-  const uploadImage = async (exerciseId: string, file: File): Promise<string|null> => {
-    setUploading(exerciseId)
-    const ext = file.name.split('.').pop()
-    const path = `${exerciseId}/image.${ext}`
-    const { error } = await supabase.storage.from('exercise-videos')
-      .upload(path, file, { upsert: true, contentType: file.type })
-    if (error) { setUploading(null); console.error(error); return null }
-    const { data: { publicUrl } } = supabase.storage.from('exercise-videos').getPublicUrl(path)
-    setUploading(null)
-    return publicUrl
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      if (!ext || !/^[a-z0-9]+$/.test(ext)) throw new Error('Choose a media file with a valid extension.')
+      // New versions never overwrite the live demo or leave browsers on a stale URL.
+      const path = `${exerciseId}/${field}-${crypto.randomUUID()}.${ext}`
+      const { data, error } = await supabase.storage.from('exercise-videos')
+        .upload(path, file, { upsert: false, contentType: file.type })
+      if (error || !data) throw new Error('Media could not upload. Your selection is kept; please retry.')
+      const { data: { publicUrl } } = supabase.storage.from('exercise-videos').getPublicUrl(path)
+      const urls = uploadedMedia.current.get(file) || new Map<string, string>()
+      urls.set(key, publicUrl)
+      uploadedMedia.current.set(file, urls)
+      return publicUrl
+    } finally { setUploading(null) }
   }
 
   const saveNew = async () => {
-    if (!newEx.name.trim()) return
+    if (!newEx.name.trim() || saveLock.current) return
+    saveLock.current = true
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    setSaveError(null)
+    try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) throw new Error('Your session expired. Sign in again; your edits are kept in this open page.')
     const payload: any = {
       name: newEx.name.trim(), muscles: newEx.muscles, secondary_muscles: newEx.secondary_muscles,
       equipment_list: newEx.equipment_list, difficulty: newEx.difficulty,
@@ -135,61 +173,78 @@ export default function ExerciseLibrary() {
       modifiers: newEx.modifiers, is_timed: newEx.is_timed,
       default_duration_seconds: newEx.is_timed ? (newEx.default_duration_seconds || 30) : null,
       tags: newEx.tags, description: newEx.description || null,
-      cues: newEx.cues || null, coach_id: user!.id,
+      cues: newEx.cues || null, coach_id: user.id,
       video_url: newEx.video_url || null,
       image_url: newEx.image_url || null,
     }
-    const { data: saved, error: insErr } = await supabase.from('exercises').insert(payload).select().single()
-    if (insErr || !saved) {
-      // Rule 14: bail with the form still open -- resetting it on a failed
-      // insert silently threw away everything the coach typed.
-      setSaving(false)
-      toastError('Could not save exercise: ' + (insErr?.message || 'unknown error'))
-      return
+    let id = newExerciseId.current
+    if (!id) {
+      const { data: created, error } = await supabase.from('exercises').insert(payload).select().single()
+      if (error || !created) throw new Error('Could not create the exercise. Your edits are kept; please retry.')
+      id = created.id as string
+      newExerciseId.current = id
+      keepExerciseDraft(user.id, 'new', { ...newEx, savedId: id })
+      setExercises(p => [created, ...p].sort((a,b)=>a.name.localeCompare(b.name)))
     }
-    if (saved && newEx._videoFile) {
-      const url = await uploadVideo(saved.id, newEx._videoFile)
-      if (url) { await supabase.from('exercises').update({ video_url: url }).eq('id', saved.id); saved.video_url = url }
-    }
-    if (saved && newEx._imageFile) {
-      const url = await uploadImage(saved.id, newEx._imageFile)
-      if (url) { await supabase.from('exercises').update({ image_url: url }).eq('id', saved.id); saved.image_url = url }
-    }
-    if (saved) setExercises(p => [saved, ...p].sort((a,b)=>a.name.localeCompare(b.name)))
+    if (newEx._videoFile) payload.video_url = await uploadMedia(id, newEx._videoFile, 'video_url')
+    if (newEx._imageFile) payload.image_url = await uploadMedia(id, newEx._imageFile, 'image_url')
+    const { data: saved, error } = await supabase.from('exercises').update(payload)
+      .eq('id', id).eq('coach_id', user.id).select().single()
+    if (error || !saved) throw new Error('The exercise was created, but its latest details or media could not save. Your edits and confirmed uploads are kept; retry here.')
+    setExercises(p => p.map(e => e.id === id ? saved : e).sort((a,b)=>a.name.localeCompare(b.name)))
+    newExerciseId.current = null
+    keepExerciseDraft(user.id, 'new', null)
     setNewEx({...blank}); setShowNew(false); setSaving(false)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save exercise. Your edits are kept; please retry.')
+    } finally { saveLock.current = false; setSaving(false) }
   }
 
   const saveEdit = async (id: string, changes: any) => {
+    if (saveLock.current) return false
+    saveLock.current = true
     setSaving(true)
-    const videoFile = changes._videoFile
-    const imageFile = changes._imageFile
-    delete changes._videoFile
-    delete changes._imageFile
-    const { error } = await supabase.from('exercises').update(changes).eq('id', id)
-    if (!error && videoFile) {
-      const url = await uploadVideo(id, videoFile)
-      if (url) { await supabase.from('exercises').update({ video_url: url }).eq('id', id); changes.video_url = url }
-    }
-    if (!error && imageFile) {
-      const url = await uploadImage(id, imageFile)
-      if (url) { await supabase.from('exercises').update({ image_url: url }).eq('id', id); changes.image_url = url }
-    }
-    setExercises(p => p.map(e => e.id === id ? { ...e, ...changes } : e))
-    setEditingId(null); setSaving(false)
+    setSaveError(null)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) throw new Error('Your session expired. Sign in again; your edits are kept in this open page.')
+      const { _videoFile, _imageFile, ...payload } = changes
+      if (_videoFile) payload.video_url = await uploadMedia(id, _videoFile, 'video_url')
+      if (_imageFile) payload.image_url = await uploadMedia(id, _imageFile, 'image_url')
+      const { data: saved, error } = await supabase.from('exercises').update(payload)
+        .eq('id', id).eq('coach_id', user.id).select().single()
+      if (error || !saved) throw new Error('Could not save exercise changes. Your edits and confirmed uploads are kept; retry here.')
+      setExercises(p => p.map(e => e.id === id ? saved : e))
+      setEditingId(null)
+      return true
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save exercise. Your edits are kept; please retry.')
+      return false
+    } finally { saveLock.current = false; setSaving(false) }
   }
 
   const quickUpload = async (id: string, file: File, field: 'video_url'|'video_url_female'|'image_url' = 'video_url') => {
-    const url = field === 'image_url'
-      ? await uploadImage(id, file)
-      : await uploadVideo(id, file, field as 'video_url'|'video_url_female')
-    if (url) {
-      await supabase.from('exercises').update({ [field]: url }).eq('id', id)
-      setExercises(p => p.map(e => e.id === id ? { ...e, [field]: url } : e))
-    }
+    if (saveLock.current) return
+    saveLock.current = true
+    setSaving(true)
+    setSaveError(null)
+    setPendingUpload({ id, file, field })
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) throw new Error('Your session expired. Sign in again; your selected file is kept in this open page.')
+      const url = await uploadMedia(id, file, field)
+      const { data: saved, error } = await supabase.from('exercises').update({ [field]: url })
+        .eq('id', id).eq('coach_id', user.id).select().single()
+      if (error || !saved) throw new Error('Your media uploaded but could not be linked to the exercise. Retry here to reuse the upload.')
+      setExercises(p => p.map(e => e.id === id ? saved : e))
+      setPendingUpload(null)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save media. Your selected file is kept; please retry.')
+    } finally { saveLock.current = false; setSaving(false) }
   }
 
   const confirmDeleteExercise = async () => {
-    if (!pendingDelete) return
+    if (!pendingDelete || saveLock.current) return
     setDeleting(true)
     const { error } = await supabase.from('exercises').delete().eq('id', pendingDelete.id)
     if (error) {
@@ -203,8 +258,14 @@ export default function ExerciseLibrary() {
   }
 
   const duplicateExercise = async (ex: any) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: duped } = await supabase.from('exercises').insert({
+    if (saveLock.current) return
+    saveLock.current = true
+    setSaving(true)
+    setSaveError(null)
+    try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) throw new Error('Your session expired. Sign in again before duplicating an exercise.')
+    const { data: duped, error } = await supabase.from('exercises').insert({
       name: ex.name + ' (copy)',
       muscles: ex.muscles || [],
       secondary_muscles: ex.secondary_muscles || [],
@@ -217,13 +278,15 @@ export default function ExerciseLibrary() {
       tags: ex.tags || [],
       description: ex.description || null,
       cues: ex.cues || null,
-      coach_id: user!.id,
+      coach_id: user.id,
       // Don't copy video — force intentional upload for variants
     }).select().single()
-    if (duped) {
-      setExercises(p => [duped, ...p])
-      setEditingId(duped.id) // open immediately for editing
-    }
+    if (error || !duped) throw new Error('Could not duplicate the exercise. Please retry.')
+    setExercises(p => [duped, ...p])
+    setEditingId(duped.id)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not duplicate exercise. Please retry.')
+    } finally { saveLock.current = false; setSaving(false) }
   }
 
   const filtered = exercises.filter(e => {
@@ -270,7 +333,7 @@ export default function ExerciseLibrary() {
             style={{background:'#8b5cf61a',border:'1px solid #8b5cf640',borderRadius:9,padding:'8px 14px',fontSize:13,fontWeight:700,color:'#a78bfa',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             🤖 AI Enrich
           </button>
-          <button onClick={()=>setShowNew(true)} style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
+          <button disabled={saving} onClick={()=>{setSaveError(null);const {savedId,...text}=readExerciseDraft(coachId,'new');newExerciseId.current=savedId||null;setNewEx(p=>({...p,...text}));setShowNew(true)}} style={{background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#000',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>
             + Add Exercise
           </button>
         </div>
@@ -309,6 +372,14 @@ export default function ExerciseLibrary() {
 
         {/* Grid */}
         <div style={{maxWidth:1280,margin:'0 auto',padding:20}}>
+          {saveError && <div role="alert" style={{background:t.redDim,border:'1px solid '+t.red,borderRadius:10,padding:14,marginBottom:16,color:t.text}}>
+            {saveError}
+            {pendingUpload && <div style={{marginTop:10}}>
+              <span style={{fontSize:13}}>Selected: {pendingUpload.file.name} </span>
+              <button disabled={saving} onClick={()=>quickUpload(pendingUpload.id,pendingUpload.file,pendingUpload.field)}
+                style={{background:t.surfaceHigh,color:t.text,border:'1px solid '+t.border,borderRadius:8,padding:'8px 12px',cursor:'pointer'}}>Retry Media Save</button>
+            </div>}
+          </div>}
           {filtered.length === 0 ? (
             <div style={{textAlign:'center',padding:'60px 20px',color:t.textMuted}}>
               <div style={{fontSize:32,marginBottom:12}}>🔍</div>
@@ -321,13 +392,13 @@ export default function ExerciseLibrary() {
                 <ExerciseCard key={ex.id} ex={ex}
                   isEditing={editingId===ex.id}
                   isUploading={uploading===ex.id}
-                  onEdit={()=>setEditingId(editingId===ex.id?null:ex.id)}
+                  onEdit={()=>{if(!saveLock.current){setSaveError(null);setEditingId(editingId===ex.id?null:ex.id)}}}
                   onSave={(changes:any)=>saveEdit(ex.id,changes)}
                   onUpload={(f:File)=>quickUpload(ex.id,f,'video_url')}
                   onUploadFemale={(f:File)=>quickUpload(ex.id,f,'video_url_female')}
                   onDelete={()=>setPendingDelete({ id: ex.id, name: ex.name })}
                   onDuplicate={()=>duplicateExercise(ex)}
-                  saving={saving} t={t}/>
+                  saving={saving} coachId={coachId} t={t}/>
               ))}
             </div>
 
@@ -346,12 +417,13 @@ export default function ExerciseLibrary() {
 
         {/* Add New Modal */}
         {showNew && (
-          <div onClick={()=>{setShowNew(false);setNewEx({...blank})}} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.87)',backdropFilter:'blur(10px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:20,width:'100%',maxWidth:560,padding:28,maxHeight:'92vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:14}}>
+          <div onClick={closeNew} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.87)',backdropFilter:'blur(10px)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+            <fieldset disabled={saving} onClick={e=>e.stopPropagation()} style={{background:t.surface,border:'1px solid '+t.border,borderRadius:20,width:'100%',maxWidth:560,padding:28,maxHeight:'92vh',overflowY:'auto',display:'flex',flexDirection:'column',gap:14,minWidth:0}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{fontSize:16,fontWeight:800}}>Add Exercise</div>
-                <span onClick={()=>{setShowNew(false);setNewEx({...blank})}} style={{cursor:'pointer',color:t.textMuted,fontSize:24}}>×</span>
+                <button type="button" aria-label="Close add exercise" onClick={closeNew} style={{background:'none',border:'none',cursor:'pointer',color:t.textMuted,fontSize:24}}>×</button>
               </div>
+              {saveError && <div role="alert" style={{color:t.red,fontSize:14,lineHeight:1.5}}>{saveError}</div>}
 
               {/* Video upload */}
               <div>
@@ -475,7 +547,7 @@ export default function ExerciseLibrary() {
                 style={{width:'100%',padding:'12px',borderRadius:12,border:'none',background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,color:'#000',fontSize:14,fontWeight:800,cursor:!newEx.name.trim()||saving?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:!newEx.name.trim()||saving?0.5:1}}>
                 {saving?'Saving...':'+ Save Exercise'}
               </button>
-            </div>
+            </fieldset>
           </div>
         )}
 
@@ -510,13 +582,11 @@ export default function ExerciseLibrary() {
 }
 
 // ── ExerciseCard ──────────────────────────────────────────────────────────
-function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, onUploadFemale, onDelete, onDuplicate, saving, t }: any) {
-  const [draft, setDraft] = useState<any>(null)
+function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, onUploadFemale, onDelete, onDuplicate, saving, coachId, t }: any) {
   const [playing, setPlaying] = useState(false)
   const [videoGender, setVideoGender] = useState<'male'|'female'>('male')
 
-  const openEdit = () => {
-    setDraft({
+  const initialDraft = () => ({
       name: ex.name || '',
       muscles: [...(ex.muscles||[])],
       secondary_muscles: [...(ex.secondary_muscles||[])],
@@ -533,15 +603,29 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       image_url: ex.image_url || '',
       _videoFile: null,
       _imageFile: null,
+      ...readExerciseDraft(coachId, ex.id),
     })
+  // A newly duplicated card mounts in edit mode without an Edit click.
+  const [draft, setDraft] = useState<any>(() => isEditing ? initialDraft() : null)
+  const openEdit = () => {
+    if (saving) return
+    setDraft(initialDraft())
     onEdit()
   }
 
-  const cancel = () => { setDraft(null); onEdit() }
+  useEffect(() => {
+    if (isEditing && draft) keepExerciseDraft(coachId, ex.id, draft)
+  }, [isEditing, draft, coachId, ex.id])
 
-  const submit = () => {
+  const cancel = () => {
+    if (saving) return
+    keepExerciseDraft(coachId, ex.id, null)
+    setDraft(null); onEdit()
+  }
+
+  const submit = async () => {
     if (!draft?.name?.trim()) return
-    onSave({
+    const saved = await onSave({
       name: draft.name.trim(),
       muscles: draft.muscles,
       secondary_muscles: draft.secondary_muscles,
@@ -559,7 +643,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
       _videoFile: draft._videoFile || null,
       _imageFile: draft._imageFile || null,
     })
-    setDraft(null)
+    if (saved) { keepExerciseDraft(coachId, ex.id, null); setDraft(null) }
   }
 
   const inp2 = (o?: object): React.CSSProperties => ({
@@ -622,7 +706,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
               /* No video for this gender — show upload prompt */
               <div style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8}}>
                 <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                  <input type="file" accept="video/*" style={{display:'none'}}
+                  <input disabled={saving} type="file" accept="video/*" style={{display:'none'}}
                     onChange={e=>{ const f=e.target.files?.[0]; if(f) videoGender==='female'?onUploadFemale(f):onUpload(f); (e.target as HTMLInputElement).value='' }}/>
                   <div style={{background:'#1d1d2e',border:'1px dashed #252538',borderRadius:10,padding:'10px 18px',fontSize:12,color:'#5a5a78',cursor:'pointer',textAlign:'center' as const}}>
                     {isUploading?'Uploading...': videoGender==='female'?'📹 Upload female video':'📹 Upload video'}
@@ -635,7 +719,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
             <div style={{position:'absolute',top:6,right:6,zIndex:2,display:'flex',flexDirection:'column',gap:4,alignItems:'flex-end'}}>
               {activeUrl && !playing && (
                 <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                  <input type="file" accept="video/*" style={{display:'none'}}
+                  <input disabled={saving} type="file" accept="video/*" style={{display:'none'}}
                     onChange={e=>{ setPlaying(false); const f=e.target.files?.[0]; if(f) videoGender==='female'?onUploadFemale(f):onUpload(f); (e.target as HTMLInputElement).value='' }}/>
                   <span style={{background:'rgba(0,0,0,.6)',border:'1px solid rgba(255,255,255,.15)',borderRadius:6,padding:'3px 8px',fontSize:10,color:'rgba(255,255,255,.7)',cursor:'pointer',display:'block'}}>
                     {isUploading?'⏳':'↑ Replace'}
@@ -645,7 +729,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
               {/* Quick-add the missing gender's video */}
               {hasMale && !hasFemale && videoGender==='male' && (
                 <label style={{cursor:'pointer'}} onClick={e=>e.stopPropagation()}>
-                  <input type="file" accept="video/*" style={{display:'none'}}
+                  <input disabled={saving} type="file" accept="video/*" style={{display:'none'}}
                     onChange={e=>{ const f=e.target.files?.[0]; if(f) onUploadFemale(f); (e.target as HTMLInputElement).value='' }}/>
                   <span style={{background:'rgba(244,114,182,0.7)',border:'none',borderRadius:6,padding:'3px 8px',fontSize:10,color:'#000',fontWeight:700,cursor:'pointer',display:'block'}}>
                     + ♀ Add female
@@ -672,7 +756,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
               </div>
               <div style={{display:'flex',gap:5,flexShrink:0}}>
                 <button onClick={openEdit} style={{background:t.tealDim,border:'1px solid '+t.teal+'40',borderRadius:7,padding:'4px 10px',fontSize:11,fontWeight:700,color:t.teal,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Edit</button>
-                <button onClick={onDuplicate} title="Duplicate" style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:7,padding:'4px 8px',fontSize:11,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>⧉</button>
+                <button disabled={saving} onClick={onDuplicate} title="Duplicate" style={{background:t.surfaceHigh,border:'1px solid '+t.border,borderRadius:7,padding:'4px 8px',fontSize:11,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>⧉</button>
                 <button onClick={onDelete} style={{background:t.redDim,border:'1px solid '+t.red+'40',borderRadius:7,padding:'4px 8px',fontSize:11,color:t.red,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>🗑</button>
               </div>
             </div>
@@ -695,7 +779,7 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
           </>
         ) : draft && (
           // ── EDIT MODE ──
-          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          <fieldset disabled={saving} style={{display:'flex',flexDirection:'column',gap:12,border:0,padding:0,minWidth:0}}>
             <div style={{fontSize:12,fontWeight:800,color:t.teal}}>Editing: {ex.name}</div>
 
             {/* Name */}
@@ -828,13 +912,13 @@ function ExerciseCard({ ex, isEditing, isUploading, onEdit, onSave, onUpload, on
 
             {/* Save/Cancel */}
             <div style={{display:'flex',gap:8,paddingTop:4}}>
-              <button onClick={cancel} style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'9px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
+              <button disabled={saving} onClick={cancel} style={{flex:1,background:'transparent',border:'1px solid '+t.border,borderRadius:9,padding:'9px',fontSize:12,fontWeight:700,color:t.textMuted,cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
               <button onClick={submit} disabled={!draft.name?.trim()||saving}
                 style={{flex:2,background:`linear-gradient(135deg,${t.teal},${t.teal}cc)`,border:'none',borderRadius:9,padding:'9px',fontSize:12,fontWeight:800,color:'#000',cursor:!draft.name?.trim()||saving?'not-allowed':'pointer',fontFamily:"'DM Sans',sans-serif",opacity:!draft.name?.trim()||saving?0.5:1}}>
                 {saving?'Saving...':'✓ Save Changes'}
               </button>
             </div>
-          </div>
+          </fieldset>
         )}
       </div>
     </div>
