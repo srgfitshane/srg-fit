@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { resolveSignedMediaUrl } from '@/lib/media'
 
 const t = {
   bg: '#080810', surface: '#13131f', surfaceHigh: '#1a1a2e',
@@ -50,7 +51,7 @@ export default function ReviewPopout() {
           .select('set_number, reps_completed, weight_value, weight_unit, notes')
           .eq('session_exercise_id', ex.id).order('set_number')
         const signedUrl = ex.client_video_url
-          ? (await supabase.storage.from('form-checks').createSignedUrl(ex.client_video_url, 60 * 60)).data?.signedUrl || null
+          ? await resolveSignedMediaUrl(supabase, 'form-checks', ex.client_video_url)
           : null
         return {
           ...ex,

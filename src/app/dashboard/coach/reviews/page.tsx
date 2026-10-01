@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
-import { resolveSignedMediaUrl } from '@/lib/media'
+import { resolveSignedMediaUrl, resolveSignedMediaUrls } from '@/lib/media'
 import { pickPraise } from '@/lib/coach-inbox'
 import GifPicker from '@/components/coach/GifPicker'
 
@@ -327,10 +327,10 @@ export default function ReviewsPage() {
       .filter((p): p is string => !!p)
     const signedByPath = new Map<string, string>()
     if (videoPaths.length > 0) {
-      const { data: signed } = await supabase.storage.from('form-checks').createSignedUrls(videoPaths, 60 * 60)
-      for (const item of signed || []) {
-        if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl)
-      }
+      const signed = await resolveSignedMediaUrls(supabase, 'form-checks', videoPaths)
+      videoPaths.forEach((path, index) => {
+        if (signed[index]) signedByPath.set(path, signed[index]!)
+      })
     }
 
     const setsByExercise = new Map<string, (ExSet & { session_exercise_id: string })[]>()

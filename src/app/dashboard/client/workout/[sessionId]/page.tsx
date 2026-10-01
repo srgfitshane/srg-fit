@@ -262,7 +262,7 @@ export default function ActiveWorkoutPage() {
       ...exerciseRow,
       exercise_name: exerciseRow.exercise_name || exerciseRow.exercise?.name || '',
       client_video_url: exerciseRow.client_video_url
-        ? (await supabase.storage.from('form-checks').createSignedUrl(exerciseRow.client_video_url, 60 * 60)).data?.signedUrl || null
+        ? await resolveSignedMediaUrl(supabase, 'form-checks', exerciseRow.client_video_url)
         : null,
     })))
 
@@ -397,13 +397,12 @@ ${candidateList}`
   // Resolve signed URL for coach review video if it's a storage path
   useEffect(() => {
     const raw = session?.coach_review_video_url
-    if (!raw) return
-    if (raw.startsWith('http')) { setReviewVideoUrl(raw); return }
-    // Raw storage path — generate signed URL from workout-reviews bucket
-    supabase.storage.from('workout-reviews').createSignedUrl(raw, 60 * 60)
-      .then(({ data }) => { if (data?.signedUrl) setReviewVideoUrl(data.signedUrl) })
-      .catch(err => console.warn('[workout:bg-load] failed', err))
-  }, [session?.coach_review_video_url])
+    let cancelled = false
+    setReviewVideoUrl(null)
+    void resolveSignedMediaUrl(supabase, 'workout-reviews', raw)
+      .then(url => { if (!cancelled) setReviewVideoUrl(url) })
+    return () => { cancelled = true }
+  }, [supabase, session?.coach_review_video_url])
   useEffect(() => {
     // Not actively running (completed, assigned): show the stored duration,
     // don't tick.
@@ -1270,28 +1269,42 @@ ${candidateList}`
   }
 
   async function uploadFormVideo(exId: string, file: File) {
-    const MAX_MB = 200 // ~2 min video at mobile quality
+    const MAX_MB = 150 // Must match the form-checks bucket's upload limit.
     if (file.size > MAX_MB * 1024 * 1024) {
-      toastError(`Video too large. Please keep clips under 2 minutes (${MAX_MB}MB max). Tip: trim it in your camera roll before uploading.`)
+      toastError(`Video too large (${MAX_MB}MB max). Tip: keep clips short and trim them in your camera roll before uploading.`)
       return
     }
     setVideoUploading(prev => ({ ...prev, [exId]: true }))
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setVideoUploading(prev => ({ ...prev, [exId]: false })); return }
-    const ext = file.name.split('.').pop() || 'mp4'
-    const path = `${user.id}/${sessionId}/${exId}_${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('form-checks').upload(path, file)
-    if (error) {
-      console.error('Form check upload error:', error.message)
-      toastError(`Upload failed: ${error.message}`)
-    } else {
-      const { data: signedData } = await supabase.storage.from('form-checks').createSignedUrl(path, 60 * 60)
-      const signedUrl = signedData?.signedUrl || null
-      setVideoUploads(prev => ({ ...prev, [exId]: signedUrl || path }))
-      const { error: updateErr } = await supabase.from('session_exercises').update({ client_video_url: path }).eq('id', exId)
-      if (updateErr) toastError('Video uploaded but could not link it to the exercise: ' + updateErr.message)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        toastError('Your session expired. Please sign in again before uploading.')
+        return
+      }
+      const ext = file.name.split('.').pop() || 'mp4'
+      const path = `${user.id}/${sessionId}/${exId}_${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('form-checks').upload(path, file)
+      if (error) {
+        toastError('Could not upload your video. Please try again.')
+        return
+      }
+      const { data: linked, error: updateErr } = await supabase.from('session_exercises')
+        .update({ client_video_url: path }).eq('id', exId).eq('session_id', sessionId).select('id').single()
+      if (updateErr || !linked) {
+        toastError('Video uploaded but could not be linked to this exercise. Please try again.')
+        return
+      }
+      const signedUrl = await resolveSignedMediaUrl(supabase, 'form-checks', path)
+      if (!signedUrl) {
+        toastError('Your video was saved, but the preview could not load. Please refresh to view it.')
+        return
+      }
+      setVideoUploads(prev => ({ ...prev, [exId]: signedUrl }))
+    } catch {
+      toastError('Could not finish saving your video. Please refresh to check whether it saved before trying again.')
+    } finally {
+      setVideoUploading(prev => ({ ...prev, [exId]: false }))
     }
-    setVideoUploading(prev => ({ ...prev, [exId]: false }))
   }
 
   async function removeFormVideo(exId: string) {
@@ -1958,7 +1971,7 @@ ${candidateList}`
                     </div>
                   </a>
                 )
-                return <video src={reviewVideoUrl} controls playsInline muted style={{width:'100%',borderRadius:10,background:'#000',display:'block'}}/>
+                return <video src={reviewVideoUrl} controls playsInline muted preload="metadata" style={{width:'100%',borderRadius:10,background:'#000',display:'block'}}/>
               })()}
               {session?.coach_review_gif_url && (
                 <img src={session.coach_review_gif_url} alt="Coach GIF" style={{display:'block',marginTop:session?.coach_review_notes||reviewVideoUrl?14:0,maxWidth:'100%',borderRadius:10}}/>
@@ -2953,4 +2966,3 @@ function WorkoutComplete({ session, elapsed, router, t, sessionId, supabase, ret
     </>
   )
 }
-

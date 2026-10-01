@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import Image from 'next/image'
+import { resolveSignedMediaUrls } from '@/lib/media'
 
 type ProgressPhoto = {
   id: string
@@ -70,6 +72,7 @@ export default function ProgressPhotosViewer({
 }: Props) {
   const [photos, setPhotos] = useState<ProgressPhoto[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [compareAngle, setCompareAngle] = useState<string | null>(null)
   const [compareSel, setCompareSel] = useState<ProgressPhoto[]>([])
@@ -80,29 +83,33 @@ export default function ProgressPhotosViewer({
     let cancelled = false
     void (async () => {
       setLoading(true)
-      let q = supabase
-        .from('progress_photos')
-        .select('*')
-        .eq('client_id', clientProfileId)
-        .order('photo_date', { ascending: false })
-      if (fromDate) q = q.gte('photo_date', fromDate)
-      const { data } = await q
-      if (cancelled) return
-      const rows = (data || []) as ProgressPhoto[]
-      if (!rows.length) {
-        setPhotos([])
-        setLoading(false)
-        return
+      setLoadError(null)
+      setPhotos([])
+      setLightbox(null)
+      setCompareView(null)
+      setCompareSel([])
+      try {
+        let q = supabase
+          .from('progress_photos')
+          .select('*')
+          .eq('client_id', clientProfileId)
+          .order('photo_date', { ascending: false })
+        if (fromDate) q = q.gte('photo_date', fromDate)
+        const { data, error } = await q
+        if (cancelled) return
+        if (error) throw error
+        const rows = (data || []) as ProgressPhoto[]
+        if (!rows.length) return
+        const urls = await resolveSignedMediaUrls(supabase, 'progress-photos', rows.map(p => p.storage_path))
+        if (urls.some(url => !url)) throw new Error('Photo access failed')
+        const withUrls = rows.map((p, index) => ({ ...p, signedUrl: urls[index]! }))
+        if (cancelled) return
+        setPhotos(withUrls)
+      } catch {
+        if (!cancelled) setLoadError('Could not load your photos. Please refresh and try again. Your photos have not been removed.')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      const withUrls = await Promise.all(rows.map(async (p) => {
-        const { data: url } = await supabase.storage
-          .from('progress-photos')
-          .createSignedUrl(p.storage_path, 3600)
-        return { ...p, signedUrl: url?.signedUrl }
-      }))
-      if (cancelled) return
-      setPhotos(withUrls)
-      setLoading(false)
     })()
     return () => { cancelled = true }
   }, [supabase, clientProfileId, fromDate, refreshKey])
@@ -153,6 +160,10 @@ export default function ProgressPhotosViewer({
         Loading photos…
       </div>
     )
+  }
+
+  if (loadError) {
+    return <div role="alert" style={{ padding: 24, color: t.red }}>{loadError}</div>
   }
 
   if (!photos.length) {
@@ -238,8 +249,13 @@ export default function ProgressPhotosViewer({
                       </div>
                       {p.signedUrl && (
                         <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4' }}>
-                          <img
+                          <Image
                             src={p.signedUrl}
+                            fill
+                            // Keep private photos out of Next's shared image optimizer cache.
+                            unoptimized
+                            loading="lazy"
+                            sizes="(max-width: 600px) 50vw, 25vw"
                             alt={(ANGLE_LABELS[group.angle] || 'Progress') + ' photo from ' + fmtFull(p.photo_date)}
                             style={{ objectFit: 'cover', display: 'block', width: '100%', height: '100%' }}
                           />
