@@ -274,6 +274,11 @@ export default function ReviewsPage() {
   const [selected, setSelected] = useState<Review | null>(null)
   const [reviewNote, setReviewNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [coachId, setCoachId] = useState<string | null>(null)
+  const [quickNoteId, setQuickNoteId] = useState<string | null>(null)
+  const [quickNote, setQuickNote] = useState('')
+  const [quickNoteError, setQuickNoteError] = useState<string | null>(null)
+  const quickNoteSendingRef = useRef(false)
   const [reviewVideoUrl, setReviewVideoUrl] = useState('')
   const [reviewVideoPath, setReviewVideoPath] = useState('')
   const [reviewGifUrl, setReviewGifUrl] = useState('')
@@ -288,6 +293,7 @@ export default function ReviewsPage() {
   const loadReviews = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    setCoachId(user.id)
     const { data: sessions } = await supabase
       .from('workout_sessions')
       .select(`id, title, scheduled_date, completed_at, review_due_at,
@@ -461,26 +467,59 @@ export default function ReviewsPage() {
     setSaving(false)
   }
 
-  // One-tap quick review from an inbox card. Same write + notify path as
-  // markReviewed, with a rotated praise note as the review body. Only
-  // rendered on zero-friction sessions — anything with a skip, swap, note,
-  // or recovery flag deserves a real look in the detail view.
-  async function quickPraise(review: Review) {
-    setSaving(true)
-    const note = pickPraise()
-    const { error } = await supabase.from('workout_sessions').update({
-      coach_reviewed_at: new Date().toISOString(),
-      coach_review_notes: note,
-    }).eq('id', review.id)
-    if (error) {
-      setSaving(false)
-      alert('Could not send quick review: ' + error.message)
+  function quickNoteDraftKey(sessionId: string) {
+    return `quick-review-draft:v1:${coachId}:${sessionId}`
+  }
+
+  function openQuickNote(review: Review) {
+    if (saving || !coachId) return
+    let draft = ''
+    try { draft = localStorage.getItem(quickNoteDraftKey(review.id)) || '' } catch {}
+    setQuickNote(draft)
+    setQuickNoteError(null)
+    setQuickNoteId(review.id)
+  }
+
+  function updateQuickNote(value: string) {
+    setQuickNote(value)
+    setQuickNoteError(null)
+    if (!quickNoteId || !coachId) return
+    // Save immediately: closing the inline composer must not lose writing.
+    try { localStorage.setItem(quickNoteDraftKey(quickNoteId), value) } catch {}
+  }
+
+  // Clean sessions still take the quick path, but only send the coach's words.
+  async function sendQuickNote(review: Review) {
+    if (saving || quickNoteSendingRef.current) return
+    const note = quickNote.trim()
+    if (!note || note.length > 1000) {
+      setQuickNoteError('Enter a note of up to 1,000 characters before sending.')
       return
     }
-    const profileId = review.client?.profile_id
-    if (profileId) {
+    if (quickNoteId !== review.id || getReviewIntelligence(review).frictionScore !== 0) {
+      setQuickNoteError('Open this session for a full review instead.')
+      return
+    }
+    setSaving(true)
+    quickNoteSendingRef.current = true
+    setQuickNoteError(null)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user || user.id !== coachId) {
+        setQuickNoteError('Your session changed or expired. Please sign in again. Your note has been kept here.')
+        return
+      }
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
+      const { data: saved, error } = await supabase.from('workout_sessions').update({
+        coach_reviewed_at: new Date().toISOString(),
+        coach_review_notes: note,
+      }).eq('id', review.id).eq('coach_id', user.id).is('coach_reviewed_at', null).select('id').single()
+      if (error || !saved) {
+        setQuickNoteError('Could not save your review. It may already have been reviewed. Your note has been kept here.')
+        return
+      }
+      const profileId = review.client?.profile_id
+      if (profileId && session?.access_token) {
         // send-notification inserts the bell row AND fires push — do NOT also
         // insert into notifications here (double bell rows).
         fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
@@ -493,14 +532,21 @@ export default function ReviewsPage() {
             user_id: profileId,
             notification_type: 'review_ready',
             title: '💬 Coach reviewed your workout',
-            body: note,
+            body: note.slice(0, 100),
             link_url: `/dashboard/client/workout/${review.id}`,
           })
-        }).catch(err => console.warn('[notify:quick-praise]', err))
+        }).catch(() => {})
       }
+      try { localStorage.removeItem(quickNoteDraftKey(review.id)) } catch {}
+      setReviews(prev => prev.filter(r => r.id !== review.id))
+      setQuickNoteId(null)
+      setQuickNote('')
+    } catch {
+      setQuickNoteError('Could not finish sending your review. Refresh to check its status before retrying. Your draft has been kept.')
+    } finally {
+      quickNoteSendingRef.current = false
+      setSaving(false)
     }
-    setReviews(prev => prev.filter(r => r.id !== review.id))
-    setSaving(false)
   }
 
   async function markReviewed(sessionId: string) {
@@ -818,7 +864,7 @@ export default function ReviewsPage() {
               const u=urgency(r.review_due_at); const uc=urgencyColor(u); const ub=urgencyBg(u)
               const hasVideo = r.exercises.some(ex => ex.client_video_url)
               const intelligence = getReviewIntelligence(r)
-              // Card is a div, not a button: the quick-praise action nests
+              // Card is a div, not a button: the quick-note action nests
               // inside and buttons can't legally contain buttons.
               return (
                 <div key={r.id} onClick={()=>{setSelected(r);setReviewNote('');setReviewVideoUrl('');setReviewGifUrl('')}}
@@ -861,11 +907,31 @@ export default function ReviewsPage() {
                           </div>
                         )}
                       </div>
-                      {intelligence.frictionScore === 0 && (
-                        <button onClick={e => { e.stopPropagation(); void quickPraise(r) }} disabled={saving}
+                      {intelligence.frictionScore === 0 && quickNoteId !== r.id && (
+                        <button onClick={e => { e.stopPropagation(); openQuickNote(r) }} disabled={saving || !coachId}
                           style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:6, background:t.greenDim, border:`1px solid ${t.green}40`, borderRadius:9, padding:'7px 14px', fontSize:12, fontWeight:800, color:t.green, cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif", opacity:saving?0.6:1 }}>
-                          💪 Quick praise
+                          💬 Quick note
                         </button>
+                      )}
+                      {quickNoteId === r.id && (
+                        <div onClick={e => e.stopPropagation()} style={{ marginTop:12, padding:12, background:t.surfaceHigh, border:`1px solid ${t.orange}`, borderRadius:10, cursor:'default' }}>
+                          <label htmlFor={`quick-note-${r.id}`} style={{ display:'block', fontSize:12, fontWeight:800, marginBottom:8 }}>Your note to the client</label>
+                          <textarea id={`quick-note-${r.id}`} autoFocus rows={3} maxLength={1000}
+                            value={quickNote} onChange={e => updateQuickNote(e.target.value)} disabled={saving}
+                            placeholder="Write your quick feedback…"
+                            style={{ width:'100%', resize:'vertical', background:t.surface, border:`1px solid ${t.border}`, borderRadius:8, padding:10, color:t.text, fontSize:16, fontFamily:"'DM Sans',sans-serif" }} />
+                          {quickNoteError && <div role="alert" style={{ color:t.red, fontSize:12, marginTop:8 }}>{quickNoteError}</div>}
+                          <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                            <button onClick={() => { void sendQuickNote(r) }} disabled={saving || !quickNote.trim()}
+                              style={{ background:t.greenDim, border:`1px solid ${t.green}40`, borderRadius:8, padding:'8px 12px', color:t.green, fontSize:13, fontWeight:800, cursor:'pointer' }}>
+                              {saving ? 'Sending…' : 'Send note & review'}
+                            </button>
+                            <button onClick={() => { setQuickNoteId(null); setQuickNoteError(null) }} disabled={saving}
+                              style={{ background:'none', border:`1px solid ${t.border}`, borderRadius:8, padding:'8px 12px', color:t.textDim, fontSize:13, cursor:'pointer' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                     <div style={{ fontSize:20, color:t.textMuted, flexShrink:0 }}>›</div>
