@@ -1,4 +1,5 @@
--- Read-only RLS checks under the designated client and coach, with rollback.
+-- RLS checks under the designated client and coach, with rollback.
+-- Writes touch only the designated test account and are never committed.
 -- Assertions only: never emit other clients' private profile values.
 begin;
 set local role authenticated;
@@ -16,6 +17,29 @@ begin
   end if;
   perform count(*) from public.community_posts;
   perform count(*) from public.community_replies;
+end;
+$test$;
+
+do $test$
+declare affected integer;
+begin
+  if not exists (select 1 from public.client_intake_profiles
+    where client_id = 'd4b20a0d-d1de-4b91-83ca-6acfd4f6d82d') then
+    insert into public.client_intake_profiles (client_id, intake_completed_by)
+    values ('d4b20a0d-d1de-4b91-83ca-6acfd4f6d82d', 'client');
+  end if;
+  update public.client_intake_profiles
+  set current_weight_lbs = null, goal_target_date = null, intake_completed_by = 'client'
+  where client_id = 'd4b20a0d-d1de-4b91-83ca-6acfd4f6d82d';
+  get diagnostics affected = row_count;
+  if affected <> 1 then raise exception 'Own intake save failed'; end if;
+  update public.profiles set avatar_url = avatar_url where id = auth.uid();
+  get diagnostics affected = row_count;
+  if affected <> 1 then raise exception 'Own avatar save failed'; end if;
+  update public.clients set theme_preference = theme_preference
+  where id = 'd4b20a0d-d1de-4b91-83ca-6acfd4f6d82d';
+  get diagnostics affected = row_count;
+  if affected <> 1 then raise exception 'Own theme save failed'; end if;
 end;
 $test$;
 

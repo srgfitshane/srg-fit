@@ -40,6 +40,30 @@ type IntakeProfile = Record<string, IntakeFieldValue> & {
   profile_photo_url?: string | null
 }
 
+// Draft only client-editable answers, never the full server record or coach notes.
+const EDITABLE_INTAKE_FIELDS = new Set([
+  'date_of_birth', 'phone', 'gender', 'pronouns', 'timezone', 'height_inches',
+  'starting_weight_lbs', 'current_weight_lbs', 'goal_weight_lbs', 'body_fat_pct',
+  'meas_waist', 'meas_hips', 'meas_chest', 'meas_neck', 'meas_left_arm',
+  'meas_right_arm', 'meas_left_thigh', 'meas_right_thigh', 'training_experience',
+  'training_frequency', 'cardio_preference', 'preferred_days', 'equipment_access',
+  'injuries_limitations', 'past_injuries', 'previous_coaching', 'primary_goal',
+  'secondary_goal', 'goal_target_date', 'motivation_why', 'biggest_obstacle',
+  'activity_level', 'avg_sleep_hours', 'water_intake_oz', 'stress_level',
+  'dietary_approach', 'allergies_restrictions', 'foods_disliked', 'foods_preferred',
+  'supplement_use', 'alcohol_frequency', 'medical_conditions', 'current_medications',
+  'recent_surgeries', 'menstrual_cycle_tracking',
+])
+
+function parseProfileDraft(value: string): IntakeProfile {
+  const parsed: unknown = JSON.parse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+  return Object.fromEntries(Object.entries(parsed).filter(([key, answer]) =>
+    EDITABLE_INTAKE_FIELDS.has(key) && (answer === null || typeof answer === 'string' ||
+      typeof answer === 'boolean' || (typeof answer === 'number' && Number.isFinite(answer)) ||
+      (Array.isArray(answer) && answer.every(item => typeof item === 'string')))))
+}
+
 type ProfileRecord = {
   id: string
   full_name?: string | null
@@ -84,7 +108,7 @@ const sharedInputStyle: CSSProperties = {
   border:'1px solid '+t.border,
   borderRadius:9,
   padding:'10px 12px',
-  fontSize:13,
+  fontSize:16,
   color:t.text,
   outline:'none',
   fontFamily:"'DM Sans',sans-serif",
@@ -97,7 +121,7 @@ const Label = ({children}:{children:ReactNode}) => { const {t}=_uc(_Ctx); return
 const Input = ({field,placeholder,type='text',...rest}: BaseFieldProps & { type?: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'placeholder'>) => {
   const {intake,set,t}=_uc(_Ctx)
   const value = typeof intake[field] === 'boolean' ? '' : String(intake[field] ?? '')
-  return <input value={value} onChange={e=>set(field,e.target.value)} placeholder={placeholder} type={type} inputMode={type==='number'?'decimal':undefined} {...rest} style={{...sharedInputStyle, color:t.text}} />
+  return <input value={value} onChange={e=>set(field, !e.target.value && (type === 'number' || type === 'date') ? null : e.target.value)} placeholder={placeholder} type={type} inputMode={type==='number'?'decimal':undefined} {...rest} style={{...sharedInputStyle, color:t.text}} />
 }
 const TextArea = ({field,placeholder,rows=3}: BaseFieldProps & { rows?: number }) => {
   const {intake,set,t}=_uc(_Ctx)
@@ -105,8 +129,8 @@ const TextArea = ({field,placeholder,rows=3}: BaseFieldProps & { rows?: number }
 }
 const Select = ({field,options,placeholder}:{field:string,options:SelectOption[],placeholder?:string}) => {
   const {intake,set,t}=_uc(_Ctx)
-  const value = String(intake[field] || '')
-  return <select value={value} onChange={e=>set(field,e.target.value)} style={{...sharedInputStyle, color:value?t.text:t.textMuted, appearance:'none'}}><option value="">{placeholder||'Select...'}</option>{options.map((o)=><option key={o.val} value={o.val} style={{background:t.surfaceHigh}}>{o.label}</option>)}</select>
+  const value = String(intake[field] ?? '')
+  return <select value={value} onChange={e=>set(field,e.target.value || null)} style={{...sharedInputStyle, color:value?t.text:t.textMuted, appearance:'none'}}><option value="">{placeholder||'Select...'}</option>{options.map((o)=><option key={o.val} value={o.val} style={{background:t.surfaceHigh}}>{o.label}</option>)}</select>
 }
 const ChipGroup = ({field,options}:{field:string,options:string[]}) => {
   const {intake,toggleArray,t}=_uc(_Ctx)
@@ -134,33 +158,77 @@ function ProfilePageInner() {
   const [loading,   setLoading]   = useState(true)
   const [photoUploading, setPhotoUploading] = useState(false)
   const [themePreference, setThemePreference] = useState<ThemePreference>('dark')
+  const [draftChanges, setDraftChanges] = useState<IntakeProfile>({})
+  const [restoredDraft, setRestoredDraft] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [themeSaving, setThemeSaving] = useState(false)
+  const draftStorageKey = clientId ? `profile-draft:v1:${clientId}` : null
+  const persistDraftRef = useRef<() => void>(() => {})
   const photoRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
 
-      const { data: prof } = await supabase.from('profiles').select('id, full_name, email, avatar_url').eq('id', user.id).single<ProfileRecord>()
-      const signedAvatar = await resolveSignedMediaUrl(supabase, 'avatars', prof?.avatar_url)
-      setProfile(prof ? { ...prof, avatar_url: signedAvatar } : null)
+        const { data: prof, error: profileError } = await supabase.from('profiles').select('id, full_name, email, avatar_url').eq('id', user.id).single<ProfileRecord>()
+        if (profileError || !prof) throw new Error('Profile unavailable')
+        const signedAvatar = await resolveSignedMediaUrl(supabase, 'avatars', prof.avatar_url)
+        setProfile({ ...prof, avatar_url: signedAvatar })
 
-      const { data: cl } = await supabase.from('clients').select('id, theme_preference').eq('profile_id', user.id).eq('active', true).single<ClientRecord>()
-      if (!cl) { router.push('/dashboard/client'); return }
-      setClientId(cl.id)
-      if (cl.theme_preference) setThemePreference(cl.theme_preference)
+        const { data: cl, error: clientError } = await supabase.from('clients').select('id, theme_preference').eq('profile_id', user.id).eq('active', true).single<ClientRecord>()
+        if (clientError) throw clientError
+        if (!cl) { router.push('/dashboard/client'); return }
+        if (cl.theme_preference) setThemePreference(cl.theme_preference)
 
-      const { data: existing } = await supabase.from('client_intake_profiles').select('*').eq('client_id', cl.id).single()
-      if (existing) {
-        const signedPhoto = await resolveSignedMediaUrl(supabase, 'avatars', existing.profile_photo_url)
-        setIntake({ ...existing, profile_photo_url: signedPhoto })
+        const { data: existing, error: intakeError } = await supabase.from('client_intake_profiles').select('*').eq('client_id', cl.id).maybeSingle()
+        if (intakeError) throw intakeError
+        const signedPhoto = await resolveSignedMediaUrl(supabase, 'avatars', existing?.profile_photo_url)
+        let draft: IntakeProfile = {}
+        try {
+          const stored = window.localStorage.getItem(`profile-draft:v1:${cl.id}`)
+          if (stored) draft = parseProfileDraft(stored)
+        } catch { /* Storage unavailable or malformed; keep the server answers. */ }
+        setIntake({ ...existing, profile_photo_url: signedPhoto, ...draft })
+        setDraftChanges(draft)
+        setRestoredDraft(Object.keys(draft).length > 0)
+        setClientId(cl.id)
+      } catch {
+        setLoadError(true)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
-    load()
+    void load()
   }, [router, supabase])
 
-  const set = (field: string, val: IntakeFieldValue) => setIntake((p) => ({ ...p, [field]: val }))
+  useEffect(() => {
+    if (!draftStorageKey || loading) return
+    const persist = () => {
+      try {
+        if (Object.keys(draftChanges).length) window.localStorage.setItem(draftStorageKey, JSON.stringify(draftChanges))
+        else window.localStorage.removeItem(draftStorageKey)
+      } catch { /* Keep unsaved answers in memory when device storage is unavailable. */ }
+    }
+    persistDraftRef.current = persist
+    const timer = window.setTimeout(persist, 800)
+    window.addEventListener('pagehide', persist)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pagehide', persist)
+    }
+  }, [draftChanges, draftStorageKey, loading])
+
+  // Internal navigation does not fire pagehide; flush the latest draft on exit.
+  useEffect(() => () => persistDraftRef.current(), [])
+
+  const set = (field: string, val: IntakeFieldValue) => {
+    setIntake(p => ({ ...p, [field]: val }))
+    if (EDITABLE_INTAKE_FIELDS.has(field)) setDraftChanges(p => ({ ...p, [field]: val }))
+    setSaved(false)
+  }
 
   const toggleArray = (field: string, val: string) => {
     const arr: string[] = Array.isArray(intake[field]) ? intake[field].filter((item): item is string => typeof item === 'string') : []
@@ -168,41 +236,81 @@ function ProfilePageInner() {
   }
 
   const updateTheme = async (p: ThemePreference) => {
-    // Optimistic: flip the UI immediately via the event, persist in the
-    // background. If the DB write fails we still keep the in-memory state;
-    // next reload will snap back to the DB value.
-    setThemePreference(p)
-    window.dispatchEvent(new CustomEvent('theme-changed', { detail: p }))
-    if (!clientId) return
-    const { error } = await supabase.from('clients')
-      .update({ theme_preference: p }).eq('id', clientId)
-    if (error) console.error('Theme save failed:', error.message)
+    if (themeSaving) return
+    setSubmitError(null)
+    if (!clientId) { setSubmitError('Your profile is not ready. Please refresh and try again.'); return }
+    setThemeSaving(true)
+    try {
+      const { data, error } = await supabase.from('clients')
+        .update({ theme_preference: p }).eq('id', clientId).select('id').single()
+      if (error || !data) throw new Error('Theme not saved')
+      setThemePreference(p)
+      window.dispatchEvent(new CustomEvent('theme-changed', { detail: p }))
+    } catch {
+      setSubmitError('Could not save your appearance. Please try again.')
+    } finally { setThemeSaving(false) }
   }
 
   const save = async () => {
-    if (!clientId) return
+    if (saving) return
+    setSubmitError(null)
+    setSaved(false)
+    if (!clientId) { setSubmitError('Your profile is not ready. Please refresh and try again.'); return }
     setSaving(true)
-    const payload = { ...intake, client_id: clientId, intake_completed_by: 'client' }
-    const { error } = await supabase.from('client_intake_profiles').upsert(payload, { onConflict: 'client_id' })
-    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
-    setSaving(false)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user || user.id !== profile?.id) {
+        setSubmitError('Your session expired. Please sign in again. Your unsaved answers are kept on this device when storage is available.')
+        return
+      }
+      const payload = { ...draftChanges, client_id: clientId, intake_completed_by: 'client' }
+      const { data, error } = await supabase.from('client_intake_profiles')
+        .upsert(payload, { onConflict: 'client_id' }).select('client_id').single()
+      if (error || !data) throw new Error('Profile not saved')
+      // Preserve any answers edited while this request was in flight.
+      setDraftChanges(current => Object.fromEntries(Object.entries(current)
+        .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(draftChanges[key]))))
+      try { window.localStorage.removeItem(draftStorageKey!) } catch { /* Storage unavailable. */ }
+      setRestoredDraft(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      setSubmitError('Could not save your profile. Your answers are still here. Please try again.')
+    } finally { setSaving(false) }
   }
 
   const uploadPhoto = async (file: File) => {
-    if (!clientId) return
+    if (photoUploading) return
+    setSubmitError(null)
+    if (!clientId || !profile?.id) { setSubmitError('Your profile is not ready. Please refresh and try again.'); return }
+    if (!file.type.startsWith('image/')) { setSubmitError('Please choose an image for your profile photo.'); return }
     setPhotoUploading(true)
-    const path = `profile-photos/${clientId}/${Date.now()}.${file.name.split('.').pop()}`
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (!error) {
-      const signedUrl = await resolveSignedMediaUrl(supabase, 'avatars', path)
-      set('profile_photo_url', signedUrl)
-      await supabase.from('client_intake_profiles').upsert({ client_id: clientId, profile_photo_url: path }, { onConflict: 'client_id' })
-      if (profile?.id) {
-        await supabase.from('profiles').update({ avatar_url: path }).eq('id', profile.id)
+    let failureMessage = 'Could not verify your session. Please refresh and try again.'
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user || user.id !== profile.id) {
+        failureMessage = 'Your session expired. Please sign in again before uploading a photo.'
+        throw new Error('Session unavailable')
       }
+      failureMessage = 'Could not upload your photo. Please try again.'
+      const path = `profile-photos/${clientId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: false })
+      if (uploadError) throw uploadError
+      failureMessage = 'Your photo uploaded, but could not be saved to your profile. Please try again.'
+      const { data: intakeRow, error: intakeError } = await supabase.from('client_intake_profiles')
+        .upsert({ client_id: clientId, profile_photo_url: path }, { onConflict: 'client_id' }).select('client_id').single()
+      if (intakeError || !intakeRow) throw new Error('Photo profile not saved')
+      failureMessage = 'Your profile photo was saved, but your account picture could not be updated. Please try again.'
+      const { data: profileRow, error: profileError } = await supabase.from('profiles')
+        .update({ avatar_url: path }).eq('id', profile.id).select('id').single()
+      if (profileError || !profileRow) throw new Error('Account picture not saved')
+      failureMessage = 'Your photo was saved, but its preview could not load. Please refresh.'
+      const signedUrl = await resolveSignedMediaUrl(supabase, 'avatars', path)
+      setIntake(prev => ({ ...prev, profile_photo_url: signedUrl }))
       setProfile((prev) => prev ? { ...prev, avatar_url: signedUrl } : prev)
-    }
-    setPhotoUploading(false)
+    } catch {
+      setSubmitError(failureMessage)
+    } finally { setPhotoUploading(false) }
   }
 
   // Height helper: total inches → ft/in
@@ -227,6 +335,13 @@ function ProfilePageInner() {
     <div style={{ background:t.bg, minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'DM Sans',sans-serif", color:t.textMuted }}>Loading...</div>
   )
 
+  if (loadError) return (
+    <div role="alert" style={{ background:t.bg, minHeight:'100vh', padding:24, color:t.text }}>
+      <p>Could not load your profile. Please refresh or sign in again before editing.</p>
+      <button onClick={() => window.location.reload()} style={{ marginTop:12, fontSize:16 }}>Try again</button>
+    </div>
+  )
+
   const completedSections = SECTIONS.filter(s => {
     if (!INTAKE_SECTIONS.includes(s.id)) return false
     if (s.id === 'personal') return intake.date_of_birth || intake.phone
@@ -238,6 +353,7 @@ function ProfilePageInner() {
     if (s.id === 'health')   return intake.intake_completed_at
     return false
   }).length
+  const allSaved = saved && Object.keys(draftChanges).length === 0
 
   return (
     <_Ctx.Provider value={_ctxVal}>
@@ -256,12 +372,14 @@ function ProfilePageInner() {
             <div style={{ fontSize:11, color:t.textMuted, marginTop:1 }}>{completedSections}/{INTAKE_SECTIONS.length} sections complete</div>
           </div>
           <button onClick={save} disabled={saving}
-            style={{ background: saved?t.green:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', opacity:saving?.6:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
-            {saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save'}
+            style={{ background: allSaved?t.green:'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')', border:'none', borderRadius:10, padding:'9px 20px', fontSize:13, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', opacity:saving?.6:1, fontFamily:"'DM Sans',sans-serif", transition:'background .3s' }}>
+            {allSaved ? '✓ Saved!' : saving ? 'Saving...' : 'Save'}
           </button>
         </div>
 
         {/* Progress bar */}
+        {submitError && <div role="alert" style={{ margin:'12px 20px 0', padding:12, borderRadius:10, background:t.redDim, color:t.red }}>{submitError}</div>}
+        {restoredDraft && <div role="status" style={{ margin:'12px 20px 0', padding:12, borderRadius:10, background:t.tealDim, color:t.teal }}>Your unsaved profile answers were restored. Hit Save when you&apos;re ready.</div>}
         <div style={{ padding:'10px 20px 0' }}>
           <div style={{ height:4, background:t.surfaceHigh, borderRadius:4, overflow:'hidden' }}>
             <div style={{ height:'100%', width:(completedSections/SECTIONS.length*100)+'%', background:'linear-gradient(90deg,'+t.teal+','+t.orange+')', borderRadius:4, transition:'width .4s ease' }} />
@@ -339,9 +457,9 @@ function ProfilePageInner() {
                 <Field label={`Height (e.g. 5'10")`}>
                   <input
                     defaultValue={typeof intake.height_inches === 'number' ? fmtHeight(intake.height_inches) : ''}
-                    onBlur={e=>{ const v=parseHeight(e.target.value); if(v) set('height_inches', v) }}
+                    onBlur={e=>{ if (!e.target.value.trim()) { set('height_inches', null); return } const v=parseHeight(e.target.value); if(v) set('height_inches', v) }}
                     placeholder={`5'10"`}
-                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:13, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
+                    style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:9, padding:'10px 12px', fontSize:16, color:t.text, outline:'none', fontFamily:"'DM Sans',sans-serif" }} />
                 </Field>
                 <Field label="Starting Weight (lbs)"><Input field="starting_weight_lbs" type="number" placeholder="185" /></Field>
               </FieldRow>
@@ -554,7 +672,7 @@ function ProfilePageInner() {
                 <div style={{ fontSize:12, color:t.textMuted, marginBottom:14 }}>Make sure you&apos;ve filled out what you can across all sections, then hit Save above.</div>
                 <button onClick={save} disabled={saving}
                   style={{ background:'linear-gradient(135deg,'+t.teal+','+t.green+')', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800, color:'#000', cursor:saving?'not-allowed':'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                  {saving ? 'Saving...' : saved ? '✓ All Saved!' : '💾 Save Everything'}
+                  {saving ? 'Saving...' : allSaved ? '✓ All Saved!' : '💾 Save Everything'}
                 </button>
               </div>
             </div>
@@ -628,7 +746,7 @@ function ProfilePageInner() {
                     const label = opt === 'dark' ? 'Dark' : opt === 'light' ? 'Light' : 'System'
                     const icon = opt === 'dark' ? '🌙' : opt === 'light' ? '☀️' : '🔄'
                     return (
-                      <button key={opt} onClick={() => updateTheme(opt)}
+                      <button key={opt} onClick={() => updateTheme(opt)} disabled={themeSaving}
                         style={{
                           background: active ? t.tealDim : 'transparent',
                           border: '1px solid ' + (active ? alpha(t.teal, 38) : t.border),
