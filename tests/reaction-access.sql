@@ -14,6 +14,12 @@ insert into public.message_reactions(message_id,user_id,emoji) values
 insert into public.community_reactions(post_id,user_id,emoji) values
   ('00000000-0000-4000-8000-000000000203','133f93d0-2399-4542-bc57-db4de8b98d79','probe');
 do $$ begin
+  if (select jsonb_array_length(coalesce((select jsonb_agg(r.id) from public.message_reactions r where r.message_id=m.id),'[]'::jsonb))
+      from public.messages m where m.id='00000000-0000-4000-8000-000000000201')<>1
+    or (select jsonb_array_length(coalesce((select jsonb_agg(r.id) from public.message_reactions r where r.message_id=m.id),'[]'::jsonb))
+      from public.messages m where m.id='00000000-0000-4000-8000-000000000202')<>0 then
+    raise exception 'Coach nested read lost reactions or an unreacted message';
+  end if;
   if exists(select 1 from public.community_posts where id='00000000-0000-4000-8000-000000000204') then
     raise exception 'The inaccessible community probe is visible';
   end if;
@@ -36,6 +42,10 @@ insert into public.message_reactions(message_id,user_id,emoji) values
 insert into public.community_reactions(post_id,user_id,emoji) values
   ('00000000-0000-4000-8000-000000000203','aba0fe07-3690-460b-a35a-cb4e33d3665d','probe');
 do $$ declare affected integer; begin
+  if (select jsonb_array_length(coalesce((select jsonb_agg(r.id) from public.message_reactions r where r.message_id=m.id),'[]'::jsonb))
+      from public.messages m where m.id='00000000-0000-4000-8000-000000000201')<>2 then
+    raise exception 'Client nested read lost participant reactions';
+  end if;
   if (select count(*) from public.message_reactions where message_id='00000000-0000-4000-8000-000000000201')<>2
     or (select count(*) from public.community_reactions where post_id='00000000-0000-4000-8000-000000000203')<>2 then
     raise exception 'Client cannot read both participants reactions';

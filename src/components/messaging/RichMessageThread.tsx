@@ -271,19 +271,14 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     const request = ++threadLoadRequest.current
     const { data: msgs, error: messagesError } = await supabase
       .from('messages')
-      .select('*')
+      // Embed reactions through the FK: an ID-list query grows with the
+      // conversation and can exceed the gateway's request-size limit.
+      .select('*, reactions:message_reactions!message_reactions_message_id_fkey(*)')
       .or(`and(sender_id.eq.${myId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${myId})`)
       .order('created_at', { ascending: true })
 
     if (request !== threadLoadRequest.current) return
-    if (messagesError || !msgs) { setReactionError('Could not load messages. Please refresh and try again.'); return }
-
-    const msgIds = msgs.map(m => m.id)
-    const { data: reactions, error: reactionsError } = msgIds.length
-      ? await supabase.from('message_reactions').select('*').in('message_id', msgIds)
-      : { data: [], error: null }
-    if (request !== threadLoadRequest.current) return
-    if (reactionsError || !reactions) { setReactionError('Could not load reactions. Please refresh and try again.'); return }
+    if (messagesError || !msgs) { setReactionError('Could not load messages and reactions. Please refresh and try again.'); return }
 
     // The shared resolver reuses URLs across refetches and clears its
     // account-scoped cache on sign-out. Private media never uses public URLs.
@@ -296,11 +291,11 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       return {
         ...m,
         media_url: mediaUrl,
-        reactions: (reactions || []).filter(r => r.message_id === m.id),
       }
     }))
     if (request !== threadLoadRequest.current) return
     setThread(withReactions)
+    setReactionError(null)
     // Pin on initial load; respects userScrolledUp so a reaction/visibility
     // refetch doesn't yank the user down while they're reading history.
     setTimeout(() => scrollToBottom(), 0)

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { createClient } from '@supabase/supabase-js'
 
 const paths = {
   message:'../src/components/messaging/RichMessageThread.tsx',
@@ -150,7 +151,7 @@ for (const kind of ['message', 'community']) {
     supabase:{ from:table => {
       const chain = { select:() => chain, or:() => chain, eq:() => chain, order:() => chain,
         limit:async () => ({ data:null, error:{} }), in:async () => ({ data:null, error:{} }),
-        then:resolve => resolve({ data:table === 'messages' ? [{ id:'target' }] : null, error:table === 'messages' ? null : {} }) }
+        then:resolve => resolve({ data:null, error:{} }) }
       return chain
     } },
   }
@@ -201,7 +202,55 @@ for (const kind of ['message', 'community']) {
   vm.runInNewContext(compile(handlers[kind].get(name) + '\nglobalThis.reload=' + name), context)
   const old = context.reload(); await flush(); await context.reload()
   pending.resolve({ data:[{ id:'stale', reactions:[] }], error:null }); await old
-  assert.equal(state.rows[0].id, 'latest'); assert.equal(state.errors.length, 0); cases++
+  assert.equal(state.rows[0].id, 'latest'); assert.ok(state.errors.every(error => error === null)); cases++
+}
+
+// Use the actual Supabase request builder, not a query-chain stub. Large
+// histories must keep a constant-size GET and load their nested reactions in
+// that same read, including messages without any reactions.
+for (const count of [0, 1, 627, 1000]) {
+  const rows = Array.from({ length:count }, (_, i) => ({
+    id:`00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+    message_type:'text', media_url:null,
+    reactions:i % 2 ? [] : [{ id:`reaction-${i}`, user_id:'other', emoji:'fire' }],
+  }))
+  const state = { rows:null, errors:[], requests:[] }
+  let fail = false
+  const supabase = createClient('https://synthetic.supabase.co', 'synthetic-key', {
+    auth:{ persistSession:false, autoRefreshToken:false, detectSessionInUrl:false },
+    global:{ fetch:async (input, init) => {
+      const url = new URL(input)
+      state.requests.push({ url, method:init.method })
+      assert.equal(url.pathname, '/rest/v1/messages')
+      if (init.method === 'PATCH') return new Response(null, { status:204 })
+      assert.equal(url.searchParams.get('select'), '*,reactions:message_reactions!message_reactions_message_id_fkey(*)')
+      assert.equal(url.searchParams.get('order'), 'created_at.asc')
+      assert.equal(url.searchParams.get('or'), '(and(sender_id.eq.me,recipient_id.eq.other),and(sender_id.eq.other,recipient_id.eq.me))')
+      assert.ok(url.href.length < 1024, 'Request size must not depend on message count')
+      return new Response(JSON.stringify(fail ? { message:'Private provider details' } : rows), {
+        status:fail ? 400 : 200, headers:{ 'Content-Type':'application/json' },
+      })
+    } },
+  })
+  const context = {
+    useCallback:fn => fn, myId:'me', otherId:'other', supabase,
+    threadLoadRequest:{ current:0 }, MEDIA_BUCKETS:{},
+    setThread:value => { state.rows = plain(value) }, setReactionError:value => state.errors.push(value),
+    setTimeout:() => {}, scrollToBottom:() => {},
+  }
+  vm.runInNewContext(compile(handlers.message.get('loadThread') + '\nglobalThis.reload=loadThread'), context)
+  await context.reload()
+  assert.deepEqual(state.rows, rows)
+  assert.equal(state.requests.filter(r => r.method === 'GET').length, 1)
+  assert.equal(state.errors.at(-1), null); cases++
+  if (count === 627) {
+    fail = true; await context.reload()
+    assert.deepEqual(state.rows, rows)
+    assert.ok(state.errors.at(-1)); assert.ok(!state.errors.at(-1).includes('Private provider'))
+    assert.equal(state.requests.filter(r => r.method === 'PATCH').length, 1); cases++
+    fail = false; await context.reload()
+    assert.deepEqual(state.rows, rows); assert.equal(state.errors.at(-1), null); cases++
+  }
 }
 
 // Separate simulated screens each receive the INSERT/DELETE subscription event.
