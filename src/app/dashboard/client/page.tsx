@@ -507,6 +507,13 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [journalSaved,     setJournalSaved]     = useState(false)
   const [journalSaving,    setJournalSaving]    = useState(false)
   const [journalDate,      setJournalDate]      = useState('')
+  const [journalError, setJournalError] = useState('')
+  const [journalDraftNotice, setJournalDraftNotice] = useState('')
+  const [journalReadyKey, setJournalReadyKey] = useState('')
+  const [journalActiveDate, setJournalActiveDate] = useState('')
+  const journalLoadedKey = useRef('')
+  const journalDirty = useRef(false)
+  const journalSaveLock = useRef(false)
   const [pastEntries,      setPastEntries]      = useState<JournalEntryRecord[]>([])
   const [pastEntriesOpen,  setPastEntriesOpen]  = useState(false)
   const [activeGoals,      setActiveGoals]      = useState<ClientGoalRecord[]>([])
@@ -519,6 +526,76 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   const [today, setToday] = useState(() => getLocalDateString())
   const todayStartMs = useMemo(() => new Date(`${today}T00:00:00`).getTime(), [today])
   const clientId = clientRecord?.id ?? null
+  const journalKey = profile?.id ? `journal-draft:${profile.id}:${journalActiveDate || today}` : ''
+  const journalEditable = !overrideClientId && !!journalKey && journalReadyKey === journalKey && !journalSaving
+
+  const hydrateJournal = useCallback((profileId: string, date: string, entry: JournalEntryRecord | null, preview: boolean) => {
+    let key = `journal-draft:${profileId}:${date}`
+    // Focus refreshes must never replace writing already in the editor.
+    if (journalLoadedKey.current === key) return
+    // An unfinished entry keeps its original day across midnight. Saving it
+    // explicitly advances the editor to today; never strand yesterday's draft.
+    if (journalDirty.current && journalLoadedKey.current.startsWith(`journal-draft:${profileId}:`)) return
+    let text = entry?.content || ''
+    let isPrivate = entry?.is_private ?? true
+    let notice = ''
+    let restored = false
+    if (!preview) {
+      try {
+        let stored = localStorage.getItem(key)
+        let draftKey = key
+        if (!stored) {
+          const activeKey = localStorage.getItem(`journal-draft-active:${profileId}`)
+          const prefix = `journal-draft:${profileId}:`
+          const draftDate = activeKey?.startsWith(prefix) ? activeKey.slice(prefix.length) : ''
+          if (/^\d{4}-\d{2}-\d{2}$/.test(draftDate) && draftDate < date) {
+            const earlier = localStorage.getItem(activeKey!)
+            if (earlier) { stored = earlier; draftKey = activeKey! }
+          }
+        }
+        if (stored) {
+          const draft: unknown = JSON.parse(stored)
+          if (draft && typeof draft === 'object' && 'text' in draft && 'isPrivate' in draft && typeof draft.text === 'string' && typeof draft.isPrivate === 'boolean' && (draftKey === key || draft.text.trim())) {
+            key = draftKey
+            text = draft.text
+            isPrivate = draft.isPrivate
+            restored = !!text.trim()
+            notice = 'Draft restored on this device. Tap Save to confirm your changes.'
+          }
+        }
+      } catch {
+        notice = 'Draft storage is unavailable. Keep this page open until you save.'
+      }
+    }
+    journalLoadedKey.current = key
+    journalDirty.current = restored
+    setJournalActiveDate(key.slice(`journal-draft:${profileId}:`.length))
+    setJournalReadyKey(key)
+    setJournalText(text)
+    setJournalPrivate(isPrivate)
+    setJournalDate(entry && key.endsWith(`:${date}`) ? date : '')
+    setJournalSaved(!!entry && !notice && key.endsWith(`:${date}`))
+    setJournalError('')
+    setJournalDraftNotice(notice)
+  }, [])
+
+  function updateJournalDraft(text: string, isPrivate: boolean) {
+    if (!journalEditable || journalSaveLock.current) return
+    setJournalText(text)
+    setJournalPrivate(isPrivate)
+    setJournalSaved(false)
+    journalDirty.current = !!text.trim()
+    setJournalError('')
+    // Small text-only drafts are saved immediately, including on the last
+    // keystroke before navigation. Never store them in coach preview.
+    try {
+      localStorage.setItem(journalKey, JSON.stringify({ text, isPrivate }))
+      localStorage.setItem(`journal-draft-active:${profile!.id}`, journalKey)
+      setJournalDraftNotice('Unsaved changes — draft kept on this device.')
+    } catch {
+      setJournalDraftNotice('Unsaved changes. Draft storage is unavailable; keep this page open until you save.')
+    }
+  }
 
   // In preview mode, append ?return= so the workout page knows where to send coach after finishing
   const workoutUrl = (sessionId: string) => {
@@ -583,6 +660,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   }, [overrideClientId])
 
   useEffect(() => {
+    let cancelled = false
     const loadClientData = async (clientData: DashboardClientRecord, todayStr: string, profileId: string) => {
         // Fire all queries in parallel — was 11 sequential round trips, now 1 batch
         const cid = clientData.id
@@ -595,7 +673,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
           { data: reviewData },
           { data: pendingCI },
           { data: todayCheckin },
-          { data: todayJournal },
+          { data: todayJournal, error: journalReadError },
           { data: pastData },
           { data: goalsData },
           { data: activityData },
@@ -632,7 +710,7 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
             .select('id, note, form:onboarding_forms(title, form_type, is_checkin_type)')
             .eq('client_id', cid).eq('status', 'pending').limit(3),
           supabase.from('daily_checkins').select('*').eq('client_id', cid).eq('checkin_date', todayStr).single(),
-          supabase.from('journal_entries').select('*').eq('client_id', profileId).eq('entry_date', todayStr).single(),
+          supabase.from('journal_entries').select('*').eq('client_id', profileId).eq('entry_date', todayStr).maybeSingle(),
           supabase.from('journal_entries').select('*').eq('client_id', profileId).neq('entry_date', todayStr).order('entry_date', { ascending: false }).limit(30),
           supabase.from('client_goals').select('*').eq('client_id', cid).eq('status', 'active').order('created_at', { ascending: false }),
           supabase.from('client_activities').select('*').eq('client_id', cid).eq('activity_date', todayStr).order('created_at', { ascending: false }).limit(5),
@@ -685,11 +763,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
         setPulseData((todayCheckin as DailyCheckinRecord | null) || null)
 
         // Journal: only show dedicated journal_entries — never bleed in the morning pulse note
-        const journalEntry = todayJournal || null
-        if (journalEntry) {
-          setJournalText(journalEntry.content || '')
-          setJournalPrivate(journalEntry.is_private ?? true)
-          setJournalDate(todayStr)
+        if (!cancelled) {
+          if (journalReadError) {
+            setJournalError('Could not load your journal. Refresh before editing; any existing draft is kept.')
+          } else {
+            hydrateJournal(profileId, todayStr, todayJournal || null, !!overrideClientId)
+          }
         }
 
         setPastEntries((pastData || []) as JournalEntryRecord[])
@@ -873,7 +952,8 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
       setLoading(false)
     } // end load
     void load()
-  }, [overrideClientId, router, supabase, today, refreshTick])
+    return () => { cancelled = true }
+  }, [overrideClientId, router, supabase, today, refreshTick, hydrateJournal])
 
   useEffect(() => {
     if (overrideClientId) return
@@ -1100,26 +1180,49 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
   }
 
   const saveJournal = async () => {
-    if (!clientRecord || !journalText.trim() || !profile?.id) return
+    if (!journalEditable || journalSaveLock.current || !clientRecord || !journalText.trim() || !profile?.id) return
+    const key = journalKey
+    const date = journalActiveDate || today
+    journalSaveLock.current = true
     setJournalSaving(true)
-    await supabase.from('journal_entries').upsert({
-      client_id:  profile.id,
-      entry_date: today,
-      content:    journalText.trim(),
-      is_private: journalPrivate,
-    }, { onConflict: 'client_id,entry_date' })
-    setJournalDate(today)
-    setJournalSaving(false)
-    setJournalSaved(true)
-    setTimeout(() => setJournalSaved(false), 2500)
-    const { data: pastData } = await supabase
-      .from('journal_entries')
-      .select('*')
-      .eq('client_id', profile.id)
-      .neq('entry_date', today)
-      .order('entry_date', { ascending: false })
-      .limit(30)
-    setPastEntries((pastData || []) as JournalEntryRecord[])
+    setJournalError('')
+    setJournalSaved(false)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user || user.id !== profile.id || clientRecord.profile_id !== user.id) {
+        setJournalError('Your session changed or expired. Your writing is kept; sign in again before saving.')
+        return
+      }
+      if (journalLoadedKey.current !== key) {
+        setJournalError('The journal changed. Your previous draft is kept on this device.')
+        return
+      }
+      const { data, error } = await supabase.from('journal_entries').upsert({
+        client_id: user.id,
+        entry_date: date,
+        content: journalText.trim(),
+        is_private: journalPrivate,
+      }, { onConflict: 'client_id,entry_date' }).select('id, entry_date').single()
+      if (error || !data?.id || data.entry_date !== date) {
+        setJournalError('Could not confirm your journal save. Your writing is kept; please try again.')
+        return
+      }
+      try {
+        localStorage.removeItem(key)
+        if (localStorage.getItem(`journal-draft-active:${user.id}`) === key) localStorage.removeItem(`journal-draft-active:${user.id}`)
+      } catch { /* Storage may be blocked; the server save is confirmed. */ }
+      if (journalLoadedKey.current !== key) return
+      journalDirty.current = false
+      setJournalDate(date)
+      setJournalSaved(true)
+      setJournalDraftNotice('')
+      if (date !== getLocalDateString()) setRefreshTick(value => value + 1)
+    } catch {
+      setJournalError('Could not save your journal. Your writing is kept; please try again.')
+    } finally {
+      journalSaveLock.current = false
+      setJournalSaving(false)
+    }
   }
 
   const openActivityLog = () => {
@@ -1159,19 +1262,6 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
 
     setActivitySaving(false)
   }
-
-  // Reset journal if the client keeps the app open past midnight
-  useEffect(() => {
-    if (journalDate && journalDate !== today) {
-      const timer = setTimeout(() => {
-        setJournalText('')
-        setJournalPrivate(true)
-        setJournalSaved(false)
-        setJournalDate(today)
-      }, 0)
-      return () => clearTimeout(timer)
-    }
-  }, [today, journalDate])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1828,11 +1918,17 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </div>
               <textarea
                 value={journalText}
-                onChange={e=>setJournalText(e.target.value)}
+                onChange={e=>updateJournalDraft(e.target.value, journalPrivate)}
+                aria-label={`Journal entry for ${journalActiveDate || today}`}
+                disabled={!journalEditable}
                 placeholder="Write anything — wins, struggles, how you're really feeling. No judgment here."
                 rows={4}
-                style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:13, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', outline:'none', lineHeight:1.6, boxSizing:'border-box' as const, colorScheme:'dark' }}
+                style={{ width:'100%', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:11, padding:'11px 13px', fontSize:16, color:t.text, fontFamily:"'DM Sans',sans-serif", resize:'none', lineHeight:1.6, boxSizing:'border-box' as const }}
               />
+              {overrideClientId && <p style={{ fontSize:12, color:t.textMuted }}>Read-only coach preview. Private entries are hidden.</p>}
+              {journalError && <p role="alert" style={{ fontSize:12, color:t.orange }}>{journalError}</p>}
+              {journalDraftNotice && <p role="status" style={{ fontSize:12, color:t.textMuted }}>{journalDraftNotice}</p>}
+              {journalActiveDate && journalActiveDate !== today && <p style={{ fontSize:12, color:t.textMuted }}>Unfinished entry from {journalActiveDate}. Save it to move on to today.</p>}
               {/* Segmented Private / For Coach toggle. Replaces the prior
                   single-state button so both choices are visible at once --
                   the affordance is now obvious without having to tap to
@@ -1840,12 +1936,12 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
                   any remaining ambiguity about who sees what. */}
               <div style={{ marginTop:10 }}>
                 <div style={{ display:'flex', background:t.surfaceUp, border:'1px solid '+t.border, borderRadius:20, padding:2, width:'fit-content', gap:0 }}>
-                  <button onClick={()=>setJournalPrivate(true)}
+                  <button onClick={()=>updateJournalDraft(journalText, true)} disabled={!journalEditable}
                     aria-pressed={journalPrivate}
                     style={{ display:'flex', alignItems:'center', gap:5, background:journalPrivate?t.surfaceHigh:'transparent', border:'none', borderRadius:18, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", color:journalPrivate?t.text:t.textMuted, fontSize:11, fontWeight:700, transition:'all 0.15s' }}>
                     🔒 Private
                   </button>
-                  <button onClick={()=>setJournalPrivate(false)}
+                  <button onClick={()=>updateJournalDraft(journalText, false)} disabled={!journalEditable}
                     aria-pressed={!journalPrivate}
                     style={{ display:'flex', alignItems:'center', gap:5, background:!journalPrivate?t.tealDim:'transparent', border:'none', borderRadius:18, padding:'5px 12px', cursor:'pointer', fontFamily:"'DM Sans',sans-serif", color:!journalPrivate?t.teal:t.textMuted, fontSize:11, fontWeight:700, transition:'all 0.15s' }}>
                     👁️ For Coach
@@ -1859,10 +1955,10 @@ function ClientDashboardInner({ overrideClientId }: { overrideClientId?: string 
               </div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', marginTop:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  {journalDate === today && !journalSaved && (
+                  {journalDate === today && journalSaved && (
                     <span style={{ fontSize:11, color:t.teal, fontWeight:600 }}>✓ Saved today</span>
                   )}
-                  <button onClick={saveJournal} disabled={journalSaving||!journalText.trim()}
+                  <button onClick={saveJournal} disabled={!journalEditable||!journalText.trim()}
                     style={{ background:journalSaved?t.tealDim:journalText.trim()?'linear-gradient(135deg,'+t.teal+','+alpha(t.teal, 80) + ')':t.surfaceHigh, border:journalSaved?'1px solid '+alpha(t.teal, 25):'none', borderRadius:11, padding:'9px 20px', fontSize:13, fontWeight:800, color:journalSaved?t.teal:journalText.trim()?'#000':t.textMuted, cursor:journalText.trim()?'pointer':'not-allowed', fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s' }}>
                     {journalSaved ? '✓ Saved!' : journalSaving ? 'Saving...' : journalDate === today ? 'Update' : 'Save'}
                   </button>
