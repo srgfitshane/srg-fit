@@ -10,6 +10,7 @@ const paths = {
 }
 const handlers = {}
 const effects = {}
+let emptyThreadExpression
 for (const [kind, path] of Object.entries(paths)) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
   const ast = ts.createSourceFile(kind + '.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -18,13 +19,14 @@ for (const [kind, path] of Object.entries(paths)) {
   function visit(node) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) handlers[kind].set(node.name.text, 'const ' + node.getText(ast))
     if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect') effects[kind].push(node.getText(ast))
+    if (kind === 'message' && ts.isJsxExpression(node) && node.expression?.getText(ast).includes('No messages yet')) emptyThreadExpression = node.expression.getText(ast)
     ts.forEachChild(node, visit)
   }
   visit(ast)
   // The thread-wide click dismiss was the source of the disappearing picker.
   if (kind === 'message') assert.ok(!source.replace(/\r\n/g, '\n').includes("overflow:'hidden' }}\n        onClick={()=>setReactTarget(null)}"))
 }
-const compile = code => ts.transpileModule(code, { compilerOptions:{ target:ts.ScriptTarget.ES2022, module:ts.ModuleKind.CommonJS } }).outputText
+const compile = code => ts.transpileModule(code, { compilerOptions:{ target:ts.ScriptTarget.ES2022, module:ts.ModuleKind.CommonJS, jsx:ts.JsxEmit.React } }).outputText
 const plain = value => JSON.parse(JSON.stringify(value))
 const flush = () => new Promise(resolve => setImmediate(resolve))
 const deferred = () => {
@@ -146,7 +148,7 @@ for (const kind of ['message', 'community']) {
   const context = {
     myId:'me', otherId:'other', coachId:'coach', useCallback:fn => fn,
     threadLoadRequest:{ current:0 }, postsLoadRequest:{ current:0 },
-    setReactionError:value => state.errors.push(value), toastError:value => state.errors.push(value),
+    setThreadLoading:value => { state.loading = value }, setReactionError:value => state.errors.push(value), toastError:value => state.errors.push(value),
     setThread:() => { state.changed = true }, setPosts:() => { state.changed = true },
     supabase:{ from:table => {
       const chain = { select:() => chain, or:() => chain, eq:() => chain, order:() => chain,
@@ -157,7 +159,9 @@ for (const kind of ['message', 'community']) {
   }
   const name = kind === 'message' ? 'loadThread' : 'loadPosts'
   vm.runInNewContext(compile(handlers[kind].get(name) + '\nglobalThis.reload=' + name), context)
-  await context.reload(); assert.equal(state.changed, false); assert.ok(state.errors.at(-1)); cases++
+  await context.reload(); assert.equal(state.changed, false); assert.ok(state.errors.at(-1))
+  if (kind === 'message') assert.equal(state.loading, false)
+  cases++
 }
 
 // Execute real reloads with out-of-order responses and verify confirmed UI wins.
@@ -168,7 +172,7 @@ for (const kind of ['message', 'community']) {
     Date, Object, Set, Promise, useCallback:fn => fn, myId:'me', otherId:'other', coachId:'coach',
     threadLoadRequest:{ current:0 }, postsLoadRequest:{ current:0 },
     MEDIA_BUCKETS:{}, resolveSignedMediaUrl:() => { throw new Error('No media in synthetic rows') },
-    setReactionError: value => state.errors.push(value), toastError: value => state.errors.push(value),
+    setThreadLoading:() => {}, setReactionError: value => state.errors.push(value), toastError: value => state.errors.push(value),
     setThread: value => { state.rows = value }, setPosts: value => { state.rows = value },
     setReplies:() => {}, setProfiles:() => {}, setFeaturedFirstNames:() => {},
     fetch:async () => ({ ok:true, json:async () => ({ profiles:[], featuredFirstNames:{} }) }),
@@ -235,7 +239,7 @@ for (const count of [0, 1, 627, 1000]) {
   const context = {
     useCallback:fn => fn, myId:'me', otherId:'other', supabase,
     threadLoadRequest:{ current:0 }, MEDIA_BUCKETS:{},
-    setThread:value => { state.rows = plain(value) }, setReactionError:value => state.errors.push(value),
+    setThreadLoading:() => {}, setThread:value => { state.rows = plain(value) }, setReactionError:value => state.errors.push(value),
     setTimeout:() => {}, scrollToBottom:() => {},
   }
   vm.runInNewContext(compile(handlers.message.get('loadThread') + '\nglobalThis.reload=loadThread'), context)
@@ -251,6 +255,77 @@ for (const count of [0, 1, 627, 1000]) {
     fail = false; await context.reload()
     assert.deepEqual(state.rows, rows); assert.equal(state.errors.at(-1), null); cases++
   }
+}
+
+// Execute the real private-media resolver with the real thread loader. A cold
+// history signs in one batch; a warm refresh reuses the account-scoped URLs.
+const compiledMedia = { exports:{} }
+vm.runInNewContext(compile(readFileSync(new URL('../src/lib/media.ts', import.meta.url), 'utf8')), {
+  exports:compiledMedia.exports, module:compiledMedia, URL, Date,
+})
+for (const superseded of [false, true]) {
+  const waiting = deferred()
+  let rows = Array.from({ length:60 }, (_, i) => ({ id:`media-${i}`, message_type:['image','video','audio','file'][i % 4], media_url:`message-media/attachment-${i % 30}`, reactions:[] }))
+  rows.push({ id:'text', message_type:'text', media_url:null, reactions:[] })
+  rows.push({ id:'resource', message_type:'resource', media_url:'https://example.com/resource', reactions:[] })
+  const state = { rows:[], loading:[], signing:[] }
+  const supabase = {
+    auth:{ onAuthStateChange:() => {}, getSession:async () => ({ data:{ session:{ user:{ id:'me' } } }, error:null }) },
+    storage:{ from:bucket => ({
+      getPublicUrl:path => ({ data:{ publicUrl:`https://synthetic.supabase.co/storage/v1/object/public/${bucket}/${path}` } }),
+      createSignedUrls:async paths => {
+        state.signing.push({ bucket, paths:plain(paths) }); await waiting.promise
+        return { data:paths.map(path => ({ path, signedUrl:`https://synthetic.supabase.co/signed/${path}` })), error:null }
+      },
+    }) },
+    from:table => {
+      assert.equal(table, 'messages')
+      const chain = { select:() => chain, or:() => chain, update:() => chain, eq:() => chain,
+        order:async () => ({ data:rows, error:null }), then:resolve => resolve({ error:null }) }
+      return chain
+    },
+  }
+  const context = {
+    myId:'me', otherId:'other', supabase, useCallback:fn => fn, threadLoadRequest:{ current:0 },
+    MEDIA_BUCKETS:{ image:'message-media', video:'message-media', audio:'message-media', file:'message-media' },
+    resolveSignedMediaUrls:compiledMedia.exports.resolveSignedMediaUrls,
+    setThread:value => { state.rows = plain(value) }, setThreadLoading:value => state.loading.push(value),
+    setReactionError:() => {}, setTimeout:() => {}, scrollToBottom:() => {},
+  }
+  vm.runInNewContext(compile(handlers.message.get('loadThread') + '\nglobalThis.reload=loadThread'), context)
+  const first = context.reload(); await flush()
+  assert.equal(state.signing.length, 1); assert.equal(state.signing[0].bucket, 'message-media')
+  assert.equal(state.signing[0].paths.length, 30); assert.equal(state.loading.at(-1), true)
+  assert.deepEqual(state.rows, []) // Never render raw private paths while signing.
+  if (superseded) {
+    rows = [{ id:'latest', message_type:'text', media_url:null, reactions:[] }]
+    await context.reload()
+  }
+  waiting.resolve(); await first
+  assert.equal(state.loading.at(-1), false)
+  if (superseded) assert.equal(state.rows[0].id, 'latest')
+  else {
+    assert.equal(state.rows.length, 62)
+    assert.ok(state.rows.slice(0,60).every(row => row.media_url.startsWith('https://synthetic.supabase.co/signed/')))
+    assert.equal(state.rows[60].media_url, null); assert.equal(state.rows[61].media_url, 'https://example.com/resource')
+    await context.reload(); assert.equal(state.signing.length, 1)
+  }
+  cases++
+}
+
+// Execute the actual JSX condition: loading and errors must not masquerade as
+// an empty history, and refreshing must never hide previously loaded messages.
+assert.ok(emptyThreadExpression)
+for (const [thread, threadLoading, reactionError, expected] of [
+  [[], true, null, 'Loading messages...'], [[], false, null, 'No messages yet'],
+  [[], false, 'Failed', null], [[{ id:'confirmed' }], true, null, null],
+]) {
+  const context = { thread, threadLoading, reactionError, c:{}, React:{ createElement:(type, props, ...children) => ({ type, props, children }) } }
+  vm.runInNewContext(compile('globalThis.view = (' + emptyThreadExpression + ')'), context)
+  if (expected) assert.ok(context.view.children.join('').includes(expected))
+  else assert.ok(!context.view)
+  if (threadLoading && thread.length === 0) assert.equal(context.view.props.role, 'status')
+  cases++
 }
 
 // Separate simulated screens each receive the INSERT/DELETE subscription event.

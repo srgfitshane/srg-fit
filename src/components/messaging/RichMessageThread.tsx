@@ -15,7 +15,7 @@
 import Image from 'next/image'
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { resolveSignedMediaUrl } from '@/lib/media'
+import { resolveSignedMediaUrl, resolveSignedMediaUrls } from '@/lib/media'
 import { GiphyFetch } from '@giphy/js-fetch-api'
 import { alpha } from '@/lib/theme'
 
@@ -185,6 +185,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
     setMode('text'); setGifs([]); setGifQuery('')
   }
   const [thread,       setThread]       = useState<Message[]>([])
+  const [threadLoading, setThreadLoading] = useState(true)
   const [draft,        setDraft]        = useState('')
   const [sending,      setSending]      = useState(false)
   // Surface for send failures. Inline banner (sticky, not auto-dismiss)
@@ -269,6 +270,7 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
   // ── Load thread + reactions ───────────────────────────────────────────────
   const loadThread = useCallback(async () => {
     const request = ++threadLoadRequest.current
+    setThreadLoading(true)
     const { data: msgs, error: messagesError } = await supabase
       .from('messages')
       // Embed reactions through the FK: an ID-list query grows with the
@@ -278,23 +280,27 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
       .order('created_at', { ascending: true })
 
     if (request !== threadLoadRequest.current) return
-    if (messagesError || !msgs) { setReactionError('Could not load messages and reactions. Please refresh and try again.'); return }
+    if (messagesError || !msgs) {
+      setReactionError('Could not load messages and reactions. Please refresh and try again.')
+      setThreadLoading(false)
+      return
+    }
 
     // The shared resolver reuses URLs across refetches and clears its
     // account-scoped cache on sign-out. Private media never uses public URLs.
-    const withReactions = await Promise.all(msgs.map(async (m) => {
-      const bucket = MEDIA_BUCKETS[m.message_type]
-      let mediaUrl = m.media_url
-      if (bucket && m.media_url) {
-        mediaUrl = await resolveSignedMediaUrl(supabase, bucket, m.media_url)
-      }
-      return {
-        ...m,
-        media_url: mediaUrl,
-      }
+    // All message attachments share this private bucket. Batch the history
+    // instead of waiting for one signing request per attachment.
+    const mediaPaths = msgs.map(m => MEDIA_BUCKETS[m.message_type] ? m.media_url : null)
+    const mediaUrls = mediaPaths.some(Boolean)
+      ? await resolveSignedMediaUrls(supabase, 'message-media', mediaPaths)
+      : mediaPaths
+    const withReactions = msgs.map((m, index) => ({
+      ...m,
+      media_url: MEDIA_BUCKETS[m.message_type] ? mediaUrls[index] : m.media_url,
     }))
     if (request !== threadLoadRequest.current) return
     setThread(withReactions)
+    setThreadLoading(false)
     setReactionError(null)
     // Pin on initial load; respects userScrolledUp so a reaction/visibility
     // refetch doesn't yank the user down while they're reading history.
@@ -956,10 +962,12 @@ export default function RichMessageThread({ myId, otherId, otherName, myName, he
         )}
 
         {/* ── Thread ── */}
-        <div ref={scrollRef} className="rmt-scroll" style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
-          {thread.length === 0 && (
+        <div ref={scrollRef} className="rmt-scroll" aria-busy={threadLoading} style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+          {thread.length === 0 && (threadLoading ? (
+            <div role="status" style={{ textAlign:'center', marginTop:48, color:c.textMuted, fontSize:13 }}>Loading messages...</div>
+          ) : !reactionError ? (
             <div style={{ textAlign:'center', marginTop:48, color:c.textMuted, fontSize:13 }}>No messages yet — say something! 👋</div>
-          )}
+          ) : null)}
 
           {thread.map((msg, idx) => {
             const isMe = msg.sender_id === myId
